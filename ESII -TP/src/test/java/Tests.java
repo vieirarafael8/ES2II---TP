@@ -34,8 +34,11 @@ public class Tests {
 
     }
 
+    /*
+    Teste se é lançada a exceção quando o utilizador já existe
+     */
     @Test
-    public void testRegisterUser() {
+    public void testRegisterUserExist() {
 
         //Verificação se a excepção é lançada com o id=0
         assertThrows(UserAlreadyExists.class, () -> {
@@ -46,6 +49,21 @@ public class Tests {
         }, "Should Throw Exception: UserAlreadyExists");
 
     }
+
+    /*
+ Teste se utilizador é adicionado
+  */
+    @Test
+    public void testRegisterUserValido() throws UserAlreadyExists{
+
+        brs.registerUser(1, "Emanuel", 2);
+
+        //O teste é válido, pois o utilizador Emanuel
+        // com o IDUser=1 não existe e foi adicionado
+        assertEquals(1, brs.getUsers().get(1).getIDUser());
+
+    }
+
 
     @Test
     public void testVerifyCredit() throws UserAlreadyExists {
@@ -59,7 +77,7 @@ public class Tests {
         //Verificação se retorna false ao verificar se é possivel
         // adicionar créditos a um utilizador não existente na lista de users ou se um user não tem creditos
 
-        assertAll("Should return False if user in IDUser=2 does not exist or there is no credits in IDUser=1",
+        assertAll("Should return False if user with IDUser=2 does not exist or there is no credits in IDUser=1",
                 () -> assertFalse(brs.verifyCredit(1)),
                 () -> assertFalse(brs.verifyCredit(2))
         );
