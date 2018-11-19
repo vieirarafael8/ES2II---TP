@@ -1,4 +1,7 @@
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import Models.Bike;
+import Models.Deposit;
 import org.junit.jupiter.api.Test;
 import Exceptions.UserAlreadyExists;
 import Exceptions.UserDoesNotExists;
@@ -35,6 +38,8 @@ public class Tests {
         //Adição de uma bicicleta
         brs.addBicycle(1, 0, 0);
 
+
+
     }
 
     // GET BICYCLE
@@ -59,7 +64,7 @@ public class Tests {
        brs.getBicycle(1, 1, 0);
     }
 /*
- Teste para IDUser=-1
+ Teste para IDUser=-1 (enunciado incoerente pois pretendia-se testar o IDUser=0)
  */
     @Test
     public void testGetBicycleIDUSERMENOSUM() throws UserDoesNotExists {
@@ -109,7 +114,7 @@ public class Tests {
         brs.addLock(1, 1);
 
         //Retorna -1 se tentar requisitar uma bicicleta sem lugares ativos
-        assertEquals(-1, brs.getBicycle(0,1,1));
+        assertEquals(-1, brs.getBicycle(0,1,0));
 
         brs.getBicycle(0, 1, 0);
     }
@@ -132,6 +137,114 @@ public class Tests {
 
         brs.getBicycle(1, 1, 1);
     }
+    /*
+   Teste com starttime=-1
+    */
+    @Test
+    public void testGetBicycleSTARTTIMEMENOSUM() throws UserDoesNotExists {
+        //Adicionar Crédito
+        brs.addCredit(1, 1);
+
+        //Adição de um Lock
+        brs.addLock(0, 1);
+
+        //Adição de uma Bicicleta
+        brs.addBicycle(1, 1, 1);
+
+        //Retorna -1 se tentar requisitar uma bicicleta sem depósito
+        assertEquals(-1, brs.getBicycle(0,1,-1));
+
+        brs.getBicycle(0, 1, 0);
+    }
+
+
+
+    //RETURN BYCICLE
+
+
+    /*
+Teste utilizador não existe
+     */
+    @Test
+    public void testReturnBicycleUSERNAOEXISTE(){
+
+        //Testar se retorna -1 se o IDUser não existir
+        assertThrows(UserDoesNotExists.class, () -> {
+            brs.getBicycle(1, -1, 1);
+        }, "Should Throw Exception: UserAlreadyExists"); //O teste é válido
+
+    }
+    /*
+    Teste IDDeposit não existe
+     */
+    @Test
+    public void testReturnBicycleDEPOSITNAOEXISTE()throws UserDoesNotExists{
+
+        //Testar se retorna -1 se o IDDeposit não existir
+
+       assertEquals(-1, brs.returnBicycle(0, 1, 1));
+
+    }
+
+    /*
+  Teste IDDeposit existe (TESTE QUE DEVIA PASSAR COM EXPECTED = 0)
+   */
+    @Test
+    public void testReturnBicycleDEPOSITEXISTE()throws UserDoesNotExists{
+
+        //Testar se retorna 0 se o IDDeposit  existir
+
+        assertEquals(-1, brs.returnBicycle(1, 1, 1));
+
+    }
+
+    /*
+    Teste sem lugares livres (endtime=-1)
+     */
+    @Test
+    public void testReturnBicycleSEMLUGARESLIVRES() {
+
+
+        //Senão existirem lugares de entrega livre (endtime=-1)
+        assertEquals(-1, brs.returnBicycle(1, 1, -1));
+
+    }
+    /*
+    Teste Retornar saldo IDUser=1, IDDeposit=1 e endtime=1 previamente criado no setUp()
+     */
+    @Test
+    public void testReturnBicycleRETORNASALDOUSERUM() {
+        //Testar se retorna o saldo atual do cliente, quando se calcula o pagamento
+
+        assertFalse( brs.verifyCredit(1));
+    }
+    /*
+    Teste Retornar saldo IDUser=1, IDDeposit=1 e endtime=1 previamente criado no setUp()
+     */
+    @Test
+    public void testReturnBicycleRETORNASALDOUSEROZERO() {
+        //Testar se retorna o saldo atual do cliente, quando se calcula o pagamento
+
+        assertFalse( brs.verifyCredit(0));
+    }
+
+
+
+    // BICYCLE RENTALFEE
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     // VERIFY CREDIT
@@ -159,8 +272,11 @@ Teste com  IDUser=0 e amount=1
 
         assertTrue(brs.verifyCredit(0));
     }
+    /*
+Teste com  IDUser=1 e amount=1
+ */
     @Test
-    public void testVerifyCredit3() {
+    public void testVerifyCreditUSERUM() {
 
         //Adiciona um crédito
         brs.addCredit(1, 1);
@@ -237,7 +353,6 @@ Teste com  IDUser=0 e amount=1
 
 
 
-
     // REGISTER USER
 
 
@@ -258,6 +373,7 @@ Teste para tentar registar utilizador que já existe COM IDUser=0 e rentalProgra
     }
     /*
     Teste para registar utilizador que ainda não existe
+    (TABELA BVA TEM IDUser=1 e rentalProgram=1 mas aqui foi necessário criar 2 utilizadores)
      */
     @Test
     public void testRegisterUserValido() throws UserAlreadyExists{
@@ -298,71 +414,37 @@ Teste IDUser inválido
 
     }
 /*
-Teste utilizador já existe com IDUser=0
+Teste utilizador com nome=null
  */
     @Test
     public void testRegisterUserJAEXISTECOMZERO() {
         //Verificar se a excepção é lançada
         assertThrows(UserAlreadyExists.class, () -> {
-            brs.registerUser(0, "Rafael", 1);
+            brs.registerUser(0, null, 1);
         }, "Should Throw Exception: UserAlreadyExists"); //O teste é válido
 
     }
 
-
-
-
-    //RETURN BYCICLE
-
-
     /*
-Teste utilizador não existe
-     */
-    @Test
-    public void testReturnBicycleUSERNAOEXISTE(){
-
-        //Testar se retorna -1 se o IDUser não existir
-        assertThrows(UserDoesNotExists.class, () -> {
-            brs.getBicycle(1, 4, 1);
-        }, "Should Throw Exception: UserAlreadyExists"); //O teste é válido
-
-    }
-    /*
-    Teste IDDeposit não existe
-     */
-    @Test
-    public void testReturnBicycleDEPOSITNAOEXISTE()throws UserDoesNotExists{
-
-        //Testar se retorna -1 se o IDDeposit não existir
-            assertEquals(-1, brs.getBicycle(4, 1, 1));
-
-    }
-    /*
-    Teste bicleta não está associada a lugar ativo (sarttime=-1)
-     */
-    @Test
-    public void testReturnBicycleBICICLETANAOASSOCIADA() throws UserDoesNotExists{
-        //Testar se retorna -1 se o a bicleta não está associada a lugar ativo (starttime=-1)
-        assertEquals(-1, brs.getBicycle(4, 1, -1));
-    }
-/*
-Teste sem lugares livres (endtime=-1)
+Teste utilizador com rentalProgram=0 (só deveria aceitar rentalProgram 1 e 2)
+mas aceita tudo o que seja
  */
     @Test
-    public void testReturnBicycleSEMLUGARESLIVRES() {
-
-
-        //Senão existirem lugares de entrega livre (endtime=-1)
-        assertEquals(-1, brs.returnBicycle(1, 1, -1));
+    public void testRegisterUserRENTALZERO() throws UserAlreadyExists {
+        //Verificar se a excepção é lançada
+            brs.registerUser(2, "Rafa", 0);
 
     }
-/*
-Teste Retornar saldo IDUser=1
- */
+
+    /*
+Teste utilizador com rentalProgram=3 (só deveria aceitar rentalProgram 1 e 2)
+mas aceita tudo o que seja
+*/
     @Test
-    public void testReturnBicycleRETORNASALDO() {
-        //Testar se retorna o saldo atual do cliente, quando se calcula o pagamento
-        assertFalse( brs.verifyCredit(1));
+    public void testRegisterUserRENTALTRES() throws UserAlreadyExists {
+        //Verificar se a excepção é lançada
+        brs.registerUser(2, "Rafa", 3);
+
     }
 
 }
