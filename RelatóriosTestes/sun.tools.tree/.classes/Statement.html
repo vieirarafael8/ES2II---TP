@@ -1,0 +1,425 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Statement</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.tree</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Statement (sun.tools.tree)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Statement</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 21)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 109)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1994, 2003, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.tree;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import sun.tools.java.*;
+<i>29</i>&nbsp;import sun.tools.asm.Assembler;
+<i>30</i>&nbsp;import sun.tools.asm.Label;
+<i>31</i>&nbsp;import java.io.PrintStream;
+<i>32</i>&nbsp;import java.util.Hashtable;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;/**
+<i>35</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>36</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>37</i>&nbsp; * they are subject to change or removal without notice.
+<i>38</i>&nbsp; */
+<i>39</i>&nbsp;public
+<i>40</i>&nbsp;class Statement extends Node {
+<b class="nc"><i>41</i>&nbsp;    public static final Vset DEAD_END = Vset.DEAD_END;</b>
+<b class="nc"><i>42</i>&nbsp;    Identifier labels[] = null;</b>
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;    /**
+<i>45</i>&nbsp;     * Constructor
+<i>46</i>&nbsp;     */
+<i>47</i>&nbsp;    Statement(int op, long where) {
+<b class="nc"><i>48</i>&nbsp;        super(op, where);</b>
+<i>49</i>&nbsp;    }
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;    /**
+<i>52</i>&nbsp;     * An empty statement.  Its costInline is infinite.
+<i>53</i>&nbsp;     */
+<b class="nc"><i>54</i>&nbsp;    public static final Statement empty = new Statement(STAT, 0);</b>
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;    /**
+<i>57</i>&nbsp;     * The largest possible interesting inline cost value.
+<i>58</i>&nbsp;     */
+<i>59</i>&nbsp;    public static final int MAXINLINECOST =
+<b class="nc"><i>60</i>&nbsp;                      Integer.getInteger(&quot;javac.maxinlinecost&quot;,</b>
+<b class="nc"><i>61</i>&nbsp;                                         30).intValue();</b>
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    /**
+<i>64</i>&nbsp;     * Insert a bit of code at the front of a statement.
+<i>65</i>&nbsp;     * Side-effect s2, if it is a CompoundStatement.
+<i>66</i>&nbsp;     */
+<i>67</i>&nbsp;    public static Statement insertStatement(Statement s1, Statement s2) {
+<b class="nc"><i>68</i>&nbsp;        if (s2 == null) {</b>
+<b class="nc"><i>69</i>&nbsp;            s2 = s1;</b>
+<b class="nc"><i>70</i>&nbsp;        } else if (s2 instanceof CompoundStatement) {</b>
+<i>71</i>&nbsp;            // Do not add another level of block nesting.
+<b class="nc"><i>72</i>&nbsp;            ((CompoundStatement)s2).insertStatement(s1);</b>
+<i>73</i>&nbsp;        } else {
+<b class="nc"><i>74</i>&nbsp;            Statement body[] = { s1, s2 };</b>
+<b class="nc"><i>75</i>&nbsp;            s2 = new CompoundStatement(s1.getWhere(), body);</b>
+<i>76</i>&nbsp;        }
+<b class="nc"><i>77</i>&nbsp;        return s2;</b>
+<i>78</i>&nbsp;    }
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;    /**
+<i>81</i>&nbsp;     * Set the label of a statement
+<i>82</i>&nbsp;     */
+<i>83</i>&nbsp;    public void setLabel(Environment env, Expression e) {
+<b class="nc"><i>84</i>&nbsp;        if (e.op == IDENT) {</b>
+<b class="nc"><i>85</i>&nbsp;            if (labels == null) {</b>
+<b class="nc"><i>86</i>&nbsp;                labels = new Identifier[1];</b>
+<i>87</i>&nbsp;            } else {
+<i>88</i>&nbsp;                // this should almost never happen.  Multiple labels on
+<i>89</i>&nbsp;                // the same statement.  But handle it gracefully.
+<b class="nc"><i>90</i>&nbsp;                Identifier newLabels[] = new Identifier[labels.length + 1];</b>
+<b class="nc"><i>91</i>&nbsp;                System.arraycopy(labels, 0, newLabels, 1, labels.length);</b>
+<b class="nc"><i>92</i>&nbsp;                labels = newLabels;</b>
+<i>93</i>&nbsp;            }
+<b class="nc"><i>94</i>&nbsp;            labels[0] = ((IdentifierExpression)e).id;</b>
+<i>95</i>&nbsp;        } else {
+<b class="nc"><i>96</i>&nbsp;            env.error(e.where, &quot;invalid.label&quot;);</b>
+<i>97</i>&nbsp;        }
+<i>98</i>&nbsp;    }
+<i>99</i>&nbsp;
+<i>100</i>&nbsp;    /**
+<i>101</i>&nbsp;     * Check a statement
+<i>102</i>&nbsp;     */
+<i>103</i>&nbsp;    public Vset checkMethod(Environment env, Context ctx, Vset vset, Hashtable&lt;Object, Object&gt; exp) {
+<i>104</i>&nbsp;        // Set up ctx.getReturnContext() for the sake of ReturnStatement.check().
+<b class="nc"><i>105</i>&nbsp;        CheckContext mctx = new CheckContext(ctx, new Statement(METHOD, 0));</b>
+<b class="nc"><i>106</i>&nbsp;        ctx = mctx;</b>
+<i>107</i>&nbsp;
+<b class="nc"><i>108</i>&nbsp;        vset = check(env, ctx, vset, exp);</b>
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;        // Check for return
+<b class="nc"><i>111</i>&nbsp;        if (!ctx.field.getType().getReturnType().isType(TC_VOID)) {</b>
+<i>112</i>&nbsp;            // In general, we suppress further error messages due to
+<i>113</i>&nbsp;            // unreachable statements after reporting the first error
+<i>114</i>&nbsp;            // along a flow path (using &#39;clearDeadEnd&#39;).   Here, we
+<i>115</i>&nbsp;            // report an error anyway, because the end of the method
+<i>116</i>&nbsp;            // should be unreachable despite the earlier error.  The
+<i>117</i>&nbsp;            // difference in treatment is due to the fact that, in this
+<i>118</i>&nbsp;            // case, the error is reachability, not unreachability.
+<i>119</i>&nbsp;            // NOTE: In addition to this subtle difference in the quality
+<i>120</i>&nbsp;            // of the error diagnostics, this treatment is essential to
+<i>121</i>&nbsp;            // preserve the correctness of using &#39;clearDeadEnd&#39; to implement
+<i>122</i>&nbsp;            // the special-case reachability rules for if-then and if-then-else.
+<b class="nc"><i>123</i>&nbsp;            if (!vset.isDeadEnd()) {</b>
+<b class="nc"><i>124</i>&nbsp;                env.error(ctx.field.getWhere(), &quot;return.required.at.end&quot;, ctx.field);</b>
+<i>125</i>&nbsp;            }
+<i>126</i>&nbsp;        }
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;        // Simulate a return at the end.
+<b class="nc"><i>129</i>&nbsp;        vset = vset.join(mctx.vsBreak);</b>
+<i>130</i>&nbsp;
+<b class="nc"><i>131</i>&nbsp;        return vset;</b>
+<i>132</i>&nbsp;    }
+<i>133</i>&nbsp;    Vset checkDeclaration(Environment env, Context ctx, Vset vset, int mod, Type t, Hashtable&lt;Object, Object&gt; exp) {
+<b class="nc"><i>134</i>&nbsp;        throw new CompilerError(&quot;checkDeclaration&quot;);</b>
+<i>135</i>&nbsp;    }
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;    /**
+<i>138</i>&nbsp;     * Make sure the labels on this statement do not duplicate the
+<i>139</i>&nbsp;     * labels on any enclosing statement.  Provided as a convenience
+<i>140</i>&nbsp;     * for subclasses.
+<i>141</i>&nbsp;     */
+<i>142</i>&nbsp;    protected void checkLabel(Environment env, Context ctx) {
+<b class="nc"><i>143</i>&nbsp;        if (labels != null) {</b>
+<b class="nc"><i>144</i>&nbsp;            loop: for (int i = 0; i &lt; labels.length; i++) {</b>
+<i>145</i>&nbsp;                // Make sure there is not a double label on this statement.
+<b class="nc"><i>146</i>&nbsp;                for (int j = i+1; j &lt; labels.length; j++) {</b>
+<b class="nc"><i>147</i>&nbsp;                    if (labels[i] == labels[j]) {</b>
+<b class="nc"><i>148</i>&nbsp;                        env.error(where, &quot;nested.duplicate.label&quot;, labels[i]);</b>
+<b class="nc"><i>149</i>&nbsp;                        continue loop;</b>
+<i>150</i>&nbsp;                    }
+<i>151</i>&nbsp;                }
+<i>152</i>&nbsp;
+<i>153</i>&nbsp;                // Make sure no enclosing statement has the same label.
+<b class="nc"><i>154</i>&nbsp;                CheckContext destCtx =</b>
+<b class="nc"><i>155</i>&nbsp;                    (CheckContext) ctx.getLabelContext(labels[i]);</b>
+<i>156</i>&nbsp;
+<b class="nc"><i>157</i>&nbsp;                if (destCtx != null) {</b>
+<i>158</i>&nbsp;                    // Check to make sure the label is in not uplevel.
+<b class="nc"><i>159</i>&nbsp;                    if (destCtx.frameNumber == ctx.frameNumber) {</b>
+<b class="nc"><i>160</i>&nbsp;                        env.error(where, &quot;nested.duplicate.label&quot;, labels[i]);</b>
+<i>161</i>&nbsp;                    }
+<i>162</i>&nbsp;                }
+<i>163</i>&nbsp;            } // end loop
+<i>164</i>&nbsp;        }
+<i>165</i>&nbsp;    }
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;    Vset check(Environment env, Context ctx, Vset vset, Hashtable&lt;Object, Object&gt; exp) {
+<b class="nc"><i>168</i>&nbsp;        throw new CompilerError(&quot;check&quot;);</b>
+<i>169</i>&nbsp;    }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;    /** This is called in contexts where declarations are valid. */
+<i>172</i>&nbsp;    Vset checkBlockStatement(Environment env, Context ctx, Vset vset, Hashtable&lt;Object, Object&gt; exp) {
+<b class="nc"><i>173</i>&nbsp;        return check(env, ctx, vset, exp);</b>
+<i>174</i>&nbsp;    }
+<i>175</i>&nbsp;
+<i>176</i>&nbsp;    Vset reach(Environment env, Vset vset) {
+<b class="nc"><i>177</i>&nbsp;        if (vset.isDeadEnd()) {</b>
+<b class="nc"><i>178</i>&nbsp;            env.error(where, &quot;stat.not.reached&quot;);</b>
+<b class="nc"><i>179</i>&nbsp;            vset = vset.clearDeadEnd();</b>
+<i>180</i>&nbsp;        }
+<b class="nc"><i>181</i>&nbsp;        return vset;</b>
+<i>182</i>&nbsp;    }
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;    /**
+<i>185</i>&nbsp;     * Inline
+<i>186</i>&nbsp;     */
+<i>187</i>&nbsp;    public Statement inline(Environment env, Context ctx) {
+<b class="nc"><i>188</i>&nbsp;        return this;</b>
+<i>189</i>&nbsp;    }
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;    /**
+<i>192</i>&nbsp;     * Eliminate this statement, which is only possible if it has no label.
+<i>193</i>&nbsp;     */
+<i>194</i>&nbsp;    public Statement eliminate(Environment env, Statement s) {
+<b class="nc"><i>195</i>&nbsp;        if ((s != null) &amp;&amp; (labels != null)) {</b>
+<b class="nc"><i>196</i>&nbsp;            Statement args[] = {s};</b>
+<b class="nc"><i>197</i>&nbsp;            s = new CompoundStatement(where, args);</b>
+<b class="nc"><i>198</i>&nbsp;            s.labels = labels;</b>
+<i>199</i>&nbsp;        }
+<b class="nc"><i>200</i>&nbsp;        return s;</b>
+<i>201</i>&nbsp;    }
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;
+<i>204</i>&nbsp;    /**
+<i>205</i>&nbsp;     * Code
+<i>206</i>&nbsp;     */
+<i>207</i>&nbsp;    public void code(Environment env, Context ctx, Assembler asm) {
+<b class="nc"><i>208</i>&nbsp;        throw new CompilerError(&quot;code&quot;);</b>
+<i>209</i>&nbsp;    }
+<i>210</i>&nbsp;
+<i>211</i>&nbsp;    /**
+<i>212</i>&nbsp;     * Generate the code to call all finally&#39;s for a break, continue, or
+<i>213</i>&nbsp;     * return statement.  We must call &quot;jsr&quot; on all the cleanup code between
+<i>214</i>&nbsp;     * the current context &quot;ctx&quot;, and the destination context &quot;stopctx&quot;.
+<i>215</i>&nbsp;     * If &#39;save&#39; isn&#39;t null, there is also a value on the top of the stack
+<i>216</i>&nbsp;     */
+<i>217</i>&nbsp;    void codeFinally(Environment env, Context ctx, Assembler asm,
+<i>218</i>&nbsp;                        Context stopctx, Type save) {
+<b class="nc"><i>219</i>&nbsp;        Integer num = null;</b>
+<b class="nc"><i>220</i>&nbsp;        boolean haveCleanup = false; // there is a finally or synchronize;</b>
+<b class="nc"><i>221</i>&nbsp;        boolean haveNonLocalFinally = false; // some finally doesn&#39;t return;</b>
+<i>222</i>&nbsp;
+<b class="nc"><i>223</i>&nbsp;        for (Context c = ctx; (c != null) &amp;&amp; (c != stopctx); c = c.prev) {</b>
+<b class="nc"><i>224</i>&nbsp;            if (c.node == null)</b>
+<b class="nc"><i>225</i>&nbsp;                continue;</b>
+<b class="nc"><i>226</i>&nbsp;            if (c.node.op == SYNCHRONIZED) {</b>
+<b class="nc"><i>227</i>&nbsp;                haveCleanup = true;</b>
+<b class="nc"><i>228</i>&nbsp;            } else if (c.node.op == FINALLY</b>
+<i>229</i>&nbsp;                          &amp;&amp; ((CodeContext)c).contLabel != null) {
+<i>230</i>&nbsp;                // c.contLabel == null indicates we&#39;re in the &quot;finally&quot; part
+<b class="nc"><i>231</i>&nbsp;                haveCleanup = true;</b>
+<b class="nc"><i>232</i>&nbsp;                FinallyStatement st = ((FinallyStatement)(c.node));</b>
+<b class="nc"><i>233</i>&nbsp;                if (!st.finallyCanFinish) {</b>
+<b class="nc"><i>234</i>&nbsp;                    haveNonLocalFinally = true;</b>
+<i>235</i>&nbsp;                    // after hitting a non-local finally, no need generating
+<i>236</i>&nbsp;                    // further code, because it won&#39;t get executed.
+<b class="nc"><i>237</i>&nbsp;                    break;</b>
+<i>238</i>&nbsp;                }
+<i>239</i>&nbsp;            }
+<i>240</i>&nbsp;        }
+<b class="nc"><i>241</i>&nbsp;        if (!haveCleanup) {</b>
+<i>242</i>&nbsp;            // there is no cleanup that needs to be done.  Just quit.
+<i>243</i>&nbsp;            return;
+<i>244</i>&nbsp;        }
+<b class="nc"><i>245</i>&nbsp;        if (save != null) {</b>
+<i>246</i>&nbsp;            // This statement has a return value on the stack.
+<b class="nc"><i>247</i>&nbsp;            ClassDefinition def = ctx.field.getClassDefinition();</b>
+<b class="nc"><i>248</i>&nbsp;            if (!haveNonLocalFinally) {</b>
+<i>249</i>&nbsp;                // Save the return value in the register which should have
+<i>250</i>&nbsp;                // been reserved.
+<b class="nc"><i>251</i>&nbsp;                LocalMember lf = ctx.getLocalField(idFinallyReturnValue);</b>
+<b class="nc"><i>252</i>&nbsp;                num = lf.number;</b>
+<b class="nc"><i>253</i>&nbsp;                asm.add(where, opc_istore + save.getTypeCodeOffset(), num);</b>
+<b class="nc"><i>254</i>&nbsp;            } else {</b>
+<i>255</i>&nbsp;                // Pop the return value.
+<b class="nc"><i>256</i>&nbsp;                switch(ctx.field.getType().getReturnType().getTypeCode()) {</b>
+<i>257</i>&nbsp;                    case TC_VOID:
+<b class="nc"><i>258</i>&nbsp;                        break;</b>
+<i>259</i>&nbsp;                    case TC_DOUBLE: case TC_LONG:
+<b class="nc"><i>260</i>&nbsp;                        asm.add(where, opc_pop2); break;</b>
+<i>261</i>&nbsp;                    default:
+<b class="nc"><i>262</i>&nbsp;                        asm.add(where, opc_pop); break;</b>
+<i>263</i>&nbsp;                }
+<i>264</i>&nbsp;            }
+<i>265</i>&nbsp;        }
+<i>266</i>&nbsp;        // Call each of the cleanup functions, as necessary.
+<b class="nc"><i>267</i>&nbsp;        for (Context c = ctx ; (c != null)  &amp;&amp; (c != stopctx) ; c = c.prev) {</b>
+<b class="nc"><i>268</i>&nbsp;            if (c.node == null)</b>
+<b class="nc"><i>269</i>&nbsp;                continue;</b>
+<b class="nc"><i>270</i>&nbsp;            if (c.node.op == SYNCHRONIZED) {</b>
+<b class="nc"><i>271</i>&nbsp;                asm.add(where, opc_jsr, ((CodeContext)c).contLabel);</b>
+<b class="nc"><i>272</i>&nbsp;            } else if (c.node.op == FINALLY</b>
+<i>273</i>&nbsp;                          &amp;&amp; ((CodeContext)c).contLabel != null) {
+<b class="nc"><i>274</i>&nbsp;                FinallyStatement st = ((FinallyStatement)(c.node));</b>
+<b class="nc"><i>275</i>&nbsp;                Label label = ((CodeContext)c).contLabel;</b>
+<b class="nc"><i>276</i>&nbsp;                if (st.finallyCanFinish) {</b>
+<b class="nc"><i>277</i>&nbsp;                    asm.add(where, opc_jsr, label);</b>
+<i>278</i>&nbsp;                } else {
+<i>279</i>&nbsp;                    // the code never returns, so we&#39;re done.
+<b class="nc"><i>280</i>&nbsp;                    asm.add(where, opc_goto, label);</b>
+<b class="nc"><i>281</i>&nbsp;                    break;</b>
+<i>282</i>&nbsp;                }
+<i>283</i>&nbsp;            }
+<i>284</i>&nbsp;        }
+<i>285</i>&nbsp;        // Move the return value from the register back to the stack.
+<b class="nc"><i>286</i>&nbsp;        if (num != null) {</b>
+<b class="nc"><i>287</i>&nbsp;            asm.add(where, opc_iload + save.getTypeCodeOffset(), num);</b>
+<i>288</i>&nbsp;        }
+<i>289</i>&nbsp;    }
+<i>290</i>&nbsp;
+<i>291</i>&nbsp;    /*
+<i>292</i>&nbsp;     * Return true if the statement has the given label
+<i>293</i>&nbsp;     */
+<i>294</i>&nbsp;    public boolean hasLabel (Identifier lbl) {
+<b class="nc"><i>295</i>&nbsp;        Identifier labels[] = this.labels;</b>
+<b class="nc"><i>296</i>&nbsp;        if (labels != null) {</b>
+<b class="nc"><i>297</i>&nbsp;            for (int i = labels.length; --i &gt;= 0; ) {</b>
+<b class="nc"><i>298</i>&nbsp;                if (labels[i].equals(lbl)) {</b>
+<b class="nc"><i>299</i>&nbsp;                    return true;</b>
+<i>300</i>&nbsp;                }
+<i>301</i>&nbsp;            }
+<i>302</i>&nbsp;        }
+<b class="nc"><i>303</i>&nbsp;        return false;</b>
+<i>304</i>&nbsp;    }
+<i>305</i>&nbsp;
+<i>306</i>&nbsp;    /**
+<i>307</i>&nbsp;     * Check if the first thing is a constructor invocation
+<i>308</i>&nbsp;     */
+<i>309</i>&nbsp;    public Expression firstConstructor() {
+<b class="nc"><i>310</i>&nbsp;        return null;</b>
+<i>311</i>&nbsp;    }
+<i>312</i>&nbsp;
+<i>313</i>&nbsp;    /**
+<i>314</i>&nbsp;     * Create a copy of the statement for method inlining
+<i>315</i>&nbsp;     */
+<i>316</i>&nbsp;    public Statement copyInline(Context ctx, boolean valNeeded) {
+<b class="nc"><i>317</i>&nbsp;        return (Statement)clone();</b>
+<i>318</i>&nbsp;    }
+<i>319</i>&nbsp;
+<i>320</i>&nbsp;    public int costInline(int thresh, Environment env, Context ctx) {
+<b class="nc"><i>321</i>&nbsp;        return thresh;</b>
+<i>322</i>&nbsp;    }
+<i>323</i>&nbsp;
+<i>324</i>&nbsp;
+<i>325</i>&nbsp;    /**
+<i>326</i>&nbsp;     * Print
+<i>327</i>&nbsp;     */
+<i>328</i>&nbsp;    void printIndent(PrintStream out, int indent) {
+<b class="nc"><i>329</i>&nbsp;        for (int i = 0 ; i &lt; indent ; i++) {</b>
+<b class="nc"><i>330</i>&nbsp;            out.print(&quot;    &quot;);</b>
+<i>331</i>&nbsp;        }
+<i>332</i>&nbsp;    }
+<i>333</i>&nbsp;    public void print(PrintStream out, int indent) {
+<b class="nc"><i>334</i>&nbsp;        if (labels != null) {</b>
+<b class="nc"><i>335</i>&nbsp;            for (int i = labels.length; --i &gt;= 0; )</b>
+<b class="nc"><i>336</i>&nbsp;                out.print(labels[i] + &quot;: &quot;);</b>
+<i>337</i>&nbsp;        }
+<i>338</i>&nbsp;    }
+<i>339</i>&nbsp;    public void print(PrintStream out) {
+<b class="nc"><i>340</i>&nbsp;        print(out, 0);</b>
+<i>341</i>&nbsp;    }
+<i>342</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

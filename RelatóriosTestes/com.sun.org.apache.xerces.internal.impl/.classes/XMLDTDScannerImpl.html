@@ -1,0 +1,2276 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: XMLDTDScannerImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.org.apache.xerces.internal.impl</a> ]
+</div>
+
+<h1>Coverage Summary for Class: XMLDTDScannerImpl (com.sun.org.apache.xerces.internal.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">XMLDTDScannerImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 48)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 794)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2003, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; */
+<i>4</i>&nbsp;/*
+<i>5</i>&nbsp; * Licensed to the Apache Software Foundation (ASF) under one or more
+<i>6</i>&nbsp; * contributor license agreements.  See the NOTICE file distributed with
+<i>7</i>&nbsp; * this work for additional information regarding copyright ownership.
+<i>8</i>&nbsp; * The ASF licenses this file to You under the Apache License, Version 2.0
+<i>9</i>&nbsp; * (the &quot;License&quot;); you may not use this file except in compliance with
+<i>10</i>&nbsp; * the License.  You may obtain a copy of the License at
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *     http://www.apache.org/licenses/LICENSE-2.0
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; * Unless required by applicable law or agreed to in writing, software
+<i>15</i>&nbsp; * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+<i>16</i>&nbsp; * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+<i>17</i>&nbsp; * See the License for the specific language governing permissions and
+<i>18</i>&nbsp; * limitations under the License.
+<i>19</i>&nbsp; */
+<i>20</i>&nbsp;
+<i>21</i>&nbsp;package com.sun.org.apache.xerces.internal.impl;
+<i>22</i>&nbsp;
+<i>23</i>&nbsp;import com.sun.org.apache.xerces.internal.impl.msg.XMLMessageFormatter;
+<i>24</i>&nbsp;import com.sun.org.apache.xerces.internal.util.SymbolTable;
+<i>25</i>&nbsp;import com.sun.org.apache.xerces.internal.util.XMLAttributesImpl;
+<i>26</i>&nbsp;import com.sun.org.apache.xerces.internal.util.XMLChar;
+<i>27</i>&nbsp;import com.sun.org.apache.xerces.internal.util.XMLStringBuffer;
+<i>28</i>&nbsp;import com.sun.org.apache.xerces.internal.utils.XMLLimitAnalyzer;
+<i>29</i>&nbsp;import com.sun.org.apache.xerces.internal.utils.XMLSecurityManager;
+<i>30</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.XMLDTDContentModelHandler;
+<i>31</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.XMLDTDHandler;
+<i>32</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.XMLResourceIdentifier;
+<i>33</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.XMLString;
+<i>34</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.XNIException;
+<i>35</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.parser.XMLComponent;
+<i>36</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.parser.XMLComponentManager;
+<i>37</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.parser.XMLConfigurationException;
+<i>38</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.parser.XMLDTDScanner;
+<i>39</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.parser.XMLInputSource;
+<i>40</i>&nbsp;import com.sun.org.apache.xerces.internal.xni.Augmentations;
+<i>41</i>&nbsp;import com.sun.xml.internal.stream.dtd.nonvalidating.DTDGrammar;
+<i>42</i>&nbsp;import java.io.EOFException;
+<i>43</i>&nbsp;import java.io.IOException;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;/**
+<i>46</i>&nbsp; * This class is responsible for scanning the declarations found
+<i>47</i>&nbsp; * in the internal and external subsets of a DTD in an XML document.
+<i>48</i>&nbsp; * The scanner acts as the sources for the DTD information which is
+<i>49</i>&nbsp; * communicated to the DTD handlers.
+<i>50</i>&nbsp; * &lt;p&gt;
+<i>51</i>&nbsp; * This component requires the following features and properties from the
+<i>52</i>&nbsp; * component manager that uses it:
+<i>53</i>&nbsp; * &lt;ul&gt;
+<i>54</i>&nbsp; *  &lt;li&gt;http://xml.org/sax/features/validation&lt;/li&gt;
+<i>55</i>&nbsp; *  &lt;li&gt;http://apache.org/xml/features/scanner/notify-char-refs&lt;/li&gt;
+<i>56</i>&nbsp; *  &lt;li&gt;http://apache.org/xml/properties/internal/symbol-table&lt;/li&gt;
+<i>57</i>&nbsp; *  &lt;li&gt;http://apache.org/xml/properties/internal/error-reporter&lt;/li&gt;
+<i>58</i>&nbsp; *  &lt;li&gt;http://apache.org/xml/properties/internal/entity-manager&lt;/li&gt;
+<i>59</i>&nbsp; * &lt;/ul&gt;
+<i>60</i>&nbsp; *
+<i>61</i>&nbsp; * @author Arnaud  Le Hors, IBM
+<i>62</i>&nbsp; * @author Andy Clark, IBM
+<i>63</i>&nbsp; * @author Glenn Marcy, IBM
+<i>64</i>&nbsp; * @author Eric Ye, IBM
+<i>65</i>&nbsp; *
+<i>66</i>&nbsp; * @LastModified: Nov 2017
+<i>67</i>&nbsp; */
+<i>68</i>&nbsp;public class XMLDTDScannerImpl
+<i>69</i>&nbsp;extends XMLScanner
+<i>70</i>&nbsp;implements XMLDTDScanner, XMLComponent, XMLEntityHandler {
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    //
+<i>73</i>&nbsp;    // Constants
+<i>74</i>&nbsp;    //
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    // scanner states
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    /** Scanner state: end of input. */
+<i>79</i>&nbsp;    protected static final int SCANNER_STATE_END_OF_INPUT = 0;
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    /** Scanner state: text declaration. */
+<i>82</i>&nbsp;    protected static final int SCANNER_STATE_TEXT_DECL = 1;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    /** Scanner state: markup declaration. */
+<i>85</i>&nbsp;    protected static final int SCANNER_STATE_MARKUP_DECL = 2;
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    // recognized features and properties
+<i>88</i>&nbsp;
+<i>89</i>&nbsp;    /** Recognized features. */
+<i>90</i>&nbsp;    private static final String[] RECOGNIZED_FEATURES = {
+<i>91</i>&nbsp;        VALIDATION,
+<i>92</i>&nbsp;        NOTIFY_CHAR_REFS,
+<i>93</i>&nbsp;    };
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;    /** Feature defaults. */
+<i>96</i>&nbsp;    private static final Boolean[] FEATURE_DEFAULTS = {
+<b class="nc"><i>97</i>&nbsp;        null,</b>
+<i>98</i>&nbsp;        Boolean.FALSE,
+<i>99</i>&nbsp;    };
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;    /** Recognized properties. */
+<i>102</i>&nbsp;    private static final String[] RECOGNIZED_PROPERTIES = {
+<b class="nc"><i>103</i>&nbsp;        SYMBOL_TABLE,</b>
+<i>104</i>&nbsp;        ERROR_REPORTER,
+<i>105</i>&nbsp;        ENTITY_MANAGER,
+<i>106</i>&nbsp;    };
+<i>107</i>&nbsp;
+<i>108</i>&nbsp;    /** Property defaults. */
+<b class="nc"><i>109</i>&nbsp;    private static final Object[] PROPERTY_DEFAULTS = {</b>
+<i>110</i>&nbsp;        null,
+<i>111</i>&nbsp;        null,
+<i>112</i>&nbsp;        null,
+<i>113</i>&nbsp;    };
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;    // debugging
+<b class="nc"><i>116</i>&nbsp;</b>
+<i>117</i>&nbsp;    /** Debug scanner state. */
+<i>118</i>&nbsp;    private static final boolean DEBUG_SCANNER_STATE = false;
+<i>119</i>&nbsp;
+<i>120</i>&nbsp;    //
+<i>121</i>&nbsp;    // Data
+<i>122</i>&nbsp;    //
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    // handlers
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;    /** DTD handler. */
+<i>127</i>&nbsp;    public XMLDTDHandler fDTDHandler = null;
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    /** DTD content model handler. */
+<i>130</i>&nbsp;    protected XMLDTDContentModelHandler fDTDContentModelHandler;
+<i>131</i>&nbsp;
+<i>132</i>&nbsp;    // state
+<i>133</i>&nbsp;
+<b class="nc"><i>134</i>&nbsp;    /** Scanner state. */</b>
+<i>135</i>&nbsp;    protected int fScannerState;
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;    /** Standalone. */
+<i>138</i>&nbsp;    protected boolean fStandalone;
+<i>139</i>&nbsp;
+<i>140</i>&nbsp;    /** Seen external DTD. */
+<i>141</i>&nbsp;    protected boolean fSeenExternalDTD;
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;    /** Seen external parameter entity. */
+<i>144</i>&nbsp;    protected boolean fSeenExternalPE;
+<i>145</i>&nbsp;
+<i>146</i>&nbsp;    // private data
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;    /** Start DTD called. */
+<i>149</i>&nbsp;    private boolean fStartDTDCalled;
+<i>150</i>&nbsp;
+<i>151</i>&nbsp;    /** Default attribute */
+<i>152</i>&nbsp;    private XMLAttributesImpl fAttributes = new XMLAttributesImpl();
+<i>153</i>&nbsp;
+<i>154</i>&nbsp;    /**
+<i>155</i>&nbsp;     * Stack of content operators (either &#39;|&#39; or &#39;,&#39;) in children
+<i>156</i>&nbsp;     * content.
+<i>157</i>&nbsp;     */
+<i>158</i>&nbsp;    private int[] fContentStack = new int[5];
+<b class="nc"><i>159</i>&nbsp;</b>
+<i>160</i>&nbsp;    /** Size of content stack. */
+<i>161</i>&nbsp;    private int fContentDepth;
+<i>162</i>&nbsp;
+<i>163</i>&nbsp;    /** Parameter entity stack to check well-formedness. */
+<i>164</i>&nbsp;    private int[] fPEStack = new int[5];
+<b class="nc"><i>165</i>&nbsp;</b>
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;    /** Parameter entity stack to report start/end entity calls. */
+<i>168</i>&nbsp;    private boolean[] fPEReport = new boolean[5];
+<i>169</i>&nbsp;
+<i>170</i>&nbsp;    /** Number of opened parameter entities. */
+<b class="nc"><i>171</i>&nbsp;    private int fPEDepth;</b>
+<i>172</i>&nbsp;
+<i>173</i>&nbsp;    /** Markup depth. */
+<i>174</i>&nbsp;    private int fMarkUpDepth;
+<b class="nc"><i>175</i>&nbsp;</b>
+<i>176</i>&nbsp;    /** Number of opened external entities. */
+<i>177</i>&nbsp;    private int fExtEntityDepth;
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;    /** Number of opened include sections. */
+<i>180</i>&nbsp;    private int fIncludeSectDepth;
+<i>181</i>&nbsp;
+<i>182</i>&nbsp;    // temporary variables
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;    /** Array of 3 strings. */
+<i>185</i>&nbsp;    private String[] fStrings = new String[3];
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;    /** String. */
+<i>188</i>&nbsp;    private XMLString fString = new XMLString();
+<i>189</i>&nbsp;
+<i>190</i>&nbsp;    /** String buffer. */
+<i>191</i>&nbsp;    private XMLStringBuffer fStringBuffer = new XMLStringBuffer();
+<b class="nc"><i>192</i>&nbsp;</b>
+<i>193</i>&nbsp;    /** String buffer. */
+<i>194</i>&nbsp;    private XMLStringBuffer fStringBuffer2 = new XMLStringBuffer();
+<b class="nc"><i>195</i>&nbsp;</b>
+<i>196</i>&nbsp;    /** Literal text. */
+<i>197</i>&nbsp;    private XMLString fLiteral = new XMLString();
+<b class="nc"><i>198</i>&nbsp;</b>
+<i>199</i>&nbsp;    /** Literal text. */
+<i>200</i>&nbsp;    private XMLString fLiteral2 = new XMLString();
+<b class="nc"><i>201</i>&nbsp;</b>
+<i>202</i>&nbsp;    /** Enumeration values. */
+<i>203</i>&nbsp;    private String[] fEnumeration = new String[5];
+<b class="nc"><i>204</i>&nbsp;</b>
+<i>205</i>&nbsp;    /** Enumeration values count. */
+<i>206</i>&nbsp;    private int fEnumerationCount;
+<b class="nc"><i>207</i>&nbsp;</b>
+<i>208</i>&nbsp;    /** Ignore conditional section buffer. */
+<i>209</i>&nbsp;    private XMLStringBuffer fIgnoreConditionalBuffer = new XMLStringBuffer(128);
+<b class="nc"><i>210</i>&nbsp;</b>
+<i>211</i>&nbsp;    /** Object contains grammar information for a non-validaing parser. */
+<i>212</i>&nbsp;    DTDGrammar nvGrammarInfo = null;
+<i>213</i>&nbsp;
+<i>214</i>&nbsp;    boolean nonValidatingMode = false;
+<i>215</i>&nbsp;    //
+<b class="nc"><i>216</i>&nbsp;    // Constructors</b>
+<i>217</i>&nbsp;    //
+<i>218</i>&nbsp;
+<b class="nc"><i>219</i>&nbsp;    /** Default constructor. */</b>
+<i>220</i>&nbsp;    public XMLDTDScannerImpl() {
+<b class="nc"><i>221</i>&nbsp;    } // &lt;init&gt;()</b>
+<i>222</i>&nbsp;
+<i>223</i>&nbsp;    /** Constructor for he use of non-XMLComponentManagers. */
+<i>224</i>&nbsp;    public XMLDTDScannerImpl(SymbolTable symbolTable,
+<i>225</i>&nbsp;            XMLErrorReporter errorReporter, XMLEntityManager entityManager) {
+<i>226</i>&nbsp;        fSymbolTable = symbolTable;
+<b class="nc"><i>227</i>&nbsp;        fErrorReporter = errorReporter;</b>
+<i>228</i>&nbsp;        fEntityManager = entityManager;
+<i>229</i>&nbsp;        entityManager.setProperty(SYMBOL_TABLE, fSymbolTable);
+<i>230</i>&nbsp;    }
+<i>231</i>&nbsp;
+<b class="nc"><i>232</i>&nbsp;    //</b>
+<b class="nc"><i>233</i>&nbsp;    // XMLDTDScanner methods</b>
+<b class="nc"><i>234</i>&nbsp;    //</b>
+<b class="nc"><i>235</i>&nbsp;</b>
+<b class="nc"><i>236</i>&nbsp;    /**</b>
+<i>237</i>&nbsp;     * Sets the input source.
+<i>238</i>&nbsp;     *
+<i>239</i>&nbsp;     * @param inputSource The input source or null.
+<i>240</i>&nbsp;     *
+<i>241</i>&nbsp;     * @throws IOException Thrown on i/o error.
+<i>242</i>&nbsp;     */
+<i>243</i>&nbsp;    public void setInputSource(XMLInputSource inputSource) throws IOException {
+<i>244</i>&nbsp;        if (inputSource == null) {
+<i>245</i>&nbsp;            // no system id was available
+<i>246</i>&nbsp;            if (fDTDHandler != null) {
+<i>247</i>&nbsp;                fDTDHandler.startDTD(null, null);
+<i>248</i>&nbsp;                fDTDHandler.endDTD(null);
+<i>249</i>&nbsp;            }
+<i>250</i>&nbsp;            if (nonValidatingMode){
+<b class="nc"><i>251</i>&nbsp;                nvGrammarInfo.startDTD(null,null);</b>
+<i>252</i>&nbsp;                nvGrammarInfo.endDTD(null);
+<b class="nc"><i>253</i>&nbsp;            }</b>
+<b class="nc"><i>254</i>&nbsp;            return;</b>
+<b class="nc"><i>255</i>&nbsp;        }</b>
+<i>256</i>&nbsp;        fEntityManager.setEntityHandler(this);
+<b class="nc"><i>257</i>&nbsp;        fEntityManager.startDTDEntity(inputSource);</b>
+<b class="nc"><i>258</i>&nbsp;    } // setInputSource(XMLInputSource)</b>
+<b class="nc"><i>259</i>&nbsp;</b>
+<i>260</i>&nbsp;
+<i>261</i>&nbsp;    public void setLimitAnalyzer(XMLLimitAnalyzer limitAnalyzer) {
+<i>262</i>&nbsp;        fLimitAnalyzer = limitAnalyzer;
+<b class="nc"><i>263</i>&nbsp;    }</b>
+<b class="nc"><i>264</i>&nbsp;</b>
+<i>265</i>&nbsp;    /**
+<i>266</i>&nbsp;     * Scans the external subset of the document.
+<i>267</i>&nbsp;     *
+<i>268</i>&nbsp;     * @param complete True if the scanner should scan the document
+<b class="nc"><i>269</i>&nbsp;     *                 completely, pushing all events to the registered</b>
+<i>270</i>&nbsp;     *                 document handler. A value of false indicates that
+<i>271</i>&nbsp;     *                 that the scanner should only scan the next portion
+<i>272</i>&nbsp;     *                 of the document and return. A scanner instance is
+<i>273</i>&nbsp;     *                 permitted to completely scan a document if it does
+<i>274</i>&nbsp;     *                 not support this &quot;pull&quot; scanning model.
+<i>275</i>&nbsp;     *
+<i>276</i>&nbsp;     * @return True if there is more to scan, false otherwise.
+<i>277</i>&nbsp;     */
+<i>278</i>&nbsp;    public boolean scanDTDExternalSubset(boolean complete)
+<i>279</i>&nbsp;    throws IOException, XNIException {
+<i>280</i>&nbsp;
+<i>281</i>&nbsp;        fEntityManager.setEntityHandler(this);
+<i>282</i>&nbsp;        if (fScannerState == SCANNER_STATE_TEXT_DECL) {
+<i>283</i>&nbsp;            fSeenExternalDTD = true;
+<i>284</i>&nbsp;            boolean textDecl = scanTextDecl();
+<i>285</i>&nbsp;            if (fScannerState == SCANNER_STATE_END_OF_INPUT) {
+<i>286</i>&nbsp;                return false;
+<i>287</i>&nbsp;            }
+<b class="nc"><i>288</i>&nbsp;            else {</b>
+<b class="nc"><i>289</i>&nbsp;                // next state is markup decls regardless of whether there</b>
+<b class="nc"><i>290</i>&nbsp;                // is a TextDecl or not</b>
+<b class="nc"><i>291</i>&nbsp;                setScannerState(SCANNER_STATE_MARKUP_DECL);</b>
+<b class="nc"><i>292</i>&nbsp;                if (textDecl &amp;&amp; !complete) {</b>
+<b class="nc"><i>293</i>&nbsp;                    return true;</b>
+<i>294</i>&nbsp;                }
+<i>295</i>&nbsp;            }
+<i>296</i>&nbsp;        }
+<i>297</i>&nbsp;        // keep dispatching &quot;events&quot;
+<b class="nc"><i>298</i>&nbsp;        do {</b>
+<b class="nc"><i>299</i>&nbsp;            if (!scanDecls(complete)) {</b>
+<b class="nc"><i>300</i>&nbsp;                return false;</b>
+<i>301</i>&nbsp;            }
+<i>302</i>&nbsp;        } while (complete);
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;        // return that there is more to scan
+<i>305</i>&nbsp;        return true;
+<b class="nc"><i>306</i>&nbsp;</b>
+<b class="nc"><i>307</i>&nbsp;    } // scanDTDExternalSubset(boolean):boolean</b>
+<i>308</i>&nbsp;
+<b class="nc"><i>309</i>&nbsp;    /**</b>
+<i>310</i>&nbsp;     * Scans the internal subset of the document.
+<i>311</i>&nbsp;     *
+<b class="nc"><i>312</i>&nbsp;     * @param complete True if the scanner should scan the document</b>
+<i>313</i>&nbsp;     *                 completely, pushing all events to the registered
+<i>314</i>&nbsp;     *                 document handler. A value of false indicates that
+<i>315</i>&nbsp;     *                 that the scanner should only scan the next portion
+<i>316</i>&nbsp;     *                 of the document and return. A scanner instance is
+<i>317</i>&nbsp;     *                 permitted to completely scan a document if it does
+<i>318</i>&nbsp;     *                 not support this &quot;pull&quot; scanning model.
+<i>319</i>&nbsp;     * @param standalone True if the document was specified as standalone.
+<i>320</i>&nbsp;     *                   This value is important for verifying certain
+<i>321</i>&nbsp;     *                   well-formedness constraints.
+<i>322</i>&nbsp;     * @param hasExternalDTD True if the document has an external DTD.
+<i>323</i>&nbsp;     *                       This allows the scanner to properly notify
+<i>324</i>&nbsp;     *                       the handler of the end of the DTD in the
+<i>325</i>&nbsp;     *                       absence of an external subset.
+<i>326</i>&nbsp;     *
+<i>327</i>&nbsp;     * @return True if there is more to scan, false otherwise.
+<i>328</i>&nbsp;     */
+<i>329</i>&nbsp;    public boolean scanDTDInternalSubset(boolean complete, boolean standalone,
+<i>330</i>&nbsp;    boolean hasExternalSubset)
+<i>331</i>&nbsp;    throws IOException, XNIException {
+<i>332</i>&nbsp;        // reset entity scanner
+<i>333</i>&nbsp;        //xxx:stax getText() is supposed to return only DTD internal subset
+<i>334</i>&nbsp;        //shouldn&#39;t we record position here before we go ahead ??
+<i>335</i>&nbsp;
+<i>336</i>&nbsp;        fEntityScanner = fEntityManager.getEntityScanner();
+<i>337</i>&nbsp;        fEntityManager.setEntityHandler(this);
+<i>338</i>&nbsp;        fStandalone = standalone;
+<i>339</i>&nbsp;        //System.out.println(&quot;state&quot;+fScannerState);
+<i>340</i>&nbsp;        if (fScannerState == SCANNER_STATE_TEXT_DECL) {
+<i>341</i>&nbsp;            // call handler
+<i>342</i>&nbsp;            if (fDTDHandler != null) {
+<b class="nc"><i>343</i>&nbsp;                fDTDHandler.startDTD(fEntityScanner, null);</b>
+<b class="nc"><i>344</i>&nbsp;                fStartDTDCalled = true;</b>
+<b class="nc"><i>345</i>&nbsp;            }</b>
+<i>346</i>&nbsp;
+<b class="nc"><i>347</i>&nbsp;            if (nonValidatingMode){</b>
+<i>348</i>&nbsp;                fStartDTDCalled = true;
+<b class="nc"><i>349</i>&nbsp;                nvGrammarInfo.startDTD(fEntityScanner,null);</b>
+<b class="nc"><i>350</i>&nbsp;            }</b>
+<b class="nc"><i>351</i>&nbsp;            // set starting state for internal subset</b>
+<i>352</i>&nbsp;            setScannerState(SCANNER_STATE_MARKUP_DECL);
+<i>353</i>&nbsp;        }
+<b class="nc"><i>354</i>&nbsp;        // keep dispatching &quot;events&quot;</b>
+<b class="nc"><i>355</i>&nbsp;        do {</b>
+<b class="nc"><i>356</i>&nbsp;            if (!scanDecls(complete)) {</b>
+<i>357</i>&nbsp;                // call handler
+<i>358</i>&nbsp;                if (fDTDHandler != null &amp;&amp; hasExternalSubset == false) {
+<b class="nc"><i>359</i>&nbsp;                    fDTDHandler.endDTD(null);</b>
+<i>360</i>&nbsp;                }
+<i>361</i>&nbsp;                if (nonValidatingMode &amp;&amp; hasExternalSubset == false ){
+<i>362</i>&nbsp;                    nvGrammarInfo.endDTD(null);
+<b class="nc"><i>363</i>&nbsp;                }</b>
+<i>364</i>&nbsp;                // we&#39;re done, set starting state for external subset
+<b class="nc"><i>365</i>&nbsp;                setScannerState(SCANNER_STATE_TEXT_DECL);</b>
+<b class="nc"><i>366</i>&nbsp;                // we&#39;re done scanning DTD.</b>
+<i>367</i>&nbsp;                fLimitAnalyzer.reset(XMLSecurityManager.Limit.GENERAL_ENTITY_SIZE_LIMIT);
+<b class="nc"><i>368</i>&nbsp;                fLimitAnalyzer.reset(XMLSecurityManager.Limit.TOTAL_ENTITY_SIZE_LIMIT);</b>
+<b class="nc"><i>369</i>&nbsp;                return false;</b>
+<i>370</i>&nbsp;            }
+<i>371</i>&nbsp;        } while (complete);
+<b class="nc"><i>372</i>&nbsp;</b>
+<i>373</i>&nbsp;        // return that there is more to scan
+<b class="nc"><i>374</i>&nbsp;        return true;</b>
+<b class="nc"><i>375</i>&nbsp;</b>
+<b class="nc"><i>376</i>&nbsp;    } // scanDTDInternalSubset(boolean,boolean,boolean):boolean</b>
+<i>377</i>&nbsp;
+<b class="nc"><i>378</i>&nbsp;    /**</b>
+<i>379</i>&nbsp;     * Skip the DTD if javax.xml.stream.supportDTD is false.
+<i>380</i>&nbsp;     *
+<b class="nc"><i>381</i>&nbsp;     * @param supportDTD The value of the property javax.xml.stream.supportDTD.</b>
+<i>382</i>&nbsp;     * @return true if DTD is skipped, false otherwise.
+<i>383</i>&nbsp;     * @throws java.io.IOException if i/o error occurs
+<i>384</i>&nbsp;     */
+<i>385</i>&nbsp;    @Override
+<i>386</i>&nbsp;    public boolean skipDTD(boolean supportDTD) throws IOException {
+<i>387</i>&nbsp;        if (supportDTD)
+<i>388</i>&nbsp;            return false;
+<i>389</i>&nbsp;
+<i>390</i>&nbsp;        fStringBuffer.clear();
+<i>391</i>&nbsp;        while (fEntityScanner.scanData(&quot;]&quot;, fStringBuffer, 0)) {
+<i>392</i>&nbsp;            int c = fEntityScanner.peekChar();
+<i>393</i>&nbsp;            if (c != -1) {
+<b class="nc"><i>394</i>&nbsp;                if (XMLChar.isHighSurrogate(c)) {</b>
+<b class="nc"><i>395</i>&nbsp;                    scanSurrogates(fStringBuffer);</b>
+<i>396</i>&nbsp;                }
+<b class="nc"><i>397</i>&nbsp;                if (isInvalidLiteral(c)) {</b>
+<b class="nc"><i>398</i>&nbsp;                    reportFatalError(&quot;InvalidCharInDTD&quot;,</b>
+<b class="nc"><i>399</i>&nbsp;                        new Object[] { Integer.toHexString(c) });</b>
+<b class="nc"><i>400</i>&nbsp;                    fEntityScanner.scanChar(null);</b>
+<b class="nc"><i>401</i>&nbsp;                }</b>
+<b class="nc"><i>402</i>&nbsp;            }</b>
+<i>403</i>&nbsp;        }
+<b class="nc"><i>404</i>&nbsp;        fEntityScanner.fCurrentEntity.position--;</b>
+<b class="nc"><i>405</i>&nbsp;        return true;</b>
+<b class="nc"><i>406</i>&nbsp;    }</b>
+<b class="nc"><i>407</i>&nbsp;</b>
+<i>408</i>&nbsp;    //
+<i>409</i>&nbsp;    // XMLComponent methods
+<b class="nc"><i>410</i>&nbsp;    //</b>
+<b class="nc"><i>411</i>&nbsp;</b>
+<b class="nc"><i>412</i>&nbsp;    /**</b>
+<i>413</i>&nbsp;     * reset
+<i>414</i>&nbsp;     *
+<i>415</i>&nbsp;     * @param componentManager
+<i>416</i>&nbsp;     */
+<i>417</i>&nbsp;    public void reset(XMLComponentManager componentManager)
+<i>418</i>&nbsp;    throws XMLConfigurationException {
+<i>419</i>&nbsp;
+<i>420</i>&nbsp;        super.reset(componentManager);
+<i>421</i>&nbsp;        init();
+<i>422</i>&nbsp;
+<i>423</i>&nbsp;    } // reset(XMLComponentManager)
+<i>424</i>&nbsp;
+<i>425</i>&nbsp;    // this is made for something like XMLDTDLoader--XMLComponentManager-free operation...
+<i>426</i>&nbsp;    public void reset() {
+<b class="nc"><i>427</i>&nbsp;        super.reset();</b>
+<b class="nc"><i>428</i>&nbsp;        init();</b>
+<i>429</i>&nbsp;
+<i>430</i>&nbsp;    }
+<i>431</i>&nbsp;
+<i>432</i>&nbsp;    public void reset(PropertyManager props) {
+<i>433</i>&nbsp;        setPropertyManager(props);
+<b class="nc"><i>434</i>&nbsp;        super.reset(props);</b>
+<b class="nc"><i>435</i>&nbsp;        init() ;</b>
+<i>436</i>&nbsp;        nonValidatingMode = true;
+<i>437</i>&nbsp;        //Revisit : Create new grammar until we implement GrammarPool.
+<i>438</i>&nbsp;        nvGrammarInfo = new DTDGrammar(fSymbolTable);
+<i>439</i>&nbsp;    }
+<b class="nc"><i>440</i>&nbsp;    /**</b>
+<b class="nc"><i>441</i>&nbsp;     * Returns a list of feature identifiers that are recognized by</b>
+<b class="nc"><i>442</i>&nbsp;     * this component. This method may return null if no features</b>
+<b class="nc"><i>443</i>&nbsp;     * are recognized by this component.</b>
+<i>444</i>&nbsp;     */
+<b class="nc"><i>445</i>&nbsp;    public String[] getRecognizedFeatures() {</b>
+<i>446</i>&nbsp;        return RECOGNIZED_FEATURES.clone();
+<i>447</i>&nbsp;    } // getRecognizedFeatures():String[]
+<i>448</i>&nbsp;
+<i>449</i>&nbsp;    /**
+<i>450</i>&nbsp;     * Returns a list of property identifiers that are recognized by
+<i>451</i>&nbsp;     * this component. This method may return null if no properties
+<i>452</i>&nbsp;     * are recognized by this component.
+<b class="nc"><i>453</i>&nbsp;     */</b>
+<i>454</i>&nbsp;    public String[] getRecognizedProperties() {
+<i>455</i>&nbsp;        return RECOGNIZED_PROPERTIES.clone();
+<i>456</i>&nbsp;    } // getRecognizedProperties():String[]
+<i>457</i>&nbsp;
+<i>458</i>&nbsp;    /**
+<i>459</i>&nbsp;     * Returns the default state for a feature, or null if this
+<i>460</i>&nbsp;     * component does not want to report a default value for this
+<i>461</i>&nbsp;     * feature.
+<b class="nc"><i>462</i>&nbsp;     *</b>
+<i>463</i>&nbsp;     * @param featureId The feature identifier.
+<i>464</i>&nbsp;     *
+<i>465</i>&nbsp;     * @since Xerces 2.2.0
+<i>466</i>&nbsp;     */
+<i>467</i>&nbsp;    public Boolean getFeatureDefault(String featureId) {
+<i>468</i>&nbsp;        for (int i = 0; i &lt; RECOGNIZED_FEATURES.length; i++) {
+<i>469</i>&nbsp;            if (RECOGNIZED_FEATURES[i].equals(featureId)) {
+<i>470</i>&nbsp;                return FEATURE_DEFAULTS[i];
+<i>471</i>&nbsp;            }
+<i>472</i>&nbsp;        }
+<i>473</i>&nbsp;        return null;
+<i>474</i>&nbsp;    } // getFeatureDefault(String):Boolean
+<b class="nc"><i>475</i>&nbsp;</b>
+<b class="nc"><i>476</i>&nbsp;    /**</b>
+<b class="nc"><i>477</i>&nbsp;     * Returns the default state for a property, or null if this</b>
+<i>478</i>&nbsp;     * component does not want to report a default value for this
+<i>479</i>&nbsp;     * property.
+<b class="nc"><i>480</i>&nbsp;     *</b>
+<i>481</i>&nbsp;     * @param propertyId The property identifier.
+<i>482</i>&nbsp;     *
+<i>483</i>&nbsp;     * @since Xerces 2.2.0
+<i>484</i>&nbsp;     */
+<i>485</i>&nbsp;    public Object getPropertyDefault(String propertyId) {
+<i>486</i>&nbsp;        for (int i = 0; i &lt; RECOGNIZED_PROPERTIES.length; i++) {
+<i>487</i>&nbsp;            if (RECOGNIZED_PROPERTIES[i].equals(propertyId)) {
+<i>488</i>&nbsp;                return PROPERTY_DEFAULTS[i];
+<i>489</i>&nbsp;            }
+<i>490</i>&nbsp;        }
+<i>491</i>&nbsp;        return null;
+<i>492</i>&nbsp;    } // getPropertyDefault(String):Object
+<b class="nc"><i>493</i>&nbsp;</b>
+<b class="nc"><i>494</i>&nbsp;    //</b>
+<b class="nc"><i>495</i>&nbsp;    // XMLDTDSource methods</b>
+<i>496</i>&nbsp;    //
+<i>497</i>&nbsp;
+<b class="nc"><i>498</i>&nbsp;    /**</b>
+<i>499</i>&nbsp;     * setDTDHandler
+<i>500</i>&nbsp;     *
+<i>501</i>&nbsp;     * @param dtdHandler
+<i>502</i>&nbsp;     */
+<i>503</i>&nbsp;    public void setDTDHandler(XMLDTDHandler dtdHandler) {
+<i>504</i>&nbsp;        fDTDHandler = dtdHandler;
+<i>505</i>&nbsp;    } // setDTDHandler(XMLDTDHandler)
+<i>506</i>&nbsp;
+<i>507</i>&nbsp;    /**
+<i>508</i>&nbsp;     * getDTDHandler
+<i>509</i>&nbsp;     *
+<i>510</i>&nbsp;     * @return the XMLDTDHandler
+<b class="nc"><i>511</i>&nbsp;     */</b>
+<i>512</i>&nbsp;    public XMLDTDHandler getDTDHandler() {
+<i>513</i>&nbsp;        return fDTDHandler;
+<i>514</i>&nbsp;    } // getDTDHandler():  XMLDTDHandler
+<i>515</i>&nbsp;
+<i>516</i>&nbsp;    //
+<i>517</i>&nbsp;    // XMLDTDContentModelSource methods
+<i>518</i>&nbsp;    //
+<i>519</i>&nbsp;
+<b class="nc"><i>520</i>&nbsp;    /**</b>
+<i>521</i>&nbsp;     * setDTDContentModelHandler
+<i>522</i>&nbsp;     *
+<i>523</i>&nbsp;     * @param dtdContentModelHandler
+<i>524</i>&nbsp;     */
+<i>525</i>&nbsp;    public void setDTDContentModelHandler(XMLDTDContentModelHandler
+<i>526</i>&nbsp;    dtdContentModelHandler) {
+<i>527</i>&nbsp;        fDTDContentModelHandler = dtdContentModelHandler;
+<i>528</i>&nbsp;    } // setDTDContentModelHandler
+<i>529</i>&nbsp;
+<i>530</i>&nbsp;    /**
+<i>531</i>&nbsp;     * getDTDContentModelHandler
+<i>532</i>&nbsp;     *
+<i>533</i>&nbsp;     * @return XMLDTDContentModelHandler
+<b class="nc"><i>534</i>&nbsp;     */</b>
+<i>535</i>&nbsp;    public XMLDTDContentModelHandler getDTDContentModelHandler() {
+<i>536</i>&nbsp;        return fDTDContentModelHandler ;
+<i>537</i>&nbsp;    } // setDTDContentModelHandler
+<i>538</i>&nbsp;
+<i>539</i>&nbsp;    //
+<i>540</i>&nbsp;    // XMLEntityHandler methods
+<i>541</i>&nbsp;    //
+<i>542</i>&nbsp;
+<b class="nc"><i>543</i>&nbsp;    /**</b>
+<i>544</i>&nbsp;     * This method notifies of the start of an entity. The DTD has the
+<i>545</i>&nbsp;     * pseudo-name of &quot;[dtd]&quot; parameter entity names start with &#39;%&#39;; and
+<i>546</i>&nbsp;     * general entities are just specified by their name.
+<i>547</i>&nbsp;     *
+<i>548</i>&nbsp;     * @param name     The name of the entity.
+<i>549</i>&nbsp;     * @param identifier The resource identifier.
+<i>550</i>&nbsp;     * @param encoding The auto-detected IANA encoding name of the entity
+<i>551</i>&nbsp;     *                 stream. This value will be null in those situations
+<i>552</i>&nbsp;     *                 where the entity encoding is not auto-detected (e.g.
+<i>553</i>&nbsp;     *                 internal entities or a document entity that is
+<i>554</i>&nbsp;     *                 parsed from a java.io.Reader).
+<i>555</i>&nbsp;     * @param augs     Additional information that may include infoset augmentations
+<i>556</i>&nbsp;     *
+<i>557</i>&nbsp;     * @throws XNIException Thrown by handler to signal an error.
+<i>558</i>&nbsp;     */
+<i>559</i>&nbsp;    public void startEntity(String name,
+<i>560</i>&nbsp;                            XMLResourceIdentifier identifier,
+<i>561</i>&nbsp;                            String encoding, Augmentations augs) throws XNIException {
+<i>562</i>&nbsp;
+<i>563</i>&nbsp;        super.startEntity(name, identifier, encoding, augs);
+<i>564</i>&nbsp;
+<i>565</i>&nbsp;        boolean dtdEntity = name.equals(&quot;[dtd]&quot;);
+<i>566</i>&nbsp;        if (dtdEntity) {
+<i>567</i>&nbsp;            // call handler
+<i>568</i>&nbsp;            if (fDTDHandler != null &amp;&amp; !fStartDTDCalled ) {
+<i>569</i>&nbsp;                fDTDHandler.startDTD(fEntityScanner, null);
+<b class="nc"><i>570</i>&nbsp;            }</b>
+<i>571</i>&nbsp;            if (fDTDHandler != null) {
+<b class="nc"><i>572</i>&nbsp;                fDTDHandler.startExternalSubset(identifier,null);</b>
+<b class="nc"><i>573</i>&nbsp;            }</b>
+<i>574</i>&nbsp;            fEntityManager.startExternalSubset();
+<b class="nc"><i>575</i>&nbsp;            fEntityStore.startExternalSubset();</b>
+<b class="nc"><i>576</i>&nbsp;            fExtEntityDepth++;</b>
+<i>577</i>&nbsp;        }
+<b class="nc"><i>578</i>&nbsp;        else if (name.charAt(0) == &#39;%&#39;) {</b>
+<b class="nc"><i>579</i>&nbsp;            pushPEStack(fMarkUpDepth, fReportEntity);</b>
+<i>580</i>&nbsp;            if (fEntityScanner.isExternal()) {
+<b class="nc"><i>581</i>&nbsp;                fExtEntityDepth++;</b>
+<b class="nc"><i>582</i>&nbsp;            }</b>
+<b class="nc"><i>583</i>&nbsp;        }</b>
+<i>584</i>&nbsp;
+<b class="nc"><i>585</i>&nbsp;        // call handler</b>
+<b class="nc"><i>586</i>&nbsp;        if (fDTDHandler != null &amp;&amp; !dtdEntity &amp;&amp; fReportEntity) {</b>
+<b class="nc"><i>587</i>&nbsp;            fDTDHandler.startParameterEntity(name, identifier, encoding, null);</b>
+<b class="nc"><i>588</i>&nbsp;        }</b>
+<i>589</i>&nbsp;
+<i>590</i>&nbsp;    } // startEntity(String,XMLResourceIdentifier,String)
+<i>591</i>&nbsp;
+<i>592</i>&nbsp;    /**
+<b class="nc"><i>593</i>&nbsp;     * This method notifies the end of an entity. The DTD has the pseudo-name</b>
+<b class="nc"><i>594</i>&nbsp;     * of &quot;[dtd]&quot; parameter entity names start with &#39;%&#39;; and general entities</b>
+<i>595</i>&nbsp;     * are just specified by their name.
+<i>596</i>&nbsp;     *
+<i>597</i>&nbsp;     * @param name The name of the entity.
+<i>598</i>&nbsp;     *
+<i>599</i>&nbsp;     * @throws XNIException Thrown by handler to signal an error.
+<i>600</i>&nbsp;     */
+<i>601</i>&nbsp;    public void endEntity(String name, Augmentations augs)
+<i>602</i>&nbsp;    throws XNIException, IOException {
+<i>603</i>&nbsp;
+<i>604</i>&nbsp;        super.endEntity(name, augs);
+<i>605</i>&nbsp;
+<i>606</i>&nbsp;        // if there is no data after the doctype
+<i>607</i>&nbsp;        //
+<i>608</i>&nbsp;        if (fScannerState == SCANNER_STATE_END_OF_INPUT)
+<i>609</i>&nbsp;            return;
+<i>610</i>&nbsp;
+<b class="nc"><i>611</i>&nbsp;        // Handle end of PE</b>
+<i>612</i>&nbsp;        boolean reportEntity = fReportEntity;
+<i>613</i>&nbsp;        if (name.startsWith(&quot;%&quot;)) {
+<i>614</i>&nbsp;            reportEntity = peekReportEntity();
+<b class="nc"><i>615</i>&nbsp;            // check well-formedness of the entity</b>
+<i>616</i>&nbsp;            int startMarkUpDepth = popPEStack();
+<i>617</i>&nbsp;            // throw fatalError if this entity was incomplete and
+<i>618</i>&nbsp;            // was a freestanding decl
+<b class="nc"><i>619</i>&nbsp;            if(startMarkUpDepth == 0 &amp;&amp;</b>
+<b class="nc"><i>620</i>&nbsp;            startMarkUpDepth &lt; fMarkUpDepth) {</b>
+<b class="nc"><i>621</i>&nbsp;                fErrorReporter.reportError(XMLMessageFormatter.XML_DOMAIN,</b>
+<i>622</i>&nbsp;                &quot;ILL_FORMED_PARAMETER_ENTITY_WHEN_USED_IN_DECL&quot;,
+<b class="nc"><i>623</i>&nbsp;                new Object[]{ fEntityManager.fCurrentEntity.name},</b>
+<i>624</i>&nbsp;                XMLErrorReporter.SEVERITY_FATAL_ERROR);
+<i>625</i>&nbsp;            }
+<b class="nc"><i>626</i>&nbsp;            if (startMarkUpDepth != fMarkUpDepth) {</b>
+<i>627</i>&nbsp;                reportEntity = false;
+<b class="nc"><i>628</i>&nbsp;                if (fValidation) {</b>
+<i>629</i>&nbsp;                    // Proper nesting of parameter entities is a Validity Constraint
+<i>630</i>&nbsp;                    // and must not be enforced when validation is off
+<i>631</i>&nbsp;                    fErrorReporter.reportError(XMLMessageFormatter.XML_DOMAIN,
+<i>632</i>&nbsp;                    &quot;ImproperDeclarationNesting&quot;,
+<b class="nc"><i>633</i>&nbsp;                    new Object[]{ name },</b>
+<b class="nc"><i>634</i>&nbsp;                    XMLErrorReporter.SEVERITY_ERROR);</b>
+<b class="nc"><i>635</i>&nbsp;                }</b>
+<i>636</i>&nbsp;            }
+<i>637</i>&nbsp;            if (fEntityScanner.isExternal()) {
+<b class="nc"><i>638</i>&nbsp;                fExtEntityDepth--;</b>
+<i>639</i>&nbsp;            }
+<i>640</i>&nbsp;        }
+<i>641</i>&nbsp;
+<i>642</i>&nbsp;        // call handler
+<i>643</i>&nbsp;        boolean dtdEntity = name.equals(&quot;[dtd]&quot;);
+<b class="nc"><i>644</i>&nbsp;        if (fDTDHandler != null &amp;&amp; !dtdEntity &amp;&amp; reportEntity) {</b>
+<b class="nc"><i>645</i>&nbsp;            fDTDHandler.endParameterEntity(name, null);</b>
+<i>646</i>&nbsp;        }
+<i>647</i>&nbsp;
+<i>648</i>&nbsp;        // end DTD
+<i>649</i>&nbsp;        if (dtdEntity) {
+<b class="nc"><i>650</i>&nbsp;            if (fIncludeSectDepth != 0) {</b>
+<b class="nc"><i>651</i>&nbsp;                reportFatalError(&quot;IncludeSectUnterminated&quot;, null);</b>
+<b class="nc"><i>652</i>&nbsp;            }</b>
+<i>653</i>&nbsp;            fScannerState = SCANNER_STATE_END_OF_INPUT;
+<i>654</i>&nbsp;            // call handler
+<i>655</i>&nbsp;            fEntityManager.endExternalSubset();
+<b class="nc"><i>656</i>&nbsp;            fEntityStore.endExternalSubset();</b>
+<b class="nc"><i>657</i>&nbsp;</b>
+<b class="nc"><i>658</i>&nbsp;            if (fDTDHandler != null) {</b>
+<i>659</i>&nbsp;                fDTDHandler.endExternalSubset(null);
+<b class="nc"><i>660</i>&nbsp;                fDTDHandler.endDTD(null);</b>
+<i>661</i>&nbsp;            }
+<b class="nc"><i>662</i>&nbsp;            fExtEntityDepth--;</b>
+<b class="nc"><i>663</i>&nbsp;        }</b>
+<i>664</i>&nbsp;
+<b class="nc"><i>665</i>&nbsp;        //XML (Document Entity) is the last opened entity, however</b>
+<b class="nc"><i>666</i>&nbsp;        //if for some reason DTD Scanner receives this callback</b>
+<b class="nc"><i>667</i>&nbsp;        //there is something wrong (probably invalid XML), throw exception.</b>
+<i>668</i>&nbsp;        //or
+<b class="nc"><i>669</i>&nbsp;        //For standalone DTD loader, it might be the last opened entity</b>
+<i>670</i>&nbsp;        //and if this is the last opened entity and fMarkUpDepth != 0 or
+<i>671</i>&nbsp;        //fIncludeSectDepth != 0 or fExtEntityDepth != 0 throw Exception
+<i>672</i>&nbsp;        if (augs != null &amp;&amp; Boolean.TRUE.equals(augs.getItem(Constants.LAST_ENTITY))
+<i>673</i>&nbsp;            &amp;&amp; ( fMarkUpDepth != 0 || fExtEntityDepth !=0 || fIncludeSectDepth != 0)){
+<i>674</i>&nbsp;            throw new EOFException();
+<i>675</i>&nbsp;        }
+<i>676</i>&nbsp;
+<i>677</i>&nbsp;    } // endEntity(String)
+<i>678</i>&nbsp;
+<b class="nc"><i>679</i>&nbsp;    // helper methods</b>
+<i>680</i>&nbsp;
+<b class="nc"><i>681</i>&nbsp;    /**</b>
+<i>682</i>&nbsp;     * Sets the scanner state.
+<i>683</i>&nbsp;     *
+<i>684</i>&nbsp;     * @param state The new scanner state.
+<i>685</i>&nbsp;     */
+<i>686</i>&nbsp;    protected final void setScannerState(int state) {
+<i>687</i>&nbsp;
+<i>688</i>&nbsp;        fScannerState = state;
+<i>689</i>&nbsp;        if (DEBUG_SCANNER_STATE) {
+<i>690</i>&nbsp;            System.out.print(&quot;### setScannerState: &quot;);
+<i>691</i>&nbsp;            System.out.print(getScannerStateName(state));
+<i>692</i>&nbsp;            //System.out.println();
+<i>693</i>&nbsp;        }
+<i>694</i>&nbsp;
+<b class="nc"><i>695</i>&nbsp;    } // setScannerState(int)</b>
+<i>696</i>&nbsp;
+<i>697</i>&nbsp;    //
+<i>698</i>&nbsp;    // Private methods
+<i>699</i>&nbsp;    //
+<i>700</i>&nbsp;
+<i>701</i>&nbsp;    /** Returns the scanner state name. */
+<i>702</i>&nbsp;    private static String getScannerStateName(int state) {
+<i>703</i>&nbsp;
+<i>704</i>&nbsp;        if (DEBUG_SCANNER_STATE) {
+<i>705</i>&nbsp;            switch (state) {
+<i>706</i>&nbsp;                case SCANNER_STATE_END_OF_INPUT: return &quot;SCANNER_STATE_END_OF_INPUT&quot;;
+<i>707</i>&nbsp;                case SCANNER_STATE_TEXT_DECL: return &quot;SCANNER_STATE_TEXT_DECL&quot;;
+<i>708</i>&nbsp;                case SCANNER_STATE_MARKUP_DECL: return &quot;SCANNER_STATE_MARKUP_DECL&quot;;
+<i>709</i>&nbsp;            }
+<i>710</i>&nbsp;        }
+<i>711</i>&nbsp;
+<i>712</i>&nbsp;        return &quot;??? (&quot;+state+&#39;)&#39;;
+<i>713</i>&nbsp;
+<i>714</i>&nbsp;    } // getScannerStateName(int):String
+<i>715</i>&nbsp;
+<i>716</i>&nbsp;    protected final boolean scanningInternalSubset() {
+<i>717</i>&nbsp;        return fExtEntityDepth == 0;
+<i>718</i>&nbsp;    }
+<b class="nc"><i>719</i>&nbsp;</b>
+<i>720</i>&nbsp;    /**
+<i>721</i>&nbsp;     * start a parameter entity dealing with the textdecl if there is any
+<i>722</i>&nbsp;     *
+<i>723</i>&nbsp;     * @param name The name of the parameter entity to start (without the &#39;%&#39;)
+<b class="nc"><i>724</i>&nbsp;     * @param literal Whether this is happening within a literal</b>
+<i>725</i>&nbsp;     */
+<i>726</i>&nbsp;    protected void startPE(String name, boolean literal)
+<i>727</i>&nbsp;    throws IOException, XNIException {
+<i>728</i>&nbsp;        int depth = fPEDepth;
+<i>729</i>&nbsp;        String pName = &quot;%&quot;+name;
+<i>730</i>&nbsp;        if (fValidation &amp;&amp; !fEntityStore.isDeclaredEntity(pName)) {
+<i>731</i>&nbsp;            fErrorReporter.reportError( XMLMessageFormatter.XML_DOMAIN,&quot;EntityNotDeclared&quot;,
+<i>732</i>&nbsp;            new Object[]{name}, XMLErrorReporter.SEVERITY_ERROR);
+<i>733</i>&nbsp;        }
+<i>734</i>&nbsp;        fEntityManager.startEntity(false, fSymbolTable.addSymbol(pName),
+<b class="nc"><i>735</i>&nbsp;        literal);</b>
+<b class="nc"><i>736</i>&nbsp;        // if we actually got a new entity and it&#39;s external</b>
+<b class="nc"><i>737</i>&nbsp;        // parse text decl if there is any</b>
+<b class="nc"><i>738</i>&nbsp;        if (depth != fPEDepth &amp;&amp; fEntityScanner.isExternal()) {</b>
+<i>739</i>&nbsp;            scanTextDecl();
+<i>740</i>&nbsp;        }
+<b class="nc"><i>741</i>&nbsp;    }</b>
+<i>742</i>&nbsp;
+<i>743</i>&nbsp;    /**
+<i>744</i>&nbsp;     * Dispatch an XML &quot;event&quot;.
+<b class="nc"><i>745</i>&nbsp;     *</b>
+<b class="nc"><i>746</i>&nbsp;     * @param complete True if this method is intended to scan</b>
+<i>747</i>&nbsp;     *                 and dispatch as much as possible.
+<i>748</i>&nbsp;     *
+<i>749</i>&nbsp;     * @return True if a TextDecl was scanned.
+<i>750</i>&nbsp;     *
+<i>751</i>&nbsp;     * @throws IOException  Thrown on i/o error.
+<i>752</i>&nbsp;     * @throws XNIException Thrown on parse error.
+<i>753</i>&nbsp;     *
+<i>754</i>&nbsp;     */
+<i>755</i>&nbsp;    protected final boolean scanTextDecl()
+<i>756</i>&nbsp;    throws IOException, XNIException {
+<i>757</i>&nbsp;
+<i>758</i>&nbsp;        // scan XMLDecl
+<i>759</i>&nbsp;        boolean textDecl = false;
+<i>760</i>&nbsp;        if (fEntityScanner.skipString(&quot;&lt;?xml&quot;)) {
+<i>761</i>&nbsp;            fMarkUpDepth++;
+<i>762</i>&nbsp;            // NOTE: special case where document starts with a PI
+<i>763</i>&nbsp;            //       whose name starts with &quot;xml&quot; (e.g. &quot;xmlfoo&quot;)
+<i>764</i>&nbsp;            if (isValidNameChar(fEntityScanner.peekChar())) {
+<i>765</i>&nbsp;                fStringBuffer.clear();
+<b class="nc"><i>766</i>&nbsp;                fStringBuffer.append(&quot;xml&quot;);</b>
+<b class="nc"><i>767</i>&nbsp;                while (isValidNameChar(fEntityScanner.peekChar())) {</b>
+<b class="nc"><i>768</i>&nbsp;                    fStringBuffer.append((char)fEntityScanner.scanChar(null));</b>
+<i>769</i>&nbsp;                }
+<i>770</i>&nbsp;                String target =
+<b class="nc"><i>771</i>&nbsp;                fSymbolTable.addSymbol(fStringBuffer.ch,</b>
+<b class="nc"><i>772</i>&nbsp;                fStringBuffer.offset,</b>
+<b class="nc"><i>773</i>&nbsp;                fStringBuffer.length);</b>
+<b class="nc"><i>774</i>&nbsp;                scanPIData(target, fString);</b>
+<b class="nc"><i>775</i>&nbsp;            }</b>
+<i>776</i>&nbsp;
+<b class="nc"><i>777</i>&nbsp;            // standard Text declaration</b>
+<b class="nc"><i>778</i>&nbsp;            else {</b>
+<i>779</i>&nbsp;                // pseudo-attribute values
+<i>780</i>&nbsp;                String version = null;
+<b class="nc"><i>781</i>&nbsp;                String encoding = null;</b>
+<b class="nc"><i>782</i>&nbsp;</b>
+<i>783</i>&nbsp;                scanXMLDeclOrTextDecl(true, fStrings);
+<i>784</i>&nbsp;                textDecl = true;
+<i>785</i>&nbsp;                fMarkUpDepth--;
+<i>786</i>&nbsp;
+<b class="nc"><i>787</i>&nbsp;                version = fStrings[0];</b>
+<b class="nc"><i>788</i>&nbsp;                encoding = fStrings[1];</b>
+<i>789</i>&nbsp;
+<b class="nc"><i>790</i>&nbsp;                fEntityScanner.setEncoding(encoding);</b>
+<b class="nc"><i>791</i>&nbsp;</b>
+<b class="nc"><i>792</i>&nbsp;                // call handler</b>
+<i>793</i>&nbsp;                if (fDTDHandler != null) {
+<b class="nc"><i>794</i>&nbsp;                    fDTDHandler.textDecl(version, encoding, null);</b>
+<b class="nc"><i>795</i>&nbsp;                }</b>
+<i>796</i>&nbsp;            }
+<b class="nc"><i>797</i>&nbsp;        }</b>
+<i>798</i>&nbsp;        fEntityManager.fCurrentEntity.mayReadChunks = true;
+<i>799</i>&nbsp;
+<b class="nc"><i>800</i>&nbsp;        return textDecl;</b>
+<b class="nc"><i>801</i>&nbsp;</b>
+<i>802</i>&nbsp;    } // scanTextDecl(boolean):boolean
+<i>803</i>&nbsp;
+<i>804</i>&nbsp;    /**
+<b class="nc"><i>805</i>&nbsp;     * Scans a processing data. This is needed to handle the situation</b>
+<i>806</i>&nbsp;     * where a document starts with a processing instruction whose
+<b class="nc"><i>807</i>&nbsp;     * target name &lt;em&gt;starts with&lt;/em&gt; &quot;xml&quot;. (e.g. xmlfoo)</b>
+<i>808</i>&nbsp;     *
+<i>809</i>&nbsp;     * @param target The PI target
+<i>810</i>&nbsp;     * @param data The string to fill in with the data
+<i>811</i>&nbsp;     */
+<i>812</i>&nbsp;    protected final void scanPIData(String target, XMLString data)
+<i>813</i>&nbsp;    throws IOException, XNIException {
+<i>814</i>&nbsp;        //Venu REVISIT
+<i>815</i>&nbsp;        //      super.scanPIData(target, data);
+<i>816</i>&nbsp;        fMarkUpDepth--;
+<i>817</i>&nbsp;
+<i>818</i>&nbsp;        // call handler
+<i>819</i>&nbsp;        if (fDTDHandler != null) {
+<i>820</i>&nbsp;            fDTDHandler.processingInstruction(target, data, null);
+<i>821</i>&nbsp;        }
+<i>822</i>&nbsp;
+<b class="nc"><i>823</i>&nbsp;    } // scanPIData(String)</b>
+<i>824</i>&nbsp;
+<i>825</i>&nbsp;    /**
+<b class="nc"><i>826</i>&nbsp;     * Scans a comment.</b>
+<b class="nc"><i>827</i>&nbsp;     * &lt;p&gt;</b>
+<i>828</i>&nbsp;     * &lt;pre&gt;
+<i>829</i>&nbsp;     * [15] Comment ::= &#39;&amp;lt!--&#39; ((Char - &#39;-&#39;) | (&#39;-&#39; (Char - &#39;-&#39;)))* &#39;--&gt;&#39;
+<i>830</i>&nbsp;     * &lt;/pre&gt;
+<i>831</i>&nbsp;     * &lt;p&gt;
+<i>832</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; Called after scanning past &#39;&amp;lt;!--&#39;
+<i>833</i>&nbsp;     */
+<i>834</i>&nbsp;    protected final void scanComment() throws IOException, XNIException {
+<i>835</i>&nbsp;
+<i>836</i>&nbsp;        fReportEntity = false;
+<i>837</i>&nbsp;        scanComment(fStringBuffer);
+<i>838</i>&nbsp;        fMarkUpDepth--;
+<i>839</i>&nbsp;
+<i>840</i>&nbsp;        // call handler
+<i>841</i>&nbsp;        if (fDTDHandler != null) {
+<i>842</i>&nbsp;            fDTDHandler.comment(fStringBuffer, null);
+<b class="nc"><i>843</i>&nbsp;        }</b>
+<b class="nc"><i>844</i>&nbsp;        fReportEntity = true;</b>
+<b class="nc"><i>845</i>&nbsp;</b>
+<i>846</i>&nbsp;    } // scanComment()
+<i>847</i>&nbsp;
+<b class="nc"><i>848</i>&nbsp;    /**</b>
+<b class="nc"><i>849</i>&nbsp;     * Scans an element declaration</b>
+<i>850</i>&nbsp;     * &lt;p&gt;
+<b class="nc"><i>851</i>&nbsp;     * &lt;pre&gt;</b>
+<i>852</i>&nbsp;     * [45]    elementdecl    ::=    &#39;&amp;lt;!ELEMENT&#39; S Name S contentspec S? &#39;&gt;&#39;
+<i>853</i>&nbsp;     * [46]    contentspec    ::=    &#39;EMPTY&#39; | &#39;ANY&#39; | Mixed | children
+<i>854</i>&nbsp;     * &lt;/pre&gt;
+<i>855</i>&nbsp;     * &lt;p&gt;
+<i>856</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; Called after scanning past &#39;&amp;lt;!ELEMENT&#39;
+<i>857</i>&nbsp;     */
+<i>858</i>&nbsp;    protected final void scanElementDecl() throws IOException, XNIException {
+<i>859</i>&nbsp;
+<i>860</i>&nbsp;        // spaces
+<i>861</i>&nbsp;        fReportEntity = false;
+<i>862</i>&nbsp;        if (!skipSeparator(true, !scanningInternalSubset())) {
+<i>863</i>&nbsp;            reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_ELEMENT_TYPE_IN_ELEMENTDECL&quot;,
+<i>864</i>&nbsp;            null);
+<i>865</i>&nbsp;        }
+<i>866</i>&nbsp;
+<i>867</i>&nbsp;        // element name
+<b class="nc"><i>868</i>&nbsp;        String name = fEntityScanner.scanName(NameType.ELEMENTSTART);</b>
+<b class="nc"><i>869</i>&nbsp;        if (name == null) {</b>
+<b class="nc"><i>870</i>&nbsp;            reportFatalError(&quot;MSG_ELEMENT_TYPE_REQUIRED_IN_ELEMENTDECL&quot;,</b>
+<i>871</i>&nbsp;            null);
+<i>872</i>&nbsp;        }
+<i>873</i>&nbsp;
+<i>874</i>&nbsp;        // spaces
+<b class="nc"><i>875</i>&nbsp;        if (!skipSeparator(true, !scanningInternalSubset())) {</b>
+<b class="nc"><i>876</i>&nbsp;            reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_CONTENTSPEC_IN_ELEMENTDECL&quot;,</b>
+<b class="nc"><i>877</i>&nbsp;            new Object[]{name});</b>
+<i>878</i>&nbsp;        }
+<i>879</i>&nbsp;
+<i>880</i>&nbsp;        // content model
+<i>881</i>&nbsp;        if (fDTDContentModelHandler != null) {
+<b class="nc"><i>882</i>&nbsp;            fDTDContentModelHandler.startContentModel(name, null);</b>
+<b class="nc"><i>883</i>&nbsp;        }</b>
+<i>884</i>&nbsp;        String contentModel = null;
+<i>885</i>&nbsp;        fReportEntity = true;
+<i>886</i>&nbsp;        if (fEntityScanner.skipString(&quot;EMPTY&quot;)) {
+<i>887</i>&nbsp;            contentModel = &quot;EMPTY&quot;;
+<b class="nc"><i>888</i>&nbsp;            // call handler</b>
+<b class="nc"><i>889</i>&nbsp;            if (fDTDContentModelHandler != null) {</b>
+<i>890</i>&nbsp;                fDTDContentModelHandler.empty(null);
+<b class="nc"><i>891</i>&nbsp;            }</b>
+<b class="nc"><i>892</i>&nbsp;        }</b>
+<b class="nc"><i>893</i>&nbsp;        else if (fEntityScanner.skipString(&quot;ANY&quot;)) {</b>
+<b class="nc"><i>894</i>&nbsp;            contentModel = &quot;ANY&quot;;</b>
+<i>895</i>&nbsp;            // call handler
+<b class="nc"><i>896</i>&nbsp;            if (fDTDContentModelHandler != null) {</b>
+<b class="nc"><i>897</i>&nbsp;                fDTDContentModelHandler.any(null);</b>
+<i>898</i>&nbsp;            }
+<i>899</i>&nbsp;        }
+<b class="nc"><i>900</i>&nbsp;        else {</b>
+<b class="nc"><i>901</i>&nbsp;            if (!fEntityScanner.skipChar(&#39;(&#39;, null)) {</b>
+<i>902</i>&nbsp;                reportFatalError(&quot;MSG_OPEN_PAREN_OR_ELEMENT_TYPE_REQUIRED_IN_CHILDREN&quot;,
+<b class="nc"><i>903</i>&nbsp;                new Object[]{name});</b>
+<b class="nc"><i>904</i>&nbsp;            }</b>
+<i>905</i>&nbsp;            if (fDTDContentModelHandler != null) {
+<i>906</i>&nbsp;                fDTDContentModelHandler.startGroup(null);
+<i>907</i>&nbsp;            }
+<b class="nc"><i>908</i>&nbsp;            fStringBuffer.clear();</b>
+<b class="nc"><i>909</i>&nbsp;            fStringBuffer.append(&#39;(&#39;);</b>
+<i>910</i>&nbsp;            fMarkUpDepth++;
+<i>911</i>&nbsp;            skipSeparator(false, !scanningInternalSubset());
+<b class="nc"><i>912</i>&nbsp;</b>
+<b class="nc"><i>913</i>&nbsp;            // Mixed content model</b>
+<i>914</i>&nbsp;            if (fEntityScanner.skipString(&quot;#PCDATA&quot;)) {
+<b class="nc"><i>915</i>&nbsp;                scanMixed(name);</b>
+<b class="nc"><i>916</i>&nbsp;            }</b>
+<b class="nc"><i>917</i>&nbsp;            else {              // children content</b>
+<b class="nc"><i>918</i>&nbsp;                scanChildren(name);</b>
+<i>919</i>&nbsp;            }
+<i>920</i>&nbsp;            contentModel = fStringBuffer.toString();
+<b class="nc"><i>921</i>&nbsp;        }</b>
+<b class="nc"><i>922</i>&nbsp;</b>
+<i>923</i>&nbsp;        // call handler
+<i>924</i>&nbsp;        if (fDTDContentModelHandler != null) {
+<b class="nc"><i>925</i>&nbsp;            fDTDContentModelHandler.endContentModel(null);</b>
+<i>926</i>&nbsp;        }
+<b class="nc"><i>927</i>&nbsp;</b>
+<i>928</i>&nbsp;        fReportEntity = false;
+<i>929</i>&nbsp;        skipSeparator(false, !scanningInternalSubset());
+<i>930</i>&nbsp;        // end
+<b class="nc"><i>931</i>&nbsp;        if (!fEntityScanner.skipChar(&#39;&gt;&#39;, null)) {</b>
+<b class="nc"><i>932</i>&nbsp;            reportFatalError(&quot;ElementDeclUnterminated&quot;, new Object[]{name});</b>
+<i>933</i>&nbsp;        }
+<i>934</i>&nbsp;        fReportEntity = true;
+<b class="nc"><i>935</i>&nbsp;        fMarkUpDepth--;</b>
+<b class="nc"><i>936</i>&nbsp;</b>
+<i>937</i>&nbsp;        // call handler
+<b class="nc"><i>938</i>&nbsp;        if (fDTDHandler != null) {</b>
+<b class="nc"><i>939</i>&nbsp;            fDTDHandler.elementDecl(name, contentModel, null);</b>
+<i>940</i>&nbsp;        }
+<b class="nc"><i>941</i>&nbsp;        if (nonValidatingMode) nvGrammarInfo.elementDecl(name, contentModel, null);</b>
+<b class="nc"><i>942</i>&nbsp;    } // scanElementDecl()</b>
+<i>943</i>&nbsp;
+<i>944</i>&nbsp;    /**
+<b class="nc"><i>945</i>&nbsp;     * scan Mixed content model</b>
+<b class="nc"><i>946</i>&nbsp;     * This assumes the content model has been parsed up to #PCDATA and</b>
+<i>947</i>&nbsp;     * can simply append to fStringBuffer.
+<b class="nc"><i>948</i>&nbsp;     * &lt;pre&gt;</b>
+<i>949</i>&nbsp;     * [51]    Mixed    ::=    &#39;(&#39; S? &#39;#PCDATA&#39; (S? &#39;|&#39; S? Name)* S? &#39;)*&#39;
+<i>950</i>&nbsp;     *                       | &#39;(&#39; S? &#39;#PCDATA&#39; S? &#39;)&#39;
+<i>951</i>&nbsp;     * &lt;/pre&gt;
+<i>952</i>&nbsp;     *
+<i>953</i>&nbsp;     * @param elName The element type name this declaration is about.
+<i>954</i>&nbsp;     *
+<i>955</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; Called after scanning past &#39;(#PCDATA&#39;.
+<i>956</i>&nbsp;     */
+<i>957</i>&nbsp;    private final void scanMixed(String elName)
+<i>958</i>&nbsp;    throws IOException, XNIException {
+<i>959</i>&nbsp;
+<i>960</i>&nbsp;        String childName = null;
+<i>961</i>&nbsp;
+<i>962</i>&nbsp;        fStringBuffer.append(&quot;#PCDATA&quot;);
+<i>963</i>&nbsp;        // call handler
+<i>964</i>&nbsp;        if (fDTDContentModelHandler != null) {
+<i>965</i>&nbsp;            fDTDContentModelHandler.pcdata(null);
+<i>966</i>&nbsp;        }
+<b class="nc"><i>967</i>&nbsp;        skipSeparator(false, !scanningInternalSubset());</b>
+<i>968</i>&nbsp;        while (fEntityScanner.skipChar(&#39;|&#39;, null)) {
+<b class="nc"><i>969</i>&nbsp;            fStringBuffer.append(&#39;|&#39;);</b>
+<i>970</i>&nbsp;            // call handler
+<b class="nc"><i>971</i>&nbsp;            if (fDTDContentModelHandler != null) {</b>
+<b class="nc"><i>972</i>&nbsp;                fDTDContentModelHandler.separator(XMLDTDContentModelHandler.SEPARATOR_CHOICE,</b>
+<i>973</i>&nbsp;                null);
+<b class="nc"><i>974</i>&nbsp;            }</b>
+<b class="nc"><i>975</i>&nbsp;            skipSeparator(false, !scanningInternalSubset());</b>
+<b class="nc"><i>976</i>&nbsp;</b>
+<i>977</i>&nbsp;            childName = fEntityScanner.scanName(NameType.ENTITY);
+<b class="nc"><i>978</i>&nbsp;            if (childName == null) {</b>
+<b class="nc"><i>979</i>&nbsp;                reportFatalError(&quot;MSG_ELEMENT_TYPE_REQUIRED_IN_MIXED_CONTENT&quot;,</b>
+<i>980</i>&nbsp;                new Object[]{elName});
+<i>981</i>&nbsp;            }
+<b class="nc"><i>982</i>&nbsp;            fStringBuffer.append(childName);</b>
+<i>983</i>&nbsp;            // call handler
+<b class="nc"><i>984</i>&nbsp;            if (fDTDContentModelHandler != null) {</b>
+<b class="nc"><i>985</i>&nbsp;                fDTDContentModelHandler.element(childName, null);</b>
+<b class="nc"><i>986</i>&nbsp;            }</b>
+<i>987</i>&nbsp;            skipSeparator(false, !scanningInternalSubset());
+<i>988</i>&nbsp;        }
+<b class="nc"><i>989</i>&nbsp;        // The following check must be done in a single call (as opposed to one</b>
+<i>990</i>&nbsp;        // for &#39;)&#39; and then one for &#39;*&#39;) to guarantee that callbacks are
+<b class="nc"><i>991</i>&nbsp;        // properly nested. We do not want to trigger endEntity too early in</b>
+<b class="nc"><i>992</i>&nbsp;        // case we cross the boundary of an entity between the two characters.</b>
+<i>993</i>&nbsp;        if (fEntityScanner.skipString(&quot;)*&quot;)) {
+<b class="nc"><i>994</i>&nbsp;            fStringBuffer.append(&quot;)*&quot;);</b>
+<i>995</i>&nbsp;            // call handler
+<i>996</i>&nbsp;            if (fDTDContentModelHandler != null) {
+<i>997</i>&nbsp;                fDTDContentModelHandler.endGroup(null);
+<i>998</i>&nbsp;                fDTDContentModelHandler.occurrence(XMLDTDContentModelHandler.OCCURS_ZERO_OR_MORE,
+<i>999</i>&nbsp;                null);
+<b class="nc"><i>1000</i>&nbsp;            }</b>
+<b class="nc"><i>1001</i>&nbsp;        }</b>
+<i>1002</i>&nbsp;        else if (childName != null) {
+<b class="nc"><i>1003</i>&nbsp;            reportFatalError(&quot;MixedContentUnterminated&quot;,</b>
+<b class="nc"><i>1004</i>&nbsp;            new Object[]{elName});</b>
+<b class="nc"><i>1005</i>&nbsp;        }</b>
+<i>1006</i>&nbsp;        else if (fEntityScanner.skipChar(&#39;)&#39;, null)){
+<i>1007</i>&nbsp;            fStringBuffer.append(&#39;)&#39;);
+<i>1008</i>&nbsp;            // call handler
+<b class="nc"><i>1009</i>&nbsp;            if (fDTDContentModelHandler != null) {</b>
+<b class="nc"><i>1010</i>&nbsp;                fDTDContentModelHandler.endGroup(null);</b>
+<i>1011</i>&nbsp;            }
+<i>1012</i>&nbsp;        }
+<b class="nc"><i>1013</i>&nbsp;        else {</b>
+<b class="nc"><i>1014</i>&nbsp;            reportFatalError(&quot;MSG_CLOSE_PAREN_REQUIRED_IN_CHILDREN&quot;,</b>
+<i>1015</i>&nbsp;            new Object[]{elName});
+<b class="nc"><i>1016</i>&nbsp;        }</b>
+<b class="nc"><i>1017</i>&nbsp;        fMarkUpDepth--;</b>
+<i>1018</i>&nbsp;        // we are done
+<i>1019</i>&nbsp;    }
+<i>1020</i>&nbsp;
+<b class="nc"><i>1021</i>&nbsp;    /**</b>
+<i>1022</i>&nbsp;     * scan children content model
+<i>1023</i>&nbsp;     * This assumes it can simply append to fStringBuffer.
+<b class="nc"><i>1024</i>&nbsp;     * &lt;pre&gt;</b>
+<i>1025</i>&nbsp;     * [47]    children  ::=    (choice | seq) (&#39;?&#39; | &#39;*&#39; | &#39;+&#39;)?
+<i>1026</i>&nbsp;     * [48]    cp        ::=    (Name | choice | seq) (&#39;?&#39; | &#39;*&#39; | &#39;+&#39;)?
+<i>1027</i>&nbsp;     * [49]    choice    ::=    &#39;(&#39; S? cp ( S? &#39;|&#39; S? cp )+ S? &#39;)&#39;
+<i>1028</i>&nbsp;     * [50]    seq       ::=    &#39;(&#39; S? cp ( S? &#39;,&#39; S? cp )* S? &#39;)&#39;
+<i>1029</i>&nbsp;     * &lt;/pre&gt;
+<i>1030</i>&nbsp;     *
+<i>1031</i>&nbsp;     * @param elName The element type name this declaration is about.
+<i>1032</i>&nbsp;     *
+<i>1033</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; Called after scanning past the first open
+<i>1034</i>&nbsp;     * paranthesis.
+<i>1035</i>&nbsp;     */
+<i>1036</i>&nbsp;    private final void scanChildren(String elName)
+<i>1037</i>&nbsp;    throws IOException, XNIException {
+<i>1038</i>&nbsp;
+<i>1039</i>&nbsp;        fContentDepth = 0;
+<i>1040</i>&nbsp;        pushContentStack(0);
+<i>1041</i>&nbsp;        int currentOp = 0;
+<i>1042</i>&nbsp;        int c;
+<i>1043</i>&nbsp;        while (true) {
+<i>1044</i>&nbsp;            if (fEntityScanner.skipChar(&#39;(&#39;, null)) {
+<i>1045</i>&nbsp;                fMarkUpDepth++;
+<b class="nc"><i>1046</i>&nbsp;                fStringBuffer.append(&#39;(&#39;);</b>
+<b class="nc"><i>1047</i>&nbsp;                // call handler</b>
+<b class="nc"><i>1048</i>&nbsp;                if (fDTDContentModelHandler != null) {</b>
+<i>1049</i>&nbsp;                    fDTDContentModelHandler.startGroup(null);
+<i>1050</i>&nbsp;                }
+<b class="nc"><i>1051</i>&nbsp;                // push current op on stack and reset it</b>
+<b class="nc"><i>1052</i>&nbsp;                pushContentStack(currentOp);</b>
+<b class="nc"><i>1053</i>&nbsp;                currentOp = 0;</b>
+<i>1054</i>&nbsp;                skipSeparator(false, !scanningInternalSubset());
+<b class="nc"><i>1055</i>&nbsp;                continue;</b>
+<b class="nc"><i>1056</i>&nbsp;            }</b>
+<i>1057</i>&nbsp;            skipSeparator(false, !scanningInternalSubset());
+<i>1058</i>&nbsp;            String childName = fEntityScanner.scanName(NameType.ELEMENTSTART);
+<b class="nc"><i>1059</i>&nbsp;            if (childName == null) {</b>
+<b class="nc"><i>1060</i>&nbsp;                reportFatalError(&quot;MSG_OPEN_PAREN_OR_ELEMENT_TYPE_REQUIRED_IN_CHILDREN&quot;,</b>
+<b class="nc"><i>1061</i>&nbsp;                new Object[]{elName});</b>
+<b class="nc"><i>1062</i>&nbsp;                return;</b>
+<i>1063</i>&nbsp;            }
+<b class="nc"><i>1064</i>&nbsp;            // call handler</b>
+<b class="nc"><i>1065</i>&nbsp;            if (fDTDContentModelHandler != null) {</b>
+<b class="nc"><i>1066</i>&nbsp;                fDTDContentModelHandler.element(childName, null);</b>
+<b class="nc"><i>1067</i>&nbsp;            }</b>
+<i>1068</i>&nbsp;            fStringBuffer.append(childName);
+<i>1069</i>&nbsp;            c = fEntityScanner.peekChar();
+<i>1070</i>&nbsp;            if (c == &#39;?&#39; || c == &#39;*&#39; || c == &#39;+&#39;) {
+<i>1071</i>&nbsp;                // call handler
+<b class="nc"><i>1072</i>&nbsp;                if (fDTDContentModelHandler != null) {</b>
+<b class="nc"><i>1073</i>&nbsp;                    short oc;</b>
+<i>1074</i>&nbsp;                    if (c == &#39;?&#39;) {
+<b class="nc"><i>1075</i>&nbsp;                        oc = XMLDTDContentModelHandler.OCCURS_ZERO_OR_ONE;</b>
+<b class="nc"><i>1076</i>&nbsp;                    }</b>
+<b class="nc"><i>1077</i>&nbsp;                    else if (c == &#39;*&#39;) {</b>
+<i>1078</i>&nbsp;                        oc = XMLDTDContentModelHandler.OCCURS_ZERO_OR_MORE;
+<b class="nc"><i>1079</i>&nbsp;                    }</b>
+<i>1080</i>&nbsp;                    else {
+<b class="nc"><i>1081</i>&nbsp;                        oc = XMLDTDContentModelHandler.OCCURS_ONE_OR_MORE;</b>
+<b class="nc"><i>1082</i>&nbsp;                    }</b>
+<i>1083</i>&nbsp;                    fDTDContentModelHandler.occurrence(oc, null);
+<b class="nc"><i>1084</i>&nbsp;                }</b>
+<b class="nc"><i>1085</i>&nbsp;                fEntityScanner.scanChar(null);</b>
+<i>1086</i>&nbsp;                fStringBuffer.append((char)c);
+<i>1087</i>&nbsp;            }
+<b class="nc"><i>1088</i>&nbsp;            while (true) {</b>
+<i>1089</i>&nbsp;                skipSeparator(false, !scanningInternalSubset());
+<b class="nc"><i>1090</i>&nbsp;                c = fEntityScanner.peekChar();</b>
+<i>1091</i>&nbsp;                if (c == &#39;,&#39; &amp;&amp; currentOp != &#39;|&#39;) {
+<b class="nc"><i>1092</i>&nbsp;                    currentOp = c;</b>
+<b class="nc"><i>1093</i>&nbsp;                    // call handler</b>
+<i>1094</i>&nbsp;                    if (fDTDContentModelHandler != null) {
+<i>1095</i>&nbsp;                        fDTDContentModelHandler.separator(XMLDTDContentModelHandler.SEPARATOR_SEQUENCE,
+<b class="nc"><i>1096</i>&nbsp;                        null);</b>
+<b class="nc"><i>1097</i>&nbsp;                    }</b>
+<b class="nc"><i>1098</i>&nbsp;                    fEntityScanner.scanChar(null);</b>
+<b class="nc"><i>1099</i>&nbsp;                    fStringBuffer.append(&#39;,&#39;);</b>
+<i>1100</i>&nbsp;                    break;
+<b class="nc"><i>1101</i>&nbsp;                }</b>
+<b class="nc"><i>1102</i>&nbsp;                else if (c == &#39;|&#39; &amp;&amp; currentOp != &#39;,&#39;) {</b>
+<i>1103</i>&nbsp;                    currentOp = c;
+<i>1104</i>&nbsp;                    // call handler
+<b class="nc"><i>1105</i>&nbsp;                    if (fDTDContentModelHandler != null) {</b>
+<b class="nc"><i>1106</i>&nbsp;                        fDTDContentModelHandler.separator(XMLDTDContentModelHandler.SEPARATOR_CHOICE,</b>
+<b class="nc"><i>1107</i>&nbsp;                        null);</b>
+<i>1108</i>&nbsp;                    }
+<b class="nc"><i>1109</i>&nbsp;                    fEntityScanner.scanChar(null);</b>
+<b class="nc"><i>1110</i>&nbsp;                    fStringBuffer.append(&#39;|&#39;);</b>
+<i>1111</i>&nbsp;                    break;
+<b class="nc"><i>1112</i>&nbsp;                }</b>
+<b class="nc"><i>1113</i>&nbsp;                else if (c != &#39;)&#39;) {</b>
+<i>1114</i>&nbsp;                    reportFatalError(&quot;MSG_CLOSE_PAREN_REQUIRED_IN_CHILDREN&quot;,
+<i>1115</i>&nbsp;                    new Object[]{elName});
+<b class="nc"><i>1116</i>&nbsp;                }</b>
+<b class="nc"><i>1117</i>&nbsp;                // call handler</b>
+<b class="nc"><i>1118</i>&nbsp;                if (fDTDContentModelHandler != null) {</b>
+<i>1119</i>&nbsp;                    fDTDContentModelHandler.endGroup(null);
+<b class="nc"><i>1120</i>&nbsp;                }</b>
+<b class="nc"><i>1121</i>&nbsp;                // restore previous op</b>
+<i>1122</i>&nbsp;                currentOp = popContentStack();
+<i>1123</i>&nbsp;                short oc;
+<i>1124</i>&nbsp;                // The following checks must be done in a single call (as
+<b class="nc"><i>1125</i>&nbsp;                // opposed to one for &#39;)&#39; and then one for &#39;?&#39;, &#39;*&#39;, and &#39;+&#39;)</b>
+<b class="nc"><i>1126</i>&nbsp;                // to guarantee that callbacks are properly nested. We do not</b>
+<i>1127</i>&nbsp;                // want to trigger endEntity too early in case we cross the
+<i>1128</i>&nbsp;                // boundary of an entity between the two characters.
+<b class="nc"><i>1129</i>&nbsp;                if (fEntityScanner.skipString(&quot;)?&quot;)) {</b>
+<i>1130</i>&nbsp;                    fStringBuffer.append(&quot;)?&quot;);
+<i>1131</i>&nbsp;                    // call handler
+<i>1132</i>&nbsp;                    if (fDTDContentModelHandler != null) {
+<i>1133</i>&nbsp;                        oc = XMLDTDContentModelHandler.OCCURS_ZERO_OR_ONE;
+<i>1134</i>&nbsp;                        fDTDContentModelHandler.occurrence(oc, null);
+<i>1135</i>&nbsp;                    }
+<b class="nc"><i>1136</i>&nbsp;                }</b>
+<b class="nc"><i>1137</i>&nbsp;                else if (fEntityScanner.skipString(&quot;)+&quot;)) {</b>
+<i>1138</i>&nbsp;                    fStringBuffer.append(&quot;)+&quot;);
+<b class="nc"><i>1139</i>&nbsp;                    // call handler</b>
+<b class="nc"><i>1140</i>&nbsp;                    if (fDTDContentModelHandler != null) {</b>
+<b class="nc"><i>1141</i>&nbsp;                        oc = XMLDTDContentModelHandler.OCCURS_ONE_OR_MORE;</b>
+<i>1142</i>&nbsp;                        fDTDContentModelHandler.occurrence(oc, null);
+<i>1143</i>&nbsp;                    }
+<b class="nc"><i>1144</i>&nbsp;                }</b>
+<b class="nc"><i>1145</i>&nbsp;                else if (fEntityScanner.skipString(&quot;)*&quot;)) {</b>
+<i>1146</i>&nbsp;                    fStringBuffer.append(&quot;)*&quot;);
+<b class="nc"><i>1147</i>&nbsp;                    // call handler</b>
+<b class="nc"><i>1148</i>&nbsp;                    if (fDTDContentModelHandler != null) {</b>
+<b class="nc"><i>1149</i>&nbsp;                        oc = XMLDTDContentModelHandler.OCCURS_ZERO_OR_MORE;</b>
+<i>1150</i>&nbsp;                        fDTDContentModelHandler.occurrence(oc, null);
+<i>1151</i>&nbsp;                    }
+<b class="nc"><i>1152</i>&nbsp;                }</b>
+<b class="nc"><i>1153</i>&nbsp;                else {</b>
+<i>1154</i>&nbsp;                    // no occurrence specified
+<b class="nc"><i>1155</i>&nbsp;                    fEntityScanner.scanChar(null);</b>
+<b class="nc"><i>1156</i>&nbsp;                    fStringBuffer.append(&#39;)&#39;);</b>
+<b class="nc"><i>1157</i>&nbsp;                }</b>
+<i>1158</i>&nbsp;                fMarkUpDepth--;
+<i>1159</i>&nbsp;                if (fContentDepth == 0) {
+<i>1160</i>&nbsp;                    return;
+<i>1161</i>&nbsp;                }
+<b class="nc"><i>1162</i>&nbsp;            }</b>
+<b class="nc"><i>1163</i>&nbsp;            skipSeparator(false, !scanningInternalSubset());</b>
+<i>1164</i>&nbsp;        }
+<b class="nc"><i>1165</i>&nbsp;    }</b>
+<b class="nc"><i>1166</i>&nbsp;</b>
+<i>1167</i>&nbsp;    /**
+<i>1168</i>&nbsp;     * Scans an attlist declaration
+<i>1169</i>&nbsp;     * &lt;p&gt;
+<b class="nc"><i>1170</i>&nbsp;     * &lt;pre&gt;</b>
+<b class="nc"><i>1171</i>&nbsp;     * [52]  AttlistDecl    ::=   &#39;&amp;lt;!ATTLIST&#39; S Name AttDef* S? &#39;&gt;&#39;</b>
+<i>1172</i>&nbsp;     * [53]  AttDef         ::=   S Name S AttType S DefaultDecl
+<i>1173</i>&nbsp;     * &lt;/pre&gt;
+<i>1174</i>&nbsp;     * &lt;p&gt;
+<i>1175</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; Called after scanning past &#39;&amp;lt;!ATTLIST&#39;
+<i>1176</i>&nbsp;     */
+<i>1177</i>&nbsp;    protected final void scanAttlistDecl() throws IOException, XNIException {
+<i>1178</i>&nbsp;
+<i>1179</i>&nbsp;        // spaces
+<i>1180</i>&nbsp;        fReportEntity = false;
+<i>1181</i>&nbsp;        if (!skipSeparator(true, !scanningInternalSubset())) {
+<i>1182</i>&nbsp;            reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_ELEMENT_TYPE_IN_ATTLISTDECL&quot;,
+<i>1183</i>&nbsp;            null);
+<i>1184</i>&nbsp;        }
+<i>1185</i>&nbsp;
+<i>1186</i>&nbsp;        // element name
+<b class="nc"><i>1187</i>&nbsp;        String elName = fEntityScanner.scanName(NameType.ELEMENTSTART);</b>
+<b class="nc"><i>1188</i>&nbsp;        if (elName == null) {</b>
+<b class="nc"><i>1189</i>&nbsp;            reportFatalError(&quot;MSG_ELEMENT_TYPE_REQUIRED_IN_ATTLISTDECL&quot;,</b>
+<i>1190</i>&nbsp;            null);
+<i>1191</i>&nbsp;        }
+<i>1192</i>&nbsp;
+<i>1193</i>&nbsp;        // call handler
+<b class="nc"><i>1194</i>&nbsp;        if (fDTDHandler != null) {</b>
+<b class="nc"><i>1195</i>&nbsp;            fDTDHandler.startAttlist(elName, null);</b>
+<b class="nc"><i>1196</i>&nbsp;        }</b>
+<i>1197</i>&nbsp;
+<i>1198</i>&nbsp;        // spaces
+<i>1199</i>&nbsp;        if (!skipSeparator(true, !scanningInternalSubset())) {
+<i>1200</i>&nbsp;            // no space, is it the end yet?
+<b class="nc"><i>1201</i>&nbsp;            if (fEntityScanner.skipChar(&#39;&gt;&#39;, null)) {</b>
+<b class="nc"><i>1202</i>&nbsp;                // yes, stop here</b>
+<i>1203</i>&nbsp;                // call handler
+<i>1204</i>&nbsp;                if (fDTDHandler != null) {
+<i>1205</i>&nbsp;                    fDTDHandler.endAttlist(null);
+<b class="nc"><i>1206</i>&nbsp;                }</b>
+<i>1207</i>&nbsp;                fMarkUpDepth--;
+<b class="nc"><i>1208</i>&nbsp;                return;</b>
+<i>1209</i>&nbsp;            }
+<i>1210</i>&nbsp;            else {
+<b class="nc"><i>1211</i>&nbsp;                reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_ATTRIBUTE_NAME_IN_ATTDEF&quot;,</b>
+<b class="nc"><i>1212</i>&nbsp;                new Object[]{elName});</b>
+<i>1213</i>&nbsp;            }
+<b class="nc"><i>1214</i>&nbsp;        }</b>
+<i>1215</i>&nbsp;
+<i>1216</i>&nbsp;        // definitions
+<i>1217</i>&nbsp;        while (!fEntityScanner.skipChar(&#39;&gt;&#39;, null)) {
+<b class="nc"><i>1218</i>&nbsp;            String name = fEntityScanner.scanName(NameType.ATTRIBUTENAME);</b>
+<i>1219</i>&nbsp;            if (name == null) {
+<i>1220</i>&nbsp;                reportFatalError(&quot;AttNameRequiredInAttDef&quot;,
+<i>1221</i>&nbsp;                new Object[]{elName});
+<i>1222</i>&nbsp;            }
+<i>1223</i>&nbsp;            // spaces
+<b class="nc"><i>1224</i>&nbsp;            if (!skipSeparator(true, !scanningInternalSubset())) {</b>
+<b class="nc"><i>1225</i>&nbsp;                reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_ATTTYPE_IN_ATTDEF&quot;,</b>
+<b class="nc"><i>1226</i>&nbsp;                new Object[]{elName, name});</b>
+<b class="nc"><i>1227</i>&nbsp;            }</b>
+<i>1228</i>&nbsp;            // type
+<i>1229</i>&nbsp;            String type = scanAttType(elName, name);
+<i>1230</i>&nbsp;
+<b class="nc"><i>1231</i>&nbsp;            // spaces</b>
+<b class="nc"><i>1232</i>&nbsp;            if (!skipSeparator(true, !scanningInternalSubset())) {</b>
+<i>1233</i>&nbsp;                reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_DEFAULTDECL_IN_ATTDEF&quot;,
+<i>1234</i>&nbsp;                new Object[]{elName, name});
+<i>1235</i>&nbsp;            }
+<b class="nc"><i>1236</i>&nbsp;</b>
+<i>1237</i>&nbsp;            // default decl
+<i>1238</i>&nbsp;            String defaultType = scanAttDefaultDecl(elName, name,
+<b class="nc"><i>1239</i>&nbsp;            type,</b>
+<b class="nc"><i>1240</i>&nbsp;            fLiteral, fLiteral2);</b>
+<i>1241</i>&nbsp;            // REVISIT: Should we do anything with the non-normalized
+<i>1242</i>&nbsp;            //          default attribute value? -Ac
+<i>1243</i>&nbsp;            // yes--according to bug 5073.  - neilg
+<i>1244</i>&nbsp;            String[] enumr = null;
+<b class="nc"><i>1245</i>&nbsp;            if( fDTDHandler != null || nonValidatingMode){</b>
+<i>1246</i>&nbsp;                if (fEnumerationCount != 0) {
+<i>1247</i>&nbsp;                    enumr = new String[fEnumerationCount];
+<i>1248</i>&nbsp;                    System.arraycopy(fEnumeration, 0, enumr,
+<i>1249</i>&nbsp;                    0, fEnumerationCount);
+<i>1250</i>&nbsp;                }
+<b class="nc"><i>1251</i>&nbsp;            }</b>
+<b class="nc"><i>1252</i>&nbsp;            // call handler</b>
+<b class="nc"><i>1253</i>&nbsp;            // Determine whether the default value to be passed should be null.</b>
+<b class="nc"><i>1254</i>&nbsp;            // REVISIT: should probably check whether fLiteral.ch is null instead. LM.</b>
+<b class="nc"><i>1255</i>&nbsp;            if (defaultType!=null &amp;&amp; (defaultType.equals(&quot;#REQUIRED&quot;) ||</b>
+<i>1256</i>&nbsp;            defaultType.equals(&quot;#IMPLIED&quot;))) {
+<i>1257</i>&nbsp;                if (fDTDHandler != null){
+<i>1258</i>&nbsp;                    fDTDHandler.attributeDecl(elName, name, type, enumr,
+<i>1259</i>&nbsp;                    defaultType, null, null, null);
+<i>1260</i>&nbsp;                }
+<i>1261</i>&nbsp;                if(nonValidatingMode){
+<b class="nc"><i>1262</i>&nbsp;                    nvGrammarInfo.attributeDecl(elName, name, type, enumr,</b>
+<b class="nc"><i>1263</i>&nbsp;                    defaultType, null, null, null);</b>
+<b class="nc"><i>1264</i>&nbsp;</b>
+<b class="nc"><i>1265</i>&nbsp;                }</b>
+<i>1266</i>&nbsp;            }
+<i>1267</i>&nbsp;            else {
+<b class="nc"><i>1268</i>&nbsp;                if (fDTDHandler != null){</b>
+<b class="nc"><i>1269</i>&nbsp;                    fDTDHandler.attributeDecl(elName, name, type, enumr,</b>
+<i>1270</i>&nbsp;                    defaultType, fLiteral, fLiteral2, null);
+<i>1271</i>&nbsp;                }
+<i>1272</i>&nbsp;                if(nonValidatingMode){
+<i>1273</i>&nbsp;                    nvGrammarInfo.attributeDecl(elName, name, type, enumr,
+<i>1274</i>&nbsp;                    defaultType, fLiteral, fLiteral2, null);
+<b class="nc"><i>1275</i>&nbsp;                }</b>
+<b class="nc"><i>1276</i>&nbsp;            }</b>
+<i>1277</i>&nbsp;            skipSeparator(false, !scanningInternalSubset());
+<i>1278</i>&nbsp;        }
+<b class="nc"><i>1279</i>&nbsp;</b>
+<b class="nc"><i>1280</i>&nbsp;        // call handler</b>
+<i>1281</i>&nbsp;        if (fDTDHandler != null) {
+<i>1282</i>&nbsp;            fDTDHandler.endAttlist(null);
+<i>1283</i>&nbsp;        }
+<b class="nc"><i>1284</i>&nbsp;        fMarkUpDepth--;</b>
+<b class="nc"><i>1285</i>&nbsp;        fReportEntity = true;</b>
+<i>1286</i>&nbsp;
+<i>1287</i>&nbsp;    } // scanAttlistDecl()
+<b class="nc"><i>1288</i>&nbsp;</b>
+<b class="nc"><i>1289</i>&nbsp;    /**</b>
+<i>1290</i>&nbsp;     * Scans an attribute type definition
+<b class="nc"><i>1291</i>&nbsp;     * &lt;p&gt;</b>
+<b class="nc"><i>1292</i>&nbsp;     * &lt;pre&gt;</b>
+<i>1293</i>&nbsp;     * [54]  AttType        ::=   StringType | TokenizedType | EnumeratedType
+<i>1294</i>&nbsp;     * [55]  StringType     ::=   &#39;CDATA&#39;
+<i>1295</i>&nbsp;     * [56]  TokenizedType  ::=   &#39;ID&#39;
+<i>1296</i>&nbsp;     *                          | &#39;IDREF&#39;
+<i>1297</i>&nbsp;     *                          | &#39;IDREFS&#39;
+<i>1298</i>&nbsp;     *                          | &#39;ENTITY&#39;
+<i>1299</i>&nbsp;     *                          | &#39;ENTITIES&#39;
+<i>1300</i>&nbsp;     *                          | &#39;NMTOKEN&#39;
+<i>1301</i>&nbsp;     *                          | &#39;NMTOKENS&#39;
+<i>1302</i>&nbsp;     * [57]  EnumeratedType ::=    NotationType | Enumeration
+<i>1303</i>&nbsp;     * [58]  NotationType ::= &#39;NOTATION&#39; S &#39;(&#39; S? Name (S? &#39;|&#39; S? Name)* S? &#39;)&#39;
+<i>1304</i>&nbsp;     * [59]  Enumeration    ::=    &#39;(&#39; S? Nmtoken (S? &#39;|&#39; S? Nmtoken)* S? &#39;)&#39;
+<i>1305</i>&nbsp;     * &lt;/pre&gt;
+<i>1306</i>&nbsp;     * &lt;p&gt;
+<i>1307</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; Called after scanning past &#39;&amp;lt;!ATTLIST&#39;
+<i>1308</i>&nbsp;     *
+<i>1309</i>&nbsp;     * @param elName The element type name this declaration is about.
+<i>1310</i>&nbsp;     * @param atName The attribute name this declaration is about.
+<i>1311</i>&nbsp;     */
+<i>1312</i>&nbsp;    private final String scanAttType(String elName, String atName)
+<i>1313</i>&nbsp;    throws IOException, XNIException {
+<i>1314</i>&nbsp;
+<i>1315</i>&nbsp;        String type = null;
+<i>1316</i>&nbsp;        fEnumerationCount = 0;
+<i>1317</i>&nbsp;        /*
+<i>1318</i>&nbsp;         * Watchout: the order here is important: when a string happens to
+<i>1319</i>&nbsp;         * be a substring of another string, the longer one needs to be
+<i>1320</i>&nbsp;         * looked for first!!
+<i>1321</i>&nbsp;         */
+<b class="nc"><i>1322</i>&nbsp;        if (fEntityScanner.skipString(&quot;CDATA&quot;)) {</b>
+<b class="nc"><i>1323</i>&nbsp;            type = &quot;CDATA&quot;;</b>
+<i>1324</i>&nbsp;        }
+<i>1325</i>&nbsp;        else if (fEntityScanner.skipString(&quot;IDREFS&quot;)) {
+<i>1326</i>&nbsp;            type = &quot;IDREFS&quot;;
+<i>1327</i>&nbsp;        }
+<i>1328</i>&nbsp;        else if (fEntityScanner.skipString(&quot;IDREF&quot;)) {
+<b class="nc"><i>1329</i>&nbsp;            type = &quot;IDREF&quot;;</b>
+<b class="nc"><i>1330</i>&nbsp;        }</b>
+<i>1331</i>&nbsp;        else if (fEntityScanner.skipString(&quot;ID&quot;)) {
+<b class="nc"><i>1332</i>&nbsp;            type = &quot;ID&quot;;</b>
+<b class="nc"><i>1333</i>&nbsp;        }</b>
+<i>1334</i>&nbsp;        else if (fEntityScanner.skipString(&quot;ENTITY&quot;)) {
+<b class="nc"><i>1335</i>&nbsp;            type = &quot;ENTITY&quot;;</b>
+<b class="nc"><i>1336</i>&nbsp;        }</b>
+<i>1337</i>&nbsp;        else if (fEntityScanner.skipString(&quot;ENTITIES&quot;)) {
+<b class="nc"><i>1338</i>&nbsp;            type = &quot;ENTITIES&quot;;</b>
+<b class="nc"><i>1339</i>&nbsp;        }</b>
+<i>1340</i>&nbsp;        else if (fEntityScanner.skipString(&quot;NMTOKENS&quot;)) {
+<b class="nc"><i>1341</i>&nbsp;            type = &quot;NMTOKENS&quot;;</b>
+<b class="nc"><i>1342</i>&nbsp;        }</b>
+<i>1343</i>&nbsp;        else if (fEntityScanner.skipString(&quot;NMTOKEN&quot;)) {
+<b class="nc"><i>1344</i>&nbsp;            type = &quot;NMTOKEN&quot;;</b>
+<b class="nc"><i>1345</i>&nbsp;        }</b>
+<i>1346</i>&nbsp;        else if (fEntityScanner.skipString(&quot;NOTATION&quot;)) {
+<b class="nc"><i>1347</i>&nbsp;            type = &quot;NOTATION&quot;;</b>
+<b class="nc"><i>1348</i>&nbsp;            // spaces</b>
+<i>1349</i>&nbsp;            if (!skipSeparator(true, !scanningInternalSubset())) {
+<b class="nc"><i>1350</i>&nbsp;                reportFatalError(&quot;MSG_SPACE_REQUIRED_AFTER_NOTATION_IN_NOTATIONTYPE&quot;,</b>
+<b class="nc"><i>1351</i>&nbsp;                new Object[]{elName, atName});</b>
+<i>1352</i>&nbsp;            }
+<b class="nc"><i>1353</i>&nbsp;            // open paren</b>
+<b class="nc"><i>1354</i>&nbsp;            int c = fEntityScanner.scanChar(null);</b>
+<i>1355</i>&nbsp;            if (c != &#39;(&#39;) {
+<b class="nc"><i>1356</i>&nbsp;                reportFatalError(&quot;MSG_OPEN_PAREN_REQUIRED_IN_NOTATIONTYPE&quot;,</b>
+<b class="nc"><i>1357</i>&nbsp;                new Object[]{elName, atName});</b>
+<i>1358</i>&nbsp;            }
+<i>1359</i>&nbsp;            fMarkUpDepth++;
+<i>1360</i>&nbsp;            do {
+<b class="nc"><i>1361</i>&nbsp;                skipSeparator(false, !scanningInternalSubset());</b>
+<b class="nc"><i>1362</i>&nbsp;                String aName = fEntityScanner.scanName(NameType.ATTRIBUTENAME);</b>
+<b class="nc"><i>1363</i>&nbsp;                if (aName == null) {</b>
+<i>1364</i>&nbsp;                    reportFatalError(&quot;MSG_NAME_REQUIRED_IN_NOTATIONTYPE&quot;,
+<i>1365</i>&nbsp;                    new Object[]{elName, atName});
+<b class="nc"><i>1366</i>&nbsp;                }</b>
+<i>1367</i>&nbsp;                ensureEnumerationSize(fEnumerationCount + 1);
+<b class="nc"><i>1368</i>&nbsp;                fEnumeration[fEnumerationCount++] = aName;</b>
+<b class="nc"><i>1369</i>&nbsp;                skipSeparator(false, !scanningInternalSubset());</b>
+<b class="nc"><i>1370</i>&nbsp;                c = fEntityScanner.scanChar(null);</b>
+<b class="nc"><i>1371</i>&nbsp;            } while (c == &#39;|&#39;);</b>
+<i>1372</i>&nbsp;            if (c != &#39;)&#39;) {
+<i>1373</i>&nbsp;                reportFatalError(&quot;NotationTypeUnterminated&quot;,
+<b class="nc"><i>1374</i>&nbsp;                new Object[]{elName, atName});</b>
+<b class="nc"><i>1375</i>&nbsp;            }</b>
+<b class="nc"><i>1376</i>&nbsp;            fMarkUpDepth--;</b>
+<b class="nc"><i>1377</i>&nbsp;        }</b>
+<b class="nc"><i>1378</i>&nbsp;        else {              // Enumeration</b>
+<b class="nc"><i>1379</i>&nbsp;            type = &quot;ENUMERATION&quot;;</b>
+<b class="nc"><i>1380</i>&nbsp;            // open paren</b>
+<i>1381</i>&nbsp;            int c = fEntityScanner.scanChar(null);
+<i>1382</i>&nbsp;            if (c != &#39;(&#39;) {
+<b class="nc"><i>1383</i>&nbsp;                //                       &quot;OPEN_PAREN_REQUIRED_BEFORE_ENUMERATION_IN_ATTRDECL&quot;,</b>
+<b class="nc"><i>1384</i>&nbsp;                reportFatalError(&quot;AttTypeRequiredInAttDef&quot;,</b>
+<i>1385</i>&nbsp;                new Object[]{elName, atName});
+<b class="nc"><i>1386</i>&nbsp;            }</b>
+<i>1387</i>&nbsp;            fMarkUpDepth++;
+<b class="nc"><i>1388</i>&nbsp;            do {</b>
+<b class="nc"><i>1389</i>&nbsp;                skipSeparator(false, !scanningInternalSubset());</b>
+<i>1390</i>&nbsp;                String token = fEntityScanner.scanNmtoken();
+<b class="nc"><i>1391</i>&nbsp;                if (token == null) {</b>
+<i>1392</i>&nbsp;                    reportFatalError(&quot;MSG_NMTOKEN_REQUIRED_IN_ENUMERATION&quot;,
+<i>1393</i>&nbsp;                    new Object[]{elName, atName});
+<b class="nc"><i>1394</i>&nbsp;                }</b>
+<i>1395</i>&nbsp;                ensureEnumerationSize(fEnumerationCount + 1);
+<b class="nc"><i>1396</i>&nbsp;                fEnumeration[fEnumerationCount++] = token;</b>
+<b class="nc"><i>1397</i>&nbsp;                skipSeparator(false, !scanningInternalSubset());</b>
+<b class="nc"><i>1398</i>&nbsp;                c = fEntityScanner.scanChar(null);</b>
+<b class="nc"><i>1399</i>&nbsp;            } while (c == &#39;|&#39;);</b>
+<i>1400</i>&nbsp;            if (c != &#39;)&#39;) {
+<i>1401</i>&nbsp;                reportFatalError(&quot;EnumerationUnterminated&quot;,
+<b class="nc"><i>1402</i>&nbsp;                new Object[]{elName, atName});</b>
+<b class="nc"><i>1403</i>&nbsp;            }</b>
+<b class="nc"><i>1404</i>&nbsp;            fMarkUpDepth--;</b>
+<b class="nc"><i>1405</i>&nbsp;        }</b>
+<b class="nc"><i>1406</i>&nbsp;        return type;</b>
+<b class="nc"><i>1407</i>&nbsp;</b>
+<b class="nc"><i>1408</i>&nbsp;    } // scanAttType():String</b>
+<i>1409</i>&nbsp;
+<i>1410</i>&nbsp;
+<b class="nc"><i>1411</i>&nbsp;    /**</b>
+<i>1412</i>&nbsp;     * Scans an attribute default declaration
+<b class="nc"><i>1413</i>&nbsp;     * &lt;p&gt;</b>
+<i>1414</i>&nbsp;     * &lt;pre&gt;
+<i>1415</i>&nbsp;     * [60] DefaultDecl ::= &#39;#REQUIRED&#39; | &#39;#IMPLIED&#39; | ((&#39;#FIXED&#39; S)? AttValue)
+<i>1416</i>&nbsp;     * &lt;/pre&gt;
+<i>1417</i>&nbsp;     *
+<i>1418</i>&nbsp;     * @param name The name of the attribute being scanned.
+<i>1419</i>&nbsp;     * @param defaultVal The string to fill in with the default value.
+<i>1420</i>&nbsp;     */
+<i>1421</i>&nbsp;    protected final String scanAttDefaultDecl(String elName, String atName,
+<i>1422</i>&nbsp;    String type,
+<i>1423</i>&nbsp;    XMLString defaultVal,
+<i>1424</i>&nbsp;    XMLString nonNormalizedDefaultVal)
+<i>1425</i>&nbsp;    throws IOException, XNIException {
+<i>1426</i>&nbsp;
+<i>1427</i>&nbsp;        String defaultType = null;
+<i>1428</i>&nbsp;        fString.clear();
+<i>1429</i>&nbsp;        defaultVal.clear();
+<i>1430</i>&nbsp;        if (fEntityScanner.skipString(&quot;#REQUIRED&quot;)) {
+<i>1431</i>&nbsp;            defaultType = &quot;#REQUIRED&quot;;
+<i>1432</i>&nbsp;        }
+<i>1433</i>&nbsp;        else if (fEntityScanner.skipString(&quot;#IMPLIED&quot;)) {
+<b class="nc"><i>1434</i>&nbsp;            defaultType = &quot;#IMPLIED&quot;;</b>
+<b class="nc"><i>1435</i>&nbsp;        }</b>
+<b class="nc"><i>1436</i>&nbsp;        else {</b>
+<b class="nc"><i>1437</i>&nbsp;            if (fEntityScanner.skipString(&quot;#FIXED&quot;)) {</b>
+<b class="nc"><i>1438</i>&nbsp;                defaultType = &quot;#FIXED&quot;;</b>
+<i>1439</i>&nbsp;                // spaces
+<b class="nc"><i>1440</i>&nbsp;                if (!skipSeparator(true, !scanningInternalSubset())) {</b>
+<b class="nc"><i>1441</i>&nbsp;                    reportFatalError(&quot;MSG_SPACE_REQUIRED_AFTER_FIXED_IN_DEFAULTDECL&quot;,</b>
+<i>1442</i>&nbsp;                    new Object[]{elName, atName});
+<i>1443</i>&nbsp;                }
+<b class="nc"><i>1444</i>&nbsp;            }</b>
+<b class="nc"><i>1445</i>&nbsp;            // AttValue</b>
+<i>1446</i>&nbsp;            boolean isVC = !fStandalone  &amp;&amp;  (fSeenExternalDTD || fSeenExternalPE) ;
+<b class="nc"><i>1447</i>&nbsp;            scanAttributeValue(defaultVal, nonNormalizedDefaultVal, atName,</b>
+<b class="nc"><i>1448</i>&nbsp;            fAttributes, 0, isVC, elName, false);</b>
+<i>1449</i>&nbsp;        }
+<i>1450</i>&nbsp;        return defaultType;
+<i>1451</i>&nbsp;
+<i>1452</i>&nbsp;    } // ScanAttDefaultDecl
+<b class="nc"><i>1453</i>&nbsp;</b>
+<b class="nc"><i>1454</i>&nbsp;    /**</b>
+<i>1455</i>&nbsp;     * Scans an entity declaration
+<i>1456</i>&nbsp;     * &lt;p&gt;
+<b class="nc"><i>1457</i>&nbsp;     * &lt;pre&gt;</b>
+<i>1458</i>&nbsp;     * [70]    EntityDecl  ::=    GEDecl | PEDecl
+<i>1459</i>&nbsp;     * [71]    GEDecl      ::=    &#39;&amp;lt;!ENTITY&#39; S Name S EntityDef S? &#39;&gt;&#39;
+<i>1460</i>&nbsp;     * [72]    PEDecl      ::=    &#39;&amp;lt;!ENTITY&#39; S &#39;%&#39; S Name S PEDef S? &#39;&gt;&#39;
+<i>1461</i>&nbsp;     * [73]    EntityDef   ::=    EntityValue | (ExternalID NDataDecl?)
+<i>1462</i>&nbsp;     * [74]    PEDef       ::=    EntityValue | ExternalID
+<i>1463</i>&nbsp;     * [75]    ExternalID  ::=    &#39;SYSTEM&#39; S SystemLiteral
+<i>1464</i>&nbsp;     *                          | &#39;PUBLIC&#39; S PubidLiteral S SystemLiteral
+<i>1465</i>&nbsp;     * [76]    NDataDecl   ::=    S &#39;NDATA&#39; S Name
+<i>1466</i>&nbsp;     * &lt;/pre&gt;
+<i>1467</i>&nbsp;     * &lt;p&gt;
+<i>1468</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; Called after scanning past &#39;&amp;lt;!ENTITY&#39;
+<i>1469</i>&nbsp;     */
+<i>1470</i>&nbsp;    private final void scanEntityDecl() throws IOException, XNIException {
+<i>1471</i>&nbsp;
+<i>1472</i>&nbsp;        boolean isPEDecl = false;
+<i>1473</i>&nbsp;        boolean sawPERef = false;
+<i>1474</i>&nbsp;        fReportEntity = false;
+<i>1475</i>&nbsp;        if (fEntityScanner.skipSpaces()) {
+<i>1476</i>&nbsp;            if (!fEntityScanner.skipChar(&#39;%&#39;, NameType.REFERENCE)) {
+<i>1477</i>&nbsp;                isPEDecl = false; // &lt;!ENTITY x &quot;x&quot;&gt;
+<i>1478</i>&nbsp;            }
+<b class="nc"><i>1479</i>&nbsp;            else if (skipSeparator(true, !scanningInternalSubset())) {</b>
+<b class="nc"><i>1480</i>&nbsp;                // &lt;!ENTITY % x &quot;x&quot;&gt;</b>
+<b class="nc"><i>1481</i>&nbsp;                isPEDecl = true;</b>
+<b class="nc"><i>1482</i>&nbsp;            }</b>
+<b class="nc"><i>1483</i>&nbsp;            else if (scanningInternalSubset()) {</b>
+<b class="nc"><i>1484</i>&nbsp;                reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_ENTITY_NAME_IN_ENTITYDECL&quot;,</b>
+<i>1485</i>&nbsp;                null);
+<b class="nc"><i>1486</i>&nbsp;                isPEDecl = true;</b>
+<i>1487</i>&nbsp;            }
+<b class="nc"><i>1488</i>&nbsp;            else if (fEntityScanner.peekChar() == &#39;%&#39;) {</b>
+<i>1489</i>&nbsp;                // &lt;!ENTITY %%x; &quot;x&quot;&gt; is legal
+<b class="nc"><i>1490</i>&nbsp;                skipSeparator(false, !scanningInternalSubset());</b>
+<b class="nc"><i>1491</i>&nbsp;                isPEDecl = true;</b>
+<i>1492</i>&nbsp;            }
+<b class="nc"><i>1493</i>&nbsp;            else {</b>
+<i>1494</i>&nbsp;                sawPERef = true;
+<b class="nc"><i>1495</i>&nbsp;            }</b>
+<i>1496</i>&nbsp;        }
+<b class="nc"><i>1497</i>&nbsp;        else if (scanningInternalSubset() || !fEntityScanner.skipChar(&#39;%&#39;, NameType.REFERENCE)) {</b>
+<b class="nc"><i>1498</i>&nbsp;            // &lt;!ENTITY[^ ]...&gt; or &lt;!ENTITY[^ %]...&gt;</b>
+<i>1499</i>&nbsp;            reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_ENTITY_NAME_IN_ENTITYDECL&quot;,
+<i>1500</i>&nbsp;            null);
+<b class="nc"><i>1501</i>&nbsp;            isPEDecl = false;</b>
+<i>1502</i>&nbsp;        }
+<i>1503</i>&nbsp;        else if (fEntityScanner.skipSpaces()) {
+<b class="nc"><i>1504</i>&nbsp;            // &lt;!ENTITY% ...&gt;</b>
+<i>1505</i>&nbsp;            reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_PERCENT_IN_PEDECL&quot;,
+<b class="nc"><i>1506</i>&nbsp;            null);</b>
+<i>1507</i>&nbsp;            isPEDecl = false;
+<b class="nc"><i>1508</i>&nbsp;        }</b>
+<i>1509</i>&nbsp;        else {
+<b class="nc"><i>1510</i>&nbsp;            sawPERef = true;</b>
+<i>1511</i>&nbsp;        }
+<b class="nc"><i>1512</i>&nbsp;        if (sawPERef) {</b>
+<i>1513</i>&nbsp;            while (true) {
+<b class="nc"><i>1514</i>&nbsp;                String peName = fEntityScanner.scanName(NameType.REFERENCE);</b>
+<i>1515</i>&nbsp;                if (peName == null) {
+<i>1516</i>&nbsp;                    reportFatalError(&quot;NameRequiredInPEReference&quot;, null);
+<b class="nc"><i>1517</i>&nbsp;                }</b>
+<i>1518</i>&nbsp;                else if (!fEntityScanner.skipChar(&#39;;&#39;, NameType.REFERENCE)) {
+<b class="nc"><i>1519</i>&nbsp;                    reportFatalError(&quot;SemicolonRequiredInPEReference&quot;,</b>
+<i>1520</i>&nbsp;                    new Object[]{peName});
+<b class="nc"><i>1521</i>&nbsp;                }</b>
+<b class="nc"><i>1522</i>&nbsp;                else {</b>
+<b class="nc"><i>1523</i>&nbsp;                    startPE(peName, false);</b>
+<i>1524</i>&nbsp;                }
+<b class="nc"><i>1525</i>&nbsp;                fEntityScanner.skipSpaces();</b>
+<b class="nc"><i>1526</i>&nbsp;                if (!fEntityScanner.skipChar(&#39;%&#39;, NameType.REFERENCE))</b>
+<i>1527</i>&nbsp;                    break;
+<i>1528</i>&nbsp;                if (!isPEDecl) {
+<i>1529</i>&nbsp;                    if (skipSeparator(true, !scanningInternalSubset())) {
+<b class="nc"><i>1530</i>&nbsp;                        isPEDecl = true;</b>
+<i>1531</i>&nbsp;                        break;
+<b class="nc"><i>1532</i>&nbsp;                    }</b>
+<b class="nc"><i>1533</i>&nbsp;                    isPEDecl = fEntityScanner.skipChar(&#39;%&#39;, NameType.REFERENCE);</b>
+<b class="nc"><i>1534</i>&nbsp;                }</b>
+<b class="nc"><i>1535</i>&nbsp;            }</b>
+<b class="nc"><i>1536</i>&nbsp;        }</b>
+<b class="nc"><i>1537</i>&nbsp;</b>
+<b class="nc"><i>1538</i>&nbsp;        // name</b>
+<i>1539</i>&nbsp;        String name = fEntityScanner.scanName(NameType.ENTITY);
+<b class="nc"><i>1540</i>&nbsp;        if (name == null) {</b>
+<i>1541</i>&nbsp;            reportFatalError(&quot;MSG_ENTITY_NAME_REQUIRED_IN_ENTITYDECL&quot;, null);
+<b class="nc"><i>1542</i>&nbsp;        }</b>
+<i>1543</i>&nbsp;
+<i>1544</i>&nbsp;        // spaces
+<i>1545</i>&nbsp;        if (!skipSeparator(true, !scanningInternalSubset())) {
+<b class="nc"><i>1546</i>&nbsp;            reportFatalError(&quot;MSG_SPACE_REQUIRED_AFTER_ENTITY_NAME_IN_ENTITYDECL&quot;,</b>
+<b class="nc"><i>1547</i>&nbsp;            new Object[]{name});</b>
+<b class="nc"><i>1548</i>&nbsp;        }</b>
+<i>1549</i>&nbsp;
+<i>1550</i>&nbsp;        // external id
+<i>1551</i>&nbsp;        scanExternalID(fStrings, false);
+<b class="nc"><i>1552</i>&nbsp;        String systemId = fStrings[0];</b>
+<b class="nc"><i>1553</i>&nbsp;        String publicId = fStrings[1];</b>
+<i>1554</i>&nbsp;
+<i>1555</i>&nbsp;        if (isPEDecl &amp;&amp; systemId != null) {
+<i>1556</i>&nbsp;            fSeenExternalPE = true;
+<i>1557</i>&nbsp;        }
+<b class="nc"><i>1558</i>&nbsp;</b>
+<b class="nc"><i>1559</i>&nbsp;        String notation = null;</b>
+<b class="nc"><i>1560</i>&nbsp;        // NDATA</b>
+<i>1561</i>&nbsp;        boolean sawSpace = skipSeparator(true, !scanningInternalSubset());
+<b class="nc"><i>1562</i>&nbsp;        if (!isPEDecl &amp;&amp; fEntityScanner.skipString(&quot;NDATA&quot;)) {</b>
+<b class="nc"><i>1563</i>&nbsp;            // check whether there was space before NDATA</b>
+<i>1564</i>&nbsp;            if (!sawSpace) {
+<i>1565</i>&nbsp;                reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_NDATA_IN_UNPARSED_ENTITYDECL&quot;,
+<b class="nc"><i>1566</i>&nbsp;                new Object[]{name});</b>
+<i>1567</i>&nbsp;            }
+<b class="nc"><i>1568</i>&nbsp;</b>
+<b class="nc"><i>1569</i>&nbsp;            // spaces</b>
+<i>1570</i>&nbsp;            if (!skipSeparator(true, !scanningInternalSubset())) {
+<b class="nc"><i>1571</i>&nbsp;                reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_NOTATION_NAME_IN_UNPARSED_ENTITYDECL&quot;,</b>
+<b class="nc"><i>1572</i>&nbsp;                new Object[]{name});</b>
+<i>1573</i>&nbsp;            }
+<i>1574</i>&nbsp;            notation = fEntityScanner.scanName(NameType.NOTATION);
+<i>1575</i>&nbsp;            if (notation == null) {
+<i>1576</i>&nbsp;                reportFatalError(&quot;MSG_NOTATION_NAME_REQUIRED_FOR_UNPARSED_ENTITYDECL&quot;,
+<b class="nc"><i>1577</i>&nbsp;                new Object[]{name});</b>
+<b class="nc"><i>1578</i>&nbsp;            }</b>
+<i>1579</i>&nbsp;        }
+<i>1580</i>&nbsp;
+<b class="nc"><i>1581</i>&nbsp;        // internal entity</b>
+<b class="nc"><i>1582</i>&nbsp;        if (systemId == null) {</b>
+<b class="nc"><i>1583</i>&nbsp;            scanEntityValue(name, isPEDecl, fLiteral, fLiteral2);</b>
+<i>1584</i>&nbsp;            // since we need it&#39;s value anyway, let&#39;s snag it so it doesn&#39;t get corrupted
+<i>1585</i>&nbsp;            // if a new load takes place before we store the entity values
+<i>1586</i>&nbsp;            fStringBuffer.clear();
+<i>1587</i>&nbsp;            fStringBuffer2.clear();
+<i>1588</i>&nbsp;            fStringBuffer.append(fLiteral.ch, fLiteral.offset, fLiteral.length);
+<b class="nc"><i>1589</i>&nbsp;            fStringBuffer2.append(fLiteral2.ch, fLiteral2.offset, fLiteral2.length);</b>
+<b class="nc"><i>1590</i>&nbsp;        }</b>
+<i>1591</i>&nbsp;
+<i>1592</i>&nbsp;        // skip possible trailing space
+<b class="nc"><i>1593</i>&nbsp;        skipSeparator(false, !scanningInternalSubset());</b>
+<b class="nc"><i>1594</i>&nbsp;</b>
+<b class="nc"><i>1595</i>&nbsp;        // end</b>
+<b class="nc"><i>1596</i>&nbsp;        if (!fEntityScanner.skipChar(&#39;&gt;&#39;, null)) {</b>
+<i>1597</i>&nbsp;            reportFatalError(&quot;EntityDeclUnterminated&quot;, new Object[]{name});
+<i>1598</i>&nbsp;        }
+<i>1599</i>&nbsp;        fMarkUpDepth--;
+<b class="nc"><i>1600</i>&nbsp;</b>
+<i>1601</i>&nbsp;        // register entity and make callback
+<i>1602</i>&nbsp;        if (isPEDecl) {
+<b class="nc"><i>1603</i>&nbsp;            name = &quot;%&quot; + name;</b>
+<b class="nc"><i>1604</i>&nbsp;        }</b>
+<i>1605</i>&nbsp;        if (systemId != null) {
+<b class="nc"><i>1606</i>&nbsp;            String baseSystemId = fEntityScanner.getBaseSystemId();</b>
+<i>1607</i>&nbsp;            if (notation != null) {
+<i>1608</i>&nbsp;                fEntityStore.addUnparsedEntity(name, publicId, systemId, baseSystemId, notation);
+<b class="nc"><i>1609</i>&nbsp;            }</b>
+<b class="nc"><i>1610</i>&nbsp;            else {</b>
+<i>1611</i>&nbsp;                fEntityStore.addExternalEntity(name, publicId, systemId,
+<b class="nc"><i>1612</i>&nbsp;                baseSystemId);</b>
+<b class="nc"><i>1613</i>&nbsp;            }</b>
+<b class="nc"><i>1614</i>&nbsp;            if (fDTDHandler != null) {</b>
+<b class="nc"><i>1615</i>&nbsp;                //Venu Revisit : why false has been removed in expandSYstem</b>
+<i>1616</i>&nbsp;                fResourceIdentifier.setValues(publicId, systemId, baseSystemId, XMLEntityManager.expandSystemId(systemId, baseSystemId ));
+<i>1617</i>&nbsp;
+<b class="nc"><i>1618</i>&nbsp;                if (notation != null) {</b>
+<i>1619</i>&nbsp;                    fDTDHandler.unparsedEntityDecl(name, fResourceIdentifier,
+<i>1620</i>&nbsp;                    notation, null);
+<b class="nc"><i>1621</i>&nbsp;                }</b>
+<i>1622</i>&nbsp;                else {
+<b class="nc"><i>1623</i>&nbsp;                    fDTDHandler.externalEntityDecl(name, fResourceIdentifier, null);</b>
+<i>1624</i>&nbsp;                }
+<b class="nc"><i>1625</i>&nbsp;            }</b>
+<b class="nc"><i>1626</i>&nbsp;        }</b>
+<i>1627</i>&nbsp;        else {
+<i>1628</i>&nbsp;            fEntityStore.addInternalEntity(name, fStringBuffer.toString());
+<i>1629</i>&nbsp;            if (fDTDHandler != null) {
+<b class="nc"><i>1630</i>&nbsp;                fDTDHandler.internalEntityDecl(name, fStringBuffer, fStringBuffer2, null);</b>
+<i>1631</i>&nbsp;            }
+<i>1632</i>&nbsp;        }
+<b class="nc"><i>1633</i>&nbsp;        fReportEntity = true;</b>
+<i>1634</i>&nbsp;
+<b class="nc"><i>1635</i>&nbsp;    } // scanEntityDecl()</b>
+<b class="nc"><i>1636</i>&nbsp;</b>
+<b class="nc"><i>1637</i>&nbsp;    /**</b>
+<i>1638</i>&nbsp;     * Scans an entity value.
+<i>1639</i>&nbsp;     *
+<b class="nc"><i>1640</i>&nbsp;     * @param value The string to fill in with the value.</b>
+<i>1641</i>&nbsp;     * @param nonNormalizedValue The string to fill in with the
+<i>1642</i>&nbsp;     *                           non-normalized value.
+<i>1643</i>&nbsp;     *
+<i>1644</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; This method uses fString, fStringBuffer (through
+<i>1645</i>&nbsp;     * the use of scanCharReferenceValue), and fStringBuffer2, anything in them
+<i>1646</i>&nbsp;     * at the time of calling is lost.
+<i>1647</i>&nbsp;     */
+<i>1648</i>&nbsp;    protected final void scanEntityValue(String entityName, boolean isPEDecl, XMLString value,
+<i>1649</i>&nbsp;    XMLString nonNormalizedValue)
+<i>1650</i>&nbsp;    throws IOException, XNIException {
+<i>1651</i>&nbsp;        int quote = fEntityScanner.scanChar(null);
+<i>1652</i>&nbsp;        if (quote != &#39;\&#39;&#39; &amp;&amp; quote != &#39;&quot;&#39;) {
+<i>1653</i>&nbsp;            reportFatalError(&quot;OpenQuoteMissingInDecl&quot;, null);
+<i>1654</i>&nbsp;        }
+<i>1655</i>&nbsp;        // store at which depth of entities we start
+<i>1656</i>&nbsp;        int entityDepth = fEntityDepth;
+<i>1657</i>&nbsp;
+<b class="nc"><i>1658</i>&nbsp;        XMLString literal = fString;</b>
+<b class="nc"><i>1659</i>&nbsp;        XMLString literal2 = fString;</b>
+<b class="nc"><i>1660</i>&nbsp;        int countChar = 0;</b>
+<i>1661</i>&nbsp;        if (fLimitAnalyzer == null ) {
+<i>1662</i>&nbsp;            fLimitAnalyzer = fEntityManager.fLimitAnalyzer;
+<b class="nc"><i>1663</i>&nbsp;         }</b>
+<i>1664</i>&nbsp;        fLimitAnalyzer.startEntity(entityName);
+<b class="nc"><i>1665</i>&nbsp;</b>
+<b class="nc"><i>1666</i>&nbsp;        if (fEntityScanner.scanLiteral(quote, fString, false) != quote) {</b>
+<b class="nc"><i>1667</i>&nbsp;            fStringBuffer.clear();</b>
+<b class="nc"><i>1668</i>&nbsp;            fStringBuffer2.clear();</b>
+<b class="nc"><i>1669</i>&nbsp;            int offset;</b>
+<i>1670</i>&nbsp;            do {
+<b class="nc"><i>1671</i>&nbsp;                countChar = 0;</b>
+<i>1672</i>&nbsp;                offset = fStringBuffer.length;
+<b class="nc"><i>1673</i>&nbsp;                fStringBuffer.append(fString);</b>
+<b class="nc"><i>1674</i>&nbsp;                fStringBuffer2.append(fString);</b>
+<b class="nc"><i>1675</i>&nbsp;                if (fEntityScanner.skipChar(&#39;&amp;&#39;, NameType.REFERENCE)) {</b>
+<i>1676</i>&nbsp;                    if (fEntityScanner.skipChar(&#39;#&#39;, NameType.REFERENCE)) {
+<i>1677</i>&nbsp;                        fStringBuffer2.append(&quot;&amp;#&quot;);
+<b class="nc"><i>1678</i>&nbsp;                        scanCharReferenceValue(fStringBuffer, fStringBuffer2);</b>
+<b class="nc"><i>1679</i>&nbsp;                    }</b>
+<b class="nc"><i>1680</i>&nbsp;                    else {</b>
+<b class="nc"><i>1681</i>&nbsp;                        fStringBuffer.append(&#39;&amp;&#39;);</b>
+<b class="nc"><i>1682</i>&nbsp;                        fStringBuffer2.append(&#39;&amp;&#39;);</b>
+<b class="nc"><i>1683</i>&nbsp;                        String eName = fEntityScanner.scanName(NameType.REFERENCE);</b>
+<b class="nc"><i>1684</i>&nbsp;                        if (eName == null) {</b>
+<b class="nc"><i>1685</i>&nbsp;                            reportFatalError(&quot;NameRequiredInReference&quot;,</b>
+<i>1686</i>&nbsp;                            null);
+<i>1687</i>&nbsp;                        }
+<b class="nc"><i>1688</i>&nbsp;                        else {</b>
+<b class="nc"><i>1689</i>&nbsp;                            fStringBuffer.append(eName);</b>
+<b class="nc"><i>1690</i>&nbsp;                            fStringBuffer2.append(eName);</b>
+<b class="nc"><i>1691</i>&nbsp;                        }</b>
+<b class="nc"><i>1692</i>&nbsp;                        if (!fEntityScanner.skipChar(&#39;;&#39;, NameType.REFERENCE)) {</b>
+<i>1693</i>&nbsp;                            reportFatalError(&quot;SemicolonRequiredInReference&quot;,
+<i>1694</i>&nbsp;                            new Object[]{eName});
+<i>1695</i>&nbsp;                        }
+<b class="nc"><i>1696</i>&nbsp;                        else {</b>
+<b class="nc"><i>1697</i>&nbsp;                            fStringBuffer.append(&#39;;&#39;);</b>
+<i>1698</i>&nbsp;                            fStringBuffer2.append(&#39;;&#39;);
+<b class="nc"><i>1699</i>&nbsp;                        }</b>
+<b class="nc"><i>1700</i>&nbsp;                    }</b>
+<i>1701</i>&nbsp;                }
+<i>1702</i>&nbsp;                else if (fEntityScanner.skipChar(&#39;%&#39;, NameType.REFERENCE)) {
+<i>1703</i>&nbsp;                    while (true) {
+<b class="nc"><i>1704</i>&nbsp;                        fStringBuffer2.append(&#39;%&#39;);</b>
+<b class="nc"><i>1705</i>&nbsp;                        String peName = fEntityScanner.scanName(NameType.REFERENCE);</b>
+<i>1706</i>&nbsp;                        if (peName == null) {
+<b class="nc"><i>1707</i>&nbsp;                            reportFatalError(&quot;NameRequiredInPEReference&quot;,</b>
+<i>1708</i>&nbsp;                            null);
+<b class="nc"><i>1709</i>&nbsp;                        }</b>
+<i>1710</i>&nbsp;                        else if (!fEntityScanner.skipChar(&#39;;&#39;, NameType.REFERENCE)) {
+<b class="nc"><i>1711</i>&nbsp;                            reportFatalError(&quot;SemicolonRequiredInPEReference&quot;,</b>
+<b class="nc"><i>1712</i>&nbsp;                            new Object[]{peName});</b>
+<b class="nc"><i>1713</i>&nbsp;                        }</b>
+<b class="nc"><i>1714</i>&nbsp;                        else {</b>
+<i>1715</i>&nbsp;                            if (scanningInternalSubset()) {
+<i>1716</i>&nbsp;                                reportFatalError(&quot;PEReferenceWithinMarkup&quot;,
+<b class="nc"><i>1717</i>&nbsp;                                new Object[]{peName});</b>
+<b class="nc"><i>1718</i>&nbsp;                            }</b>
+<i>1719</i>&nbsp;                            fStringBuffer2.append(peName);
+<i>1720</i>&nbsp;                            fStringBuffer2.append(&#39;;&#39;);
+<i>1721</i>&nbsp;                        }
+<b class="nc"><i>1722</i>&nbsp;                        startPE(peName, true);</b>
+<b class="nc"><i>1723</i>&nbsp;                        // REVISIT: [Q] Why do we skip spaces here? -Ac</b>
+<i>1724</i>&nbsp;                        // REVISIT: This will make returning the non-
+<i>1725</i>&nbsp;                        //          normalized value harder. -Ac
+<b class="nc"><i>1726</i>&nbsp;                        fEntityScanner.skipSpaces();</b>
+<b class="nc"><i>1727</i>&nbsp;                        if (!fEntityScanner.skipChar(&#39;%&#39;, NameType.REFERENCE))</b>
+<i>1728</i>&nbsp;                            break;
+<b class="nc"><i>1729</i>&nbsp;                    }</b>
+<i>1730</i>&nbsp;                }
+<i>1731</i>&nbsp;                else {
+<i>1732</i>&nbsp;                    int c = fEntityScanner.peekChar();
+<b class="nc"><i>1733</i>&nbsp;                    if (XMLChar.isHighSurrogate(c)) {</b>
+<b class="nc"><i>1734</i>&nbsp;                        countChar++;</b>
+<b class="nc"><i>1735</i>&nbsp;                        scanSurrogates(fStringBuffer2);</b>
+<b class="nc"><i>1736</i>&nbsp;                    }</b>
+<i>1737</i>&nbsp;                    else if (isInvalidLiteral(c)) {
+<i>1738</i>&nbsp;                        reportFatalError(&quot;InvalidCharInLiteral&quot;,
+<b class="nc"><i>1739</i>&nbsp;                        new Object[]{Integer.toHexString(c)});</b>
+<b class="nc"><i>1740</i>&nbsp;                        fEntityScanner.scanChar(null);</b>
+<b class="nc"><i>1741</i>&nbsp;                    }</b>
+<b class="nc"><i>1742</i>&nbsp;                    // if it&#39;s not the delimiting quote or if it is but from a</b>
+<i>1743</i>&nbsp;                    // different entity than the one this literal started from,
+<b class="nc"><i>1744</i>&nbsp;                    // simply append the character to our buffer</b>
+<b class="nc"><i>1745</i>&nbsp;                    else if (c != quote || entityDepth != fEntityDepth) {</b>
+<b class="nc"><i>1746</i>&nbsp;                        fStringBuffer.append((char)c);</b>
+<b class="nc"><i>1747</i>&nbsp;                        fStringBuffer2.append((char)c);</b>
+<i>1748</i>&nbsp;                        fEntityScanner.scanChar(null);
+<i>1749</i>&nbsp;                    }
+<i>1750</i>&nbsp;                }
+<i>1751</i>&nbsp;                checkEntityLimit(isPEDecl, entityName, fStringBuffer.length - offset + countChar);
+<b class="nc"><i>1752</i>&nbsp;            } while (fEntityScanner.scanLiteral(quote, fString, false) != quote);</b>
+<b class="nc"><i>1753</i>&nbsp;            checkEntityLimit(isPEDecl, entityName, fString.length);</b>
+<b class="nc"><i>1754</i>&nbsp;            fStringBuffer.append(fString);</b>
+<b class="nc"><i>1755</i>&nbsp;            fStringBuffer2.append(fString);</b>
+<i>1756</i>&nbsp;            literal = fStringBuffer;
+<i>1757</i>&nbsp;            literal2 = fStringBuffer2;
+<b class="nc"><i>1758</i>&nbsp;        } else {</b>
+<b class="nc"><i>1759</i>&nbsp;            checkEntityLimit(isPEDecl, entityName, literal);</b>
+<b class="nc"><i>1760</i>&nbsp;        }</b>
+<b class="nc"><i>1761</i>&nbsp;        value.setValues(literal);</b>
+<b class="nc"><i>1762</i>&nbsp;        nonNormalizedValue.setValues(literal2);</b>
+<b class="nc"><i>1763</i>&nbsp;        if (fLimitAnalyzer != null) {</b>
+<b class="nc"><i>1764</i>&nbsp;            if (isPEDecl) {</b>
+<b class="nc"><i>1765</i>&nbsp;                fLimitAnalyzer.endEntity(XMLSecurityManager.Limit.PARAMETER_ENTITY_SIZE_LIMIT, entityName);</b>
+<b class="nc"><i>1766</i>&nbsp;            } else {</b>
+<i>1767</i>&nbsp;                fLimitAnalyzer.endEntity(XMLSecurityManager.Limit.GENERAL_ENTITY_SIZE_LIMIT, entityName);
+<b class="nc"><i>1768</i>&nbsp;            }</b>
+<b class="nc"><i>1769</i>&nbsp;        }</b>
+<b class="nc"><i>1770</i>&nbsp;</b>
+<b class="nc"><i>1771</i>&nbsp;        if (!fEntityScanner.skipChar(quote, null)) {</b>
+<b class="nc"><i>1772</i>&nbsp;            reportFatalError(&quot;CloseQuoteMissingInDecl&quot;, null);</b>
+<i>1773</i>&nbsp;        }
+<b class="nc"><i>1774</i>&nbsp;    } // scanEntityValue(XMLString,XMLString):void</b>
+<i>1775</i>&nbsp;
+<i>1776</i>&nbsp;    /**
+<i>1777</i>&nbsp;     * Scans a notation declaration
+<b class="nc"><i>1778</i>&nbsp;     * &lt;p&gt;</b>
+<b class="nc"><i>1779</i>&nbsp;     * &lt;pre&gt;</b>
+<i>1780</i>&nbsp;     * [82] NotationDecl ::= &#39;&amp;lt;!NOTATION&#39; S Name S (ExternalID|PublicID) S? &#39;&gt;&#39;
+<i>1781</i>&nbsp;     * [83]  PublicID    ::= &#39;PUBLIC&#39; S PubidLiteral
+<i>1782</i>&nbsp;     * &lt;/pre&gt;
+<i>1783</i>&nbsp;     * &lt;p&gt;
+<i>1784</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; Called after scanning past &#39;&amp;lt;!NOTATION&#39;
+<i>1785</i>&nbsp;     */
+<i>1786</i>&nbsp;    private final void scanNotationDecl() throws IOException, XNIException {
+<i>1787</i>&nbsp;
+<i>1788</i>&nbsp;        // spaces
+<i>1789</i>&nbsp;        fReportEntity = false;
+<i>1790</i>&nbsp;        if (!skipSeparator(true, !scanningInternalSubset())) {
+<i>1791</i>&nbsp;            reportFatalError(&quot;MSG_SPACE_REQUIRED_BEFORE_NOTATION_NAME_IN_NOTATIONDECL&quot;,
+<i>1792</i>&nbsp;            null);
+<i>1793</i>&nbsp;        }
+<i>1794</i>&nbsp;
+<i>1795</i>&nbsp;        // notation name
+<b class="nc"><i>1796</i>&nbsp;        String name = fEntityScanner.scanName(NameType.NOTATION);</b>
+<b class="nc"><i>1797</i>&nbsp;        if (name == null) {</b>
+<b class="nc"><i>1798</i>&nbsp;            reportFatalError(&quot;MSG_NOTATION_NAME_REQUIRED_IN_NOTATIONDECL&quot;,</b>
+<i>1799</i>&nbsp;            null);
+<i>1800</i>&nbsp;        }
+<i>1801</i>&nbsp;
+<i>1802</i>&nbsp;        // spaces
+<b class="nc"><i>1803</i>&nbsp;        if (!skipSeparator(true, !scanningInternalSubset())) {</b>
+<b class="nc"><i>1804</i>&nbsp;            reportFatalError(&quot;MSG_SPACE_REQUIRED_AFTER_NOTATION_NAME_IN_NOTATIONDECL&quot;,</b>
+<b class="nc"><i>1805</i>&nbsp;            new Object[]{name});</b>
+<i>1806</i>&nbsp;        }
+<i>1807</i>&nbsp;
+<i>1808</i>&nbsp;        // external id
+<i>1809</i>&nbsp;        scanExternalID(fStrings, true);
+<b class="nc"><i>1810</i>&nbsp;        String systemId = fStrings[0];</b>
+<b class="nc"><i>1811</i>&nbsp;        String publicId = fStrings[1];</b>
+<i>1812</i>&nbsp;        String baseSystemId = fEntityScanner.getBaseSystemId();
+<i>1813</i>&nbsp;
+<i>1814</i>&nbsp;        if (systemId == null &amp;&amp; publicId == null) {
+<i>1815</i>&nbsp;            reportFatalError(&quot;ExternalIDorPublicIDRequired&quot;,
+<b class="nc"><i>1816</i>&nbsp;            new Object[]{name});</b>
+<b class="nc"><i>1817</i>&nbsp;        }</b>
+<b class="nc"><i>1818</i>&nbsp;</b>
+<b class="nc"><i>1819</i>&nbsp;        // skip possible trailing space</b>
+<i>1820</i>&nbsp;        skipSeparator(false, !scanningInternalSubset());
+<b class="nc"><i>1821</i>&nbsp;</b>
+<b class="nc"><i>1822</i>&nbsp;        // end</b>
+<i>1823</i>&nbsp;        if (!fEntityScanner.skipChar(&#39;&gt;&#39;, null)) {
+<i>1824</i>&nbsp;            reportFatalError(&quot;NotationDeclUnterminated&quot;, new Object[]{name});
+<i>1825</i>&nbsp;        }
+<i>1826</i>&nbsp;        fMarkUpDepth--;
+<b class="nc"><i>1827</i>&nbsp;</b>
+<i>1828</i>&nbsp;        fResourceIdentifier.setValues(publicId, systemId, baseSystemId, XMLEntityManager.expandSystemId(systemId, baseSystemId ));
+<i>1829</i>&nbsp;        if (nonValidatingMode) nvGrammarInfo.notationDecl(name, fResourceIdentifier, null);
+<b class="nc"><i>1830</i>&nbsp;        // call handler</b>
+<b class="nc"><i>1831</i>&nbsp;        if (fDTDHandler != null) {</b>
+<i>1832</i>&nbsp;            //Venu Revisit wby false has been removed.
+<b class="nc"><i>1833</i>&nbsp;            //fResourceIdentifier.setValues(publicId, systemId, baseSystemId, XMLEntityManager.expandSystemId(systemId, baseSystemId, false));</b>
+<i>1834</i>&nbsp;            fDTDHandler.notationDecl(name, fResourceIdentifier, null);
+<b class="nc"><i>1835</i>&nbsp;        }</b>
+<b class="nc"><i>1836</i>&nbsp;        fReportEntity = true;</b>
+<i>1837</i>&nbsp;
+<b class="nc"><i>1838</i>&nbsp;    } // scanNotationDecl()</b>
+<i>1839</i>&nbsp;
+<i>1840</i>&nbsp;    /**
+<b class="nc"><i>1841</i>&nbsp;     * Scans a conditional section. If it&#39;s a section to ignore the whole</b>
+<i>1842</i>&nbsp;     * section gets scanned through and this method only returns after the
+<b class="nc"><i>1843</i>&nbsp;     * closing bracket has been found. When it&#39;s an include section though, it</b>
+<i>1844</i>&nbsp;     * returns to let the main loop take care of scanning it. In that case the
+<i>1845</i>&nbsp;     * end of the section if handled by the main loop (scanDecls).
+<i>1846</i>&nbsp;     * &lt;p&gt;
+<i>1847</i>&nbsp;     * &lt;pre&gt;
+<i>1848</i>&nbsp;     * [61] conditionalSect   ::= includeSect | ignoreSect
+<i>1849</i>&nbsp;     * [62] includeSect       ::= &#39;&amp;lt;![&#39; S? &#39;INCLUDE&#39; S? &#39;[&#39; extSubsetDecl &#39;]]&gt;&#39;
+<i>1850</i>&nbsp;     * [63] ignoreSect   ::= &#39;&amp;lt;![&#39; S? &#39;IGNORE&#39; S? &#39;[&#39; ignoreSectContents* &#39;]]&gt;&#39;
+<i>1851</i>&nbsp;     * [64] ignoreSectContents ::= Ignore (&#39;&amp;lt;![&#39; ignoreSectContents &#39;]]&gt;&#39; Ignore)*
+<i>1852</i>&nbsp;     * [65] Ignore            ::=    Char* - (Char* (&#39;&amp;lt;![&#39; | &#39;]]&gt;&#39;) Char*)
+<i>1853</i>&nbsp;     * &lt;/pre&gt;
+<i>1854</i>&nbsp;     * &lt;p&gt;
+<i>1855</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; Called after scanning past &#39;&amp;lt;![&#39; */
+<i>1856</i>&nbsp;    private final void scanConditionalSect(int currPEDepth)
+<i>1857</i>&nbsp;    throws IOException, XNIException {
+<i>1858</i>&nbsp;
+<i>1859</i>&nbsp;        fReportEntity = false;
+<i>1860</i>&nbsp;        skipSeparator(false, !scanningInternalSubset());
+<i>1861</i>&nbsp;
+<i>1862</i>&nbsp;        if (fEntityScanner.skipString(&quot;INCLUDE&quot;)) {
+<i>1863</i>&nbsp;            skipSeparator(false, !scanningInternalSubset());
+<i>1864</i>&nbsp;            if(currPEDepth != fPEDepth &amp;&amp; fValidation) {
+<i>1865</i>&nbsp;                fErrorReporter.reportError(XMLMessageFormatter.XML_DOMAIN,
+<b class="nc"><i>1866</i>&nbsp;                &quot;INVALID_PE_IN_CONDITIONAL&quot;,</b>
+<b class="nc"><i>1867</i>&nbsp;                new Object[]{ fEntityManager.fCurrentEntity.name},</b>
+<i>1868</i>&nbsp;                XMLErrorReporter.SEVERITY_ERROR);
+<b class="nc"><i>1869</i>&nbsp;            }</b>
+<b class="nc"><i>1870</i>&nbsp;            // call handler</b>
+<b class="nc"><i>1871</i>&nbsp;            if (!fEntityScanner.skipChar(&#39;[&#39;, null)) {</b>
+<b class="nc"><i>1872</i>&nbsp;                reportFatalError(&quot;MSG_MARKUP_NOT_RECOGNIZED_IN_DTD&quot;, null);</b>
+<i>1873</i>&nbsp;            }
+<i>1874</i>&nbsp;
+<i>1875</i>&nbsp;            if (fDTDHandler != null) {
+<i>1876</i>&nbsp;                fDTDHandler.startConditional(XMLDTDHandler.CONDITIONAL_INCLUDE,
+<i>1877</i>&nbsp;                null);
+<b class="nc"><i>1878</i>&nbsp;            }</b>
+<b class="nc"><i>1879</i>&nbsp;            fIncludeSectDepth++;</b>
+<i>1880</i>&nbsp;            // just stop there and go back to the main loop
+<i>1881</i>&nbsp;            fReportEntity = true;
+<b class="nc"><i>1882</i>&nbsp;        }</b>
+<b class="nc"><i>1883</i>&nbsp;        else if (fEntityScanner.skipString(&quot;IGNORE&quot;)) {</b>
+<i>1884</i>&nbsp;            skipSeparator(false, !scanningInternalSubset());
+<i>1885</i>&nbsp;            if(currPEDepth != fPEDepth &amp;&amp; fValidation) {
+<b class="nc"><i>1886</i>&nbsp;                fErrorReporter.reportError(XMLMessageFormatter.XML_DOMAIN,</b>
+<i>1887</i>&nbsp;                &quot;INVALID_PE_IN_CONDITIONAL&quot;,
+<b class="nc"><i>1888</i>&nbsp;                new Object[]{ fEntityManager.fCurrentEntity.name},</b>
+<i>1889</i>&nbsp;                XMLErrorReporter.SEVERITY_ERROR);
+<b class="nc"><i>1890</i>&nbsp;            }</b>
+<b class="nc"><i>1891</i>&nbsp;            // call handler</b>
+<b class="nc"><i>1892</i>&nbsp;            if (fDTDHandler != null) {</b>
+<b class="nc"><i>1893</i>&nbsp;                fDTDHandler.startConditional(XMLDTDHandler.CONDITIONAL_IGNORE,</b>
+<i>1894</i>&nbsp;                null);
+<i>1895</i>&nbsp;            }
+<i>1896</i>&nbsp;            if (!fEntityScanner.skipChar(&#39;[&#39;, null)) {
+<i>1897</i>&nbsp;                reportFatalError(&quot;MSG_MARKUP_NOT_RECOGNIZED_IN_DTD&quot;, null);
+<i>1898</i>&nbsp;            }
+<b class="nc"><i>1899</i>&nbsp;            fReportEntity = true;</b>
+<b class="nc"><i>1900</i>&nbsp;            int initialDepth = ++fIncludeSectDepth;</b>
+<i>1901</i>&nbsp;            if (fDTDHandler != null) {
+<i>1902</i>&nbsp;                fIgnoreConditionalBuffer.clear();
+<b class="nc"><i>1903</i>&nbsp;            }</b>
+<b class="nc"><i>1904</i>&nbsp;            while (true) {</b>
+<i>1905</i>&nbsp;                if (fEntityScanner.skipChar(&#39;&lt;&#39;, null)) {
+<b class="nc"><i>1906</i>&nbsp;                    if (fDTDHandler != null) {</b>
+<b class="nc"><i>1907</i>&nbsp;                        fIgnoreConditionalBuffer.append(&#39;&lt;&#39;);</b>
+<b class="nc"><i>1908</i>&nbsp;                    }</b>
+<b class="nc"><i>1909</i>&nbsp;                    //</b>
+<i>1910</i>&nbsp;                    // These tests are split so that we handle cases like
+<i>1911</i>&nbsp;                    // &#39;&lt;&lt;![&#39; and &#39;&lt;!&lt;![&#39; which we might otherwise miss.
+<b class="nc"><i>1912</i>&nbsp;                    //</b>
+<b class="nc"><i>1913</i>&nbsp;                    if (fEntityScanner.skipChar(&#39;!&#39;, null)) {</b>
+<b class="nc"><i>1914</i>&nbsp;                        if(fEntityScanner.skipChar(&#39;[&#39;, null)) {</b>
+<i>1915</i>&nbsp;                            if (fDTDHandler != null) {
+<i>1916</i>&nbsp;                                fIgnoreConditionalBuffer.append(&quot;![&quot;);
+<i>1917</i>&nbsp;                            }
+<i>1918</i>&nbsp;                            fIncludeSectDepth++;
+<i>1919</i>&nbsp;                        } else {
+<b class="nc"><i>1920</i>&nbsp;                            if (fDTDHandler != null) {</b>
+<b class="nc"><i>1921</i>&nbsp;                                fIgnoreConditionalBuffer.append(&quot;!&quot;);</b>
+<b class="nc"><i>1922</i>&nbsp;                            }</b>
+<b class="nc"><i>1923</i>&nbsp;                        }</b>
+<i>1924</i>&nbsp;                    }
+<b class="nc"><i>1925</i>&nbsp;                }</b>
+<i>1926</i>&nbsp;                else if (fEntityScanner.skipChar(&#39;]&#39;, null)) {
+<b class="nc"><i>1927</i>&nbsp;                    if (fDTDHandler != null) {</b>
+<b class="nc"><i>1928</i>&nbsp;                        fIgnoreConditionalBuffer.append(&#39;]&#39;);</b>
+<i>1929</i>&nbsp;                    }
+<i>1930</i>&nbsp;                    //
+<i>1931</i>&nbsp;                    // The same thing goes for &#39;]&lt;![&#39; and &#39;&lt;]]&gt;&#39;, etc.
+<i>1932</i>&nbsp;                    //
+<b class="nc"><i>1933</i>&nbsp;                    if (fEntityScanner.skipChar(&#39;]&#39;, null)) {</b>
+<b class="nc"><i>1934</i>&nbsp;                        if (fDTDHandler != null) {</b>
+<b class="nc"><i>1935</i>&nbsp;                            fIgnoreConditionalBuffer.append(&#39;]&#39;);</b>
+<i>1936</i>&nbsp;                        }
+<i>1937</i>&nbsp;                        while (fEntityScanner.skipChar(&#39;]&#39;, null)) {
+<i>1938</i>&nbsp;                            /* empty loop body */
+<i>1939</i>&nbsp;                            if (fDTDHandler != null) {
+<b class="nc"><i>1940</i>&nbsp;                                fIgnoreConditionalBuffer.append(&#39;]&#39;);</b>
+<b class="nc"><i>1941</i>&nbsp;                            }</b>
+<b class="nc"><i>1942</i>&nbsp;                        }</b>
+<i>1943</i>&nbsp;                        if (fEntityScanner.skipChar(&#39;&gt;&#39;, null)) {
+<b class="nc"><i>1944</i>&nbsp;                            if (fIncludeSectDepth-- == initialDepth) {</b>
+<i>1945</i>&nbsp;                                fMarkUpDepth--;
+<b class="nc"><i>1946</i>&nbsp;                                // call handler</b>
+<b class="nc"><i>1947</i>&nbsp;                                if (fDTDHandler != null) {</b>
+<i>1948</i>&nbsp;                                    fLiteral.setValues(fIgnoreConditionalBuffer.ch, 0,
+<i>1949</i>&nbsp;                                    fIgnoreConditionalBuffer.length - 2);
+<b class="nc"><i>1950</i>&nbsp;                                    fDTDHandler.ignoredCharacters(fLiteral, null);</b>
+<b class="nc"><i>1951</i>&nbsp;                                    fDTDHandler.endConditional(null);</b>
+<b class="nc"><i>1952</i>&nbsp;                                }</b>
+<i>1953</i>&nbsp;                                return;
+<b class="nc"><i>1954</i>&nbsp;                            } else if(fDTDHandler != null) {</b>
+<b class="nc"><i>1955</i>&nbsp;                                fIgnoreConditionalBuffer.append(&#39;&gt;&#39;);</b>
+<i>1956</i>&nbsp;                            }
+<b class="nc"><i>1957</i>&nbsp;                        }</b>
+<b class="nc"><i>1958</i>&nbsp;                    }</b>
+<i>1959</i>&nbsp;                }
+<i>1960</i>&nbsp;                else {
+<b class="nc"><i>1961</i>&nbsp;                    int c = fEntityScanner.scanChar(null);</b>
+<b class="nc"><i>1962</i>&nbsp;                    if (fScannerState == SCANNER_STATE_END_OF_INPUT) {</b>
+<i>1963</i>&nbsp;                        reportFatalError(&quot;IgnoreSectUnterminated&quot;, null);
+<i>1964</i>&nbsp;                        return;
+<i>1965</i>&nbsp;                    }
+<i>1966</i>&nbsp;                    if (fDTDHandler != null) {
+<i>1967</i>&nbsp;                        fIgnoreConditionalBuffer.append((char)c);
+<b class="nc"><i>1968</i>&nbsp;                    }</b>
+<b class="nc"><i>1969</i>&nbsp;                }</b>
+<b class="nc"><i>1970</i>&nbsp;            }</b>
+<i>1971</i>&nbsp;        }
+<i>1972</i>&nbsp;        else {
+<b class="nc"><i>1973</i>&nbsp;            reportFatalError(&quot;MSG_MARKUP_NOT_RECOGNIZED_IN_DTD&quot;, null);</b>
+<b class="nc"><i>1974</i>&nbsp;        }</b>
+<i>1975</i>&nbsp;
+<b class="nc"><i>1976</i>&nbsp;    } // scanConditionalSect()</b>
+<i>1977</i>&nbsp;
+<i>1978</i>&nbsp;    /**
+<i>1979</i>&nbsp;     * Dispatch an XML &quot;event&quot;.
+<b class="nc"><i>1980</i>&nbsp;     *</b>
+<i>1981</i>&nbsp;     * @param complete True if this method is intended to scan
+<i>1982</i>&nbsp;     *                 and dispatch as much as possible.
+<i>1983</i>&nbsp;     *
+<i>1984</i>&nbsp;     * @return True if there is more to scan.
+<i>1985</i>&nbsp;     *
+<i>1986</i>&nbsp;     * @throws IOException  Thrown on i/o error.
+<i>1987</i>&nbsp;     * @throws XNIException Thrown on parse error.
+<i>1988</i>&nbsp;     *
+<i>1989</i>&nbsp;     */
+<i>1990</i>&nbsp;    protected final boolean scanDecls(boolean complete)
+<i>1991</i>&nbsp;    throws IOException, XNIException {
+<i>1992</i>&nbsp;
+<i>1993</i>&nbsp;        skipSeparator(false, true);
+<i>1994</i>&nbsp;        boolean again = true;
+<i>1995</i>&nbsp;        //System.out.println(&quot;scanDecls&quot;+fScannerState);
+<i>1996</i>&nbsp;        while (again &amp;&amp; fScannerState == SCANNER_STATE_MARKUP_DECL) {
+<i>1997</i>&nbsp;            again = complete;
+<i>1998</i>&nbsp;            if (fEntityScanner.skipChar(&#39;&lt;&#39;, null)) {
+<i>1999</i>&nbsp;                fMarkUpDepth++;
+<b class="nc"><i>2000</i>&nbsp;                if (fEntityScanner.skipChar(&#39;?&#39;, null)) {</b>
+<b class="nc"><i>2001</i>&nbsp;                    fStringBuffer.clear();</b>
+<i>2002</i>&nbsp;                    scanPI(fStringBuffer);
+<b class="nc"><i>2003</i>&nbsp;                    fMarkUpDepth--; // we&#39;re done with this decl</b>
+<b class="nc"><i>2004</i>&nbsp;                }</b>
+<b class="nc"><i>2005</i>&nbsp;                else if (fEntityScanner.skipChar(&#39;!&#39;, null)) {</b>
+<b class="nc"><i>2006</i>&nbsp;                    if (fEntityScanner.skipChar(&#39;-&#39;, null)) {</b>
+<b class="nc"><i>2007</i>&nbsp;                        if (!fEntityScanner.skipChar(&#39;-&#39;, null)) {</b>
+<b class="nc"><i>2008</i>&nbsp;                            reportFatalError(&quot;MSG_MARKUP_NOT_RECOGNIZED_IN_DTD&quot;,</b>
+<b class="nc"><i>2009</i>&nbsp;                            null);</b>
+<b class="nc"><i>2010</i>&nbsp;                        } else {</b>
+<i>2011</i>&nbsp;                            scanComment();
+<b class="nc"><i>2012</i>&nbsp;                        }</b>
+<b class="nc"><i>2013</i>&nbsp;                    }</b>
+<b class="nc"><i>2014</i>&nbsp;                    else if (fEntityScanner.skipString(&quot;ELEMENT&quot;)) {</b>
+<b class="nc"><i>2015</i>&nbsp;                        scanElementDecl();</b>
+<i>2016</i>&nbsp;                    }
+<i>2017</i>&nbsp;                    else if (fEntityScanner.skipString(&quot;ATTLIST&quot;)) {
+<b class="nc"><i>2018</i>&nbsp;                        scanAttlistDecl();</b>
+<i>2019</i>&nbsp;                    }
+<i>2020</i>&nbsp;                    else if (fEntityScanner.skipString(&quot;ENTITY&quot;)) {
+<b class="nc"><i>2021</i>&nbsp;                        scanEntityDecl();</b>
+<b class="nc"><i>2022</i>&nbsp;                    }</b>
+<i>2023</i>&nbsp;                    else if (fEntityScanner.skipString(&quot;NOTATION&quot;)) {
+<b class="nc"><i>2024</i>&nbsp;                        scanNotationDecl();</b>
+<b class="nc"><i>2025</i>&nbsp;                    }</b>
+<i>2026</i>&nbsp;                    else if (fEntityScanner.skipChar(&#39;[&#39;, null) &amp;&amp;
+<b class="nc"><i>2027</i>&nbsp;                    !scanningInternalSubset()) {</b>
+<b class="nc"><i>2028</i>&nbsp;                        scanConditionalSect(fPEDepth);</b>
+<i>2029</i>&nbsp;                    }
+<b class="nc"><i>2030</i>&nbsp;                    else {</b>
+<b class="nc"><i>2031</i>&nbsp;                        fMarkUpDepth--;</b>
+<i>2032</i>&nbsp;                        reportFatalError(&quot;MSG_MARKUP_NOT_RECOGNIZED_IN_DTD&quot;,
+<b class="nc"><i>2033</i>&nbsp;                        null);</b>
+<b class="nc"><i>2034</i>&nbsp;                    }</b>
+<b class="nc"><i>2035</i>&nbsp;                }</b>
+<i>2036</i>&nbsp;                else {
+<i>2037</i>&nbsp;                    fMarkUpDepth--;
+<b class="nc"><i>2038</i>&nbsp;                    reportFatalError(&quot;MSG_MARKUP_NOT_RECOGNIZED_IN_DTD&quot;, null);</b>
+<b class="nc"><i>2039</i>&nbsp;                }</b>
+<i>2040</i>&nbsp;            }
+<i>2041</i>&nbsp;            else if (fIncludeSectDepth &gt; 0 &amp;&amp; fEntityScanner.skipChar(&#39;]&#39;, null)) {
+<i>2042</i>&nbsp;                // end of conditional section?
+<i>2043</i>&nbsp;                if (!fEntityScanner.skipChar(&#39;]&#39;, null)
+<b class="nc"><i>2044</i>&nbsp;                || !fEntityScanner.skipChar(&#39;&gt;&#39;, null)) {</b>
+<b class="nc"><i>2045</i>&nbsp;                    reportFatalError(&quot;IncludeSectUnterminated&quot;, null);</b>
+<i>2046</i>&nbsp;                }
+<i>2047</i>&nbsp;                // call handler
+<b class="nc"><i>2048</i>&nbsp;                if (fDTDHandler != null) {</b>
+<i>2049</i>&nbsp;                    fDTDHandler.endConditional(null);
+<b class="nc"><i>2050</i>&nbsp;                }</b>
+<b class="nc"><i>2051</i>&nbsp;                // decreaseMarkupDepth();</b>
+<b class="nc"><i>2052</i>&nbsp;                fIncludeSectDepth--;</b>
+<i>2053</i>&nbsp;                fMarkUpDepth--;
+<i>2054</i>&nbsp;            }
+<b class="nc"><i>2055</i>&nbsp;            else if (scanningInternalSubset() &amp;&amp;</b>
+<b class="nc"><i>2056</i>&nbsp;            fEntityScanner.peekChar() == &#39;]&#39;) {</b>
+<i>2057</i>&nbsp;                // this is the end of the internal subset, let&#39;s stop here
+<i>2058</i>&nbsp;                return false;
+<b class="nc"><i>2059</i>&nbsp;            }</b>
+<b class="nc"><i>2060</i>&nbsp;            else if (fEntityScanner.skipSpaces()) {</b>
+<i>2061</i>&nbsp;                // simply skip
+<b class="nc"><i>2062</i>&nbsp;            }</b>
+<b class="nc"><i>2063</i>&nbsp;            else {</b>
+<i>2064</i>&nbsp;                reportFatalError(&quot;MSG_MARKUP_NOT_RECOGNIZED_IN_DTD&quot;, null);
+<b class="nc"><i>2065</i>&nbsp;            }</b>
+<i>2066</i>&nbsp;            skipSeparator(false, true);
+<b class="nc"><i>2067</i>&nbsp;        }</b>
+<i>2068</i>&nbsp;        return fScannerState != SCANNER_STATE_END_OF_INPUT;
+<i>2069</i>&nbsp;    }
+<i>2070</i>&nbsp;
+<b class="nc"><i>2071</i>&nbsp;    /**</b>
+<i>2072</i>&nbsp;     * Skip separator. This is typically just whitespace but it can also be one
+<b class="nc"><i>2073</i>&nbsp;     * or more parameter entity references.</b>
+<i>2074</i>&nbsp;     * &lt;p&gt;
+<b class="nc"><i>2075</i>&nbsp;     * If there are some it &quot;expands them&quot; by calling the corresponding entity</b>
+<i>2076</i>&nbsp;     * from the entity manager.
+<i>2077</i>&nbsp;     * &lt;p&gt;
+<i>2078</i>&nbsp;     * This is recursive and will process has many refs as possible.
+<i>2079</i>&nbsp;     *
+<i>2080</i>&nbsp;     * @param spaceRequired Specify whether some leading whitespace should be
+<i>2081</i>&nbsp;     *                      found
+<i>2082</i>&nbsp;     * @param lookForPERefs Specify whether parameter entity references should
+<i>2083</i>&nbsp;     *                      be looked for
+<i>2084</i>&nbsp;     * @return True if any leading whitespace was found or the end of a
+<i>2085</i>&nbsp;     *         parameter entity was crossed.
+<i>2086</i>&nbsp;     */
+<i>2087</i>&nbsp;    private boolean skipSeparator(boolean spaceRequired, boolean lookForPERefs)
+<i>2088</i>&nbsp;    throws IOException, XNIException {
+<i>2089</i>&nbsp;        int depth = fPEDepth;
+<i>2090</i>&nbsp;        boolean sawSpace = fEntityScanner.skipSpaces();
+<i>2091</i>&nbsp;        if (!lookForPERefs || !fEntityScanner.skipChar(&#39;%&#39;, NameType.REFERENCE)) {
+<i>2092</i>&nbsp;            return !spaceRequired || sawSpace || (depth != fPEDepth);
+<i>2093</i>&nbsp;        }
+<i>2094</i>&nbsp;        while (true) {
+<i>2095</i>&nbsp;            String name = fEntityScanner.scanName(NameType.ENTITY);
+<b class="nc"><i>2096</i>&nbsp;            if (name == null) {</b>
+<b class="nc"><i>2097</i>&nbsp;                reportFatalError(&quot;NameRequiredInPEReference&quot;, null);</b>
+<b class="nc"><i>2098</i>&nbsp;            }</b>
+<b class="nc"><i>2099</i>&nbsp;            else if (!fEntityScanner.skipChar(&#39;;&#39;, NameType.REFERENCE)) {</b>
+<i>2100</i>&nbsp;                reportFatalError(&quot;SemicolonRequiredInPEReference&quot;,
+<i>2101</i>&nbsp;                new Object[]{name});
+<b class="nc"><i>2102</i>&nbsp;            }</b>
+<b class="nc"><i>2103</i>&nbsp;            startPE(name, false);</b>
+<b class="nc"><i>2104</i>&nbsp;            fEntityScanner.skipSpaces();</b>
+<i>2105</i>&nbsp;            if (!fEntityScanner.skipChar(&#39;%&#39;, NameType.REFERENCE))
+<b class="nc"><i>2106</i>&nbsp;                return true;</b>
+<b class="nc"><i>2107</i>&nbsp;        }</b>
+<i>2108</i>&nbsp;    }
+<i>2109</i>&nbsp;
+<b class="nc"><i>2110</i>&nbsp;</b>
+<b class="nc"><i>2111</i>&nbsp;    /*</b>
+<b class="nc"><i>2112</i>&nbsp;     * Element Children Content Stack</b>
+<b class="nc"><i>2113</i>&nbsp;     */</b>
+<b class="nc"><i>2114</i>&nbsp;    private final void pushContentStack(int c) {</b>
+<i>2115</i>&nbsp;        if (fContentStack.length == fContentDepth) {
+<i>2116</i>&nbsp;            int[] newStack = new int[fContentDepth * 2];
+<i>2117</i>&nbsp;            System.arraycopy(fContentStack, 0, newStack, 0, fContentDepth);
+<i>2118</i>&nbsp;            fContentStack = newStack;
+<i>2119</i>&nbsp;        }
+<i>2120</i>&nbsp;        fContentStack[fContentDepth++] = c;
+<i>2121</i>&nbsp;    }
+<b class="nc"><i>2122</i>&nbsp;</b>
+<b class="nc"><i>2123</i>&nbsp;    private final int popContentStack() {</b>
+<b class="nc"><i>2124</i>&nbsp;        return fContentStack[--fContentDepth];</b>
+<b class="nc"><i>2125</i>&nbsp;    }</b>
+<i>2126</i>&nbsp;
+<b class="nc"><i>2127</i>&nbsp;</b>
+<i>2128</i>&nbsp;    /*
+<i>2129</i>&nbsp;     * Parameter Entity Stack
+<i>2130</i>&nbsp;     */
+<b class="nc"><i>2131</i>&nbsp;    private final void pushPEStack(int depth, boolean report) {</b>
+<i>2132</i>&nbsp;        if (fPEStack.length == fPEDepth) {
+<i>2133</i>&nbsp;            int[] newIntStack = new int[fPEDepth * 2];
+<i>2134</i>&nbsp;            System.arraycopy(fPEStack, 0, newIntStack, 0, fPEDepth);
+<i>2135</i>&nbsp;            fPEStack = newIntStack;
+<i>2136</i>&nbsp;            // report end/start calls
+<i>2137</i>&nbsp;            boolean[] newBooleanStack = new boolean[fPEDepth * 2];
+<i>2138</i>&nbsp;            System.arraycopy(fPEReport, 0, newBooleanStack, 0, fPEDepth);
+<b class="nc"><i>2139</i>&nbsp;            fPEReport = newBooleanStack;</b>
+<b class="nc"><i>2140</i>&nbsp;</b>
+<b class="nc"><i>2141</i>&nbsp;        }</b>
+<b class="nc"><i>2142</i>&nbsp;        fPEReport[fPEDepth] = report;</b>
+<i>2143</i>&nbsp;        fPEStack[fPEDepth++] = depth;
+<b class="nc"><i>2144</i>&nbsp;    }</b>
+<b class="nc"><i>2145</i>&nbsp;</b>
+<b class="nc"><i>2146</i>&nbsp;    /** pop the stack */</b>
+<i>2147</i>&nbsp;    private final int popPEStack() {
+<i>2148</i>&nbsp;        return fPEStack[--fPEDepth];
+<b class="nc"><i>2149</i>&nbsp;    }</b>
+<b class="nc"><i>2150</i>&nbsp;</b>
+<i>2151</i>&nbsp;    /** look at the top of the stack */
+<i>2152</i>&nbsp;    private final boolean peekReportEntity() {
+<i>2153</i>&nbsp;        return fPEReport[fPEDepth-1];
+<i>2154</i>&nbsp;    }
+<b class="nc"><i>2155</i>&nbsp;</b>
+<i>2156</i>&nbsp;
+<i>2157</i>&nbsp;    /*
+<i>2158</i>&nbsp;     * Utility method
+<i>2159</i>&nbsp;     */
+<b class="nc"><i>2160</i>&nbsp;    private final void ensureEnumerationSize(int size) {</b>
+<i>2161</i>&nbsp;        if (fEnumeration.length == size) {
+<i>2162</i>&nbsp;            String[] newEnum = new String[size * 2];
+<i>2163</i>&nbsp;            System.arraycopy(fEnumeration, 0, newEnum, 0, size);
+<i>2164</i>&nbsp;            fEnumeration = newEnum;
+<i>2165</i>&nbsp;        }
+<i>2166</i>&nbsp;    }
+<i>2167</i>&nbsp;
+<b class="nc"><i>2168</i>&nbsp;    // private methods</b>
+<b class="nc"><i>2169</i>&nbsp;    private void init() {</b>
+<b class="nc"><i>2170</i>&nbsp;        // reset state related data</b>
+<b class="nc"><i>2171</i>&nbsp;        fStartDTDCalled = false;</b>
+<i>2172</i>&nbsp;        fExtEntityDepth = 0;
+<i>2173</i>&nbsp;        fIncludeSectDepth = 0;
+<i>2174</i>&nbsp;        fMarkUpDepth = 0;
+<i>2175</i>&nbsp;        fPEDepth = 0;
+<i>2176</i>&nbsp;
+<i>2177</i>&nbsp;        fStandalone = false;
+<b class="nc"><i>2178</i>&nbsp;        fSeenExternalDTD = false;</b>
+<b class="nc"><i>2179</i>&nbsp;        fSeenExternalPE = false;</b>
+<b class="nc"><i>2180</i>&nbsp;</b>
+<b class="nc"><i>2181</i>&nbsp;        // set starting state</b>
+<b class="nc"><i>2182</i>&nbsp;        setScannerState(SCANNER_STATE_TEXT_DECL);</b>
+<i>2183</i>&nbsp;        //new SymbolTable());
+<b class="nc"><i>2184</i>&nbsp;</b>
+<b class="nc"><i>2185</i>&nbsp;        fLimitAnalyzer = fEntityManager.fLimitAnalyzer;</b>
+<b class="nc"><i>2186</i>&nbsp;        fSecurityManager = fEntityManager.fSecurityManager;</b>
+<i>2187</i>&nbsp;    }
+<i>2188</i>&nbsp;
+<b class="nc"><i>2189</i>&nbsp;    public DTDGrammar getGrammar(){</b>
+<i>2190</i>&nbsp;        return nvGrammarInfo;
+<i>2191</i>&nbsp;    }
+<b class="nc"><i>2192</i>&nbsp;</b>
+<b class="nc"><i>2193</i>&nbsp;} // class XMLDTDScannerImpl</b>
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,812 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ZoneInfo</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.util.calendar</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ZoneInfo (sun.util.calendar)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ZoneInfo</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 31)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 183)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.util.calendar;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.io.ObjectInputStream;
+<i>30</i>&nbsp;import java.util.Date;
+<i>31</i>&nbsp;import java.util.Map;
+<i>32</i>&nbsp;import java.util.SimpleTimeZone;
+<i>33</i>&nbsp;import java.util.TimeZone;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;/**
+<i>36</i>&nbsp; * &lt;code&gt;ZoneInfo&lt;/code&gt; is an implementation subclass of {@link
+<i>37</i>&nbsp; * java.util.TimeZone TimeZone} that represents GMT offsets and
+<i>38</i>&nbsp; * daylight saving time transitions of a time zone.
+<i>39</i>&nbsp; * &lt;p&gt;
+<i>40</i>&nbsp; * The daylight saving time transitions are described in the {@link
+<i>41</i>&nbsp; * #transitions transitions} table consisting of a chronological
+<i>42</i>&nbsp; * sequence of transitions of GMT offset and/or daylight saving time
+<i>43</i>&nbsp; * changes. Since all transitions are represented in UTC, in theory,
+<i>44</i>&nbsp; * &lt;code&gt;ZoneInfo&lt;/code&gt; can be used with any calendar systems except
+<i>45</i>&nbsp; * for the {@link #getOffset(int,int,int,int,int,int) getOffset}
+<i>46</i>&nbsp; * method that takes Gregorian calendar date fields.
+<i>47</i>&nbsp; * &lt;p&gt;
+<i>48</i>&nbsp; * This table covers transitions from 1900 until 2037 (as of version
+<i>49</i>&nbsp; * 1.4), Before 1900, it assumes that there was no daylight saving
+<i>50</i>&nbsp; * time and the &lt;code&gt;getOffset&lt;/code&gt; methods always return the
+<i>51</i>&nbsp; * {@link #getRawOffset} value. No Local Mean Time is supported. If a
+<i>52</i>&nbsp; * specified date is beyond the transition table and this time zone is
+<i>53</i>&nbsp; * supposed to observe daylight saving time in 2037, it delegates
+<i>54</i>&nbsp; * operations to a {@link java.util.SimpleTimeZone SimpleTimeZone}
+<i>55</i>&nbsp; * object created using the daylight saving time schedule as of 2037.
+<i>56</i>&nbsp; * &lt;p&gt;
+<i>57</i>&nbsp; * The date items, transitions, GMT offset(s), etc. are read from a database
+<i>58</i>&nbsp; * file. See {@link ZoneInfoFile} for details.
+<i>59</i>&nbsp; * @see java.util.SimpleTimeZone
+<i>60</i>&nbsp; * @since 1.4
+<i>61</i>&nbsp; */
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;public class ZoneInfo extends TimeZone {
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    private static final int UTC_TIME = 0;
+<i>66</i>&nbsp;    private static final int STANDARD_TIME = 1;
+<i>67</i>&nbsp;    private static final int WALL_TIME = 2;
+<i>68</i>&nbsp;
+<i>69</i>&nbsp;    private static final long OFFSET_MASK = 0x0fL;
+<i>70</i>&nbsp;    private static final long DST_MASK = 0xf0L;
+<i>71</i>&nbsp;    private static final int DST_NSHIFT = 4;
+<i>72</i>&nbsp;    // this bit field is reserved for abbreviation support
+<i>73</i>&nbsp;    private static final long ABBR_MASK = 0xf00L;
+<i>74</i>&nbsp;    private static final int TRANSITION_NSHIFT = 12;
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    /**
+<i>77</i>&nbsp;     * The raw GMT offset in milliseconds between this zone and GMT.
+<i>78</i>&nbsp;     * Negative offsets are to the west of Greenwich.  To obtain local
+<i>79</i>&nbsp;     * &lt;em&gt;standard&lt;/em&gt; time, add the offset to GMT time.
+<i>80</i>&nbsp;     * @serial
+<i>81</i>&nbsp;     */
+<i>82</i>&nbsp;    private int rawOffset;
+<b class="nc"><i>83</i>&nbsp;</b>
+<i>84</i>&nbsp;    /**
+<i>85</i>&nbsp;     * Difference in milliseconds from the original GMT offset in case
+<i>86</i>&nbsp;     * the raw offset value has been modified by calling {@link
+<i>87</i>&nbsp;     * #setRawOffset}. The initial value is 0.
+<i>88</i>&nbsp;     * @serial
+<i>89</i>&nbsp;     */
+<i>90</i>&nbsp;    private int rawOffsetDiff = 0;
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    /**
+<i>93</i>&nbsp;     * A CRC32 value of all pairs of transition time (in milliseconds
+<i>94</i>&nbsp;     * in &lt;code&gt;long&lt;/code&gt;) in local time and its GMT offset (in
+<i>95</i>&nbsp;     * seconds in &lt;code&gt;int&lt;/code&gt;) in the chronological order. Byte
+<i>96</i>&nbsp;     * values of each &lt;code&gt;long&lt;/code&gt; and &lt;code&gt;int&lt;/code&gt; are taken
+<i>97</i>&nbsp;     * in the big endian order (i.e., MSB to LSB).
+<i>98</i>&nbsp;     * @serial
+<b class="nc"><i>99</i>&nbsp;     */</b>
+<i>100</i>&nbsp;    private int checksum;
+<i>101</i>&nbsp;
+<i>102</i>&nbsp;    /**
+<i>103</i>&nbsp;     * The amount of time in milliseconds saved during daylight saving
+<i>104</i>&nbsp;     * time. If &lt;code&gt;useDaylight&lt;/code&gt; is false, this value is 0.
+<i>105</i>&nbsp;     * @serial
+<i>106</i>&nbsp;     */
+<i>107</i>&nbsp;    private int dstSavings;
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    /**
+<i>110</i>&nbsp;     * This array describes transitions of GMT offsets of this time
+<i>111</i>&nbsp;     * zone, including both raw offset changes and daylight saving
+<i>112</i>&nbsp;     * time changes.
+<i>113</i>&nbsp;     * A long integer consists of four bit fields.
+<i>114</i>&nbsp;     * &lt;ul&gt;
+<i>115</i>&nbsp;     * &lt;li&gt;The most significant 52-bit field represents transition
+<i>116</i>&nbsp;     * time in milliseconds from Gregorian January 1 1970, 00:00:00
+<i>117</i>&nbsp;     * GMT.&lt;/li&gt;
+<i>118</i>&nbsp;     * &lt;li&gt;The next 4-bit field is reserved and must be 0.&lt;/li&gt;
+<i>119</i>&nbsp;     * &lt;li&gt;The next 4-bit field is an index value to {@link #offsets
+<i>120</i>&nbsp;     * offsets[]} for the amount of daylight saving at the
+<i>121</i>&nbsp;     * transition. If this value is zero, it means that no daylight
+<i>122</i>&nbsp;     * saving, not the index value zero.&lt;/li&gt;
+<i>123</i>&nbsp;     * &lt;li&gt;The least significant 4-bit field is an index value to
+<i>124</i>&nbsp;     * {@link #offsets offsets[]} for &lt;em&gt;total&lt;/em&gt; GMT offset at the
+<i>125</i>&nbsp;     * transition.&lt;/li&gt;
+<i>126</i>&nbsp;     * &lt;/ul&gt;
+<i>127</i>&nbsp;     * If this time zone doesn&#39;t observe daylight saving time and has
+<i>128</i>&nbsp;     * never changed any GMT offsets in the past, this value is null.
+<i>129</i>&nbsp;     * @serial
+<i>130</i>&nbsp;     */
+<i>131</i>&nbsp;    private long[] transitions;
+<i>132</i>&nbsp;
+<i>133</i>&nbsp;    /**
+<i>134</i>&nbsp;     * This array holds all unique offset values in
+<i>135</i>&nbsp;     * milliseconds. Index values to this array are stored in the
+<i>136</i>&nbsp;     * transitions array elements.
+<i>137</i>&nbsp;     * @serial
+<i>138</i>&nbsp;     */
+<i>139</i>&nbsp;    private int[] offsets;
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;    /**
+<i>142</i>&nbsp;     * SimpleTimeZone parameter values. It has to have either 8 for
+<i>143</i>&nbsp;     * {@link java.util.SimpleTimeZone#SimpleTimeZone(int, String,
+<i>144</i>&nbsp;     * int, int , int , int , int , int , int , int , int) the
+<i>145</i>&nbsp;     * 11-argument SimpleTimeZone constructor} or 10 for {@link
+<i>146</i>&nbsp;     * java.util.SimpleTimeZone#SimpleTimeZone(int, String, int, int,
+<i>147</i>&nbsp;     * int , int , int , int , int , int , int, int, int) the
+<i>148</i>&nbsp;     * 13-argument SimpleTimeZone constructor} parameters.
+<i>149</i>&nbsp;     * @serial
+<i>150</i>&nbsp;     */
+<i>151</i>&nbsp;    private int[] simpleTimeZoneParams;
+<i>152</i>&nbsp;
+<i>153</i>&nbsp;    /**
+<i>154</i>&nbsp;     * True if the raw GMT offset value would change after the time
+<i>155</i>&nbsp;     * zone data has been generated; false, otherwise. The default
+<i>156</i>&nbsp;     * value is false.
+<i>157</i>&nbsp;     * @serial
+<i>158</i>&nbsp;     */
+<i>159</i>&nbsp;    private boolean willGMTOffsetChange = false;
+<i>160</i>&nbsp;
+<i>161</i>&nbsp;    /**
+<i>162</i>&nbsp;     * True if the object has been modified after its instantiation.
+<i>163</i>&nbsp;     */
+<i>164</i>&nbsp;    private transient boolean dirty = false;
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;    private static final long serialVersionUID = 2653134537216586139L;
+<i>167</i>&nbsp;
+<b class="nc"><i>168</i>&nbsp;    /**</b>
+<i>169</i>&nbsp;     * A constructor.
+<i>170</i>&nbsp;     */
+<i>171</i>&nbsp;    public ZoneInfo() {
+<i>172</i>&nbsp;    }
+<b class="nc"><i>173</i>&nbsp;</b>
+<i>174</i>&nbsp;    /**
+<i>175</i>&nbsp;     * A Constructor for CustomID.
+<i>176</i>&nbsp;     */
+<i>177</i>&nbsp;    public ZoneInfo(String ID, int rawOffset) {
+<i>178</i>&nbsp;        this(ID, rawOffset, 0, 0, null, null, null, false);
+<i>179</i>&nbsp;    }
+<b class="nc"><i>180</i>&nbsp;</b>
+<i>181</i>&nbsp;    /**
+<i>182</i>&nbsp;     * Constructs a ZoneInfo instance.
+<i>183</i>&nbsp;     *
+<i>184</i>&nbsp;     * @param ID time zone name
+<i>185</i>&nbsp;     * @param rawOffset GMT offset in milliseconds
+<i>186</i>&nbsp;     * @param dstSavings daylight saving value in milliseconds or 0
+<b class="nc"><i>187</i>&nbsp;     * (zero) if this time zone doesn&#39;t observe Daylight Saving Time.</b>
+<i>188</i>&nbsp;     * @param checksum CRC32 value with all transitions table entry
+<i>189</i>&nbsp;     * values
+<i>190</i>&nbsp;     * @param transitions transition table
+<i>191</i>&nbsp;     * @param offsets offset value table
+<i>192</i>&nbsp;     * @param simpleTimeZoneParams parameter values for constructing
+<i>193</i>&nbsp;     * SimpleTimeZone
+<i>194</i>&nbsp;     * @param willGMTOffsetChange the value of willGMTOffsetChange
+<i>195</i>&nbsp;     */
+<i>196</i>&nbsp;    ZoneInfo(String ID,
+<i>197</i>&nbsp;             int rawOffset,
+<i>198</i>&nbsp;             int dstSavings,
+<i>199</i>&nbsp;             int checksum,
+<i>200</i>&nbsp;             long[] transitions,
+<i>201</i>&nbsp;             int[] offsets,
+<i>202</i>&nbsp;             int[] simpleTimeZoneParams,
+<i>203</i>&nbsp;             boolean willGMTOffsetChange) {
+<i>204</i>&nbsp;        setID(ID);
+<i>205</i>&nbsp;        this.rawOffset = rawOffset;
+<i>206</i>&nbsp;        this.dstSavings = dstSavings;
+<i>207</i>&nbsp;        this.checksum = checksum;
+<i>208</i>&nbsp;        this.transitions = transitions;
+<i>209</i>&nbsp;        this.offsets = offsets;
+<i>210</i>&nbsp;        this.simpleTimeZoneParams = simpleTimeZoneParams;
+<i>211</i>&nbsp;        this.willGMTOffsetChange = willGMTOffsetChange;
+<b class="nc"><i>212</i>&nbsp;    }</b>
+<b class="nc"><i>213</i>&nbsp;</b>
+<b class="nc"><i>214</i>&nbsp;    /**</b>
+<b class="nc"><i>215</i>&nbsp;     * Returns the difference in milliseconds between local time and UTC</b>
+<b class="nc"><i>216</i>&nbsp;     * of given time, taking into account both the raw offset and the</b>
+<b class="nc"><i>217</i>&nbsp;     * effect of daylight savings.</b>
+<b class="nc"><i>218</i>&nbsp;     *</b>
+<b class="nc"><i>219</i>&nbsp;     * @param date the milliseconds in UTC</b>
+<b class="nc"><i>220</i>&nbsp;     * @return the milliseconds to add to UTC to get local wall time</b>
+<i>221</i>&nbsp;     */
+<i>222</i>&nbsp;    public int getOffset(long date) {
+<i>223</i>&nbsp;        return getOffsets(date, null, UTC_TIME);
+<i>224</i>&nbsp;    }
+<i>225</i>&nbsp;
+<i>226</i>&nbsp;    public int getOffsets(long utc, int[] offsets) {
+<i>227</i>&nbsp;        return getOffsets(utc, offsets, UTC_TIME);
+<i>228</i>&nbsp;    }
+<i>229</i>&nbsp;
+<i>230</i>&nbsp;    public int getOffsetsByStandard(long standard, int[] offsets) {
+<i>231</i>&nbsp;        return getOffsets(standard, offsets, STANDARD_TIME);
+<b class="nc"><i>232</i>&nbsp;    }</b>
+<i>233</i>&nbsp;
+<i>234</i>&nbsp;    public int getOffsetsByWall(long wall, int[] offsets) {
+<i>235</i>&nbsp;        return getOffsets(wall, offsets, WALL_TIME);
+<b class="nc"><i>236</i>&nbsp;    }</b>
+<i>237</i>&nbsp;
+<i>238</i>&nbsp;    private int getOffsets(long date, int[] offsets, int type) {
+<i>239</i>&nbsp;        // if dst is never observed, there is no transition.
+<b class="nc"><i>240</i>&nbsp;        if (transitions == null) {</b>
+<i>241</i>&nbsp;            int offset = getLastRawOffset();
+<i>242</i>&nbsp;            if (offsets != null) {
+<i>243</i>&nbsp;                offsets[0] = offset;
+<b class="nc"><i>244</i>&nbsp;                offsets[1] = 0;</b>
+<i>245</i>&nbsp;            }
+<i>246</i>&nbsp;            return offset;
+<i>247</i>&nbsp;        }
+<i>248</i>&nbsp;
+<b class="nc"><i>249</i>&nbsp;        date -= rawOffsetDiff;</b>
+<b class="nc"><i>250</i>&nbsp;        int index = getTransitionIndex(date, type);</b>
+<b class="nc"><i>251</i>&nbsp;</b>
+<b class="nc"><i>252</i>&nbsp;        // prior to the transition table, returns the raw offset.</b>
+<b class="nc"><i>253</i>&nbsp;        // FIXME: should support LMT.</b>
+<i>254</i>&nbsp;        if (index &lt; 0) {
+<b class="nc"><i>255</i>&nbsp;            int offset = getLastRawOffset();</b>
+<i>256</i>&nbsp;            if (offsets != null) {
+<i>257</i>&nbsp;                offsets[0] = offset;
+<b class="nc"><i>258</i>&nbsp;                offsets[1] = 0;</b>
+<b class="nc"><i>259</i>&nbsp;            }</b>
+<i>260</i>&nbsp;            return offset;
+<i>261</i>&nbsp;        }
+<i>262</i>&nbsp;
+<b class="nc"><i>263</i>&nbsp;        if (index &lt; transitions.length) {</b>
+<b class="nc"><i>264</i>&nbsp;            long val = transitions[index];</b>
+<b class="nc"><i>265</i>&nbsp;            int offset = this.offsets[(int)(val &amp; OFFSET_MASK)] + rawOffsetDiff;</b>
+<b class="nc"><i>266</i>&nbsp;            if (offsets != null) {</b>
+<b class="nc"><i>267</i>&nbsp;                int dst = (int)((val &gt;&gt;&gt; DST_NSHIFT) &amp; 0xfL);</b>
+<i>268</i>&nbsp;                int save = (dst == 0) ? 0 : this.offsets[dst];
+<b class="nc"><i>269</i>&nbsp;                offsets[0] = offset - save;</b>
+<i>270</i>&nbsp;                offsets[1] = save;
+<i>271</i>&nbsp;            }
+<b class="nc"><i>272</i>&nbsp;            return offset;</b>
+<b class="nc"><i>273</i>&nbsp;        }</b>
+<b class="nc"><i>274</i>&nbsp;</b>
+<b class="nc"><i>275</i>&nbsp;        // beyond the transitions, delegate to SimpleTimeZone if there</b>
+<b class="nc"><i>276</i>&nbsp;        // is a rule; otherwise, return rawOffset.</b>
+<b class="nc"><i>277</i>&nbsp;        SimpleTimeZone tz = getLastRule();</b>
+<b class="nc"><i>278</i>&nbsp;        if (tz != null) {</b>
+<b class="nc"><i>279</i>&nbsp;            int rawoffset = tz.getRawOffset();</b>
+<i>280</i>&nbsp;            long msec = date;
+<b class="nc"><i>281</i>&nbsp;            if (type != UTC_TIME) {</b>
+<i>282</i>&nbsp;                msec -= rawOffset;
+<i>283</i>&nbsp;            }
+<i>284</i>&nbsp;            int dstoffset = tz.getOffset(msec) - rawOffset;
+<i>285</i>&nbsp;
+<b class="nc"><i>286</i>&nbsp;            // Check if it&#39;s in a standard-to-daylight transition.</b>
+<b class="nc"><i>287</i>&nbsp;            if (dstoffset &gt; 0 &amp;&amp; tz.getOffset(msec - dstoffset) == rawoffset) {</b>
+<b class="nc"><i>288</i>&nbsp;                dstoffset = 0;</b>
+<b class="nc"><i>289</i>&nbsp;            }</b>
+<b class="nc"><i>290</i>&nbsp;</b>
+<b class="nc"><i>291</i>&nbsp;            if (offsets != null) {</b>
+<i>292</i>&nbsp;                offsets[0] = rawoffset;
+<b class="nc"><i>293</i>&nbsp;                offsets[1] = dstoffset;</b>
+<i>294</i>&nbsp;            }
+<i>295</i>&nbsp;            return rawoffset + dstoffset;
+<b class="nc"><i>296</i>&nbsp;        }</b>
+<b class="nc"><i>297</i>&nbsp;        int offset = getLastRawOffset();</b>
+<i>298</i>&nbsp;        if (offsets != null) {
+<i>299</i>&nbsp;            offsets[0] = offset;
+<b class="nc"><i>300</i>&nbsp;            offsets[1] = 0;</b>
+<b class="nc"><i>301</i>&nbsp;        }</b>
+<b class="nc"><i>302</i>&nbsp;        return offset;</b>
+<i>303</i>&nbsp;    }
+<b class="nc"><i>304</i>&nbsp;</b>
+<i>305</i>&nbsp;    private int getTransitionIndex(long date, int type) {
+<b class="nc"><i>306</i>&nbsp;        int low = 0;</b>
+<b class="nc"><i>307</i>&nbsp;        int high = transitions.length - 1;</b>
+<b class="nc"><i>308</i>&nbsp;</b>
+<b class="nc"><i>309</i>&nbsp;        while (low &lt;= high) {</b>
+<i>310</i>&nbsp;            int mid = (low + high) / 2;
+<b class="nc"><i>311</i>&nbsp;            long val = transitions[mid];</b>
+<i>312</i>&nbsp;            long midVal = val &gt;&gt; TRANSITION_NSHIFT; // sign extended
+<i>313</i>&nbsp;            if (type != UTC_TIME) {
+<i>314</i>&nbsp;                midVal += offsets[(int)(val &amp; OFFSET_MASK)]; // wall time
+<b class="nc"><i>315</i>&nbsp;            }</b>
+<b class="nc"><i>316</i>&nbsp;            if (type == STANDARD_TIME) {</b>
+<i>317</i>&nbsp;                int dstIndex = (int)((val &gt;&gt;&gt; DST_NSHIFT) &amp; 0xfL);
+<b class="nc"><i>318</i>&nbsp;                if (dstIndex != 0) {</b>
+<b class="nc"><i>319</i>&nbsp;                    midVal -= offsets[dstIndex]; // make it standard time</b>
+<b class="nc"><i>320</i>&nbsp;                }</b>
+<b class="nc"><i>321</i>&nbsp;            }</b>
+<b class="nc"><i>322</i>&nbsp;</b>
+<b class="nc"><i>323</i>&nbsp;            if (midVal &lt; date) {</b>
+<i>324</i>&nbsp;                low = mid + 1;
+<b class="nc"><i>325</i>&nbsp;            } else if (midVal &gt; date) {</b>
+<b class="nc"><i>326</i>&nbsp;                high = mid - 1;</b>
+<b class="nc"><i>327</i>&nbsp;            } else {</b>
+<b class="nc"><i>328</i>&nbsp;                return mid;</b>
+<i>329</i>&nbsp;            }
+<i>330</i>&nbsp;        }
+<i>331</i>&nbsp;
+<b class="nc"><i>332</i>&nbsp;        // if beyond the transitions, returns that index.</b>
+<b class="nc"><i>333</i>&nbsp;        if (low &gt;= transitions.length) {</b>
+<b class="nc"><i>334</i>&nbsp;            return low;</b>
+<b class="nc"><i>335</i>&nbsp;        }</b>
+<i>336</i>&nbsp;        return low - 1;
+<b class="nc"><i>337</i>&nbsp;    }</b>
+<i>338</i>&nbsp;
+<b class="nc"><i>339</i>&nbsp;   /**</b>
+<i>340</i>&nbsp;     * Returns the difference in milliseconds between local time and
+<i>341</i>&nbsp;     * UTC, taking into account both the raw offset and the effect of
+<b class="nc"><i>342</i>&nbsp;     * daylight savings, for the specified date and time.  This method</b>
+<b class="nc"><i>343</i>&nbsp;     * assumes that the start and end month are distinct.  This method</b>
+<i>344</i>&nbsp;     * assumes a Gregorian calendar for calculations.
+<b class="nc"><i>345</i>&nbsp;     * &lt;p&gt;</b>
+<i>346</i>&nbsp;     * &lt;em&gt;Note: In general, clients should use
+<i>347</i>&nbsp;     * {@link Calendar#ZONE_OFFSET Calendar.get(ZONE_OFFSET)} +
+<i>348</i>&nbsp;     * {@link Calendar#DST_OFFSET Calendar.get(DST_OFFSET)}
+<i>349</i>&nbsp;     * instead of calling this method.&lt;/em&gt;
+<i>350</i>&nbsp;     *
+<i>351</i>&nbsp;     * @param era       The era of the given date. The value must be either
+<i>352</i>&nbsp;     *                  GregorianCalendar.AD or GregorianCalendar.BC.
+<i>353</i>&nbsp;     * @param year      The year in the given date.
+<i>354</i>&nbsp;     * @param month     The month in the given date. Month is 0-based. e.g.,
+<i>355</i>&nbsp;     *                  0 for January.
+<i>356</i>&nbsp;     * @param day       The day-in-month of the given date.
+<i>357</i>&nbsp;     * @param dayOfWeek The day-of-week of the given date.
+<i>358</i>&nbsp;     * @param milliseconds The milliseconds in day in &lt;em&gt;standard&lt;/em&gt; local time.
+<i>359</i>&nbsp;     * @return The milliseconds to add to UTC to get local time.
+<i>360</i>&nbsp;     */
+<i>361</i>&nbsp;    public int getOffset(int era, int year, int month, int day,
+<i>362</i>&nbsp;                         int dayOfWeek, int milliseconds) {
+<i>363</i>&nbsp;        if (milliseconds &lt; 0 || milliseconds &gt;= AbstractCalendar.DAY_IN_MILLIS) {
+<i>364</i>&nbsp;            throw new IllegalArgumentException();
+<i>365</i>&nbsp;        }
+<i>366</i>&nbsp;
+<i>367</i>&nbsp;        if (era == java.util.GregorianCalendar.BC) { // BC
+<i>368</i>&nbsp;            year = 1 - year;
+<i>369</i>&nbsp;        } else if (era != java.util.GregorianCalendar.AD) {
+<i>370</i>&nbsp;            throw new IllegalArgumentException();
+<i>371</i>&nbsp;        }
+<b class="nc"><i>372</i>&nbsp;</b>
+<b class="nc"><i>373</i>&nbsp;        Gregorian gcal = CalendarSystem.getGregorianCalendar();</b>
+<i>374</i>&nbsp;        CalendarDate date = gcal.newCalendarDate(null);
+<i>375</i>&nbsp;        date.setDate(year, month + 1, day);
+<b class="nc"><i>376</i>&nbsp;        if (gcal.validate(date) == false) {</b>
+<b class="nc"><i>377</i>&nbsp;            throw new IllegalArgumentException();</b>
+<b class="nc"><i>378</i>&nbsp;        }</b>
+<b class="nc"><i>379</i>&nbsp;</b>
+<i>380</i>&nbsp;        // bug-for-bug compatible argument checking
+<i>381</i>&nbsp;        if (dayOfWeek &lt; java.util.GregorianCalendar.SUNDAY
+<b class="nc"><i>382</i>&nbsp;            || dayOfWeek &gt; java.util.GregorianCalendar.SATURDAY) {</b>
+<b class="nc"><i>383</i>&nbsp;            throw new IllegalArgumentException();</b>
+<b class="nc"><i>384</i>&nbsp;        }</b>
+<b class="nc"><i>385</i>&nbsp;</b>
+<i>386</i>&nbsp;        if (transitions == null) {
+<i>387</i>&nbsp;            return getLastRawOffset();
+<i>388</i>&nbsp;        }
+<b class="nc"><i>389</i>&nbsp;</b>
+<i>390</i>&nbsp;        long dateInMillis = gcal.getTime(date) + milliseconds;
+<b class="nc"><i>391</i>&nbsp;        dateInMillis -= (long) rawOffset; // make it UTC</b>
+<i>392</i>&nbsp;        return getOffsets(dateInMillis, null, UTC_TIME);
+<i>393</i>&nbsp;    }
+<b class="nc"><i>394</i>&nbsp;</b>
+<b class="nc"><i>395</i>&nbsp;    /**</b>
+<i>396</i>&nbsp;     * Sets the base time zone offset from GMT. This operation
+<i>397</i>&nbsp;     * modifies all the transitions of this ZoneInfo object, including
+<b class="nc"><i>398</i>&nbsp;     * historical ones, if applicable.</b>
+<b class="nc"><i>399</i>&nbsp;     *</b>
+<b class="nc"><i>400</i>&nbsp;     * @param offsetMillis the base time zone offset to GMT.</b>
+<i>401</i>&nbsp;     * @see getRawOffset
+<i>402</i>&nbsp;     */
+<i>403</i>&nbsp;    public synchronized void setRawOffset(int offsetMillis) {
+<i>404</i>&nbsp;        if (offsetMillis == rawOffset + rawOffsetDiff) {
+<i>405</i>&nbsp;            return;
+<i>406</i>&nbsp;        }
+<i>407</i>&nbsp;        rawOffsetDiff = offsetMillis - rawOffset;
+<i>408</i>&nbsp;        if (lastRule != null) {
+<i>409</i>&nbsp;            lastRule.setRawOffset(offsetMillis);
+<i>410</i>&nbsp;        }
+<i>411</i>&nbsp;        dirty = true;
+<b class="nc"><i>412</i>&nbsp;    }</b>
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;    /**
+<b class="nc"><i>415</i>&nbsp;     * Returns the GMT offset of the current date. This GMT offset</b>
+<b class="nc"><i>416</i>&nbsp;     * value is not modified during Daylight Saving Time.</b>
+<b class="nc"><i>417</i>&nbsp;     *</b>
+<i>418</i>&nbsp;     * @return the GMT offset value in milliseconds to add to UTC time
+<b class="nc"><i>419</i>&nbsp;     * to get local standard time</b>
+<i>420</i>&nbsp;     */
+<i>421</i>&nbsp;    public int getRawOffset() {
+<i>422</i>&nbsp;        if (!willGMTOffsetChange) {
+<i>423</i>&nbsp;            return rawOffset + rawOffsetDiff;
+<i>424</i>&nbsp;        }
+<i>425</i>&nbsp;
+<i>426</i>&nbsp;        int[] offsets = new int[2];
+<i>427</i>&nbsp;        getOffsets(System.currentTimeMillis(), offsets, UTC_TIME);
+<i>428</i>&nbsp;        return offsets[0];
+<i>429</i>&nbsp;    }
+<b class="nc"><i>430</i>&nbsp;</b>
+<b class="nc"><i>431</i>&nbsp;    public boolean isDirty() {</b>
+<i>432</i>&nbsp;        return dirty;
+<i>433</i>&nbsp;    }
+<b class="nc"><i>434</i>&nbsp;</b>
+<b class="nc"><i>435</i>&nbsp;    private int getLastRawOffset() {</b>
+<b class="nc"><i>436</i>&nbsp;        return rawOffset + rawOffsetDiff;</b>
+<i>437</i>&nbsp;    }
+<i>438</i>&nbsp;
+<i>439</i>&nbsp;    /**
+<b class="nc"><i>440</i>&nbsp;     * Queries if this time zone uses Daylight Saving Time in the last known rule.</b>
+<i>441</i>&nbsp;     */
+<i>442</i>&nbsp;    public boolean useDaylightTime() {
+<i>443</i>&nbsp;        return (simpleTimeZoneParams != null);
+<b class="nc"><i>444</i>&nbsp;    }</b>
+<i>445</i>&nbsp;
+<i>446</i>&nbsp;    @Override
+<i>447</i>&nbsp;    public boolean observesDaylightTime() {
+<i>448</i>&nbsp;        if (simpleTimeZoneParams != null) {
+<i>449</i>&nbsp;            return true;
+<i>450</i>&nbsp;        }
+<b class="nc"><i>451</i>&nbsp;        if (transitions == null) {</b>
+<i>452</i>&nbsp;            return false;
+<i>453</i>&nbsp;        }
+<i>454</i>&nbsp;
+<i>455</i>&nbsp;        // Look up the transition table to see if it&#39;s in DST right
+<b class="nc"><i>456</i>&nbsp;        // now or if there&#39;s any standard-to-daylight transition at</b>
+<b class="nc"><i>457</i>&nbsp;        // any future.</b>
+<i>458</i>&nbsp;        long utc = System.currentTimeMillis() - rawOffsetDiff;
+<b class="nc"><i>459</i>&nbsp;        int index = getTransitionIndex(utc, UTC_TIME);</b>
+<b class="nc"><i>460</i>&nbsp;</b>
+<i>461</i>&nbsp;        // before transitions in the transition table
+<i>462</i>&nbsp;        if (index &lt; 0) {
+<i>463</i>&nbsp;            return false;
+<i>464</i>&nbsp;        }
+<i>465</i>&nbsp;
+<b class="nc"><i>466</i>&nbsp;        // the time is in the table range.</b>
+<b class="nc"><i>467</i>&nbsp;        for (int i = index; i &lt; transitions.length; i++) {</b>
+<i>468</i>&nbsp;            if ((transitions[i] &amp; DST_MASK) != 0) {
+<i>469</i>&nbsp;                return true;
+<b class="nc"><i>470</i>&nbsp;            }</b>
+<b class="nc"><i>471</i>&nbsp;        }</b>
+<i>472</i>&nbsp;        // No further DST is observed.
+<i>473</i>&nbsp;        return false;
+<i>474</i>&nbsp;    }
+<b class="nc"><i>475</i>&nbsp;</b>
+<b class="nc"><i>476</i>&nbsp;    /**</b>
+<b class="nc"><i>477</i>&nbsp;     * Queries if the specified date is in Daylight Saving Time.</b>
+<i>478</i>&nbsp;     */
+<i>479</i>&nbsp;    public boolean inDaylightTime(Date date) {
+<i>480</i>&nbsp;        if (date == null) {
+<b class="nc"><i>481</i>&nbsp;            throw new NullPointerException();</b>
+<i>482</i>&nbsp;        }
+<i>483</i>&nbsp;
+<i>484</i>&nbsp;        if (transitions == null) {
+<i>485</i>&nbsp;            return false;
+<i>486</i>&nbsp;        }
+<i>487</i>&nbsp;
+<b class="nc"><i>488</i>&nbsp;        long utc = date.getTime() - rawOffsetDiff;</b>
+<b class="nc"><i>489</i>&nbsp;        int index = getTransitionIndex(utc, UTC_TIME);</b>
+<i>490</i>&nbsp;
+<i>491</i>&nbsp;        // before transitions in the transition table
+<b class="nc"><i>492</i>&nbsp;        if (index &lt; 0) {</b>
+<b class="nc"><i>493</i>&nbsp;            return false;</b>
+<i>494</i>&nbsp;        }
+<i>495</i>&nbsp;
+<b class="nc"><i>496</i>&nbsp;        // the time is in the table range.</b>
+<b class="nc"><i>497</i>&nbsp;        if (index &lt; transitions.length) {</b>
+<i>498</i>&nbsp;            return (transitions[index] &amp; DST_MASK) != 0;
+<i>499</i>&nbsp;        }
+<b class="nc"><i>500</i>&nbsp;</b>
+<b class="nc"><i>501</i>&nbsp;        // beyond the transition table</b>
+<i>502</i>&nbsp;        SimpleTimeZone tz = getLastRule();
+<i>503</i>&nbsp;        if (tz != null) {
+<i>504</i>&nbsp;            return tz.inDaylightTime(date);
+<b class="nc"><i>505</i>&nbsp;       }</b>
+<b class="nc"><i>506</i>&nbsp;        return false;</b>
+<i>507</i>&nbsp;    }
+<i>508</i>&nbsp;
+<i>509</i>&nbsp;    /**
+<b class="nc"><i>510</i>&nbsp;     * Returns the amount of time in milliseconds that the clock is advanced</b>
+<b class="nc"><i>511</i>&nbsp;     * during daylight saving time is in effect in its last daylight saving time rule.</b>
+<b class="nc"><i>512</i>&nbsp;     *</b>
+<i>513</i>&nbsp;     * @return the number of milliseconds the time is advanced with respect to
+<b class="nc"><i>514</i>&nbsp;     * standard time when daylight saving time is in effect.</b>
+<i>515</i>&nbsp;     */
+<i>516</i>&nbsp;    public int getDSTSavings() {
+<i>517</i>&nbsp;        return dstSavings;
+<i>518</i>&nbsp;    }
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;//    /**
+<i>521</i>&nbsp;//     * @return the last year in the transition table or -1 if this
+<i>522</i>&nbsp;//     * time zone doesn&#39;t observe any daylight saving time.
+<i>523</i>&nbsp;//     */
+<i>524</i>&nbsp;//    public int getMaxTransitionYear() {
+<b class="nc"><i>525</i>&nbsp;//      if (transitions == null) {</b>
+<i>526</i>&nbsp;//          return -1;
+<i>527</i>&nbsp;//      }
+<i>528</i>&nbsp;//      long val = transitions[transitions.length - 1];
+<i>529</i>&nbsp;//      int offset = this.offsets[(int)(val &amp; OFFSET_MASK)] + rawOffsetDiff;
+<i>530</i>&nbsp;//      val = (val &gt;&gt; TRANSITION_NSHIFT) + offset;
+<i>531</i>&nbsp;//      CalendarDate lastDate = Gregorian.getCalendarDate(val);
+<i>532</i>&nbsp;//      return lastDate.getYear();
+<i>533</i>&nbsp;//    }
+<i>534</i>&nbsp;
+<i>535</i>&nbsp;    /**
+<i>536</i>&nbsp;     * Returns a string representation of this time zone.
+<i>537</i>&nbsp;     * @return the string
+<i>538</i>&nbsp;     */
+<i>539</i>&nbsp;    public String toString() {
+<i>540</i>&nbsp;        return getClass().getName() +
+<i>541</i>&nbsp;            &quot;[id=\&quot;&quot; + getID() + &quot;\&quot;&quot; +
+<i>542</i>&nbsp;            &quot;,offset=&quot; + getLastRawOffset() +
+<i>543</i>&nbsp;            &quot;,dstSavings=&quot; + dstSavings +
+<i>544</i>&nbsp;            &quot;,useDaylight=&quot; + useDaylightTime() +
+<i>545</i>&nbsp;            &quot;,transitions=&quot; + ((transitions != null) ? transitions.length : 0) +
+<i>546</i>&nbsp;            &quot;,lastRule=&quot; + (lastRule == null ? getLastRuleInstance() : lastRule) +
+<i>547</i>&nbsp;            &quot;]&quot;;
+<b class="nc"><i>548</i>&nbsp;    }</b>
+<b class="nc"><i>549</i>&nbsp;</b>
+<b class="nc"><i>550</i>&nbsp;    /**</b>
+<i>551</i>&nbsp;     * Gets all available IDs supported in the Java run-time.
+<b class="nc"><i>552</i>&nbsp;     *</b>
+<i>553</i>&nbsp;     * @return an array of time zone IDs.
+<b class="nc"><i>554</i>&nbsp;     */</b>
+<i>555</i>&nbsp;    public static String[] getAvailableIDs() {
+<i>556</i>&nbsp;        return ZoneInfoFile.getZoneIds();
+<i>557</i>&nbsp;    }
+<i>558</i>&nbsp;
+<i>559</i>&nbsp;    /**
+<i>560</i>&nbsp;     * Gets all available IDs that have the same value as the
+<i>561</i>&nbsp;     * specified raw GMT offset.
+<i>562</i>&nbsp;     *
+<i>563</i>&nbsp;     * @param rawOffset the GMT offset in milliseconds. This
+<b class="nc"><i>564</i>&nbsp;     * value should not include any daylight saving time.</b>
+<i>565</i>&nbsp;     *
+<i>566</i>&nbsp;     * @return an array of time zone IDs.
+<i>567</i>&nbsp;     */
+<i>568</i>&nbsp;    public static String[] getAvailableIDs(int rawOffset) {
+<i>569</i>&nbsp;        return ZoneInfoFile.getZoneIds(rawOffset);
+<i>570</i>&nbsp;    }
+<i>571</i>&nbsp;
+<i>572</i>&nbsp;    /**
+<i>573</i>&nbsp;     * Gets the ZoneInfo for the given ID.
+<i>574</i>&nbsp;     *
+<i>575</i>&nbsp;     * @param ID the ID for a ZoneInfo. See TimeZone for detail.
+<i>576</i>&nbsp;     *
+<b class="nc"><i>577</i>&nbsp;     * @return the specified ZoneInfo object, or null if there is no</b>
+<i>578</i>&nbsp;     * time zone of the ID.
+<i>579</i>&nbsp;     */
+<i>580</i>&nbsp;    public static TimeZone getTimeZone(String ID) {
+<i>581</i>&nbsp;        return ZoneInfoFile.getZoneInfo(ID);
+<i>582</i>&nbsp;    }
+<i>583</i>&nbsp;
+<i>584</i>&nbsp;    private transient SimpleTimeZone lastRule;
+<i>585</i>&nbsp;
+<i>586</i>&nbsp;    /**
+<i>587</i>&nbsp;     * Returns a SimpleTimeZone object representing the last GMT
+<i>588</i>&nbsp;     * offset and DST schedule or null if this time zone doesn&#39;t
+<b class="nc"><i>589</i>&nbsp;     * observe DST.</b>
+<i>590</i>&nbsp;     */
+<i>591</i>&nbsp;    private synchronized SimpleTimeZone getLastRule() {
+<i>592</i>&nbsp;        if (lastRule == null) {
+<i>593</i>&nbsp;            lastRule = getLastRuleInstance();
+<i>594</i>&nbsp;        }
+<i>595</i>&nbsp;        return lastRule;
+<i>596</i>&nbsp;    }
+<i>597</i>&nbsp;
+<i>598</i>&nbsp;    /**
+<i>599</i>&nbsp;     * Returns a SimpleTimeZone object that represents the last
+<b class="nc"><i>600</i>&nbsp;     * known daylight saving time rules.</b>
+<b class="nc"><i>601</i>&nbsp;     *</b>
+<i>602</i>&nbsp;     * @return a SimpleTimeZone object or null if this time zone
+<b class="nc"><i>603</i>&nbsp;     * doesn&#39;t observe DST.</b>
+<i>604</i>&nbsp;     */
+<i>605</i>&nbsp;    public SimpleTimeZone getLastRuleInstance() {
+<i>606</i>&nbsp;        if (simpleTimeZoneParams == null) {
+<i>607</i>&nbsp;            return null;
+<i>608</i>&nbsp;        }
+<i>609</i>&nbsp;        if (simpleTimeZoneParams.length == 10) {
+<i>610</i>&nbsp;            return new SimpleTimeZone(getLastRawOffset(), getID(),
+<i>611</i>&nbsp;                                      simpleTimeZoneParams[0],
+<i>612</i>&nbsp;                                      simpleTimeZoneParams[1],
+<i>613</i>&nbsp;                                      simpleTimeZoneParams[2],
+<b class="nc"><i>614</i>&nbsp;                                      simpleTimeZoneParams[3],</b>
+<b class="nc"><i>615</i>&nbsp;                                      simpleTimeZoneParams[4],</b>
+<i>616</i>&nbsp;                                      simpleTimeZoneParams[5],
+<b class="nc"><i>617</i>&nbsp;                                      simpleTimeZoneParams[6],</b>
+<b class="nc"><i>618</i>&nbsp;                                      simpleTimeZoneParams[7],</b>
+<i>619</i>&nbsp;                                      simpleTimeZoneParams[8],
+<i>620</i>&nbsp;                                      simpleTimeZoneParams[9],
+<i>621</i>&nbsp;                                      dstSavings);
+<i>622</i>&nbsp;        }
+<i>623</i>&nbsp;        return new SimpleTimeZone(getLastRawOffset(), getID(),
+<i>624</i>&nbsp;                                  simpleTimeZoneParams[0],
+<i>625</i>&nbsp;                                  simpleTimeZoneParams[1],
+<i>626</i>&nbsp;                                  simpleTimeZoneParams[2],
+<i>627</i>&nbsp;                                  simpleTimeZoneParams[3],
+<i>628</i>&nbsp;                                  simpleTimeZoneParams[4],
+<i>629</i>&nbsp;                                  simpleTimeZoneParams[5],
+<i>630</i>&nbsp;                                  simpleTimeZoneParams[6],
+<b class="nc"><i>631</i>&nbsp;                                  simpleTimeZoneParams[7],</b>
+<i>632</i>&nbsp;                                  dstSavings);
+<i>633</i>&nbsp;    }
+<i>634</i>&nbsp;
+<i>635</i>&nbsp;    /**
+<i>636</i>&nbsp;     * Returns a copy of this &lt;code&gt;ZoneInfo&lt;/code&gt;.
+<i>637</i>&nbsp;     */
+<i>638</i>&nbsp;    public Object clone() {
+<i>639</i>&nbsp;        ZoneInfo zi = (ZoneInfo) super.clone();
+<i>640</i>&nbsp;        zi.lastRule = null;
+<i>641</i>&nbsp;        return zi;
+<i>642</i>&nbsp;    }
+<i>643</i>&nbsp;
+<i>644</i>&nbsp;    /**
+<i>645</i>&nbsp;     * Returns a hash code value calculated from the GMT offset and
+<i>646</i>&nbsp;     * transitions.
+<b class="nc"><i>647</i>&nbsp;     * @return a hash code of this time zone</b>
+<b class="nc"><i>648</i>&nbsp;     */</b>
+<b class="nc"><i>649</i>&nbsp;    public int hashCode() {</b>
+<i>650</i>&nbsp;        return getLastRawOffset() ^ checksum;
+<i>651</i>&nbsp;    }
+<i>652</i>&nbsp;
+<i>653</i>&nbsp;    /**
+<i>654</i>&nbsp;     * Compares the equity of two ZoneInfo objects.
+<i>655</i>&nbsp;     *
+<i>656</i>&nbsp;     * @param obj the object to be compared with
+<i>657</i>&nbsp;     * @return true if given object is same as this ZoneInfo object,
+<b class="nc"><i>658</i>&nbsp;     * false otherwise.</b>
+<i>659</i>&nbsp;     */
+<i>660</i>&nbsp;    public boolean equals(Object obj) {
+<i>661</i>&nbsp;        if (this == obj) {
+<i>662</i>&nbsp;            return true;
+<i>663</i>&nbsp;        }
+<i>664</i>&nbsp;        if (!(obj instanceof ZoneInfo)) {
+<i>665</i>&nbsp;            return false;
+<i>666</i>&nbsp;        }
+<i>667</i>&nbsp;        ZoneInfo that = (ZoneInfo) obj;
+<i>668</i>&nbsp;        return (getID().equals(that.getID())
+<b class="nc"><i>669</i>&nbsp;                &amp;&amp; (getLastRawOffset() == that.getLastRawOffset())</b>
+<b class="nc"><i>670</i>&nbsp;                &amp;&amp; (checksum == that.checksum));</b>
+<i>671</i>&nbsp;    }
+<b class="nc"><i>672</i>&nbsp;</b>
+<b class="nc"><i>673</i>&nbsp;    /**</b>
+<i>674</i>&nbsp;     * Returns true if this zone has the same raw GMT offset value and
+<b class="nc"><i>675</i>&nbsp;     * transition table as another zone info. If the specified</b>
+<b class="nc"><i>676</i>&nbsp;     * TimeZone object is not a ZoneInfo instance, this method returns</b>
+<b class="nc"><i>677</i>&nbsp;     * true if the specified TimeZone object has the same raw GMT</b>
+<i>678</i>&nbsp;     * offset value with no daylight saving time.
+<i>679</i>&nbsp;     *
+<i>680</i>&nbsp;     * @param other the ZoneInfo object to be compared with
+<i>681</i>&nbsp;     * @return true if the given &lt;code&gt;TimeZone&lt;/code&gt; has the same
+<i>682</i>&nbsp;     * GMT offset and transition information; false, otherwise.
+<i>683</i>&nbsp;     */
+<i>684</i>&nbsp;    public boolean hasSameRules(TimeZone other) {
+<i>685</i>&nbsp;        if (this == other) {
+<i>686</i>&nbsp;            return true;
+<i>687</i>&nbsp;        }
+<i>688</i>&nbsp;        if (other == null) {
+<i>689</i>&nbsp;            return false;
+<i>690</i>&nbsp;        }
+<i>691</i>&nbsp;        if (!(other instanceof ZoneInfo)) {
+<i>692</i>&nbsp;            if (getRawOffset() != other.getRawOffset()) {
+<b class="nc"><i>693</i>&nbsp;                return false;</b>
+<b class="nc"><i>694</i>&nbsp;            }</b>
+<i>695</i>&nbsp;            // if both have the same raw offset and neither observes
+<b class="nc"><i>696</i>&nbsp;            // DST, they have the same rule.</b>
+<b class="nc"><i>697</i>&nbsp;            if ((transitions == null)</b>
+<i>698</i>&nbsp;                &amp;&amp; (useDaylightTime() == false)
+<b class="nc"><i>699</i>&nbsp;                &amp;&amp; (other.useDaylightTime() == false)) {</b>
+<b class="nc"><i>700</i>&nbsp;                return true;</b>
+<b class="nc"><i>701</i>&nbsp;            }</b>
+<i>702</i>&nbsp;            return false;
+<i>703</i>&nbsp;        }
+<i>704</i>&nbsp;        if (getLastRawOffset() != ((ZoneInfo)other).getLastRawOffset()) {
+<b class="nc"><i>705</i>&nbsp;            return false;</b>
+<b class="nc"><i>706</i>&nbsp;        }</b>
+<b class="nc"><i>707</i>&nbsp;        return (checksum == ((ZoneInfo)other).checksum);</b>
+<b class="nc"><i>708</i>&nbsp;    }</b>
+<i>709</i>&nbsp;
+<b class="nc"><i>710</i>&nbsp;    /**</b>
+<i>711</i>&nbsp;     * Returns a Map from alias time zone IDs to their standard
+<b class="nc"><i>712</i>&nbsp;     * time zone IDs.</b>
+<b class="nc"><i>713</i>&nbsp;     *</b>
+<i>714</i>&nbsp;     * @return the Map that holds the mappings from alias time zone IDs
+<b class="nc"><i>715</i>&nbsp;     *    to their standard time zone IDs, or null if</b>
+<i>716</i>&nbsp;     *    &lt;code&gt;ZoneInfoMappings&lt;/code&gt; file is not available.
+<i>717</i>&nbsp;     */
+<i>718</i>&nbsp;    public static Map&lt;String, String&gt; getAliasTable() {
+<i>719</i>&nbsp;         return ZoneInfoFile.getAliasMap();
+<i>720</i>&nbsp;    }
+<i>721</i>&nbsp;
+<i>722</i>&nbsp;    private void readObject(ObjectInputStream stream)
+<i>723</i>&nbsp;            throws IOException, ClassNotFoundException {
+<i>724</i>&nbsp;        stream.defaultReadObject();
+<i>725</i>&nbsp;        // We don&#39;t know how this object from 1.4.x or earlier has
+<i>726</i>&nbsp;        // been mutated. So it should always be marked as `dirty&#39;.
+<b class="nc"><i>727</i>&nbsp;        dirty = true;</b>
+<i>728</i>&nbsp;    }
+<i>729</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

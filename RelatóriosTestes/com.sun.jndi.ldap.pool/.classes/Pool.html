@@ -1,0 +1,337 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Pool</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.jndi.ldap.pool</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Pool (com.sun.jndi.ldap.pool)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Pool</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 71)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.jndi.ldap.pool;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.ArrayList;
+<i>29</i>&nbsp;import java.util.Map;
+<i>30</i>&nbsp;import java.util.WeakHashMap;
+<i>31</i>&nbsp;import java.util.Collection;
+<i>32</i>&nbsp;import java.util.Collections;
+<i>33</i>&nbsp;import java.util.LinkedList;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;import java.io.PrintStream;
+<i>36</i>&nbsp;import java.lang.ref.Reference;
+<i>37</i>&nbsp;import java.lang.ref.ReferenceQueue;
+<i>38</i>&nbsp;import javax.naming.NamingException;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;/**
+<i>41</i>&nbsp; * A map of pool ids to Connections.
+<i>42</i>&nbsp; * Key is an object that uniquely identifies a PooledConnection request
+<i>43</i>&nbsp; * (typically information needed to create the connection).
+<i>44</i>&nbsp; * The definitions of the key&#39;s equals() and hashCode() methods are
+<i>45</i>&nbsp; * vital to its unique identification in a Pool.
+<i>46</i>&nbsp; *
+<i>47</i>&nbsp; * Value is a ConnectionsRef, which is a reference to Connections,
+<i>48</i>&nbsp; * a list of equivalent connections.
+<i>49</i>&nbsp; *
+<i>50</i>&nbsp; * Supports methods that
+<i>51</i>&nbsp; * - retrieves (or creates as necessary) a connection from the pool
+<i>52</i>&nbsp; * - removes expired connections from the pool
+<i>53</i>&nbsp; *
+<i>54</i>&nbsp; * Connections cleanup:
+<i>55</i>&nbsp; * A WeakHashMap is used for mapping the pool ids and Connections.
+<i>56</i>&nbsp; * A SoftReference from the value to the key is kept to hold the map
+<i>57</i>&nbsp; * entry as long as possible. This allows the GC to remove Connections
+<i>58</i>&nbsp; * from the Pool under situations of VM running out of resources.
+<i>59</i>&nbsp; * To take an appropriate action of &#39;closing the connections&#39; before the GC
+<i>60</i>&nbsp; * reclaims the ConnectionsRef objects, the ConnectionsRef objects are made
+<i>61</i>&nbsp; * weakly reachable through a list of weak references registered with
+<i>62</i>&nbsp; * a reference queue.
+<i>63</i>&nbsp; * Upon an entry gets removed from the WeakHashMap, the ConnectionsRef (value
+<i>64</i>&nbsp; * in the map) object is weakly reachable. When another sweep of
+<i>65</i>&nbsp; * clearing the weak references is made by the GC it puts the corresponding
+<i>66</i>&nbsp; * ConnectionsWeakRef object into the reference queue.
+<i>67</i>&nbsp; * The reference queue is monitored lazily for reclaimable Connections
+<i>68</i>&nbsp; * whenever a pooled connection is requested or a call to remove the expired
+<i>69</i>&nbsp; * connections is made. The monitoring is done regularly when idle connection
+<i>70</i>&nbsp; * timeout is set as the PoolCleaner removes expired connections periodically.
+<i>71</i>&nbsp; * As determined by experimentation, cleanup of resources using the
+<i>72</i>&nbsp; * ReferenceQueue mechanism is reliable and has more immediate effect than the
+<i>73</i>&nbsp; * finalizer approach.
+<i>74</i>&nbsp; *
+<i>75</i>&nbsp; * @author Rosanna Lee
+<i>76</i>&nbsp; */
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;final public class Pool {
+<i>79</i>&nbsp;
+<b class="nc"><i>80</i>&nbsp;    static final boolean debug = com.sun.jndi.ldap.LdapPoolManager.debug;</b>
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;    /*
+<i>83</i>&nbsp;     * Used for connections cleanup
+<i>84</i>&nbsp;     */
+<b class="nc"><i>85</i>&nbsp;    private static final ReferenceQueue&lt;ConnectionsRef&gt; queue =</b>
+<i>86</i>&nbsp;        new ReferenceQueue&lt;&gt;();
+<i>87</i>&nbsp;    private static final Collection&lt;Reference&lt;ConnectionsRef&gt;&gt; weakRefs =
+<b class="nc"><i>88</i>&nbsp;        Collections.synchronizedList(new LinkedList&lt;Reference&lt;ConnectionsRef&gt;&gt;());</b>
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    final private int maxSize;    // max num of identical conn per pool
+<i>91</i>&nbsp;    final private int prefSize;   // preferred num of identical conn per pool
+<i>92</i>&nbsp;    final private int initSize;   // initial number of identical conn to create
+<i>93</i>&nbsp;    final private Map&lt;Object, ConnectionsRef&gt; map;
+<i>94</i>&nbsp;
+<b class="nc"><i>95</i>&nbsp;    public Pool(int initSize, int prefSize, int maxSize) {</b>
+<b class="nc"><i>96</i>&nbsp;        map = new WeakHashMap&lt;&gt;();</b>
+<b class="nc"><i>97</i>&nbsp;        this.prefSize = prefSize;</b>
+<b class="nc"><i>98</i>&nbsp;        this.maxSize = maxSize;</b>
+<b class="nc"><i>99</i>&nbsp;        this.initSize = initSize;</b>
+<i>100</i>&nbsp;    }
+<i>101</i>&nbsp;
+<i>102</i>&nbsp;    /**
+<i>103</i>&nbsp;     * Gets a pooled connection for id. The pooled connection might be
+<i>104</i>&nbsp;     * newly created, as governed by the maxSize and prefSize settings.
+<i>105</i>&nbsp;     * If a pooled connection is unavailable and cannot be created due
+<i>106</i>&nbsp;     * to the maxSize constraint, this call blocks until the constraint
+<i>107</i>&nbsp;     * is removed or until &#39;timeout&#39; ms has elapsed.
+<i>108</i>&nbsp;     *
+<i>109</i>&nbsp;     * @param id identity of the connection to get
+<i>110</i>&nbsp;     * @param timeout the number of milliseconds to wait before giving up
+<i>111</i>&nbsp;     * @param factory the factory to use for creating the connection if
+<i>112</i>&nbsp;     *          creation is necessary
+<i>113</i>&nbsp;     * @return a pooled connection
+<i>114</i>&nbsp;     * @throws NamingException the connection could not be created due to
+<i>115</i>&nbsp;     *                          an error.
+<i>116</i>&nbsp;     */
+<i>117</i>&nbsp;    public PooledConnection getPooledConnection(Object id, long timeout,
+<i>118</i>&nbsp;        PooledConnectionFactory factory) throws NamingException {
+<i>119</i>&nbsp;
+<b class="nc"><i>120</i>&nbsp;        d(&quot;get(): &quot;, id);</b>
+<b class="nc"><i>121</i>&nbsp;        if (debug) {</b>
+<b class="nc"><i>122</i>&nbsp;            synchronized (map) {</b>
+<b class="nc"><i>123</i>&nbsp;                d(&quot;size: &quot;, map.size());</b>
+<b class="nc"><i>124</i>&nbsp;            }</b>
+<i>125</i>&nbsp;        }
+<i>126</i>&nbsp;
+<b class="nc"><i>127</i>&nbsp;        expungeStaleConnections();</b>
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;        Connections conns;
+<b class="nc"><i>130</i>&nbsp;        synchronized (map) {</b>
+<b class="nc"><i>131</i>&nbsp;            conns = getConnections(id);</b>
+<b class="nc"><i>132</i>&nbsp;            if (conns == null) {</b>
+<b class="nc"><i>133</i>&nbsp;                d(&quot;get(): creating new connections list for &quot;, id);</b>
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;                // No connections for this id so create a new list
+<b class="nc"><i>136</i>&nbsp;                conns = new Connections(id, initSize, prefSize, maxSize,</b>
+<i>137</i>&nbsp;                    factory);
+<b class="nc"><i>138</i>&nbsp;                ConnectionsRef connsRef = new ConnectionsRef(conns);</b>
+<b class="nc"><i>139</i>&nbsp;                map.put(id, connsRef);</b>
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;                // Create a weak reference to ConnectionsRef
+<b class="nc"><i>142</i>&nbsp;                Reference&lt;ConnectionsRef&gt; weakRef =</b>
+<i>143</i>&nbsp;                        new ConnectionsWeakRef(connsRef, queue);
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;                // Keep the weak reference through the element of a linked list
+<b class="nc"><i>146</i>&nbsp;                weakRefs.add(weakRef);</b>
+<i>147</i>&nbsp;            }
+<b class="nc"><i>148</i>&nbsp;            d(&quot;get(): size after: &quot;, map.size());</b>
+<b class="nc"><i>149</i>&nbsp;        }</b>
+<i>150</i>&nbsp;
+<b class="nc"><i>151</i>&nbsp;        return conns.get(timeout, factory); // get one connection from list</b>
+<i>152</i>&nbsp;    }
+<i>153</i>&nbsp;
+<i>154</i>&nbsp;    private Connections getConnections(Object id) {
+<b class="nc"><i>155</i>&nbsp;        ConnectionsRef ref = map.get(id);</b>
+<b class="nc"><i>156</i>&nbsp;        return (ref != null) ? ref.getConnections() : null;</b>
+<i>157</i>&nbsp;    }
+<i>158</i>&nbsp;
+<i>159</i>&nbsp;    /**
+<i>160</i>&nbsp;     * Goes through the connections in this Pool and expires ones that
+<i>161</i>&nbsp;     * have been idle before &#39;threshold&#39;. An expired connection is closed
+<i>162</i>&nbsp;     * and then removed from the pool (removePooledConnection() will eventually
+<i>163</i>&nbsp;     * be called, and the list of pools itself removed if it becomes empty).
+<i>164</i>&nbsp;     *
+<i>165</i>&nbsp;     * @param threshold connections idle before &#39;threshold&#39; should be closed
+<i>166</i>&nbsp;     *          and removed.
+<i>167</i>&nbsp;     */
+<i>168</i>&nbsp;    public void expire(long threshold) {
+<i>169</i>&nbsp;        Collection&lt;ConnectionsRef&gt; copy;
+<b class="nc"><i>170</i>&nbsp;        synchronized (map) {</b>
+<b class="nc"><i>171</i>&nbsp;            copy = new ArrayList&lt;&gt;(map.values());</b>
+<b class="nc"><i>172</i>&nbsp;        }</b>
+<i>173</i>&nbsp;
+<b class="nc"><i>174</i>&nbsp;        ArrayList&lt;ConnectionsRef&gt; removed = new ArrayList&lt;&gt;();</b>
+<i>175</i>&nbsp;        Connections conns;
+<b class="nc"><i>176</i>&nbsp;        for (ConnectionsRef ref : copy) {</b>
+<b class="nc"><i>177</i>&nbsp;            conns = ref.getConnections();</b>
+<b class="nc"><i>178</i>&nbsp;            if (conns.expire(threshold)) {</b>
+<b class="nc"><i>179</i>&nbsp;                d(&quot;expire(): removing &quot;, conns);</b>
+<b class="nc"><i>180</i>&nbsp;                removed.add(ref);</b>
+<i>181</i>&nbsp;            }
+<b class="nc"><i>182</i>&nbsp;        }</b>
+<i>183</i>&nbsp;
+<b class="nc"><i>184</i>&nbsp;        synchronized (map) {</b>
+<b class="nc"><i>185</i>&nbsp;            map.values().removeAll(removed);</b>
+<b class="nc"><i>186</i>&nbsp;        }</b>
+<i>187</i>&nbsp;
+<b class="nc"><i>188</i>&nbsp;        expungeStaleConnections();</b>
+<i>189</i>&nbsp;    }
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;    /*
+<i>192</i>&nbsp;     * Closes the connections contained in the ConnectionsRef object that
+<i>193</i>&nbsp;     * is going to be reclaimed by the GC. Called by getPooledConnection()
+<i>194</i>&nbsp;     * and expire() methods of this class.
+<i>195</i>&nbsp;     */
+<i>196</i>&nbsp;    private static void expungeStaleConnections() {
+<b class="nc"><i>197</i>&nbsp;        ConnectionsWeakRef releaseRef = null;</b>
+<b class="nc"><i>198</i>&nbsp;        while ((releaseRef = (ConnectionsWeakRef) queue.poll())</b>
+<i>199</i>&nbsp;                                        != null) {
+<b class="nc"><i>200</i>&nbsp;            Connections conns = releaseRef.getConnections();</b>
+<i>201</i>&nbsp;
+<b class="nc"><i>202</i>&nbsp;            if (debug) {</b>
+<b class="nc"><i>203</i>&nbsp;                System.err.println(</b>
+<i>204</i>&nbsp;                        &quot;weak reference cleanup: Closing Connections:&quot; + conns);
+<i>205</i>&nbsp;            }
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;            // cleanup
+<b class="nc"><i>208</i>&nbsp;            conns.close();</b>
+<b class="nc"><i>209</i>&nbsp;            weakRefs.remove(releaseRef);</b>
+<b class="nc"><i>210</i>&nbsp;            releaseRef.clear();</b>
+<b class="nc"><i>211</i>&nbsp;         }</b>
+<i>212</i>&nbsp;    }
+<i>213</i>&nbsp;
+<i>214</i>&nbsp;
+<i>215</i>&nbsp;    public void showStats(PrintStream out) {
+<i>216</i>&nbsp;        Object id;
+<i>217</i>&nbsp;        Connections conns;
+<i>218</i>&nbsp;
+<b class="nc"><i>219</i>&nbsp;        out.println(&quot;===== Pool start ======================&quot;);</b>
+<b class="nc"><i>220</i>&nbsp;        out.println(&quot;maximum pool size: &quot; + maxSize);</b>
+<b class="nc"><i>221</i>&nbsp;        out.println(&quot;preferred pool size: &quot; + prefSize);</b>
+<b class="nc"><i>222</i>&nbsp;        out.println(&quot;initial pool size: &quot; + initSize);</b>
+<i>223</i>&nbsp;
+<b class="nc"><i>224</i>&nbsp;        synchronized (map) {</b>
+<b class="nc"><i>225</i>&nbsp;            out.println(&quot;current pool size: &quot; + map.size());</b>
+<i>226</i>&nbsp;
+<b class="nc"><i>227</i>&nbsp;            for (Map.Entry&lt;Object, ConnectionsRef&gt; entry : map.entrySet()) {</b>
+<b class="nc"><i>228</i>&nbsp;                id = entry.getKey();</b>
+<b class="nc"><i>229</i>&nbsp;                conns = entry.getValue().getConnections();</b>
+<b class="nc"><i>230</i>&nbsp;                out.println(&quot;   &quot; + id + &quot;:&quot; + conns.getStats());</b>
+<b class="nc"><i>231</i>&nbsp;            }</b>
+<b class="nc"><i>232</i>&nbsp;        }</b>
+<i>233</i>&nbsp;
+<b class="nc"><i>234</i>&nbsp;        out.println(&quot;====== Pool end =====================&quot;);</b>
+<i>235</i>&nbsp;    }
+<i>236</i>&nbsp;
+<i>237</i>&nbsp;    public String toString() {
+<b class="nc"><i>238</i>&nbsp;        synchronized (map) {</b>
+<b class="nc"><i>239</i>&nbsp;            return super.toString() + &quot; &quot; + map.toString();</b>
+<b class="nc"><i>240</i>&nbsp;        }</b>
+<i>241</i>&nbsp;    }
+<i>242</i>&nbsp;
+<i>243</i>&nbsp;    private void d(String msg, int i) {
+<b class="nc"><i>244</i>&nbsp;        if (debug) {</b>
+<b class="nc"><i>245</i>&nbsp;            System.err.println(this + &quot;.&quot; + msg + i);</b>
+<i>246</i>&nbsp;        }
+<i>247</i>&nbsp;    }
+<i>248</i>&nbsp;
+<i>249</i>&nbsp;    private void d(String msg, Object obj) {
+<b class="nc"><i>250</i>&nbsp;        if (debug) {</b>
+<b class="nc"><i>251</i>&nbsp;            System.err.println(this + &quot;.&quot; + msg + obj);</b>
+<i>252</i>&nbsp;        }
+<i>253</i>&nbsp;    }
+<i>254</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

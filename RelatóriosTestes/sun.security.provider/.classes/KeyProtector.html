@@ -1,0 +1,418 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: KeyProtector</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.provider</a> ]
+</div>
+
+<h1>Coverage Summary for Class: KeyProtector (sun.security.provider)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">KeyProtector</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 92)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.provider;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.io.UnsupportedEncodingException;
+<i>30</i>&nbsp;import java.security.Key;
+<i>31</i>&nbsp;import java.security.KeyStoreException;
+<i>32</i>&nbsp;import java.security.MessageDigest;
+<i>33</i>&nbsp;import java.security.NoSuchAlgorithmException;
+<i>34</i>&nbsp;import java.security.SecureRandom;
+<i>35</i>&nbsp;import java.security.UnrecoverableKeyException;
+<i>36</i>&nbsp;import java.util.*;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import jdk.internal.ref.CleanerFactory;
+<i>39</i>&nbsp;import sun.security.pkcs.PKCS8Key;
+<i>40</i>&nbsp;import sun.security.pkcs.EncryptedPrivateKeyInfo;
+<i>41</i>&nbsp;import sun.security.x509.AlgorithmId;
+<i>42</i>&nbsp;import sun.security.util.ObjectIdentifier;
+<i>43</i>&nbsp;import sun.security.util.DerValue;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;/**
+<i>46</i>&nbsp; * This is an implementation of a Sun proprietary, exportable algorithm
+<i>47</i>&nbsp; * intended for use when protecting (or recovering the cleartext version of)
+<i>48</i>&nbsp; * sensitive keys.
+<i>49</i>&nbsp; * This algorithm is not intended as a general purpose cipher.
+<i>50</i>&nbsp; *
+<i>51</i>&nbsp; * This is how the algorithm works for key protection:
+<i>52</i>&nbsp; *
+<i>53</i>&nbsp; * p - user password
+<i>54</i>&nbsp; * s - random salt
+<i>55</i>&nbsp; * X - xor key
+<i>56</i>&nbsp; * P - to-be-protected key
+<i>57</i>&nbsp; * Y - protected key
+<i>58</i>&nbsp; * R - what gets stored in the keystore
+<i>59</i>&nbsp; *
+<i>60</i>&nbsp; * Step 1:
+<i>61</i>&nbsp; * Take the user&#39;s password, append a random salt (of fixed size) to it,
+<i>62</i>&nbsp; * and hash it: d1 = digest(p, s)
+<i>63</i>&nbsp; * Store d1 in X.
+<i>64</i>&nbsp; *
+<i>65</i>&nbsp; * Step 2:
+<i>66</i>&nbsp; * Take the user&#39;s password, append the digest result from the previous step,
+<i>67</i>&nbsp; * and hash it: dn = digest(p, dn-1).
+<i>68</i>&nbsp; * Store dn in X (append it to the previously stored digests).
+<i>69</i>&nbsp; * Repeat this step until the length of X matches the length of the private key
+<i>70</i>&nbsp; * P.
+<i>71</i>&nbsp; *
+<i>72</i>&nbsp; * Step 3:
+<i>73</i>&nbsp; * XOR X and P, and store the result in Y: Y = X XOR P.
+<i>74</i>&nbsp; *
+<i>75</i>&nbsp; * Step 4:
+<i>76</i>&nbsp; * Store s, Y, and digest(p, P) in the result buffer R:
+<i>77</i>&nbsp; * R = s + Y + digest(p, P), where &quot;+&quot; denotes concatenation.
+<i>78</i>&nbsp; * (NOTE: digest(p, P) is stored in the result buffer, so that when the key is
+<i>79</i>&nbsp; * recovered, we can check if the recovered key indeed matches the original
+<i>80</i>&nbsp; * key.) R is stored in the keystore.
+<i>81</i>&nbsp; *
+<i>82</i>&nbsp; * The protected key is recovered as follows:
+<i>83</i>&nbsp; *
+<i>84</i>&nbsp; * Step1 and Step2 are the same as above, except that the salt is not randomly
+<i>85</i>&nbsp; * generated, but taken from the result R of step 4 (the first length(s)
+<i>86</i>&nbsp; * bytes).
+<i>87</i>&nbsp; *
+<i>88</i>&nbsp; * Step 3 (XOR operation) yields the plaintext key.
+<i>89</i>&nbsp; *
+<i>90</i>&nbsp; * Then concatenate the password with the recovered key, and compare with the
+<i>91</i>&nbsp; * last length(digest(p, P)) bytes of R. If they match, the recovered key is
+<i>92</i>&nbsp; * indeed the same key as the original key.
+<i>93</i>&nbsp; *
+<i>94</i>&nbsp; * @author Jan Luehe
+<i>95</i>&nbsp; *
+<i>96</i>&nbsp; *
+<i>97</i>&nbsp; * @see java.security.KeyStore
+<i>98</i>&nbsp; * @see JavaKeyStore
+<i>99</i>&nbsp; * @see KeyTool
+<i>100</i>&nbsp; *
+<i>101</i>&nbsp; * @since 1.2
+<i>102</i>&nbsp; */
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;final class KeyProtector {
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;    private static final int SALT_LEN = 20; // the salt length
+<i>107</i>&nbsp;    private static final String DIGEST_ALG = &quot;SHA&quot;;
+<i>108</i>&nbsp;    private static final int DIGEST_LEN = 20;
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;    // defined by JavaSoft
+<i>111</i>&nbsp;    private static final String KEY_PROTECTOR_OID = &quot;1.3.6.1.4.1.42.2.17.1.1&quot;;
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;    // The password used for protecting/recovering keys passed through this
+<i>114</i>&nbsp;    // key protector. We store it as a byte array, so that we can digest it.
+<i>115</i>&nbsp;    private byte[] passwdBytes;
+<i>116</i>&nbsp;
+<i>117</i>&nbsp;    private MessageDigest md;
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;
+<i>120</i>&nbsp;    /**
+<i>121</i>&nbsp;     * Creates an instance of this class, and initializes it with the given
+<i>122</i>&nbsp;     * password.
+<i>123</i>&nbsp;     *
+<i>124</i>&nbsp;     * &lt;p&gt;The password is expected to be in printable ASCII.
+<i>125</i>&nbsp;     * Normal rules for good password selection apply: at least
+<i>126</i>&nbsp;     * seven characters, mixed case, with punctuation encouraged.
+<i>127</i>&nbsp;     * Phrases or words which are easily guessed, for example by
+<i>128</i>&nbsp;     * being found in dictionaries, are bad.
+<i>129</i>&nbsp;     */
+<i>130</i>&nbsp;    public KeyProtector(char[] password)
+<b class="nc"><i>131</i>&nbsp;        throws NoSuchAlgorithmException</b>
+<i>132</i>&nbsp;    {
+<i>133</i>&nbsp;        int i, j;
+<b class="nc"><i>134</i>&nbsp;</b>
+<b class="nc"><i>135</i>&nbsp;        if (password == null) {</b>
+<i>136</i>&nbsp;           throw new IllegalArgumentException(&quot;password can&#39;t be null&quot;);
+<b class="nc"><i>137</i>&nbsp;        }</b>
+<i>138</i>&nbsp;        md = MessageDigest.getInstance(DIGEST_ALG);
+<b class="nc"><i>139</i>&nbsp;        // Convert password to byte array, so that it can be digested</b>
+<b class="nc"><i>140</i>&nbsp;        passwdBytes = new byte[password.length * 2];</b>
+<b class="nc"><i>141</i>&nbsp;        for (i=0, j=0; i&lt;password.length; i++) {</b>
+<b class="nc"><i>142</i>&nbsp;            passwdBytes[j++] = (byte)(password[i] &gt;&gt; 8);</b>
+<i>143</i>&nbsp;            passwdBytes[j++] = (byte)password[i];
+<i>144</i>&nbsp;        }
+<i>145</i>&nbsp;        // Use the cleaner to zero the password when no longer referenced
+<i>146</i>&nbsp;        final byte[] k = this.passwdBytes;
+<i>147</i>&nbsp;        CleanerFactory.cleaner().register(this,
+<i>148</i>&nbsp;                () -&gt; java.util.Arrays.fill(k, (byte)0x00));
+<i>149</i>&nbsp;    }
+<i>150</i>&nbsp;
+<b class="nc"><i>151</i>&nbsp;    /*</b>
+<b class="nc"><i>152</i>&nbsp;     * Protects the given plaintext key, using the password provided at</b>
+<b class="nc"><i>153</i>&nbsp;     * construction time.</b>
+<i>154</i>&nbsp;     */
+<i>155</i>&nbsp;    public byte[] protect(Key key) throws KeyStoreException
+<i>156</i>&nbsp;    {
+<i>157</i>&nbsp;        int i;
+<i>158</i>&nbsp;        int numRounds;
+<i>159</i>&nbsp;        byte[] digest;
+<i>160</i>&nbsp;        int xorOffset; // offset in xorKey where next digest will be stored
+<i>161</i>&nbsp;        int encrKeyOffset = 0;
+<i>162</i>&nbsp;
+<i>163</i>&nbsp;        if (key == null) {
+<i>164</i>&nbsp;            throw new IllegalArgumentException(&quot;plaintext key can&#39;t be null&quot;);
+<i>165</i>&nbsp;        }
+<i>166</i>&nbsp;
+<b class="nc"><i>167</i>&nbsp;        if (!&quot;PKCS#8&quot;.equalsIgnoreCase(key.getFormat())) {</b>
+<i>168</i>&nbsp;            throw new KeyStoreException(
+<b class="nc"><i>169</i>&nbsp;                &quot;Cannot get key bytes, not PKCS#8 encoded&quot;);</b>
+<b class="nc"><i>170</i>&nbsp;        }</b>
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;        byte[] plainKey = key.getEncoded();
+<b class="nc"><i>173</i>&nbsp;        if (plainKey == null) {</b>
+<b class="nc"><i>174</i>&nbsp;            throw new KeyStoreException(</b>
+<i>175</i>&nbsp;                &quot;Cannot get key bytes, encoding not supported&quot;);
+<i>176</i>&nbsp;        }
+<i>177</i>&nbsp;
+<b class="nc"><i>178</i>&nbsp;        // Determine the number of digest rounds</b>
+<b class="nc"><i>179</i>&nbsp;        numRounds = plainKey.length / DIGEST_LEN;</b>
+<b class="nc"><i>180</i>&nbsp;        if ((plainKey.length % DIGEST_LEN) != 0)</b>
+<i>181</i>&nbsp;            numRounds++;
+<i>182</i>&nbsp;
+<i>183</i>&nbsp;        // Create a random salt
+<i>184</i>&nbsp;        byte[] salt = new byte[SALT_LEN];
+<b class="nc"><i>185</i>&nbsp;        SecureRandom random = new SecureRandom();</b>
+<b class="nc"><i>186</i>&nbsp;        random.nextBytes(salt);</b>
+<b class="nc"><i>187</i>&nbsp;</b>
+<i>188</i>&nbsp;        // Set up the byte array which will be XORed with &quot;plainKey&quot;
+<i>189</i>&nbsp;        byte[] xorKey = new byte[plainKey.length];
+<b class="nc"><i>190</i>&nbsp;</b>
+<b class="nc"><i>191</i>&nbsp;        // Compute the digests, and store them in &quot;xorKey&quot;</b>
+<b class="nc"><i>192</i>&nbsp;        for (i = 0, xorOffset = 0, digest = salt;</b>
+<i>193</i>&nbsp;             i &lt; numRounds;
+<i>194</i>&nbsp;             i++, xorOffset += DIGEST_LEN) {
+<b class="nc"><i>195</i>&nbsp;            md.update(passwdBytes);</b>
+<i>196</i>&nbsp;            md.update(digest);
+<i>197</i>&nbsp;            digest = md.digest();
+<b class="nc"><i>198</i>&nbsp;            md.reset();</b>
+<b class="nc"><i>199</i>&nbsp;            // Copy the digest into &quot;xorKey&quot;</b>
+<b class="nc"><i>200</i>&nbsp;            if (i &lt; numRounds - 1) {</b>
+<b class="nc"><i>201</i>&nbsp;                System.arraycopy(digest, 0, xorKey, xorOffset,</b>
+<b class="nc"><i>202</i>&nbsp;                                 digest.length);</b>
+<b class="nc"><i>203</i>&nbsp;            } else {</b>
+<b class="nc"><i>204</i>&nbsp;                System.arraycopy(digest, 0, xorKey, xorOffset,</b>
+<i>205</i>&nbsp;                                 xorKey.length - xorOffset);
+<b class="nc"><i>206</i>&nbsp;            }</b>
+<b class="nc"><i>207</i>&nbsp;        }</b>
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;        // XOR &quot;plainKey&quot; with &quot;xorKey&quot;, and store the result in &quot;tmpKey&quot;
+<b class="nc"><i>210</i>&nbsp;        byte[] tmpKey = new byte[plainKey.length];</b>
+<i>211</i>&nbsp;        for (i = 0; i &lt; tmpKey.length; i++) {
+<i>212</i>&nbsp;            tmpKey[i] = (byte)(plainKey[i] ^ xorKey[i]);
+<i>213</i>&nbsp;        }
+<i>214</i>&nbsp;
+<i>215</i>&nbsp;        // Store salt and &quot;tmpKey&quot; in &quot;encrKey&quot;
+<b class="nc"><i>216</i>&nbsp;        byte[] encrKey = new byte[salt.length + tmpKey.length + DIGEST_LEN];</b>
+<b class="nc"><i>217</i>&nbsp;        System.arraycopy(salt, 0, encrKey, encrKeyOffset, salt.length);</b>
+<b class="nc"><i>218</i>&nbsp;        encrKeyOffset += salt.length;</b>
+<i>219</i>&nbsp;        System.arraycopy(tmpKey, 0, encrKey, encrKeyOffset, tmpKey.length);
+<i>220</i>&nbsp;        encrKeyOffset += tmpKey.length;
+<i>221</i>&nbsp;
+<b class="nc"><i>222</i>&nbsp;        // Append digest(password, plainKey) as an integrity check to &quot;encrKey&quot;</b>
+<b class="nc"><i>223</i>&nbsp;        md.update(passwdBytes);</b>
+<b class="nc"><i>224</i>&nbsp;        Arrays.fill(passwdBytes, (byte)0x00);</b>
+<b class="nc"><i>225</i>&nbsp;        passwdBytes = null;</b>
+<b class="nc"><i>226</i>&nbsp;        md.update(plainKey);</b>
+<i>227</i>&nbsp;        digest = md.digest();
+<i>228</i>&nbsp;        md.reset();
+<b class="nc"><i>229</i>&nbsp;        System.arraycopy(digest, 0, encrKey, encrKeyOffset, digest.length);</b>
+<b class="nc"><i>230</i>&nbsp;</b>
+<b class="nc"><i>231</i>&nbsp;        // wrap the protected private key in a PKCS#8-style</b>
+<b class="nc"><i>232</i>&nbsp;        // EncryptedPrivateKeyInfo, and returns its encoding</b>
+<b class="nc"><i>233</i>&nbsp;        AlgorithmId encrAlg;</b>
+<b class="nc"><i>234</i>&nbsp;        try {</b>
+<b class="nc"><i>235</i>&nbsp;            encrAlg = new AlgorithmId(new ObjectIdentifier(KEY_PROTECTOR_OID));</b>
+<i>236</i>&nbsp;            return new EncryptedPrivateKeyInfo(encrAlg,encrKey).getEncoded();
+<i>237</i>&nbsp;        } catch (IOException ioe) {
+<i>238</i>&nbsp;            throw new KeyStoreException(ioe.getMessage());
+<i>239</i>&nbsp;        }
+<i>240</i>&nbsp;    }
+<b class="nc"><i>241</i>&nbsp;</b>
+<b class="nc"><i>242</i>&nbsp;    /*</b>
+<b class="nc"><i>243</i>&nbsp;     * Recovers the plaintext version of the given key (in protected format),</b>
+<b class="nc"><i>244</i>&nbsp;     * using the password provided at construction time.</b>
+<i>245</i>&nbsp;     */
+<i>246</i>&nbsp;    public Key recover(EncryptedPrivateKeyInfo encrInfo)
+<i>247</i>&nbsp;        throws UnrecoverableKeyException
+<i>248</i>&nbsp;    {
+<i>249</i>&nbsp;        int i;
+<i>250</i>&nbsp;        byte[] digest;
+<i>251</i>&nbsp;        int numRounds;
+<i>252</i>&nbsp;        int xorOffset; // offset in xorKey where next digest will be stored
+<i>253</i>&nbsp;        int encrKeyLen; // the length of the encrpyted key
+<i>254</i>&nbsp;
+<i>255</i>&nbsp;        // do we support the algorithm?
+<i>256</i>&nbsp;        AlgorithmId encrAlg = encrInfo.getAlgorithm();
+<i>257</i>&nbsp;        if (!(encrAlg.getOID().toString().equals(KEY_PROTECTOR_OID))) {
+<i>258</i>&nbsp;            throw new UnrecoverableKeyException(&quot;Unsupported key protection &quot;
+<i>259</i>&nbsp;                                                + &quot;algorithm&quot;);
+<i>260</i>&nbsp;        }
+<i>261</i>&nbsp;
+<b class="nc"><i>262</i>&nbsp;        byte[] protectedKey = encrInfo.getEncryptedData();</b>
+<b class="nc"><i>263</i>&nbsp;</b>
+<b class="nc"><i>264</i>&nbsp;        /*</b>
+<i>265</i>&nbsp;         * Get the salt associated with this key (the first SALT_LEN bytes of
+<i>266</i>&nbsp;         * &lt;code&gt;protectedKey&lt;/code&gt;)
+<i>267</i>&nbsp;         */
+<b class="nc"><i>268</i>&nbsp;        byte[] salt = new byte[SALT_LEN];</b>
+<i>269</i>&nbsp;        System.arraycopy(protectedKey, 0, salt, 0, SALT_LEN);
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;        // Determine the number of digest rounds
+<i>272</i>&nbsp;        encrKeyLen = protectedKey.length - SALT_LEN - DIGEST_LEN;
+<i>273</i>&nbsp;        numRounds = encrKeyLen / DIGEST_LEN;
+<b class="nc"><i>274</i>&nbsp;        if ((encrKeyLen % DIGEST_LEN) != 0) numRounds++;</b>
+<b class="nc"><i>275</i>&nbsp;</b>
+<i>276</i>&nbsp;        // Get the encrypted key portion and store it in &quot;encrKey&quot;
+<i>277</i>&nbsp;        byte[] encrKey = new byte[encrKeyLen];
+<b class="nc"><i>278</i>&nbsp;        System.arraycopy(protectedKey, SALT_LEN, encrKey, 0, encrKeyLen);</b>
+<b class="nc"><i>279</i>&nbsp;</b>
+<b class="nc"><i>280</i>&nbsp;        // Set up the byte array which will be XORed with &quot;encrKey&quot;</b>
+<i>281</i>&nbsp;        byte[] xorKey = new byte[encrKey.length];
+<i>282</i>&nbsp;
+<b class="nc"><i>283</i>&nbsp;        // Compute the digests, and store them in &quot;xorKey&quot;</b>
+<b class="nc"><i>284</i>&nbsp;        for (i = 0, xorOffset = 0, digest = salt;</b>
+<i>285</i>&nbsp;             i &lt; numRounds;
+<i>286</i>&nbsp;             i++, xorOffset += DIGEST_LEN) {
+<b class="nc"><i>287</i>&nbsp;            md.update(passwdBytes);</b>
+<i>288</i>&nbsp;            md.update(digest);
+<i>289</i>&nbsp;            digest = md.digest();
+<b class="nc"><i>290</i>&nbsp;            md.reset();</b>
+<b class="nc"><i>291</i>&nbsp;            // Copy the digest into &quot;xorKey&quot;</b>
+<b class="nc"><i>292</i>&nbsp;            if (i &lt; numRounds - 1) {</b>
+<b class="nc"><i>293</i>&nbsp;                System.arraycopy(digest, 0, xorKey, xorOffset,</b>
+<b class="nc"><i>294</i>&nbsp;                                 digest.length);</b>
+<b class="nc"><i>295</i>&nbsp;            } else {</b>
+<b class="nc"><i>296</i>&nbsp;                System.arraycopy(digest, 0, xorKey, xorOffset,</b>
+<i>297</i>&nbsp;                                 xorKey.length - xorOffset);
+<b class="nc"><i>298</i>&nbsp;            }</b>
+<b class="nc"><i>299</i>&nbsp;        }</b>
+<i>300</i>&nbsp;
+<i>301</i>&nbsp;        // XOR &quot;encrKey&quot; with &quot;xorKey&quot;, and store the result in &quot;plainKey&quot;
+<b class="nc"><i>302</i>&nbsp;        byte[] plainKey = new byte[encrKey.length];</b>
+<i>303</i>&nbsp;        for (i = 0; i &lt; plainKey.length; i++) {
+<i>304</i>&nbsp;            plainKey[i] = (byte)(encrKey[i] ^ xorKey[i]);
+<i>305</i>&nbsp;        }
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;        /*
+<b class="nc"><i>308</i>&nbsp;         * Check the integrity of the recovered key by concatenating it with</b>
+<b class="nc"><i>309</i>&nbsp;         * the password, digesting the concatenation, and comparing the</b>
+<b class="nc"><i>310</i>&nbsp;         * result of the digest operation with the digest provided at the end</b>
+<i>311</i>&nbsp;         * of &lt;code&gt;protectedKey&lt;/code&gt;. If the two digest values are
+<i>312</i>&nbsp;         * different, throw an exception.
+<i>313</i>&nbsp;         */
+<i>314</i>&nbsp;        md.update(passwdBytes);
+<i>315</i>&nbsp;        Arrays.fill(passwdBytes, (byte)0x00);
+<i>316</i>&nbsp;        passwdBytes = null;
+<i>317</i>&nbsp;        md.update(plainKey);
+<i>318</i>&nbsp;        digest = md.digest();
+<i>319</i>&nbsp;        md.reset();
+<b class="nc"><i>320</i>&nbsp;        for (i = 0; i &lt; digest.length; i++) {</b>
+<b class="nc"><i>321</i>&nbsp;            if (digest[i] != protectedKey[SALT_LEN + encrKeyLen + i]) {</b>
+<b class="nc"><i>322</i>&nbsp;                throw new UnrecoverableKeyException(&quot;Cannot recover key&quot;);</b>
+<b class="nc"><i>323</i>&nbsp;            }</b>
+<b class="nc"><i>324</i>&nbsp;        }</b>
+<b class="nc"><i>325</i>&nbsp;</b>
+<b class="nc"><i>326</i>&nbsp;        // The parseKey() method of PKCS8Key parses the key</b>
+<b class="nc"><i>327</i>&nbsp;        // algorithm and instantiates the appropriate key factory,</b>
+<b class="nc"><i>328</i>&nbsp;        // which in turn parses the key material.</b>
+<i>329</i>&nbsp;        try {
+<i>330</i>&nbsp;            return PKCS8Key.parseKey(new DerValue(plainKey));
+<i>331</i>&nbsp;        } catch (IOException ioe) {
+<i>332</i>&nbsp;            throw new UnrecoverableKeyException(ioe.getMessage());
+<i>333</i>&nbsp;        }
+<i>334</i>&nbsp;    }
+<i>335</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

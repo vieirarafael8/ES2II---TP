@@ -1,0 +1,404 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: MarshalInputStream</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.rmi.server</a> ]
+</div>
+
+<h1>Coverage Summary for Class: MarshalInputStream (sun.rmi.server)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">MarshalInputStream</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 16)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 78)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.rmi.server;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.io.InputStream;
+<i>30</i>&nbsp;import java.io.ObjectInputStream;
+<i>31</i>&nbsp;import java.io.ObjectStreamClass;
+<i>32</i>&nbsp;import java.io.StreamCorruptedException;
+<i>33</i>&nbsp;import java.util.*;
+<i>34</i>&nbsp;import java.security.AccessControlException;
+<i>35</i>&nbsp;import java.security.Permission;
+<i>36</i>&nbsp;import java.rmi.server.RMIClassLoader;
+<i>37</i>&nbsp;import java.security.PrivilegedAction;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp; * MarshalInputStream is an extension of ObjectInputStream.  When resolving
+<i>41</i>&nbsp; * a class, it reads an object from the stream written by a corresponding
+<i>42</i>&nbsp; * MarshalOutputStream.  If the class to be resolved is not available
+<i>43</i>&nbsp; * locally, from the first class loader on the execution stack, or from the
+<i>44</i>&nbsp; * context class loader of the current thread, it will attempt to load the
+<i>45</i>&nbsp; * class from the location annotated by the sending MarshalOutputStream.
+<i>46</i>&nbsp; * This location object must be a string representing a path of URLs.
+<i>47</i>&nbsp; *
+<i>48</i>&nbsp; * A new MarshalInputStream should be created to deserialize remote objects or
+<i>49</i>&nbsp; * graphs containing remote objects.  Objects are created from the stream
+<i>50</i>&nbsp; * using the ObjectInputStream.readObject method.
+<i>51</i>&nbsp; *
+<i>52</i>&nbsp; * @author      Peter Jones
+<i>53</i>&nbsp; */
+<i>54</i>&nbsp;public class MarshalInputStream extends ObjectInputStream {
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;    /**
+<i>57</i>&nbsp;     * Value of &quot;java.rmi.server.useCodebaseOnly&quot; property,
+<i>58</i>&nbsp;     * as cached at class initialization time.
+<i>59</i>&nbsp;     *
+<b class="nc"><i>60</i>&nbsp;     * The default value is true. That is, the value is true</b>
+<i>61</i>&nbsp;     * if the property is absent or is not equal to &quot;false&quot;.
+<i>62</i>&nbsp;     * The value is only false when the property is present
+<i>63</i>&nbsp;     * and is equal to &quot;false&quot;.
+<i>64</i>&nbsp;     */
+<i>65</i>&nbsp;    private static final boolean useCodebaseOnlyProperty =
+<i>66</i>&nbsp;        ! java.security.AccessController.doPrivileged(
+<i>67</i>&nbsp;            (PrivilegedAction&lt;String&gt;) () -&gt; System.getProperty(
+<i>68</i>&nbsp;                &quot;java.rmi.server.useCodebaseOnly&quot;, &quot;true&quot;))
+<i>69</i>&nbsp;            .equalsIgnoreCase(&quot;false&quot;);
+<i>70</i>&nbsp;
+<b class="nc"><i>71</i>&nbsp;    /** table to hold sun classes to which access is explicitly permitted */</b>
+<b class="nc"><i>72</i>&nbsp;    protected static Map&lt;String, Class&lt;?&gt;&gt; permittedSunClasses</b>
+<i>73</i>&nbsp;        = new HashMap&lt;&gt;(3);
+<i>74</i>&nbsp;
+<b class="nc"><i>75</i>&nbsp;    /** if true, don&#39;t try superclass first in resolveClass() */</b>
+<i>76</i>&nbsp;    private boolean skipDefaultResolveClass = false;
+<i>77</i>&nbsp;
+<b class="nc"><i>78</i>&nbsp;    /** callbacks to make when done() called: maps Object to Runnable */</b>
+<i>79</i>&nbsp;    private final Map&lt;Object, Runnable&gt; doneCallbacks
+<i>80</i>&nbsp;        = new HashMap&lt;&gt;(3);
+<i>81</i>&nbsp;
+<b class="nc"><i>82</i>&nbsp;    /**</b>
+<i>83</i>&nbsp;     * if true, load classes (if not available locally) only from the
+<i>84</i>&nbsp;     * URL specified by the &quot;java.rmi.server.codebase&quot; property.
+<b class="nc"><i>85</i>&nbsp;     */</b>
+<i>86</i>&nbsp;    private boolean useCodebaseOnly = useCodebaseOnlyProperty;
+<i>87</i>&nbsp;
+<i>88</i>&nbsp;    /*
+<i>89</i>&nbsp;     * Fix for 4179055: The remote object services inside the
+<i>90</i>&nbsp;     * activation daemon use stubs that are in the package
+<i>91</i>&nbsp;     * sun.rmi.server.  Classes for these stubs should be loaded from
+<b class="nc"><i>92</i>&nbsp;     * the classpath by RMI system code and not by the normal</b>
+<i>93</i>&nbsp;     * unmarshalling process as applications should not need to have
+<i>94</i>&nbsp;     * permission to access the sun implementation classes.
+<i>95</i>&nbsp;     *
+<i>96</i>&nbsp;     * Note: this fix should be redone when API changes may be
+<i>97</i>&nbsp;     * integrated
+<i>98</i>&nbsp;     *
+<i>99</i>&nbsp;     * During parameter unmarshalling RMI needs to explicitly permit
+<i>100</i>&nbsp;     * access to three sun.* stub classes
+<i>101</i>&nbsp;     */
+<i>102</i>&nbsp;    static {
+<i>103</i>&nbsp;        try {
+<i>104</i>&nbsp;            String system =
+<i>105</i>&nbsp;                &quot;sun.rmi.server.Activation$ActivationSystemImpl_Stub&quot;;
+<i>106</i>&nbsp;            String registry = &quot;sun.rmi.registry.RegistryImpl_Stub&quot;;
+<i>107</i>&nbsp;
+<i>108</i>&nbsp;            permittedSunClasses.put(system, Class.forName(system));
+<i>109</i>&nbsp;            permittedSunClasses.put(registry, Class.forName(registry));
+<b class="nc"><i>110</i>&nbsp;</b>
+<i>111</i>&nbsp;        } catch (ClassNotFoundException e) {
+<b class="nc"><i>112</i>&nbsp;            throw new NoClassDefFoundError(&quot;Missing system class: &quot; +</b>
+<i>113</i>&nbsp;                                           e.getMessage());
+<b class="nc"><i>114</i>&nbsp;        }</b>
+<b class="nc"><i>115</i>&nbsp;    }</b>
+<i>116</i>&nbsp;
+<b class="nc"><i>117</i>&nbsp;    /**</b>
+<b class="nc"><i>118</i>&nbsp;     * Create a new MarshalInputStream object.</b>
+<b class="nc"><i>119</i>&nbsp;     */</b>
+<b class="nc"><i>120</i>&nbsp;    public MarshalInputStream(InputStream in)</b>
+<i>121</i>&nbsp;        throws IOException, StreamCorruptedException
+<i>122</i>&nbsp;    {
+<i>123</i>&nbsp;        super(in);
+<i>124</i>&nbsp;                    }
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;    /**
+<i>127</i>&nbsp;     * Returns a callback previously registered via the setDoneCallback
+<i>128</i>&nbsp;     * method with given key, or null if no callback has yet been registered
+<b class="nc"><i>129</i>&nbsp;     * with that key.</b>
+<i>130</i>&nbsp;     */
+<i>131</i>&nbsp;    public Runnable getDoneCallback(Object key) {
+<i>132</i>&nbsp;        return doneCallbacks.get(key);                 // not thread-safe
+<i>133</i>&nbsp;    }
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;    /**
+<i>136</i>&nbsp;     * Registers a callback to make when this stream&#39;s done() method is
+<i>137</i>&nbsp;     * invoked, along with a key for retrieving the same callback instance
+<b class="nc"><i>138</i>&nbsp;     * subsequently from the getDoneCallback method.</b>
+<i>139</i>&nbsp;     */
+<i>140</i>&nbsp;    public void setDoneCallback(Object key, Runnable callback) {
+<i>141</i>&nbsp;        //assert(!doneCallbacks.contains(key));
+<i>142</i>&nbsp;        doneCallbacks.put(key, callback);               // not thread-safe
+<i>143</i>&nbsp;    }
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;    /**
+<i>146</i>&nbsp;     * Indicates that the user of this MarshalInputStream is done reading
+<i>147</i>&nbsp;     * objects from it, so all callbacks registered with the setDoneCallback
+<b class="nc"><i>148</i>&nbsp;     * method should now be (synchronously) executed.  When this method</b>
+<i>149</i>&nbsp;     * returns, there are no more callbacks registered.
+<i>150</i>&nbsp;     *
+<i>151</i>&nbsp;     * This method is implicitly invoked by close() before it delegates to
+<i>152</i>&nbsp;     * the superclass&#39;s close method.
+<i>153</i>&nbsp;     */
+<i>154</i>&nbsp;    public void done() {
+<i>155</i>&nbsp;        Iterator&lt;Runnable&gt; iter = doneCallbacks.values().iterator();
+<i>156</i>&nbsp;        while (iter.hasNext()) {                        // not thread-safe
+<i>157</i>&nbsp;            Runnable callback = iter.next();
+<i>158</i>&nbsp;            callback.run();
+<i>159</i>&nbsp;        }
+<i>160</i>&nbsp;        doneCallbacks.clear();
+<b class="nc"><i>161</i>&nbsp;    }</b>
+<b class="nc"><i>162</i>&nbsp;</b>
+<b class="nc"><i>163</i>&nbsp;    /**</b>
+<b class="nc"><i>164</i>&nbsp;     * Closes this stream, implicitly invoking done() first.</b>
+<b class="nc"><i>165</i>&nbsp;     */</b>
+<b class="nc"><i>166</i>&nbsp;    public void close() throws IOException {</b>
+<i>167</i>&nbsp;        done();
+<i>168</i>&nbsp;        super.close();
+<i>169</i>&nbsp;    }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;    /**
+<i>172</i>&nbsp;     * resolveClass is extended to acquire (if present) the location
+<b class="nc"><i>173</i>&nbsp;     * from which to load the specified class.</b>
+<b class="nc"><i>174</i>&nbsp;     * It will find, load, and return the class.</b>
+<i>175</i>&nbsp;     */
+<i>176</i>&nbsp;    protected Class&lt;?&gt; resolveClass(ObjectStreamClass classDesc)
+<i>177</i>&nbsp;        throws IOException, ClassNotFoundException
+<i>178</i>&nbsp;    {
+<i>179</i>&nbsp;        /*
+<i>180</i>&nbsp;         * Always read annotation written by MarshalOutputStream
+<i>181</i>&nbsp;         * describing where to load class from.
+<i>182</i>&nbsp;         */
+<i>183</i>&nbsp;        Object annotation = readLocation();
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;        String className = classDesc.getName();
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;        /*
+<i>188</i>&nbsp;         * Unless we were told to skip this consideration, choose the
+<b class="nc"><i>189</i>&nbsp;         * &quot;default loader&quot; to simulate the default ObjectInputStream</b>
+<i>190</i>&nbsp;         * resolveClass mechanism (that is, choose the first non-platform
+<b class="nc"><i>191</i>&nbsp;         * loader on the execution stack) to maximize the likelihood of</b>
+<i>192</i>&nbsp;         * type compatibility with calling code.  (This consideration
+<i>193</i>&nbsp;         * is skipped during server parameter unmarshalling using the 1.2
+<i>194</i>&nbsp;         * stub protocol, because there would never be a non-null class
+<i>195</i>&nbsp;         * loader on the stack in that situation anyway.)
+<i>196</i>&nbsp;         */
+<i>197</i>&nbsp;        ClassLoader defaultLoader =
+<i>198</i>&nbsp;            skipDefaultResolveClass ? null : latestUserDefinedLoader();
+<i>199</i>&nbsp;
+<i>200</i>&nbsp;        /*
+<i>201</i>&nbsp;         * If the &quot;java.rmi.server.useCodebaseOnly&quot; property was true or
+<i>202</i>&nbsp;         * useCodebaseOnly() was called or the annotation is not a String,
+<b class="nc"><i>203</i>&nbsp;         * load from the local loader using the &quot;java.rmi.server.codebase&quot;</b>
+<b class="nc"><i>204</i>&nbsp;         * URL.  Otherwise, load from a loader using the codebase URL in</b>
+<i>205</i>&nbsp;         * the annotation.
+<i>206</i>&nbsp;         */
+<i>207</i>&nbsp;        String codebase = null;
+<i>208</i>&nbsp;        if (!useCodebaseOnly &amp;&amp; annotation instanceof String) {
+<i>209</i>&nbsp;            codebase = (String) annotation;
+<i>210</i>&nbsp;        }
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;        try {
+<b class="nc"><i>213</i>&nbsp;            return RMIClassLoader.loadClass(codebase, className,</b>
+<b class="nc"><i>214</i>&nbsp;                                            defaultLoader);</b>
+<b class="nc"><i>215</i>&nbsp;        } catch (AccessControlException e) {</b>
+<i>216</i>&nbsp;            return checkSunClass(className, e);
+<i>217</i>&nbsp;        } catch (ClassNotFoundException e) {
+<i>218</i>&nbsp;            /*
+<b class="nc"><i>219</i>&nbsp;             * Fix for 4442373: delegate to ObjectInputStream.resolveClass()</b>
+<i>220</i>&nbsp;             * to resolve primitive classes.
+<b class="nc"><i>221</i>&nbsp;             */</b>
+<b class="nc"><i>222</i>&nbsp;            try {</b>
+<b class="nc"><i>223</i>&nbsp;                if (Character.isLowerCase(className.charAt(0)) &amp;&amp;</b>
+<i>224</i>&nbsp;                    className.indexOf(&#39;.&#39;) == -1)
+<i>225</i>&nbsp;                {
+<i>226</i>&nbsp;                    return super.resolveClass(classDesc);
+<i>227</i>&nbsp;                }
+<i>228</i>&nbsp;            } catch (ClassNotFoundException e2) {
+<b class="nc"><i>229</i>&nbsp;            }</b>
+<b class="nc"><i>230</i>&nbsp;            throw e;</b>
+<i>231</i>&nbsp;        }
+<b class="nc"><i>232</i>&nbsp;    }</b>
+<i>233</i>&nbsp;
+<b class="nc"><i>234</i>&nbsp;    /**</b>
+<b class="nc"><i>235</i>&nbsp;     * resolveProxyClass is extended to acquire (if present) the location</b>
+<b class="nc"><i>236</i>&nbsp;     * to determine the class loader to define the proxy class in.</b>
+<i>237</i>&nbsp;     */
+<i>238</i>&nbsp;    protected Class&lt;?&gt; resolveProxyClass(String[] interfaces)
+<i>239</i>&nbsp;        throws IOException, ClassNotFoundException
+<i>240</i>&nbsp;    {
+<i>241</i>&nbsp;        /*
+<i>242</i>&nbsp;         * Always read annotation written by MarshalOutputStream.
+<i>243</i>&nbsp;         */
+<i>244</i>&nbsp;        Object annotation = readLocation();
+<i>245</i>&nbsp;
+<i>246</i>&nbsp;        ClassLoader defaultLoader =
+<b class="nc"><i>247</i>&nbsp;            skipDefaultResolveClass ? null : latestUserDefinedLoader();</b>
+<b class="nc"><i>248</i>&nbsp;</b>
+<b class="nc"><i>249</i>&nbsp;        String codebase = null;</b>
+<i>250</i>&nbsp;        if (!useCodebaseOnly &amp;&amp; annotation instanceof String) {
+<i>251</i>&nbsp;            codebase = (String) annotation;
+<i>252</i>&nbsp;        }
+<i>253</i>&nbsp;
+<i>254</i>&nbsp;        return RMIClassLoader.loadProxyClass(codebase, interfaces,
+<b class="nc"><i>255</i>&nbsp;                                             defaultLoader);</b>
+<i>256</i>&nbsp;    }
+<b class="nc"><i>257</i>&nbsp;</b>
+<b class="nc"><i>258</i>&nbsp;    /*</b>
+<i>259</i>&nbsp;     * Returns the first non-platform class loader up the execution stack,
+<b class="nc"><i>260</i>&nbsp;     * or platform class loader if only code from the platform class loader or null</b>
+<b class="nc"><i>261</i>&nbsp;     * is on the stack.</b>
+<b class="nc"><i>262</i>&nbsp;     */</b>
+<i>263</i>&nbsp;    private static ClassLoader latestUserDefinedLoader() {
+<i>264</i>&nbsp;        return jdk.internal.misc.VM.latestUserDefinedLoader();
+<b class="nc"><i>265</i>&nbsp;    }</b>
+<i>266</i>&nbsp;
+<i>267</i>&nbsp;    /**
+<i>268</i>&nbsp;     * Fix for 4179055: Need to assist resolving sun stubs; resolve
+<i>269</i>&nbsp;     * class locally if it is a &quot;permitted&quot; sun class
+<i>270</i>&nbsp;     */
+<i>271</i>&nbsp;    private Class&lt;?&gt; checkSunClass(String className, AccessControlException e)
+<i>272</i>&nbsp;        throws AccessControlException
+<i>273</i>&nbsp;    {
+<b class="nc"><i>274</i>&nbsp;        // ensure that we are giving out a stub for the correct reason</b>
+<i>275</i>&nbsp;        Permission perm = e.getPermission();
+<i>276</i>&nbsp;        String name = null;
+<i>277</i>&nbsp;        if (perm != null) {
+<i>278</i>&nbsp;            name = perm.getName();
+<i>279</i>&nbsp;        }
+<i>280</i>&nbsp;
+<i>281</i>&nbsp;        Class&lt;?&gt; resolvedClass = permittedSunClasses.get(className);
+<i>282</i>&nbsp;
+<i>283</i>&nbsp;        // if class not permitted, throw the SecurityException
+<i>284</i>&nbsp;        if ((name == null) ||
+<b class="nc"><i>285</i>&nbsp;            (resolvedClass == null) ||</b>
+<b class="nc"><i>286</i>&nbsp;            ((!name.equals(&quot;accessClassInPackage.sun.rmi.server&quot;)) &amp;&amp;</b>
+<b class="nc"><i>287</i>&nbsp;            (!name.equals(&quot;accessClassInPackage.sun.rmi.registry&quot;))))</b>
+<b class="nc"><i>288</i>&nbsp;        {</b>
+<i>289</i>&nbsp;            throw e;
+<i>290</i>&nbsp;        }
+<b class="nc"><i>291</i>&nbsp;</b>
+<i>292</i>&nbsp;        return resolvedClass;
+<i>293</i>&nbsp;    }
+<b class="nc"><i>294</i>&nbsp;</b>
+<i>295</i>&nbsp;    /**
+<b class="nc"><i>296</i>&nbsp;     * Return the location for the class in the stream.  This method can</b>
+<b class="nc"><i>297</i>&nbsp;     * be overridden by subclasses that store this annotation somewhere</b>
+<i>298</i>&nbsp;     * else than as the next object in the stream, as is done by this class.
+<b class="nc"><i>299</i>&nbsp;     */</b>
+<i>300</i>&nbsp;    protected Object readLocation()
+<i>301</i>&nbsp;        throws IOException, ClassNotFoundException
+<b class="nc"><i>302</i>&nbsp;    {</b>
+<i>303</i>&nbsp;        return readObject();
+<i>304</i>&nbsp;    }
+<i>305</i>&nbsp;
+<i>306</i>&nbsp;    /**
+<i>307</i>&nbsp;     * Set a flag to indicate that the superclass&#39;s default resolveClass()
+<i>308</i>&nbsp;     * implementation should not be invoked by our resolveClass().
+<i>309</i>&nbsp;     */
+<i>310</i>&nbsp;    void skipDefaultResolveClass() {
+<i>311</i>&nbsp;        skipDefaultResolveClass = true;
+<i>312</i>&nbsp;    }
+<b class="nc"><i>313</i>&nbsp;</b>
+<i>314</i>&nbsp;    /**
+<i>315</i>&nbsp;     * Disable code downloading except from the URL specified by the
+<i>316</i>&nbsp;     * &quot;java.rmi.server.codebase&quot; property.
+<i>317</i>&nbsp;     */
+<i>318</i>&nbsp;    void useCodebaseOnly() {
+<i>319</i>&nbsp;        useCodebaseOnly = true;
+<i>320</i>&nbsp;    }
+<b class="nc"><i>321</i>&nbsp;}</b>
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

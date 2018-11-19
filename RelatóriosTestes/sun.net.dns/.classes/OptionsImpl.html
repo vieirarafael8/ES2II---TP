@@ -1,0 +1,266 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: OptionsImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.net.dns</a> ]
+</div>
+
+<h1>Coverage Summary for Class: OptionsImpl (sun.net.dns)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">OptionsImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2002, 2012, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.net.dns;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.List;
+<i>29</i>&nbsp;import java.util.LinkedList;
+<i>30</i>&nbsp;import java.util.StringTokenizer;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;/*
+<i>33</i>&nbsp; * An implementation of sun.net.ResolverConfiguration for Windows.
+<i>34</i>&nbsp; */
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;public class ResolverConfigurationImpl
+<i>37</i>&nbsp;    extends ResolverConfiguration
+<i>38</i>&nbsp;{
+<i>39</i>&nbsp;    // Lock helds whilst loading configuration or checking
+<i>40</i>&nbsp;    private static Object lock = new Object();
+<i>41</i>&nbsp;
+<i>42</i>&nbsp;    // Resolver options
+<i>43</i>&nbsp;    private final Options opts;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;    // Addreses have changed
+<i>46</i>&nbsp;    private static boolean changed = false;
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;    // Time of last refresh.
+<i>49</i>&nbsp;    private static long lastRefresh = -1;
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;    // Cache timeout (120 seconds) - should be converted into property
+<i>52</i>&nbsp;    // or configured as preference in the future.
+<i>53</i>&nbsp;    private static final int TIMEOUT = 120000;
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    // DNS suffix list and name servers populated by native method
+<i>56</i>&nbsp;    private static String os_searchlist;
+<i>57</i>&nbsp;    private static String os_nameservers;
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    // Cached lists
+<i>60</i>&nbsp;    private static LinkedList&lt;String&gt; searchlist;
+<i>61</i>&nbsp;    private static LinkedList&lt;String&gt; nameservers;
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    // Parse string that consists of token delimited by space or commas
+<i>64</i>&nbsp;    // and return LinkedHashMap
+<i>65</i>&nbsp;    private LinkedList&lt;String&gt; stringToList(String str) {
+<i>66</i>&nbsp;        LinkedList&lt;String&gt; ll = new LinkedList&lt;&gt;();
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;        // comma and space are valid delimites
+<i>69</i>&nbsp;        StringTokenizer st = new StringTokenizer(str, &quot;, &quot;);
+<i>70</i>&nbsp;        while (st.hasMoreTokens()) {
+<i>71</i>&nbsp;            String s = st.nextToken();
+<i>72</i>&nbsp;            if (!ll.contains(s)) {
+<i>73</i>&nbsp;                ll.add(s);
+<i>74</i>&nbsp;            }
+<i>75</i>&nbsp;        }
+<i>76</i>&nbsp;        return ll;
+<i>77</i>&nbsp;    }
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    // Load DNS configuration from OS
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    private void loadConfig() {
+<i>82</i>&nbsp;        assert Thread.holdsLock(lock);
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;        // if address have changed then DNS probably changed aswell;
+<i>85</i>&nbsp;        // otherwise check if cached settings have expired.
+<i>86</i>&nbsp;        //
+<i>87</i>&nbsp;        if (changed) {
+<i>88</i>&nbsp;            changed = false;
+<i>89</i>&nbsp;        } else {
+<i>90</i>&nbsp;            if (lastRefresh &gt;= 0) {
+<i>91</i>&nbsp;                long currTime = System.currentTimeMillis();
+<i>92</i>&nbsp;                if ((currTime - lastRefresh) &lt; TIMEOUT) {
+<i>93</i>&nbsp;                    return;
+<i>94</i>&nbsp;                }
+<i>95</i>&nbsp;            }
+<i>96</i>&nbsp;        }
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;        // load DNS configuration, update timestamp, create
+<i>99</i>&nbsp;        // new HashMaps from the loaded configuration
+<i>100</i>&nbsp;        //
+<i>101</i>&nbsp;        loadDNSconfig0();
+<i>102</i>&nbsp;
+<i>103</i>&nbsp;        lastRefresh = System.currentTimeMillis();
+<i>104</i>&nbsp;        searchlist = stringToList(os_searchlist);
+<i>105</i>&nbsp;        nameservers = stringToList(os_nameservers);
+<i>106</i>&nbsp;        os_searchlist = null;                       // can be GC&#39;ed
+<i>107</i>&nbsp;        os_nameservers = null;
+<i>108</i>&nbsp;    }
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;    ResolverConfigurationImpl() {
+<i>111</i>&nbsp;        opts = new OptionsImpl();
+<i>112</i>&nbsp;    }
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;) // clone()
+<i>115</i>&nbsp;    public List&lt;String&gt; searchlist() {
+<i>116</i>&nbsp;        synchronized (lock) {
+<i>117</i>&nbsp;            loadConfig();
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;            // List is mutable so return a shallow copy
+<i>120</i>&nbsp;            return (List&lt;String&gt;)searchlist.clone();
+<i>121</i>&nbsp;        }
+<i>122</i>&nbsp;    }
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;) // clone()
+<i>125</i>&nbsp;    public List&lt;String&gt; nameservers() {
+<i>126</i>&nbsp;        synchronized (lock) {
+<i>127</i>&nbsp;            loadConfig();
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;            // List is mutable so return a shallow copy
+<i>130</i>&nbsp;            return (List&lt;String&gt;)nameservers.clone();
+<i>131</i>&nbsp;         }
+<i>132</i>&nbsp;    }
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;    public Options options() {
+<i>135</i>&nbsp;        return opts;
+<i>136</i>&nbsp;    }
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    // --- Address Change Listener
+<i>139</i>&nbsp;
+<i>140</i>&nbsp;    static class AddressChangeListener extends Thread {
+<i>141</i>&nbsp;        public void run() {
+<i>142</i>&nbsp;            for (;;) {
+<i>143</i>&nbsp;                // wait for configuration to change
+<i>144</i>&nbsp;                if (notifyAddrChange0() != 0)
+<i>145</i>&nbsp;                    return;
+<i>146</i>&nbsp;                synchronized (lock) {
+<i>147</i>&nbsp;                    changed = true;
+<i>148</i>&nbsp;                }
+<i>149</i>&nbsp;            }
+<i>150</i>&nbsp;        }
+<i>151</i>&nbsp;    }
+<i>152</i>&nbsp;
+<i>153</i>&nbsp;
+<i>154</i>&nbsp;    // --- Native methods --
+<i>155</i>&nbsp;
+<i>156</i>&nbsp;    static native void init0();
+<i>157</i>&nbsp;
+<i>158</i>&nbsp;    static native void loadDNSconfig0();
+<i>159</i>&nbsp;
+<i>160</i>&nbsp;    static native int notifyAddrChange0();
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;    static {
+<i>163</i>&nbsp;        java.security.AccessController.doPrivileged(
+<i>164</i>&nbsp;            new java.security.PrivilegedAction&lt;Void&gt;() {
+<i>165</i>&nbsp;                public Void run() {
+<i>166</i>&nbsp;                    System.loadLibrary(&quot;net&quot;);
+<i>167</i>&nbsp;                    return null;
+<i>168</i>&nbsp;                }
+<i>169</i>&nbsp;            });
+<i>170</i>&nbsp;        init0();
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;        // start the address listener thread
+<i>173</i>&nbsp;        AddressChangeListener thr = new AddressChangeListener();
+<i>174</i>&nbsp;        thr.setDaemon(true);
+<i>175</i>&nbsp;        thr.start();
+<i>176</i>&nbsp;    }
+<i>177</i>&nbsp;}
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;/**
+<i>180</i>&nbsp; * Implementation of {@link ResolverConfiguration.Options}
+<i>181</i>&nbsp; */
+<b class="nc"><i>182</i>&nbsp;class OptionsImpl extends ResolverConfiguration.Options {</b>
+<i>183</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

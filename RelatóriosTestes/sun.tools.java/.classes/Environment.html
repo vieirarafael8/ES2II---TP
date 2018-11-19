@@ -1,0 +1,1082 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Environment</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.java</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Environment (sun.tools.java)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Environment</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 63)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 303)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1994, 2003, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.java;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.Stack;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import sun.tools.tree.Context;
+<i>31</i>&nbsp;//JCOV
+<i>32</i>&nbsp;import java.io.File;
+<i>33</i>&nbsp;//end JCOV
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;/**
+<i>36</i>&nbsp; * This class defines the environment for a compilation.
+<i>37</i>&nbsp; * It is used to load classes, resolve class names and
+<i>38</i>&nbsp; * report errors. It is an abstract class, a subclass
+<i>39</i>&nbsp; * must define implementations for some of the functions.&lt;p&gt;
+<i>40</i>&nbsp; *
+<i>41</i>&nbsp; * An environment has a source object associated with it.
+<i>42</i>&nbsp; * This is the thing against which errors are reported, it
+<i>43</i>&nbsp; * is usually a file name, a field or a class.&lt;p&gt;
+<i>44</i>&nbsp; *
+<i>45</i>&nbsp; * Environments can be nested to change the source object.&lt;p&gt;
+<i>46</i>&nbsp; *
+<i>47</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>48</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>49</i>&nbsp; * they are subject to change or removal without notice.
+<i>50</i>&nbsp; *
+<i>51</i>&nbsp; * @author      Arthur van Hoff
+<i>52</i>&nbsp; */
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;public class Environment implements Constants {
+<i>55</i>&nbsp;    /**
+<i>56</i>&nbsp;     * The actual environment to which everything is forwarded.
+<i>57</i>&nbsp;     */
+<i>58</i>&nbsp;    Environment env;
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    /**
+<i>61</i>&nbsp;     * External character encoding name
+<i>62</i>&nbsp;     */
+<i>63</i>&nbsp;    String encoding;
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    /**
+<i>66</i>&nbsp;     * The object that is currently being parsed/compiled.
+<i>67</i>&nbsp;     * It is either a file name (String) or a field (MemberDefinition)
+<i>68</i>&nbsp;     * or a class (ClassDeclaration or ClassDefinition).
+<i>69</i>&nbsp;     */
+<i>70</i>&nbsp;    Object source;
+<i>71</i>&nbsp;
+<b class="nc"><i>72</i>&nbsp;    public Environment(Environment env, Object source) {</b>
+<b class="nc"><i>73</i>&nbsp;        if (env != null &amp;&amp; env.env != null &amp;&amp; env.getClass() == this.getClass())</b>
+<b class="nc"><i>74</i>&nbsp;            env = env.env;      // a small optimization</b>
+<b class="nc"><i>75</i>&nbsp;        this.env = env;</b>
+<b class="nc"><i>76</i>&nbsp;        this.source = source;</b>
+<i>77</i>&nbsp;    }
+<i>78</i>&nbsp;    public Environment() {
+<b class="nc"><i>79</i>&nbsp;        this(null, null);</b>
+<i>80</i>&nbsp;    }
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;    /**
+<i>83</i>&nbsp;     * Tells whether an Identifier refers to a package which should be
+<i>84</i>&nbsp;     * exempt from the &quot;exists&quot; check in Imports#resolve().
+<i>85</i>&nbsp;     */
+<i>86</i>&nbsp;    public boolean isExemptPackage(Identifier id) {
+<b class="nc"><i>87</i>&nbsp;        return env.isExemptPackage(id);</b>
+<i>88</i>&nbsp;    }
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    /**
+<i>91</i>&nbsp;     * Return a class declaration given a fully qualified class name.
+<i>92</i>&nbsp;     */
+<i>93</i>&nbsp;    public ClassDeclaration getClassDeclaration(Identifier nm) {
+<b class="nc"><i>94</i>&nbsp;        return env.getClassDeclaration(nm);</b>
+<i>95</i>&nbsp;    }
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    /**
+<i>98</i>&nbsp;     * Return a class definition given a fully qualified class name.
+<i>99</i>&nbsp;     * &lt;p&gt;
+<i>100</i>&nbsp;     * Should be called only with &#39;internal&#39; class names, i.e., the result
+<i>101</i>&nbsp;     * of a call to &#39;resolveName&#39; or a synthetic class name.
+<i>102</i>&nbsp;     */
+<i>103</i>&nbsp;    public final ClassDefinition getClassDefinition(Identifier nm) throws ClassNotFound {
+<b class="nc"><i>104</i>&nbsp;        if (nm.isInner()) {</b>
+<b class="nc"><i>105</i>&nbsp;            ClassDefinition c = getClassDefinition(nm.getTopName());</b>
+<b class="nc"><i>106</i>&nbsp;            Identifier tail = nm.getFlatName();</b>
+<i>107</i>&nbsp;        walkTail:
+<b class="nc"><i>108</i>&nbsp;            while (tail.isQualified()) {</b>
+<b class="nc"><i>109</i>&nbsp;                tail = tail.getTail();</b>
+<b class="nc"><i>110</i>&nbsp;                Identifier head = tail.getHead();</b>
+<i>111</i>&nbsp;                //System.out.println(&quot;CLASS: &quot; + c + &quot; HEAD: &quot; + head + &quot; TAIL: &quot; + tail);
+<b class="nc"><i>112</i>&nbsp;                String hname = head.toString();</b>
+<i>113</i>&nbsp;                // If the name is of the form &#39;ClassName.N$localName&#39;, where N is
+<i>114</i>&nbsp;                // a number, the field &#39;N$localName&#39; may not necessarily be a member
+<i>115</i>&nbsp;                // of the class named by &#39;ClassName&#39;, but might be a member of some
+<i>116</i>&nbsp;                // inaccessible class contained within it.  We use &#39;getLocalClass&#39;
+<i>117</i>&nbsp;                // to do the lookup in this case.  This is part of a fix for bugid
+<i>118</i>&nbsp;                // 4054523 and 4030421.  See also &#39;BatchEnvironment.makeClassDefinition&#39;.
+<i>119</i>&nbsp;                // This should also work for anonymous class names of the form
+<i>120</i>&nbsp;                // &#39;ClassName.N&#39;.  Note that the &#39;.&#39; qualifications get converted to
+<i>121</i>&nbsp;                // &#39;$&#39; characters when determining the external name of the class and
+<i>122</i>&nbsp;                // the name of the class file.
+<b class="nc"><i>123</i>&nbsp;                if (hname.length() &gt; 0</b>
+<b class="nc"><i>124</i>&nbsp;                    &amp;&amp; Character.isDigit(hname.charAt(0))) {</b>
+<b class="nc"><i>125</i>&nbsp;                    ClassDefinition localClass = c.getLocalClass(hname);</b>
+<b class="nc"><i>126</i>&nbsp;                    if (localClass != null) {</b>
+<b class="nc"><i>127</i>&nbsp;                        c = localClass;</b>
+<b class="nc"><i>128</i>&nbsp;                        continue walkTail;</b>
+<i>129</i>&nbsp;                    }
+<b class="nc"><i>130</i>&nbsp;                } else {</b>
+<b class="nc"><i>131</i>&nbsp;                    for (MemberDefinition f = c.getFirstMatch(head);</b>
+<b class="nc"><i>132</i>&nbsp;                         f != null; f = f.getNextMatch()) {</b>
+<b class="nc"><i>133</i>&nbsp;                        if (f.isInnerClass()) {</b>
+<b class="nc"><i>134</i>&nbsp;                            c = f.getInnerClass();</b>
+<b class="nc"><i>135</i>&nbsp;                            continue walkTail;</b>
+<i>136</i>&nbsp;                        }
+<i>137</i>&nbsp;                    }
+<i>138</i>&nbsp;                }
+<b class="nc"><i>139</i>&nbsp;                throw new ClassNotFound(Identifier.lookupInner(c.getName(), head));</b>
+<i>140</i>&nbsp;            }
+<i>141</i>&nbsp;            //System.out.println(&quot;FOUND &quot; + c + &quot; FOR &quot; + nm);
+<b class="nc"><i>142</i>&nbsp;            return c;</b>
+<i>143</i>&nbsp;        }
+<b class="nc"><i>144</i>&nbsp;        return getClassDeclaration(nm).getClassDefinition(this);</b>
+<i>145</i>&nbsp;    }
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;    /**
+<i>149</i>&nbsp;     * Return a class declaration given a type. Only works for
+<i>150</i>&nbsp;     * class types.
+<i>151</i>&nbsp;     */
+<i>152</i>&nbsp;    public ClassDeclaration getClassDeclaration(Type t) {
+<b class="nc"><i>153</i>&nbsp;        return getClassDeclaration(t.getClassName());</b>
+<i>154</i>&nbsp;    }
+<i>155</i>&nbsp;
+<i>156</i>&nbsp;    /**
+<i>157</i>&nbsp;     * Return a class definition given a type. Only works for
+<i>158</i>&nbsp;     * class types.
+<i>159</i>&nbsp;     */
+<i>160</i>&nbsp;    public final ClassDefinition getClassDefinition(Type t) throws ClassNotFound {
+<b class="nc"><i>161</i>&nbsp;        return getClassDefinition(t.getClassName());</b>
+<i>162</i>&nbsp;    }
+<i>163</i>&nbsp;
+<i>164</i>&nbsp;    /**
+<i>165</i>&nbsp;     * Check if a class exists (without actually loading it).
+<i>166</i>&nbsp;     * (Since inner classes cannot in general be examined without
+<i>167</i>&nbsp;     * loading source, this method does not accept inner names.)
+<i>168</i>&nbsp;     */
+<i>169</i>&nbsp;    public boolean classExists(Identifier nm) {
+<b class="nc"><i>170</i>&nbsp;        return env.classExists(nm);</b>
+<i>171</i>&nbsp;    }
+<i>172</i>&nbsp;
+<i>173</i>&nbsp;    public final boolean classExists(Type t) {
+<b class="nc"><i>174</i>&nbsp;        return !t.isType(TC_CLASS) || classExists(t.getClassName());</b>
+<i>175</i>&nbsp;    }
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * Get the package path for a package
+<i>179</i>&nbsp;     */
+<i>180</i>&nbsp;    public Package getPackage(Identifier pkg) throws IOException {
+<b class="nc"><i>181</i>&nbsp;        return env.getPackage(pkg);</b>
+<i>182</i>&nbsp;    }
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;    /**
+<i>185</i>&nbsp;     * Load the definition of a class.
+<i>186</i>&nbsp;     */
+<i>187</i>&nbsp;    public void loadDefinition(ClassDeclaration c) {
+<b class="nc"><i>188</i>&nbsp;        env.loadDefinition(c);</b>
+<i>189</i>&nbsp;    }
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;    /**
+<i>192</i>&nbsp;     * Return the source of the environment (ie: the thing being compiled/parsed).
+<i>193</i>&nbsp;     */
+<i>194</i>&nbsp;    public final Object getSource() {
+<b class="nc"><i>195</i>&nbsp;        return source;</b>
+<i>196</i>&nbsp;    }
+<i>197</i>&nbsp;
+<i>198</i>&nbsp;    /**
+<i>199</i>&nbsp;     * Resolve a type. Make sure that all the classes referred to by
+<i>200</i>&nbsp;     * the type have a definition.  Report errors.  Return true if
+<i>201</i>&nbsp;     * the type is well-formed.  Presently used for types appearing
+<i>202</i>&nbsp;     * in member declarations, which represent named types internally as
+<i>203</i>&nbsp;     * qualified identifiers.  Type names appearing in local variable
+<i>204</i>&nbsp;     * declarations and within expressions are represented as identifier
+<i>205</i>&nbsp;     * or field expressions, and are resolved by &#39;toType&#39;, which delegates
+<i>206</i>&nbsp;     * handling of the non-inner portion of the name to this method.
+<i>207</i>&nbsp;     * &lt;p&gt;
+<i>208</i>&nbsp;     * In &#39;toType&#39;, the various stages of qualification are represented by
+<i>209</i>&nbsp;     * separate AST nodes.  Here, we are given a single identifier which
+<i>210</i>&nbsp;     * contains the entire qualification structure.  It is not possible in
+<i>211</i>&nbsp;     * general to set the error location to the exact position of a component
+<i>212</i>&nbsp;     * that is in error, so an error message must refer to the entire qualified
+<i>213</i>&nbsp;     * name.  An attempt to keep track of the string length of the components of
+<i>214</i>&nbsp;     * the name and to offset the location accordingly fails because the initial
+<i>215</i>&nbsp;     * prefix of the name may have been rewritten by an earlier call to
+<i>216</i>&nbsp;     * &#39;resolveName&#39;.  See &#39;SourceMember.resolveTypeStructure&#39;.  The situation
+<i>217</i>&nbsp;     * is actually even worse than this, because only a single location is
+<i>218</i>&nbsp;     * passed in for an entire declaration, which may contain many type names.
+<i>219</i>&nbsp;     * All error messages are thus poorly localized.  These checks should be
+<i>220</i>&nbsp;     * done while traversing the parse tree for the type, not the type descriptor.
+<i>221</i>&nbsp;     * &lt;p&gt;
+<i>222</i>&nbsp;     * DESIGN NOTE:
+<i>223</i>&nbsp;     * As far as I can tell, the two-stage resolution of names represented in
+<i>224</i>&nbsp;     * string form is an artifact of the late implementation of inner classes
+<i>225</i>&nbsp;     * and the use of mangled names internally within the compiler.  All
+<i>226</i>&nbsp;     * qualified names should have their hiearchical structure made explicit
+<i>227</i>&nbsp;     * in the parse tree at the phase at which they are presented for static
+<i>228</i>&nbsp;     * semantic checking.  This would affect class names appearing in &#39;extends&#39;,
+<i>229</i>&nbsp;     * &#39;implements&#39;, and &#39;throws&#39; clauses, as well as in member declarations.
+<i>230</i>&nbsp;     */
+<i>231</i>&nbsp;    public boolean resolve(long where, ClassDefinition c, Type t) {
+<b class="nc"><i>232</i>&nbsp;        switch (t.getTypeCode()) {</b>
+<i>233</i>&nbsp;          case TC_CLASS: {
+<i>234</i>&nbsp;            ClassDefinition def;
+<i>235</i>&nbsp;            try {
+<b class="nc"><i>236</i>&nbsp;                Identifier nm = t.getClassName();</b>
+<b class="nc"><i>237</i>&nbsp;                if (!nm.isQualified() &amp;&amp; !nm.isInner() &amp;&amp; !classExists(nm)) {</b>
+<b class="nc"><i>238</i>&nbsp;                    resolve(nm);        // elicit complaints about ambiguity</b>
+<i>239</i>&nbsp;                }
+<b class="nc"><i>240</i>&nbsp;                def = getQualifiedClassDefinition(where, nm, c, false);</b>
+<b class="nc"><i>241</i>&nbsp;                if (!c.canAccess(this, def.getClassDeclaration())) {</b>
+<i>242</i>&nbsp;                    // Reported error location may be imprecise
+<i>243</i>&nbsp;                    // if the name is qualified.
+<b class="nc"><i>244</i>&nbsp;                    error(where, &quot;cant.access.class&quot;, def);</b>
+<b class="nc"><i>245</i>&nbsp;                    return true; // return false later</b>
+<i>246</i>&nbsp;                }
+<b class="nc"><i>247</i>&nbsp;                def.noteUsedBy(c, where, env);</b>
+<b class="nc"><i>248</i>&nbsp;            } catch (AmbiguousClass ee) {</b>
+<b class="nc"><i>249</i>&nbsp;                error(where, &quot;ambig.class&quot;, ee.name1, ee.name2);</b>
+<b class="nc"><i>250</i>&nbsp;                return false;</b>
+<b class="nc"><i>251</i>&nbsp;            } catch (ClassNotFound e) {</b>
+<i>252</i>&nbsp;                // For now, report &quot;class.and.package&quot; only when the code
+<i>253</i>&nbsp;                // is going to fail anyway.
+<i>254</i>&nbsp;                try {
+<b class="nc"><i>255</i>&nbsp;                    if (e.name.isInner() &amp;&amp;</b>
+<b class="nc"><i>256</i>&nbsp;                            getPackage(e.name.getTopName()).exists()) {</b>
+<b class="nc"><i>257</i>&nbsp;                        env.error(where, &quot;class.and.package&quot;,</b>
+<b class="nc"><i>258</i>&nbsp;                                  e.name.getTopName());</b>
+<i>259</i>&nbsp;                    }
+<b class="nc"><i>260</i>&nbsp;                } catch (IOException ee) {</b>
+<b class="nc"><i>261</i>&nbsp;                    env.error(where, &quot;io.exception&quot;, &quot;package check&quot;);</b>
+<b class="nc"><i>262</i>&nbsp;                }</b>
+<i>263</i>&nbsp;                // This error message is also emitted for &#39;new&#39; expressions.
+<i>264</i>&nbsp;                // error(where, &quot;class.not.found&quot;, e.name, &quot;declaration&quot;);
+<b class="nc"><i>265</i>&nbsp;                error(where, &quot;class.not.found.no.context&quot;, e.name);</b>
+<b class="nc"><i>266</i>&nbsp;                return false;</b>
+<b class="nc"><i>267</i>&nbsp;            }</b>
+<b class="nc"><i>268</i>&nbsp;            return true;</b>
+<i>269</i>&nbsp;          }
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;          case TC_ARRAY:
+<b class="nc"><i>272</i>&nbsp;            return resolve(where, c, t.getElementType());</b>
+<i>273</i>&nbsp;
+<i>274</i>&nbsp;          case TC_METHOD:
+<b class="nc"><i>275</i>&nbsp;            boolean ok = resolve(where, c, t.getReturnType());</b>
+<b class="nc"><i>276</i>&nbsp;            Type args[] = t.getArgumentTypes();</b>
+<b class="nc"><i>277</i>&nbsp;            for (int i = args.length ; i-- &gt; 0 ; ) {</b>
+<b class="nc"><i>278</i>&nbsp;                ok &amp;= resolve(where, c, args[i]);</b>
+<i>279</i>&nbsp;            }
+<b class="nc"><i>280</i>&nbsp;            return ok;</b>
+<i>281</i>&nbsp;        }
+<b class="nc"><i>282</i>&nbsp;        return true;</b>
+<i>283</i>&nbsp;    }
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;    /**
+<i>286</i>&nbsp;     * Given its fully-qualified name, verify that a class is defined and accessible.
+<i>287</i>&nbsp;     * Used to check components of qualified names in contexts where a class is expected.
+<i>288</i>&nbsp;     * Like &#39;resolve&#39;, but is given a single type name, not a type descriptor.
+<i>289</i>&nbsp;     */
+<i>290</i>&nbsp;    public boolean resolveByName(long where, ClassDefinition c, Identifier nm) {
+<b class="nc"><i>291</i>&nbsp;        return resolveByName(where, c, nm, false);</b>
+<i>292</i>&nbsp;    }
+<i>293</i>&nbsp;
+<i>294</i>&nbsp;    public boolean resolveExtendsByName(long where, ClassDefinition c, Identifier nm) {
+<b class="nc"><i>295</i>&nbsp;        return resolveByName(where, c, nm, true);</b>
+<i>296</i>&nbsp;    }
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;    private boolean resolveByName(long where, ClassDefinition c,
+<i>299</i>&nbsp;                                 Identifier nm, boolean isExtends) {
+<i>300</i>&nbsp;        ClassDefinition def;
+<i>301</i>&nbsp;        try {
+<b class="nc"><i>302</i>&nbsp;            if (!nm.isQualified() &amp;&amp; !nm.isInner() &amp;&amp; !classExists(nm)) {</b>
+<b class="nc"><i>303</i>&nbsp;                resolve(nm);    // elicit complaints about ambiguity</b>
+<i>304</i>&nbsp;            }
+<b class="nc"><i>305</i>&nbsp;            def = getQualifiedClassDefinition(where, nm, c, isExtends);</b>
+<b class="nc"><i>306</i>&nbsp;            ClassDeclaration decl = def.getClassDeclaration();</b>
+<b class="nc"><i>307</i>&nbsp;            if (!((!isExtends &amp;&amp; c.canAccess(this, decl))</b>
+<i>308</i>&nbsp;                  ||
+<b class="nc"><i>309</i>&nbsp;                  (isExtends &amp;&amp; c.extendsCanAccess(this, decl)))) {</b>
+<b class="nc"><i>310</i>&nbsp;                error(where, &quot;cant.access.class&quot;, def);</b>
+<b class="nc"><i>311</i>&nbsp;                return true; // return false later</b>
+<i>312</i>&nbsp;            }
+<b class="nc"><i>313</i>&nbsp;        } catch (AmbiguousClass ee) {</b>
+<b class="nc"><i>314</i>&nbsp;            error(where, &quot;ambig.class&quot;, ee.name1, ee.name2);</b>
+<b class="nc"><i>315</i>&nbsp;            return false;</b>
+<b class="nc"><i>316</i>&nbsp;        } catch (ClassNotFound e) {</b>
+<i>317</i>&nbsp;            // For now, report &quot;class.and.package&quot; only when the code
+<i>318</i>&nbsp;            // is going to fail anyway.
+<i>319</i>&nbsp;            try {
+<b class="nc"><i>320</i>&nbsp;                if (e.name.isInner() &amp;&amp;</b>
+<b class="nc"><i>321</i>&nbsp;                    getPackage(e.name.getTopName()).exists()) {</b>
+<b class="nc"><i>322</i>&nbsp;                    env.error(where, &quot;class.and.package&quot;,</b>
+<b class="nc"><i>323</i>&nbsp;                              e.name.getTopName());</b>
+<i>324</i>&nbsp;                }
+<b class="nc"><i>325</i>&nbsp;            } catch (IOException ee) {</b>
+<b class="nc"><i>326</i>&nbsp;                env.error(where, &quot;io.exception&quot;, &quot;package check&quot;);</b>
+<b class="nc"><i>327</i>&nbsp;            }</b>
+<b class="nc"><i>328</i>&nbsp;            error(where, &quot;class.not.found&quot;, e.name, &quot;type name&quot;);</b>
+<b class="nc"><i>329</i>&nbsp;            return false;</b>
+<b class="nc"><i>330</i>&nbsp;        }</b>
+<b class="nc"><i>331</i>&nbsp;        return true;</b>
+<i>332</i>&nbsp;    }
+<i>333</i>&nbsp;
+<i>334</i>&nbsp;    /**
+<i>335</i>&nbsp;     * Like &#39;getClassDefinition(env)&#39;, but check access on each component.
+<i>336</i>&nbsp;     * Currently called only by &#39;resolve&#39; above.  It is doubtful that calls
+<i>337</i>&nbsp;     * to &#39;getClassDefinition(env)&#39; are appropriate now.
+<i>338</i>&nbsp;     */
+<i>339</i>&nbsp;    public final ClassDefinition
+<i>340</i>&nbsp;    getQualifiedClassDefinition(long where,
+<i>341</i>&nbsp;                                Identifier nm,
+<i>342</i>&nbsp;                                ClassDefinition ctxClass,
+<i>343</i>&nbsp;                                boolean isExtends) throws ClassNotFound {
+<b class="nc"><i>344</i>&nbsp;        if (nm.isInner()) {</b>
+<b class="nc"><i>345</i>&nbsp;            ClassDefinition c = getClassDefinition(nm.getTopName());</b>
+<b class="nc"><i>346</i>&nbsp;            Identifier tail = nm.getFlatName();</b>
+<i>347</i>&nbsp;        walkTail:
+<b class="nc"><i>348</i>&nbsp;            while (tail.isQualified()) {</b>
+<b class="nc"><i>349</i>&nbsp;                tail = tail.getTail();</b>
+<b class="nc"><i>350</i>&nbsp;                Identifier head = tail.getHead();</b>
+<i>351</i>&nbsp;                // System.out.println(&quot;CLASS: &quot; + c + &quot; HEAD: &quot; + head + &quot; TAIL: &quot; + tail);
+<b class="nc"><i>352</i>&nbsp;                String hname = head.toString();</b>
+<i>353</i>&nbsp;                // Handle synthesized names of local and anonymous classes.
+<i>354</i>&nbsp;                // See &#39;getClassDefinition(env)&#39; above.
+<b class="nc"><i>355</i>&nbsp;                if (hname.length() &gt; 0</b>
+<b class="nc"><i>356</i>&nbsp;                    &amp;&amp; Character.isDigit(hname.charAt(0))) {</b>
+<b class="nc"><i>357</i>&nbsp;                    ClassDefinition localClass = c.getLocalClass(hname);</b>
+<b class="nc"><i>358</i>&nbsp;                    if (localClass != null) {</b>
+<b class="nc"><i>359</i>&nbsp;                        c = localClass;</b>
+<b class="nc"><i>360</i>&nbsp;                        continue walkTail;</b>
+<i>361</i>&nbsp;                    }
+<b class="nc"><i>362</i>&nbsp;                } else {</b>
+<b class="nc"><i>363</i>&nbsp;                    for (MemberDefinition f = c.getFirstMatch(head);</b>
+<b class="nc"><i>364</i>&nbsp;                         f != null; f = f.getNextMatch()) {</b>
+<b class="nc"><i>365</i>&nbsp;                        if (f.isInnerClass()) {</b>
+<b class="nc"><i>366</i>&nbsp;                            ClassDeclaration rdecl = c.getClassDeclaration();</b>
+<b class="nc"><i>367</i>&nbsp;                            c = f.getInnerClass();</b>
+<b class="nc"><i>368</i>&nbsp;                            ClassDeclaration fdecl = c.getClassDeclaration();</b>
+<i>369</i>&nbsp;                            // This check is presumably applicable even if the
+<i>370</i>&nbsp;                            // original source-code name (expanded by &#39;resolveNames&#39;)
+<i>371</i>&nbsp;                            // was a simple, unqualified name.  Hopefully, JLS 2e
+<i>372</i>&nbsp;                            // will clarify the matter.
+<b class="nc"><i>373</i>&nbsp;                            if ((!isExtends</b>
+<b class="nc"><i>374</i>&nbsp;                                 &amp;&amp; !ctxClass.canAccess(env, fdecl))</b>
+<i>375</i>&nbsp;                                ||
+<i>376</i>&nbsp;                                (isExtends
+<b class="nc"><i>377</i>&nbsp;                                 &amp;&amp; !ctxClass.extendsCanAccess(env, fdecl))) {</b>
+<i>378</i>&nbsp;                                // Reported error location is imprecise.
+<b class="nc"><i>379</i>&nbsp;                                env.error(where, &quot;no.type.access&quot;, head, rdecl, ctxClass);</b>
+<i>380</i>&nbsp;                            }
+<i>381</i>&nbsp;                            // The JLS 6.6.2 restrictions on access to protected members
+<i>382</i>&nbsp;                            // depend in an essential way upon the syntactic form of the name.
+<i>383</i>&nbsp;                            // Since the compiler has previously expanded the class names
+<i>384</i>&nbsp;                            // here into fully-qualified form (&#39;resolveNames&#39;), this check
+<i>385</i>&nbsp;                            // cannot be performed here.  Unfortunately, the original names
+<i>386</i>&nbsp;                            // are clobbered during &#39;basicCheck&#39;, which is also the phase that
+<i>387</i>&nbsp;                            // resolves the inheritance structure, required to implement the
+<i>388</i>&nbsp;                            // access restrictions.  Pending a large-scale revision of the
+<i>389</i>&nbsp;                            // name-resolution machinery, we forgo this check, with the result
+<i>390</i>&nbsp;                            // that the JLS 6.6.2 restrictions are not enforced for some cases
+<i>391</i>&nbsp;                            // of qualified access to inner classes.  Some qualified names are
+<i>392</i>&nbsp;                            // resolved elsewhere via a different mechanism, and will be
+<i>393</i>&nbsp;                            // treated correctly -- see &#39;FieldExpression.checkCommon&#39;.
+<i>394</i>&nbsp;                            /*---------------------------------------*
+<i>395</i>&nbsp;                            if (f.isProtected()) {
+<i>396</i>&nbsp;                                Type rty = Type.tClass(rdecl.getName()); // hack
+<i>397</i>&nbsp;                                if (!ctxClass.protectedAccess(env, f, rty)) {
+<i>398</i>&nbsp;                                    // Reported error location is imprecise.
+<i>399</i>&nbsp;                                    env.error(where, &quot;invalid.protected.type.use&quot;,
+<i>400</i>&nbsp;                                              head, ctxClass, rty);
+<i>401</i>&nbsp;                                }
+<i>402</i>&nbsp;                            }
+<i>403</i>&nbsp;                            *---------------------------------------*/
+<i>404</i>&nbsp;                            continue walkTail;
+<i>405</i>&nbsp;                        }
+<i>406</i>&nbsp;                    }
+<i>407</i>&nbsp;                }
+<b class="nc"><i>408</i>&nbsp;                throw new ClassNotFound(Identifier.lookupInner(c.getName(), head));</b>
+<i>409</i>&nbsp;            }
+<i>410</i>&nbsp;            //System.out.println(&quot;FOUND &quot; + c + &quot; FOR &quot; + nm);
+<b class="nc"><i>411</i>&nbsp;            return c;</b>
+<i>412</i>&nbsp;        }
+<b class="nc"><i>413</i>&nbsp;        return getClassDeclaration(nm).getClassDefinition(this);</b>
+<i>414</i>&nbsp;    }
+<i>415</i>&nbsp;
+<i>416</i>&nbsp;    /**
+<i>417</i>&nbsp;     * Resolve the names within a type, returning the adjusted type.
+<i>418</i>&nbsp;     * Adjust class names to reflect scoping.
+<i>419</i>&nbsp;     * Do not report errors.
+<i>420</i>&nbsp;     * &lt;p&gt;
+<i>421</i>&nbsp;     * NOTE: It would be convenient to check for errors here, such as
+<i>422</i>&nbsp;     * verifying that each component of a qualified name exists and is
+<i>423</i>&nbsp;     * accessible.  Why must this be done in a separate phase?
+<i>424</i>&nbsp;     * &lt;p&gt;
+<i>425</i>&nbsp;     * If the &#39;synth&#39; argument is true, indicating that the member whose
+<i>426</i>&nbsp;     * type is being resolved is synthetic, names are resolved with respect
+<i>427</i>&nbsp;     * to the package scope.  (Fix for 4097882)
+<i>428</i>&nbsp;     */
+<i>429</i>&nbsp;    public Type resolveNames(ClassDefinition c, Type t, boolean synth) {
+<b class="nc"><i>430</i>&nbsp;        if (tracing) dtEvent(&quot;Environment.resolveNames: &quot; + c + &quot;, &quot; + t);</b>
+<b class="nc"><i>431</i>&nbsp;        switch (t.getTypeCode()) {</b>
+<i>432</i>&nbsp;          case TC_CLASS: {
+<b class="nc"><i>433</i>&nbsp;            Identifier name = t.getClassName();</b>
+<i>434</i>&nbsp;            Identifier rname;
+<b class="nc"><i>435</i>&nbsp;            if (synth) {</b>
+<b class="nc"><i>436</i>&nbsp;                rname = resolvePackageQualifiedName(name);</b>
+<i>437</i>&nbsp;            } else {
+<b class="nc"><i>438</i>&nbsp;                rname = c.resolveName(this, name);</b>
+<i>439</i>&nbsp;            }
+<b class="nc"><i>440</i>&nbsp;            if (name != rname) {</b>
+<b class="nc"><i>441</i>&nbsp;                t = Type.tClass(rname);</b>
+<i>442</i>&nbsp;            }
+<i>443</i>&nbsp;            break;
+<i>444</i>&nbsp;          }
+<i>445</i>&nbsp;
+<i>446</i>&nbsp;          case TC_ARRAY:
+<b class="nc"><i>447</i>&nbsp;            t = Type.tArray(resolveNames(c, t.getElementType(), synth));</b>
+<b class="nc"><i>448</i>&nbsp;            break;</b>
+<i>449</i>&nbsp;
+<i>450</i>&nbsp;          case TC_METHOD: {
+<b class="nc"><i>451</i>&nbsp;            Type ret = t.getReturnType();</b>
+<b class="nc"><i>452</i>&nbsp;            Type rret = resolveNames(c, ret, synth);</b>
+<b class="nc"><i>453</i>&nbsp;            Type args[] = t.getArgumentTypes();</b>
+<b class="nc"><i>454</i>&nbsp;            Type rargs[] = new Type[args.length];</b>
+<b class="nc"><i>455</i>&nbsp;            boolean changed = (ret != rret);</b>
+<b class="nc"><i>456</i>&nbsp;            for (int i = args.length ; i-- &gt; 0 ; ) {</b>
+<b class="nc"><i>457</i>&nbsp;                Type arg = args[i];</b>
+<b class="nc"><i>458</i>&nbsp;                Type rarg = resolveNames(c, arg, synth);</b>
+<b class="nc"><i>459</i>&nbsp;                rargs[i] = rarg;</b>
+<b class="nc"><i>460</i>&nbsp;                if (arg != rarg) {</b>
+<b class="nc"><i>461</i>&nbsp;                    changed = true;</b>
+<i>462</i>&nbsp;                }
+<b class="nc"><i>463</i>&nbsp;            }</b>
+<b class="nc"><i>464</i>&nbsp;            if (changed) {</b>
+<b class="nc"><i>465</i>&nbsp;                t = Type.tMethod(rret, rargs);</b>
+<i>466</i>&nbsp;            }
+<i>467</i>&nbsp;            break;
+<i>468</i>&nbsp;          }
+<i>469</i>&nbsp;        }
+<b class="nc"><i>470</i>&nbsp;        return t;</b>
+<i>471</i>&nbsp;    }
+<i>472</i>&nbsp;
+<i>473</i>&nbsp;    /**
+<i>474</i>&nbsp;     * Resolve a class name, using only package and import directives.
+<i>475</i>&nbsp;     * Report no errors.
+<i>476</i>&nbsp;     * &lt;p&gt;
+<i>477</i>&nbsp;     */
+<i>478</i>&nbsp;    public Identifier resolveName(Identifier name) {
+<i>479</i>&nbsp;        // This logic is pretty exactly parallel to that of
+<i>480</i>&nbsp;        // ClassDefinition.resolveName().
+<b class="nc"><i>481</i>&nbsp;        if (name.isQualified()) {</b>
+<i>482</i>&nbsp;            // Try to resolve the first identifier component,
+<i>483</i>&nbsp;            // because inner class names take precedence over
+<i>484</i>&nbsp;            // package prefixes.  (Cf. ClassDefinition.resolveName.)
+<b class="nc"><i>485</i>&nbsp;            Identifier rhead = resolveName(name.getHead());</b>
+<i>486</i>&nbsp;
+<b class="nc"><i>487</i>&nbsp;            if (rhead.hasAmbigPrefix()) {</b>
+<i>488</i>&nbsp;                // The first identifier component refers to an
+<i>489</i>&nbsp;                // ambiguous class.  Limp on.  We throw away the
+<i>490</i>&nbsp;                // rest of the classname as it is irrelevant.
+<i>491</i>&nbsp;                // (part of solution for 4059855).
+<b class="nc"><i>492</i>&nbsp;                return rhead;</b>
+<i>493</i>&nbsp;            }
+<i>494</i>&nbsp;
+<b class="nc"><i>495</i>&nbsp;            if (!this.classExists(rhead)) {</b>
+<b class="nc"><i>496</i>&nbsp;                return this.resolvePackageQualifiedName(name);</b>
+<i>497</i>&nbsp;            }
+<i>498</i>&nbsp;            try {
+<b class="nc"><i>499</i>&nbsp;                return this.getClassDefinition(rhead).</b>
+<b class="nc"><i>500</i>&nbsp;                    resolveInnerClass(this, name.getTail());</b>
+<b class="nc"><i>501</i>&nbsp;            } catch (ClassNotFound ee) {</b>
+<i>502</i>&nbsp;                // return partially-resolved name someone else can fail on
+<b class="nc"><i>503</i>&nbsp;                return Identifier.lookupInner(rhead, name.getTail());</b>
+<i>504</i>&nbsp;            }
+<i>505</i>&nbsp;        }
+<i>506</i>&nbsp;        try {
+<b class="nc"><i>507</i>&nbsp;            return resolve(name);</b>
+<b class="nc"><i>508</i>&nbsp;        } catch (AmbiguousClass ee) {</b>
+<i>509</i>&nbsp;            // Don&#39;t force a resolution of the name if it is ambiguous.
+<i>510</i>&nbsp;            // Forcing the resolution would tack the current package
+<i>511</i>&nbsp;            // name onto the front of the class, which would be wrong.
+<i>512</i>&nbsp;            // Instead, mark the name as ambiguous and let a later stage
+<i>513</i>&nbsp;            // find the error by calling env.resolve(name).
+<i>514</i>&nbsp;            // (part of solution for 4059855).
+<i>515</i>&nbsp;
+<b class="nc"><i>516</i>&nbsp;            if (name.hasAmbigPrefix()) {</b>
+<b class="nc"><i>517</i>&nbsp;                return name;</b>
+<i>518</i>&nbsp;            } else {
+<b class="nc"><i>519</i>&nbsp;                return name.addAmbigPrefix();</b>
+<i>520</i>&nbsp;            }
+<b class="nc"><i>521</i>&nbsp;        } catch (ClassNotFound ee) {</b>
+<i>522</i>&nbsp;            // last chance to make something halfway sensible
+<b class="nc"><i>523</i>&nbsp;            Imports imports = getImports();</b>
+<b class="nc"><i>524</i>&nbsp;            if (imports != null)</b>
+<b class="nc"><i>525</i>&nbsp;                return imports.forceResolve(this, name);</b>
+<i>526</i>&nbsp;        }
+<b class="nc"><i>527</i>&nbsp;        return name;</b>
+<i>528</i>&nbsp;    }
+<i>529</i>&nbsp;
+<i>530</i>&nbsp;    /**
+<i>531</i>&nbsp;     * Discover if name consists of a package prefix, followed by the
+<i>532</i>&nbsp;     * name of a class (that actually exists), followed possibly by
+<i>533</i>&nbsp;     * some inner class names.  If we can&#39;t find a class that exists,
+<i>534</i>&nbsp;     * return the name unchanged.
+<i>535</i>&nbsp;     * &lt;p&gt;
+<i>536</i>&nbsp;     * This routine is used after a class name fails to
+<i>537</i>&nbsp;     * be resolved by means of imports or inner classes.
+<i>538</i>&nbsp;     * However, import processing uses this routine directly,
+<i>539</i>&nbsp;     * since import names must be exactly qualified to start with.
+<i>540</i>&nbsp;     */
+<i>541</i>&nbsp;    public final Identifier resolvePackageQualifiedName(Identifier name) {
+<b class="nc"><i>542</i>&nbsp;        Identifier tail = null;</b>
+<i>543</i>&nbsp;        for (;;) {
+<b class="nc"><i>544</i>&nbsp;            if (classExists(name)) {</b>
+<b class="nc"><i>545</i>&nbsp;                break;</b>
+<i>546</i>&nbsp;            }
+<b class="nc"><i>547</i>&nbsp;            if (!name.isQualified()) {</b>
+<b class="nc"><i>548</i>&nbsp;                name = (tail == null) ? name : Identifier.lookup(name, tail);</b>
+<b class="nc"><i>549</i>&nbsp;                tail = null;</b>
+<b class="nc"><i>550</i>&nbsp;                break;</b>
+<i>551</i>&nbsp;            }
+<b class="nc"><i>552</i>&nbsp;            Identifier nm = name.getName();</b>
+<b class="nc"><i>553</i>&nbsp;            tail = (tail == null)? nm: Identifier.lookup(nm, tail);</b>
+<b class="nc"><i>554</i>&nbsp;            name = name.getQualifier();</b>
+<b class="nc"><i>555</i>&nbsp;        }</b>
+<b class="nc"><i>556</i>&nbsp;        if (tail != null)</b>
+<b class="nc"><i>557</i>&nbsp;            name = Identifier.lookupInner(name, tail);</b>
+<b class="nc"><i>558</i>&nbsp;        return name;</b>
+<i>559</i>&nbsp;    }
+<i>560</i>&nbsp;
+<i>561</i>&nbsp;    /**
+<i>562</i>&nbsp;     * Resolve a class name, using only package and import directives.
+<i>563</i>&nbsp;     */
+<i>564</i>&nbsp;    public Identifier resolve(Identifier nm) throws ClassNotFound {
+<b class="nc"><i>565</i>&nbsp;        if (env == null)  return nm;    // a pretty useless no-op</b>
+<b class="nc"><i>566</i>&nbsp;        return env.resolve(nm);</b>
+<i>567</i>&nbsp;    }
+<i>568</i>&nbsp;
+<i>569</i>&nbsp;    /**
+<i>570</i>&nbsp;     * Get the imports used to resolve class names.
+<i>571</i>&nbsp;     */
+<i>572</i>&nbsp;    public Imports getImports() {
+<b class="nc"><i>573</i>&nbsp;        if (env == null)  return null; // lame default</b>
+<b class="nc"><i>574</i>&nbsp;        return env.getImports();</b>
+<i>575</i>&nbsp;    }
+<i>576</i>&nbsp;
+<i>577</i>&nbsp;    /**
+<i>578</i>&nbsp;     * Create a new class.
+<i>579</i>&nbsp;     */
+<i>580</i>&nbsp;    public ClassDefinition makeClassDefinition(Environment origEnv, long where,
+<i>581</i>&nbsp;                                               IdentifierToken name,
+<i>582</i>&nbsp;                                               String doc, int modifiers,
+<i>583</i>&nbsp;                                               IdentifierToken superClass,
+<i>584</i>&nbsp;                                               IdentifierToken interfaces[],
+<i>585</i>&nbsp;                                               ClassDefinition outerClass) {
+<b class="nc"><i>586</i>&nbsp;        if (env == null)  return null; // lame default</b>
+<b class="nc"><i>587</i>&nbsp;        return env.makeClassDefinition(origEnv, where, name,</b>
+<i>588</i>&nbsp;                                       doc, modifiers,
+<i>589</i>&nbsp;                                       superClass, interfaces, outerClass);
+<i>590</i>&nbsp;    }
+<i>591</i>&nbsp;
+<i>592</i>&nbsp;    /**
+<i>593</i>&nbsp;     * Create a new field.
+<i>594</i>&nbsp;     */
+<i>595</i>&nbsp;    public MemberDefinition makeMemberDefinition(Environment origEnv, long where,
+<i>596</i>&nbsp;                                               ClassDefinition clazz,
+<i>597</i>&nbsp;                                               String doc, int modifiers,
+<i>598</i>&nbsp;                                               Type type, Identifier name,
+<i>599</i>&nbsp;                                               IdentifierToken argNames[],
+<i>600</i>&nbsp;                                               IdentifierToken expIds[],
+<i>601</i>&nbsp;                                               Object value) {
+<b class="nc"><i>602</i>&nbsp;        if (env == null)  return null; // lame default</b>
+<b class="nc"><i>603</i>&nbsp;        return env.makeMemberDefinition(origEnv, where, clazz, doc, modifiers,</b>
+<i>604</i>&nbsp;                                       type, name, argNames, expIds, value);
+<i>605</i>&nbsp;    }
+<i>606</i>&nbsp;
+<i>607</i>&nbsp;    /**
+<i>608</i>&nbsp;     * Returns true if the given method is applicable to the given arguments
+<i>609</i>&nbsp;     */
+<i>610</i>&nbsp;
+<i>611</i>&nbsp;    public boolean isApplicable(MemberDefinition m, Type args[]) throws ClassNotFound {
+<b class="nc"><i>612</i>&nbsp;        Type mType = m.getType();</b>
+<b class="nc"><i>613</i>&nbsp;        if (!mType.isType(TC_METHOD))</b>
+<b class="nc"><i>614</i>&nbsp;            return false;</b>
+<b class="nc"><i>615</i>&nbsp;        Type mArgs[] = mType.getArgumentTypes();</b>
+<b class="nc"><i>616</i>&nbsp;        if (args.length != mArgs.length)</b>
+<b class="nc"><i>617</i>&nbsp;            return false;</b>
+<b class="nc"><i>618</i>&nbsp;        for (int i = args.length ; --i &gt;= 0 ;)</b>
+<b class="nc"><i>619</i>&nbsp;            if (!isMoreSpecific(args[i], mArgs[i]))</b>
+<b class="nc"><i>620</i>&nbsp;                return false;</b>
+<b class="nc"><i>621</i>&nbsp;        return true;</b>
+<i>622</i>&nbsp;    }
+<i>623</i>&nbsp;
+<i>624</i>&nbsp;
+<i>625</i>&nbsp;    /**
+<i>626</i>&nbsp;     * Returns true if &quot;best&quot; is in every argument at least as good as &quot;other&quot;
+<i>627</i>&nbsp;     */
+<i>628</i>&nbsp;    public boolean isMoreSpecific(MemberDefinition best, MemberDefinition other)
+<i>629</i>&nbsp;           throws ClassNotFound {
+<b class="nc"><i>630</i>&nbsp;        Type bestType = best.getClassDeclaration().getType();</b>
+<b class="nc"><i>631</i>&nbsp;        Type otherType = other.getClassDeclaration().getType();</b>
+<b class="nc"><i>632</i>&nbsp;        boolean result = isMoreSpecific(bestType, otherType)</b>
+<b class="nc"><i>633</i>&nbsp;                      &amp;&amp; isApplicable(other, best.getType().getArgumentTypes());</b>
+<i>634</i>&nbsp;        // System.out.println(&quot;isMoreSpecific: &quot; + best + &quot;/&quot; + other
+<i>635</i>&nbsp;        //                      + &quot; =&gt; &quot; + result);
+<b class="nc"><i>636</i>&nbsp;        return result;</b>
+<i>637</i>&nbsp;    }
+<i>638</i>&nbsp;
+<i>639</i>&nbsp;    /**
+<i>640</i>&nbsp;     * Returns true if &quot;from&quot; is a more specific type than &quot;to&quot;
+<i>641</i>&nbsp;     */
+<i>642</i>&nbsp;
+<i>643</i>&nbsp;    public boolean isMoreSpecific(Type from, Type to) throws ClassNotFound {
+<b class="nc"><i>644</i>&nbsp;        return implicitCast(from, to);</b>
+<i>645</i>&nbsp;    }
+<i>646</i>&nbsp;
+<i>647</i>&nbsp;    /**
+<i>648</i>&nbsp;     * Return true if an implicit cast from this type to
+<i>649</i>&nbsp;     * the given type is allowed.
+<i>650</i>&nbsp;     */
+<i>651</i>&nbsp;    @SuppressWarnings(&quot;fallthrough&quot;)
+<b class="nc"><i>652</i>&nbsp;    public boolean implicitCast(Type from, Type to) throws ClassNotFound {</b>
+<b class="nc"><i>653</i>&nbsp;        if (from == to)</b>
+<i>654</i>&nbsp;            return true;
+<b class="nc"><i>655</i>&nbsp;</b>
+<i>656</i>&nbsp;        int toTypeCode = to.getTypeCode();
+<b class="nc"><i>657</i>&nbsp;</b>
+<i>658</i>&nbsp;        switch(from.getTypeCode()) {
+<b class="nc"><i>659</i>&nbsp;        case TC_BYTE:</b>
+<b class="nc"><i>660</i>&nbsp;            if (toTypeCode == TC_SHORT)</b>
+<i>661</i>&nbsp;                return true;
+<i>662</i>&nbsp;        case TC_SHORT:
+<b class="nc"><i>663</i>&nbsp;        case TC_CHAR:</b>
+<i>664</i>&nbsp;            if (toTypeCode == TC_INT) return true;
+<b class="nc"><i>665</i>&nbsp;        case TC_INT:</b>
+<i>666</i>&nbsp;            if (toTypeCode == TC_LONG) return true;
+<b class="nc"><i>667</i>&nbsp;        case TC_LONG:</b>
+<i>668</i>&nbsp;            if (toTypeCode == TC_FLOAT) return true;
+<b class="nc"><i>669</i>&nbsp;        case TC_FLOAT:</b>
+<i>670</i>&nbsp;            if (toTypeCode == TC_DOUBLE) return true;
+<i>671</i>&nbsp;        case TC_DOUBLE:
+<b class="nc"><i>672</i>&nbsp;        default:</b>
+<i>673</i>&nbsp;            return false;
+<i>674</i>&nbsp;
+<b class="nc"><i>675</i>&nbsp;        case TC_NULL:</b>
+<i>676</i>&nbsp;            return to.inMask(TM_REFERENCE);
+<i>677</i>&nbsp;
+<b class="nc"><i>678</i>&nbsp;        case TC_ARRAY:</b>
+<b class="nc"><i>679</i>&nbsp;            if (!to.isType(TC_ARRAY)) {</b>
+<i>680</i>&nbsp;                return (to == Type.tObject || to == Type.tCloneable
+<i>681</i>&nbsp;                           || to == Type.tSerializable);
+<i>682</i>&nbsp;            } else {
+<i>683</i>&nbsp;                // both are arrays.  recurse down both until one isn&#39;t an array
+<b class="nc"><i>684</i>&nbsp;                do {</b>
+<b class="nc"><i>685</i>&nbsp;                    from = from.getElementType();</b>
+<b class="nc"><i>686</i>&nbsp;                    to = to.getElementType();</b>
+<b class="nc"><i>687</i>&nbsp;                } while (from.isType(TC_ARRAY) &amp;&amp; to.isType(TC_ARRAY));</b>
+<b class="nc"><i>688</i>&nbsp;                if (  from.inMask(TM_ARRAY|TM_CLASS)</b>
+<b class="nc"><i>689</i>&nbsp;                      &amp;&amp; to.inMask(TM_ARRAY|TM_CLASS)) {</b>
+<i>690</i>&nbsp;                    return isMoreSpecific(from, to);
+<b class="nc"><i>691</i>&nbsp;                } else {</b>
+<i>692</i>&nbsp;                    return (from.getTypeCode() == to.getTypeCode());
+<i>693</i>&nbsp;                }
+<i>694</i>&nbsp;            }
+<i>695</i>&nbsp;
+<b class="nc"><i>696</i>&nbsp;        case TC_CLASS:</b>
+<b class="nc"><i>697</i>&nbsp;            if (toTypeCode == TC_CLASS) {</b>
+<b class="nc"><i>698</i>&nbsp;                ClassDefinition fromDef = getClassDefinition(from);</b>
+<b class="nc"><i>699</i>&nbsp;                ClassDefinition toDef = getClassDefinition(to);</b>
+<b class="nc"><i>700</i>&nbsp;                return toDef.implementedBy(this,</b>
+<i>701</i>&nbsp;                                           fromDef.getClassDeclaration());
+<b class="nc"><i>702</i>&nbsp;            } else {</b>
+<i>703</i>&nbsp;                return false;
+<i>704</i>&nbsp;            }
+<i>705</i>&nbsp;        }
+<i>706</i>&nbsp;    }
+<i>707</i>&nbsp;
+<i>708</i>&nbsp;
+<i>709</i>&nbsp;    /**
+<i>710</i>&nbsp;     * Return true if an explicit cast from this type to
+<i>711</i>&nbsp;     * the given type is allowed.
+<i>712</i>&nbsp;     */
+<b class="nc"><i>713</i>&nbsp;    public boolean explicitCast(Type from, Type to) throws ClassNotFound {</b>
+<b class="nc"><i>714</i>&nbsp;        if (implicitCast(from, to)) {</b>
+<i>715</i>&nbsp;            return true;
+<b class="nc"><i>716</i>&nbsp;        }</b>
+<b class="nc"><i>717</i>&nbsp;        if (from.inMask(TM_NUMBER)) {</b>
+<i>718</i>&nbsp;            return to.inMask(TM_NUMBER);
+<b class="nc"><i>719</i>&nbsp;        }</b>
+<b class="nc"><i>720</i>&nbsp;        if (from.isType(TC_CLASS) &amp;&amp; to.isType(TC_CLASS)) {</b>
+<b class="nc"><i>721</i>&nbsp;            ClassDefinition fromClass = getClassDefinition(from);</b>
+<b class="nc"><i>722</i>&nbsp;            ClassDefinition toClass = getClassDefinition(to);</b>
+<b class="nc"><i>723</i>&nbsp;            if (toClass.isFinal()) {</b>
+<b class="nc"><i>724</i>&nbsp;                return fromClass.implementedBy(this,</b>
+<i>725</i>&nbsp;                                               toClass.getClassDeclaration());
+<b class="nc"><i>726</i>&nbsp;            }</b>
+<b class="nc"><i>727</i>&nbsp;            if (fromClass.isFinal()) {</b>
+<b class="nc"><i>728</i>&nbsp;                return toClass.implementedBy(this,</b>
+<i>729</i>&nbsp;                                             fromClass.getClassDeclaration());
+<i>730</i>&nbsp;            }
+<i>731</i>&nbsp;
+<i>732</i>&nbsp;            // The code here used to omit this case.  If both types
+<i>733</i>&nbsp;            // involved in a cast are interfaces, then JLS 5.5 requires
+<i>734</i>&nbsp;            // that we do a simple test -- make sure none of the methods
+<i>735</i>&nbsp;            // in toClass and fromClass have the same signature but
+<b class="nc"><i>736</i>&nbsp;            // different return types.  (bug number 4028359)</b>
+<b class="nc"><i>737</i>&nbsp;            if (toClass.isInterface() &amp;&amp; fromClass.isInterface()) {</b>
+<i>738</i>&nbsp;                return toClass.couldImplement(fromClass);
+<i>739</i>&nbsp;            }
+<b class="nc"><i>740</i>&nbsp;</b>
+<b class="nc"><i>741</i>&nbsp;            return toClass.isInterface() ||</b>
+<b class="nc"><i>742</i>&nbsp;                   fromClass.isInterface() ||</b>
+<i>743</i>&nbsp;                   fromClass.superClassOf(this, toClass.getClassDeclaration());
+<b class="nc"><i>744</i>&nbsp;        }</b>
+<b class="nc"><i>745</i>&nbsp;        if (to.isType(TC_ARRAY)) {</b>
+<b class="nc"><i>746</i>&nbsp;            if (from.isType(TC_ARRAY))  {</b>
+<b class="nc"><i>747</i>&nbsp;                Type t1 = from.getElementType();</b>
+<b class="nc"><i>748</i>&nbsp;                Type t2 = to.getElementType();</b>
+<b class="nc"><i>749</i>&nbsp;                while ((t1.getTypeCode() == TC_ARRAY)</b>
+<b class="nc"><i>750</i>&nbsp;                       &amp;&amp; (t2.getTypeCode() == TC_ARRAY)) {</b>
+<b class="nc"><i>751</i>&nbsp;                    t1 = t1.getElementType();</b>
+<i>752</i>&nbsp;                    t2 = t2.getElementType();
+<b class="nc"><i>753</i>&nbsp;                }</b>
+<b class="nc"><i>754</i>&nbsp;                if (t1.inMask(TM_ARRAY|TM_CLASS) &amp;&amp;</b>
+<b class="nc"><i>755</i>&nbsp;                    t2.inMask(TM_ARRAY|TM_CLASS)) {</b>
+<i>756</i>&nbsp;                    return explicitCast(t1, t2);
+<b class="nc"><i>757</i>&nbsp;                }</b>
+<i>758</i>&nbsp;            } else if (from == Type.tObject || from == Type.tCloneable
+<b class="nc"><i>759</i>&nbsp;                          || from == Type.tSerializable)</b>
+<i>760</i>&nbsp;                return true;
+<b class="nc"><i>761</i>&nbsp;        }</b>
+<i>762</i>&nbsp;        return false;
+<i>763</i>&nbsp;    }
+<i>764</i>&nbsp;
+<i>765</i>&nbsp;    /**
+<i>766</i>&nbsp;     * Flags.
+<i>767</i>&nbsp;     */
+<b class="nc"><i>768</i>&nbsp;    public int getFlags() {</b>
+<i>769</i>&nbsp;        return env.getFlags();
+<i>770</i>&nbsp;    }
+<i>771</i>&nbsp;
+<i>772</i>&nbsp;    /**
+<i>773</i>&nbsp;     * Debugging flags.  There used to be a method debug()
+<i>774</i>&nbsp;     * that has been replaced because -g has changed meaning
+<i>775</i>&nbsp;     * (it now cooperates with -O and line number, variable
+<i>776</i>&nbsp;     * range and source file info can be toggled separately).
+<i>777</i>&nbsp;     */
+<b class="nc"><i>778</i>&nbsp;    public final boolean debug_lines() {</b>
+<i>779</i>&nbsp;        return (getFlags() &amp; F_DEBUG_LINES) != 0;
+<i>780</i>&nbsp;    }
+<b class="nc"><i>781</i>&nbsp;    public final boolean debug_vars() {</b>
+<i>782</i>&nbsp;        return (getFlags() &amp; F_DEBUG_VARS) != 0;
+<i>783</i>&nbsp;    }
+<b class="nc"><i>784</i>&nbsp;    public final boolean debug_source() {</b>
+<i>785</i>&nbsp;        return (getFlags() &amp; F_DEBUG_SOURCE) != 0;
+<i>786</i>&nbsp;    }
+<i>787</i>&nbsp;
+<i>788</i>&nbsp;    /**
+<i>789</i>&nbsp;     * Optimization flags.  There used to be a method optimize()
+<i>790</i>&nbsp;     * that has been replaced because -O has changed meaning in
+<i>791</i>&nbsp;     * javac to be replaced with -O and -O:interclass.
+<i>792</i>&nbsp;     */
+<b class="nc"><i>793</i>&nbsp;    public final boolean opt() {</b>
+<i>794</i>&nbsp;        return (getFlags() &amp; F_OPT) != 0;
+<i>795</i>&nbsp;    }
+<b class="nc"><i>796</i>&nbsp;    public final boolean opt_interclass() {</b>
+<i>797</i>&nbsp;        return (getFlags() &amp; F_OPT_INTERCLASS) != 0;
+<i>798</i>&nbsp;    }
+<i>799</i>&nbsp;
+<i>800</i>&nbsp;    /**
+<i>801</i>&nbsp;     * Verbose
+<i>802</i>&nbsp;     */
+<b class="nc"><i>803</i>&nbsp;    public final boolean verbose() {</b>
+<i>804</i>&nbsp;        return (getFlags() &amp; F_VERBOSE) != 0;
+<i>805</i>&nbsp;    }
+<i>806</i>&nbsp;
+<i>807</i>&nbsp;    /**
+<i>808</i>&nbsp;     * Dump debugging stuff
+<i>809</i>&nbsp;     */
+<b class="nc"><i>810</i>&nbsp;    public final boolean dump() {</b>
+<i>811</i>&nbsp;        return (getFlags() &amp; F_DUMP) != 0;
+<i>812</i>&nbsp;    }
+<i>813</i>&nbsp;
+<i>814</i>&nbsp;    /**
+<i>815</i>&nbsp;     * Verbose
+<i>816</i>&nbsp;     */
+<b class="nc"><i>817</i>&nbsp;    public final boolean warnings() {</b>
+<i>818</i>&nbsp;        return (getFlags() &amp; F_WARNINGS) != 0;
+<i>819</i>&nbsp;    }
+<i>820</i>&nbsp;
+<i>821</i>&nbsp;    /**
+<i>822</i>&nbsp;     * Dependencies
+<i>823</i>&nbsp;     */
+<b class="nc"><i>824</i>&nbsp;    public final boolean dependencies() {</b>
+<i>825</i>&nbsp;        return (getFlags() &amp; F_DEPENDENCIES) != 0;
+<i>826</i>&nbsp;    }
+<i>827</i>&nbsp;
+<i>828</i>&nbsp;    /**
+<i>829</i>&nbsp;     * Print Dependencies to stdout
+<i>830</i>&nbsp;     */
+<b class="nc"><i>831</i>&nbsp;    public final boolean print_dependencies() {</b>
+<i>832</i>&nbsp;        return (getFlags() &amp; F_PRINT_DEPENDENCIES) != 0;
+<i>833</i>&nbsp;    }
+<i>834</i>&nbsp;
+<i>835</i>&nbsp;    /**
+<i>836</i>&nbsp;     * Deprecation warnings are enabled.
+<i>837</i>&nbsp;     */
+<b class="nc"><i>838</i>&nbsp;    public final boolean deprecation() {</b>
+<i>839</i>&nbsp;        return (getFlags() &amp; F_DEPRECATION) != 0;
+<i>840</i>&nbsp;    }
+<i>841</i>&nbsp;
+<i>842</i>&nbsp;    /**
+<i>843</i>&nbsp;     * Do not support virtual machines before version 1.2.
+<i>844</i>&nbsp;     * This option is not supported and is only here for testing purposes.
+<i>845</i>&nbsp;     */
+<b class="nc"><i>846</i>&nbsp;    public final boolean version12() {</b>
+<i>847</i>&nbsp;        return (getFlags() &amp; F_VERSION12) != 0;
+<i>848</i>&nbsp;    }
+<i>849</i>&nbsp;
+<i>850</i>&nbsp;    /**
+<i>851</i>&nbsp;     * Floating point is strict by default
+<i>852</i>&nbsp;     */
+<b class="nc"><i>853</i>&nbsp;    public final boolean strictdefault() {</b>
+<i>854</i>&nbsp;        return (getFlags() &amp; F_STRICTDEFAULT) != 0;
+<i>855</i>&nbsp;    }
+<i>856</i>&nbsp;
+<i>857</i>&nbsp;    /**
+<i>858</i>&nbsp;     * Release resources, if any.
+<i>859</i>&nbsp;     */
+<b class="nc"><i>860</i>&nbsp;    public void shutdown() {</b>
+<b class="nc"><i>861</i>&nbsp;        if (env != null) {</b>
+<i>862</i>&nbsp;            env.shutdown();
+<i>863</i>&nbsp;        }
+<i>864</i>&nbsp;    }
+<i>865</i>&nbsp;
+<i>866</i>&nbsp;    /**
+<i>867</i>&nbsp;     * Issue an error.
+<i>868</i>&nbsp;     *  source   - the input source, usually a file name string
+<i>869</i>&nbsp;     *  offset   - the offset in the source of the error
+<i>870</i>&nbsp;     *  err      - the error number (as defined in this interface)
+<i>871</i>&nbsp;     *  arg1     - an optional argument to the error (null if not applicable)
+<i>872</i>&nbsp;     *  arg2     - a second optional argument to the error (null if not applicable)
+<i>873</i>&nbsp;     *  arg3     - a third optional argument to the error (null if not applicable)
+<i>874</i>&nbsp;     */
+<b class="nc"><i>875</i>&nbsp;    public void error(Object source, long where, String err, Object arg1, Object arg2, Object arg3) {</b>
+<i>876</i>&nbsp;        env.error(source, where, err, arg1, arg2, arg3);
+<i>877</i>&nbsp;    }
+<b class="nc"><i>878</i>&nbsp;    public final void error(long where, String err, Object arg1, Object arg2, Object arg3) {</b>
+<i>879</i>&nbsp;        error(source, where, err, arg1, arg2, arg3);
+<i>880</i>&nbsp;    }
+<b class="nc"><i>881</i>&nbsp;    public final void error(long where, String err, Object arg1, Object arg2) {</b>
+<i>882</i>&nbsp;        error(source, where, err, arg1, arg2, null);
+<i>883</i>&nbsp;    }
+<b class="nc"><i>884</i>&nbsp;    public final void error(long where, String err, Object arg1) {</b>
+<i>885</i>&nbsp;        error(source, where, err, arg1, null, null);
+<i>886</i>&nbsp;    }
+<b class="nc"><i>887</i>&nbsp;    public final void error(long where, String err) {</b>
+<i>888</i>&nbsp;        error(source, where, err, null, null, null);
+<i>889</i>&nbsp;    }
+<i>890</i>&nbsp;
+<i>891</i>&nbsp;    /**
+<i>892</i>&nbsp;     * Output a string. This can either be an error message or something
+<i>893</i>&nbsp;     * for debugging. This should be used instead of println.
+<i>894</i>&nbsp;     */
+<b class="nc"><i>895</i>&nbsp;    public void output(String msg) {</b>
+<i>896</i>&nbsp;        env.output(msg);
+<i>897</i>&nbsp;    }
+<b class="nc"><i>898</i>&nbsp;</b>
+<i>899</i>&nbsp;    private static boolean debugging = (System.getProperty(&quot;javac.debug&quot;) != null);
+<i>900</i>&nbsp;
+<b class="nc"><i>901</i>&nbsp;    public static void debugOutput(Object msg) {</b>
+<b class="nc"><i>902</i>&nbsp;        if (Environment.debugging)</b>
+<i>903</i>&nbsp;            System.out.println(msg.toString());
+<i>904</i>&nbsp;    }
+<i>905</i>&nbsp;
+<i>906</i>&nbsp;    /**
+<i>907</i>&nbsp;     * set character encoding name
+<i>908</i>&nbsp;     */
+<b class="nc"><i>909</i>&nbsp;    public void setCharacterEncoding(String encoding) {</b>
+<i>910</i>&nbsp;        this.encoding = encoding;
+<i>911</i>&nbsp;    }
+<i>912</i>&nbsp;
+<i>913</i>&nbsp;    /**
+<i>914</i>&nbsp;     * Return character encoding name
+<i>915</i>&nbsp;     */
+<b class="nc"><i>916</i>&nbsp;    public String getCharacterEncoding() {</b>
+<i>917</i>&nbsp;        return encoding;
+<i>918</i>&nbsp;    }
+<i>919</i>&nbsp;
+<i>920</i>&nbsp;    /**
+<i>921</i>&nbsp;     * Return major version to use in generated class files.
+<i>922</i>&nbsp;     */
+<b class="nc"><i>923</i>&nbsp;    public short getMajorVersion() {</b>
+<b class="nc"><i>924</i>&nbsp;        if (env==null) return JAVA_DEFAULT_VERSION;  // needed for javah</b>
+<i>925</i>&nbsp;        return env.getMajorVersion();
+<i>926</i>&nbsp;    }
+<i>927</i>&nbsp;
+<i>928</i>&nbsp;    /**
+<i>929</i>&nbsp;     * Return minor version to use in generated class files.
+<i>930</i>&nbsp;     */
+<b class="nc"><i>931</i>&nbsp;    public short getMinorVersion() {</b>
+<b class="nc"><i>932</i>&nbsp;        if (env==null) return JAVA_DEFAULT_MINOR_VERSION;  // needed for javah</b>
+<i>933</i>&nbsp;        return env.getMinorVersion();
+<i>934</i>&nbsp;    }
+<i>935</i>&nbsp;
+<i>936</i>&nbsp;// JCOV
+<i>937</i>&nbsp;    /**
+<i>938</i>&nbsp;     *  get coverage flag
+<i>939</i>&nbsp;     */
+<b class="nc"><i>940</i>&nbsp;    public final boolean coverage() {</b>
+<i>941</i>&nbsp;        return (getFlags() &amp; F_COVERAGE) != 0;
+<i>942</i>&nbsp;    }
+<i>943</i>&nbsp;
+<i>944</i>&nbsp;    /**
+<i>945</i>&nbsp;     *  get flag of generation the coverage data file
+<i>946</i>&nbsp;     */
+<b class="nc"><i>947</i>&nbsp;    public final boolean covdata() {</b>
+<i>948</i>&nbsp;        return (getFlags() &amp; F_COVDATA) != 0;
+<i>949</i>&nbsp;    }
+<i>950</i>&nbsp;
+<i>951</i>&nbsp;    /**
+<i>952</i>&nbsp;     * Return the coverage data file
+<i>953</i>&nbsp;     */
+<b class="nc"><i>954</i>&nbsp;    public File getcovFile() {</b>
+<i>955</i>&nbsp;        return env.getcovFile();
+<i>956</i>&nbsp;    }
+<i>957</i>&nbsp;
+<i>958</i>&nbsp;// end JCOV
+<i>959</i>&nbsp;
+<i>960</i>&nbsp;    /**
+<i>961</i>&nbsp;     * Debug tracing.
+<i>962</i>&nbsp;     * Currently, this code is used only for tracing the loading and
+<i>963</i>&nbsp;     * checking of classes, particularly the demand-driven aspects.
+<i>964</i>&nbsp;     * This code should probably be integrated with &#39;debugOutput&#39; above,
+<i>965</i>&nbsp;     * but we need to give more thought to the issue of classifying debugging
+<i>966</i>&nbsp;     * messages and allowing those only those of interest to be enabled.
+<i>967</i>&nbsp;     *
+<i>968</i>&nbsp;     * Calls to these methods are generally conditioned on the final variable
+<i>969</i>&nbsp;     * &#39;Constants.tracing&#39;, which allows the calls to be completely omitted
+<i>970</i>&nbsp;     * in a production release to avoid space and time overhead.
+<i>971</i>&nbsp;     */
+<b class="nc"><i>972</i>&nbsp;</b>
+<b class="nc"><i>973</i>&nbsp;    private static boolean dependtrace =</b>
+<i>974</i>&nbsp;                (System.getProperty(&quot;javac.trace.depend&quot;) != null);
+<i>975</i>&nbsp;
+<b class="nc"><i>976</i>&nbsp;    public void dtEnter(String s) {</b>
+<i>977</i>&nbsp;        if (dependtrace) System.out.println(&quot;&gt;&gt;&gt; &quot; + s);
+<i>978</i>&nbsp;    }
+<i>979</i>&nbsp;
+<b class="nc"><i>980</i>&nbsp;    public void dtExit(String s) {</b>
+<i>981</i>&nbsp;        if (dependtrace) System.out.println(&quot;&lt;&lt;&lt; &quot; + s);
+<i>982</i>&nbsp;    }
+<i>983</i>&nbsp;
+<b class="nc"><i>984</i>&nbsp;    public void dtEvent(String s) {</b>
+<i>985</i>&nbsp;        if (dependtrace) System.out.println(s);
+<i>986</i>&nbsp;    }
+<i>987</i>&nbsp;
+<i>988</i>&nbsp;    /**
+<i>989</i>&nbsp;     * Enable diagnostic dump of class modifier bits, including those
+<i>990</i>&nbsp;     * in InnerClasses attributes, as they are written to the classfile.
+<i>991</i>&nbsp;     * In the future, may also enable dumping field and method modifiers.
+<i>992</i>&nbsp;     */
+<i>993</i>&nbsp;
+<b class="nc"><i>994</i>&nbsp;    private static boolean dumpmodifiers =</b>
+<i>995</i>&nbsp;                (System.getProperty(&quot;javac.dump.modifiers&quot;) != null);
+<b class="nc"><i>996</i>&nbsp;</b>
+<i>997</i>&nbsp;    public boolean dumpModifiers() { return dumpmodifiers; }
+<i>998</i>&nbsp;
+<i>999</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

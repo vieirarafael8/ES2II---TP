@@ -1,0 +1,973 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ImageInputStreamImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">javax.imageio.stream</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ImageInputStreamImpl (javax.imageio.stream)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ImageInputStreamImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 52)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 340)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package javax.imageio.stream;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.DataInputStream;
+<i>29</i>&nbsp;import java.io.EOFException;
+<i>30</i>&nbsp;import java.io.IOException;
+<i>31</i>&nbsp;import java.nio.ByteOrder;
+<i>32</i>&nbsp;import java.util.Stack;
+<i>33</i>&nbsp;import javax.imageio.IIOException;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;/**
+<i>36</i>&nbsp; * An abstract class implementing the {@code ImageInputStream} interface.
+<i>37</i>&nbsp; * This class is designed to reduce the number of methods that must
+<i>38</i>&nbsp; * be implemented by subclasses.
+<i>39</i>&nbsp; *
+<i>40</i>&nbsp; * &lt;p&gt; In particular, this class handles most or all of the details of
+<i>41</i>&nbsp; * byte order interpretation, buffering, mark/reset, discarding,
+<i>42</i>&nbsp; * closing, and disposing.
+<i>43</i>&nbsp; */
+<i>44</i>&nbsp;public abstract class ImageInputStreamImpl implements ImageInputStream {
+<i>45</i>&nbsp;
+<b class="nc"><i>46</i>&nbsp;    private Stack&lt;Long&gt; markByteStack = new Stack&lt;&gt;();</b>
+<i>47</i>&nbsp;
+<b class="nc"><i>48</i>&nbsp;    private Stack&lt;Integer&gt; markBitStack = new Stack&lt;&gt;();</b>
+<i>49</i>&nbsp;
+<b class="nc"><i>50</i>&nbsp;    private boolean isClosed = false;</b>
+<i>51</i>&nbsp;
+<i>52</i>&nbsp;    // Length of the buffer used for readFully(type[], int, int)
+<i>53</i>&nbsp;    private static final int BYTE_BUF_LENGTH = 8192;
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    /**
+<i>56</i>&nbsp;     * Byte buffer used for readFully(type[], int, int).  Note that this
+<i>57</i>&nbsp;     * array is also used for bulk reads in readShort(), readInt(), etc, so
+<i>58</i>&nbsp;     * it should be large enough to hold a primitive value (i.e. &gt;= 8 bytes).
+<i>59</i>&nbsp;     * Also note that this array is package protected, so that it can be
+<i>60</i>&nbsp;     * used by ImageOutputStreamImpl in a similar manner.
+<i>61</i>&nbsp;     */
+<b class="nc"><i>62</i>&nbsp;    byte[] byteBuf = new byte[BYTE_BUF_LENGTH];</b>
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    /**
+<i>65</i>&nbsp;     * The byte order of the stream as an instance of the enumeration
+<i>66</i>&nbsp;     * class {@code java.nio.ByteOrder}, where
+<i>67</i>&nbsp;     * {@code ByteOrder.BIG_ENDIAN} indicates network byte order
+<i>68</i>&nbsp;     * and {@code ByteOrder.LITTLE_ENDIAN} indicates the reverse
+<i>69</i>&nbsp;     * order.  By default, the value is
+<i>70</i>&nbsp;     * {@code ByteOrder.BIG_ENDIAN}.
+<i>71</i>&nbsp;     */
+<b class="nc"><i>72</i>&nbsp;    protected ByteOrder byteOrder = ByteOrder.BIG_ENDIAN;</b>
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    /**
+<i>75</i>&nbsp;     * The current read position within the stream.  Subclasses are
+<i>76</i>&nbsp;     * responsible for keeping this value current from any method they
+<i>77</i>&nbsp;     * override that alters the read position.
+<i>78</i>&nbsp;     */
+<i>79</i>&nbsp;    protected long streamPos;
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    /**
+<i>82</i>&nbsp;     * The current bit offset within the stream.  Subclasses are
+<i>83</i>&nbsp;     * responsible for keeping this value current from any method they
+<i>84</i>&nbsp;     * override that alters the bit offset.
+<i>85</i>&nbsp;     */
+<i>86</i>&nbsp;    protected int bitOffset;
+<i>87</i>&nbsp;
+<i>88</i>&nbsp;    /**
+<i>89</i>&nbsp;     * The position prior to which data may be discarded.  Seeking
+<i>90</i>&nbsp;     * to a smaller position is not allowed.  {@code flushedPos}
+<i>91</i>&nbsp;     * will always be {@literal &gt;= 0}.
+<i>92</i>&nbsp;     */
+<b class="nc"><i>93</i>&nbsp;    protected long flushedPos = 0;</b>
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;    /**
+<i>96</i>&nbsp;     * Constructs an {@code ImageInputStreamImpl}.
+<i>97</i>&nbsp;     */
+<b class="nc"><i>98</i>&nbsp;    public ImageInputStreamImpl() {</b>
+<i>99</i>&nbsp;    }
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;    /**
+<i>102</i>&nbsp;     * Throws an {@code IOException} if the stream has been closed.
+<i>103</i>&nbsp;     * Subclasses may call this method from any of their methods that
+<i>104</i>&nbsp;     * require the stream not to be closed.
+<i>105</i>&nbsp;     *
+<i>106</i>&nbsp;     * @exception IOException if the stream is closed.
+<i>107</i>&nbsp;     */
+<i>108</i>&nbsp;    protected final void checkClosed() throws IOException {
+<b class="nc"><i>109</i>&nbsp;        if (isClosed) {</b>
+<b class="nc"><i>110</i>&nbsp;            throw new IOException(&quot;closed&quot;);</b>
+<i>111</i>&nbsp;        }
+<i>112</i>&nbsp;    }
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    public void setByteOrder(ByteOrder byteOrder) {
+<b class="nc"><i>115</i>&nbsp;        this.byteOrder = byteOrder;</b>
+<i>116</i>&nbsp;    }
+<i>117</i>&nbsp;
+<i>118</i>&nbsp;    public ByteOrder getByteOrder() {
+<b class="nc"><i>119</i>&nbsp;        return byteOrder;</b>
+<i>120</i>&nbsp;    }
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;    /**
+<i>123</i>&nbsp;     * Reads a single byte from the stream and returns it as an
+<i>124</i>&nbsp;     * {@code int} between 0 and 255.  If EOF is reached,
+<i>125</i>&nbsp;     * {@code -1} is returned.
+<i>126</i>&nbsp;     *
+<i>127</i>&nbsp;     * &lt;p&gt; Subclasses must provide an implementation for this method.
+<i>128</i>&nbsp;     * The subclass implementation should update the stream position
+<i>129</i>&nbsp;     * before exiting.
+<i>130</i>&nbsp;     *
+<i>131</i>&nbsp;     * &lt;p&gt; The bit offset within the stream must be reset to zero before
+<i>132</i>&nbsp;     * the read occurs.
+<i>133</i>&nbsp;     *
+<i>134</i>&nbsp;     * @return the value of the next byte in the stream, or {@code -1}
+<i>135</i>&nbsp;     * if EOF is reached.
+<i>136</i>&nbsp;     *
+<i>137</i>&nbsp;     * @exception IOException if the stream has been closed.
+<i>138</i>&nbsp;     */
+<i>139</i>&nbsp;    public abstract int read() throws IOException;
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;    /**
+<i>142</i>&nbsp;     * A convenience method that calls {@code read(b, 0, b.length)}.
+<i>143</i>&nbsp;     *
+<i>144</i>&nbsp;     * &lt;p&gt; The bit offset within the stream is reset to zero before
+<i>145</i>&nbsp;     * the read occurs.
+<i>146</i>&nbsp;     *
+<i>147</i>&nbsp;     * @return the number of bytes actually read, or {@code -1}
+<i>148</i>&nbsp;     * to indicate EOF.
+<i>149</i>&nbsp;     *
+<i>150</i>&nbsp;     * @exception NullPointerException if {@code b} is
+<i>151</i>&nbsp;     * {@code null}.
+<i>152</i>&nbsp;     * @exception IOException if an I/O error occurs.
+<i>153</i>&nbsp;     */
+<i>154</i>&nbsp;    public int read(byte[] b) throws IOException {
+<b class="nc"><i>155</i>&nbsp;        return read(b, 0, b.length);</b>
+<i>156</i>&nbsp;    }
+<i>157</i>&nbsp;
+<i>158</i>&nbsp;    /**
+<i>159</i>&nbsp;     * Reads up to {@code len} bytes from the stream, and stores
+<i>160</i>&nbsp;     * them into {@code b} starting at index {@code off}.
+<i>161</i>&nbsp;     * If no bytes can be read because the end of the stream has been
+<i>162</i>&nbsp;     * reached, {@code -1} is returned.
+<i>163</i>&nbsp;     *
+<i>164</i>&nbsp;     * &lt;p&gt; The bit offset within the stream must be reset to zero before
+<i>165</i>&nbsp;     * the read occurs.
+<i>166</i>&nbsp;     *
+<i>167</i>&nbsp;     * &lt;p&gt; Subclasses must provide an implementation for this method.
+<i>168</i>&nbsp;     * The subclass implementation should update the stream position
+<i>169</i>&nbsp;     * before exiting.
+<i>170</i>&nbsp;     *
+<i>171</i>&nbsp;     * @param b an array of bytes to be written to.
+<i>172</i>&nbsp;     * @param off the starting position within {@code b} to write to.
+<i>173</i>&nbsp;     * @param len the maximum number of bytes to read.
+<i>174</i>&nbsp;     *
+<i>175</i>&nbsp;     * @return the number of bytes actually read, or {@code -1}
+<i>176</i>&nbsp;     * to indicate EOF.
+<i>177</i>&nbsp;     *
+<i>178</i>&nbsp;     * @exception IndexOutOfBoundsException if {@code off} is
+<i>179</i>&nbsp;     * negative, {@code len} is negative, or {@code off + len}
+<i>180</i>&nbsp;     * is greater than {@code b.length}.
+<i>181</i>&nbsp;     * @exception NullPointerException if {@code b} is
+<i>182</i>&nbsp;     * {@code null}.
+<i>183</i>&nbsp;     * @exception IOException if an I/O error occurs.
+<i>184</i>&nbsp;     */
+<i>185</i>&nbsp;    public abstract int read(byte[] b, int off, int len) throws IOException;
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;    public void readBytes(IIOByteBuffer buf, int len) throws IOException {
+<b class="nc"><i>188</i>&nbsp;        if (len &lt; 0) {</b>
+<b class="nc"><i>189</i>&nbsp;            throw new IndexOutOfBoundsException(&quot;len &lt; 0!&quot;);</b>
+<i>190</i>&nbsp;        }
+<b class="nc"><i>191</i>&nbsp;        if (buf == null) {</b>
+<b class="nc"><i>192</i>&nbsp;            throw new NullPointerException(&quot;buf == null!&quot;);</b>
+<i>193</i>&nbsp;        }
+<i>194</i>&nbsp;
+<b class="nc"><i>195</i>&nbsp;        byte[] data = new byte[len];</b>
+<b class="nc"><i>196</i>&nbsp;        len = read(data, 0, len);</b>
+<i>197</i>&nbsp;
+<b class="nc"><i>198</i>&nbsp;        buf.setData(data);</b>
+<b class="nc"><i>199</i>&nbsp;        buf.setOffset(0);</b>
+<b class="nc"><i>200</i>&nbsp;        buf.setLength(len);</b>
+<i>201</i>&nbsp;    }
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;    public boolean readBoolean() throws IOException {
+<b class="nc"><i>204</i>&nbsp;        int ch = this.read();</b>
+<b class="nc"><i>205</i>&nbsp;        if (ch &lt; 0) {</b>
+<b class="nc"><i>206</i>&nbsp;            throw new EOFException();</b>
+<i>207</i>&nbsp;        }
+<b class="nc"><i>208</i>&nbsp;        return (ch != 0);</b>
+<i>209</i>&nbsp;    }
+<i>210</i>&nbsp;
+<i>211</i>&nbsp;    public byte readByte() throws IOException {
+<b class="nc"><i>212</i>&nbsp;        int ch = this.read();</b>
+<b class="nc"><i>213</i>&nbsp;        if (ch &lt; 0) {</b>
+<b class="nc"><i>214</i>&nbsp;            throw new EOFException();</b>
+<i>215</i>&nbsp;        }
+<b class="nc"><i>216</i>&nbsp;        return (byte)ch;</b>
+<i>217</i>&nbsp;    }
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;    public int readUnsignedByte() throws IOException {
+<b class="nc"><i>220</i>&nbsp;        int ch = this.read();</b>
+<b class="nc"><i>221</i>&nbsp;        if (ch &lt; 0) {</b>
+<b class="nc"><i>222</i>&nbsp;            throw new EOFException();</b>
+<i>223</i>&nbsp;        }
+<b class="nc"><i>224</i>&nbsp;        return ch;</b>
+<i>225</i>&nbsp;    }
+<i>226</i>&nbsp;
+<i>227</i>&nbsp;    public short readShort() throws IOException {
+<b class="nc"><i>228</i>&nbsp;        if (read(byteBuf, 0, 2) != 2) {</b>
+<b class="nc"><i>229</i>&nbsp;            throw new EOFException();</b>
+<i>230</i>&nbsp;        }
+<i>231</i>&nbsp;
+<b class="nc"><i>232</i>&nbsp;        if (byteOrder == ByteOrder.BIG_ENDIAN) {</b>
+<b class="nc"><i>233</i>&nbsp;            return (short)</b>
+<i>234</i>&nbsp;                (((byteBuf[0] &amp; 0xff) &lt;&lt; 8) | ((byteBuf[1] &amp; 0xff) &lt;&lt; 0));
+<i>235</i>&nbsp;        } else {
+<b class="nc"><i>236</i>&nbsp;            return (short)</b>
+<i>237</i>&nbsp;                (((byteBuf[1] &amp; 0xff) &lt;&lt; 8) | ((byteBuf[0] &amp; 0xff) &lt;&lt; 0));
+<i>238</i>&nbsp;        }
+<i>239</i>&nbsp;    }
+<i>240</i>&nbsp;
+<i>241</i>&nbsp;    public int readUnsignedShort() throws IOException {
+<b class="nc"><i>242</i>&nbsp;        return ((int)readShort()) &amp; 0xffff;</b>
+<i>243</i>&nbsp;    }
+<i>244</i>&nbsp;
+<i>245</i>&nbsp;    public char readChar() throws IOException {
+<b class="nc"><i>246</i>&nbsp;        return (char)readShort();</b>
+<i>247</i>&nbsp;    }
+<i>248</i>&nbsp;
+<i>249</i>&nbsp;    public int readInt() throws IOException {
+<b class="nc"><i>250</i>&nbsp;        if (read(byteBuf, 0, 4) !=  4) {</b>
+<b class="nc"><i>251</i>&nbsp;            throw new EOFException();</b>
+<i>252</i>&nbsp;        }
+<i>253</i>&nbsp;
+<b class="nc"><i>254</i>&nbsp;        if (byteOrder == ByteOrder.BIG_ENDIAN) {</b>
+<b class="nc"><i>255</i>&nbsp;            return</b>
+<i>256</i>&nbsp;                (((byteBuf[0] &amp; 0xff) &lt;&lt; 24) | ((byteBuf[1] &amp; 0xff) &lt;&lt; 16) |
+<i>257</i>&nbsp;                 ((byteBuf[2] &amp; 0xff) &lt;&lt;  8) | ((byteBuf[3] &amp; 0xff) &lt;&lt;  0));
+<i>258</i>&nbsp;        } else {
+<b class="nc"><i>259</i>&nbsp;            return</b>
+<i>260</i>&nbsp;                (((byteBuf[3] &amp; 0xff) &lt;&lt; 24) | ((byteBuf[2] &amp; 0xff) &lt;&lt; 16) |
+<i>261</i>&nbsp;                 ((byteBuf[1] &amp; 0xff) &lt;&lt;  8) | ((byteBuf[0] &amp; 0xff) &lt;&lt;  0));
+<i>262</i>&nbsp;        }
+<i>263</i>&nbsp;    }
+<i>264</i>&nbsp;
+<i>265</i>&nbsp;    public long readUnsignedInt() throws IOException {
+<b class="nc"><i>266</i>&nbsp;        return ((long)readInt()) &amp; 0xffffffffL;</b>
+<i>267</i>&nbsp;    }
+<i>268</i>&nbsp;
+<i>269</i>&nbsp;    public long readLong() throws IOException {
+<i>270</i>&nbsp;        // REMIND: Once 6277756 is fixed, we should do a bulk read of all 8
+<i>271</i>&nbsp;        // bytes here as we do in readShort() and readInt() for even better
+<i>272</i>&nbsp;        // performance (see 6347575 for details).
+<b class="nc"><i>273</i>&nbsp;        int i1 = readInt();</b>
+<b class="nc"><i>274</i>&nbsp;        int i2 = readInt();</b>
+<i>275</i>&nbsp;
+<b class="nc"><i>276</i>&nbsp;        if (byteOrder == ByteOrder.BIG_ENDIAN) {</b>
+<b class="nc"><i>277</i>&nbsp;            return ((long)i1 &lt;&lt; 32) + (i2 &amp; 0xFFFFFFFFL);</b>
+<i>278</i>&nbsp;        } else {
+<b class="nc"><i>279</i>&nbsp;            return ((long)i2 &lt;&lt; 32) + (i1 &amp; 0xFFFFFFFFL);</b>
+<i>280</i>&nbsp;        }
+<i>281</i>&nbsp;    }
+<i>282</i>&nbsp;
+<i>283</i>&nbsp;    public float readFloat() throws IOException {
+<b class="nc"><i>284</i>&nbsp;        return Float.intBitsToFloat(readInt());</b>
+<i>285</i>&nbsp;    }
+<i>286</i>&nbsp;
+<i>287</i>&nbsp;    public double readDouble() throws IOException {
+<b class="nc"><i>288</i>&nbsp;        return Double.longBitsToDouble(readLong());</b>
+<i>289</i>&nbsp;    }
+<i>290</i>&nbsp;
+<i>291</i>&nbsp;    public String readLine() throws IOException {
+<b class="nc"><i>292</i>&nbsp;        StringBuilder input = new StringBuilder();</b>
+<b class="nc"><i>293</i>&nbsp;        int c = -1;</b>
+<b class="nc"><i>294</i>&nbsp;        boolean eol = false;</b>
+<i>295</i>&nbsp;
+<b class="nc"><i>296</i>&nbsp;        while (!eol) {</b>
+<b class="nc"><i>297</i>&nbsp;            switch (c = read()) {</b>
+<i>298</i>&nbsp;            case -1:
+<i>299</i>&nbsp;            case &#39;\n&#39;:
+<b class="nc"><i>300</i>&nbsp;                eol = true;</b>
+<b class="nc"><i>301</i>&nbsp;                break;</b>
+<i>302</i>&nbsp;            case &#39;\r&#39;:
+<b class="nc"><i>303</i>&nbsp;                eol = true;</b>
+<b class="nc"><i>304</i>&nbsp;                long cur = getStreamPosition();</b>
+<b class="nc"><i>305</i>&nbsp;                if ((read()) != &#39;\n&#39;) {</b>
+<b class="nc"><i>306</i>&nbsp;                    seek(cur);</b>
+<i>307</i>&nbsp;                }
+<i>308</i>&nbsp;                break;
+<i>309</i>&nbsp;            default:
+<b class="nc"><i>310</i>&nbsp;                input.append((char)c);</b>
+<b class="nc"><i>311</i>&nbsp;                break;</b>
+<i>312</i>&nbsp;            }
+<i>313</i>&nbsp;        }
+<i>314</i>&nbsp;
+<b class="nc"><i>315</i>&nbsp;        if ((c == -1) &amp;&amp; (input.length() == 0)) {</b>
+<b class="nc"><i>316</i>&nbsp;            return null;</b>
+<i>317</i>&nbsp;        }
+<b class="nc"><i>318</i>&nbsp;        return input.toString();</b>
+<i>319</i>&nbsp;    }
+<i>320</i>&nbsp;
+<i>321</i>&nbsp;    public String readUTF() throws IOException {
+<b class="nc"><i>322</i>&nbsp;        this.bitOffset = 0;</b>
+<i>323</i>&nbsp;
+<i>324</i>&nbsp;        // Fix 4494369: method ImageInputStreamImpl.readUTF()
+<i>325</i>&nbsp;        // does not work as specified (it should always assume
+<i>326</i>&nbsp;        // network byte order).
+<b class="nc"><i>327</i>&nbsp;        ByteOrder oldByteOrder = getByteOrder();</b>
+<b class="nc"><i>328</i>&nbsp;        setByteOrder(ByteOrder.BIG_ENDIAN);</b>
+<i>329</i>&nbsp;
+<i>330</i>&nbsp;        String ret;
+<i>331</i>&nbsp;        try {
+<b class="nc"><i>332</i>&nbsp;            ret = DataInputStream.readUTF(this);</b>
+<b class="nc"><i>333</i>&nbsp;        } catch (IOException e) {</b>
+<i>334</i>&nbsp;            // Restore the old byte order even if an exception occurs
+<b class="nc"><i>335</i>&nbsp;            setByteOrder(oldByteOrder);</b>
+<b class="nc"><i>336</i>&nbsp;            throw e;</b>
+<b class="nc"><i>337</i>&nbsp;        }</b>
+<i>338</i>&nbsp;
+<b class="nc"><i>339</i>&nbsp;        setByteOrder(oldByteOrder);</b>
+<b class="nc"><i>340</i>&nbsp;        return ret;</b>
+<i>341</i>&nbsp;    }
+<i>342</i>&nbsp;
+<i>343</i>&nbsp;    public void readFully(byte[] b, int off, int len) throws IOException {
+<i>344</i>&nbsp;        // Fix 4430357 - if off + len &lt; 0, overflow occurred
+<b class="nc"><i>345</i>&nbsp;        if (off &lt; 0 || len &lt; 0 || off + len &gt; b.length || off + len &lt; 0) {</b>
+<b class="nc"><i>346</i>&nbsp;            throw new IndexOutOfBoundsException</b>
+<i>347</i>&nbsp;                (&quot;off &lt; 0 || len &lt; 0 || off + len &gt; b.length!&quot;);
+<i>348</i>&nbsp;        }
+<i>349</i>&nbsp;
+<b class="nc"><i>350</i>&nbsp;        while (len &gt; 0) {</b>
+<b class="nc"><i>351</i>&nbsp;            int nbytes = read(b, off, len);</b>
+<b class="nc"><i>352</i>&nbsp;            if (nbytes == -1) {</b>
+<b class="nc"><i>353</i>&nbsp;                throw new EOFException();</b>
+<i>354</i>&nbsp;            }
+<b class="nc"><i>355</i>&nbsp;            off += nbytes;</b>
+<b class="nc"><i>356</i>&nbsp;            len -= nbytes;</b>
+<b class="nc"><i>357</i>&nbsp;        }</b>
+<i>358</i>&nbsp;    }
+<i>359</i>&nbsp;
+<i>360</i>&nbsp;    public void readFully(byte[] b) throws IOException {
+<b class="nc"><i>361</i>&nbsp;        readFully(b, 0, b.length);</b>
+<i>362</i>&nbsp;    }
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;    public void readFully(short[] s, int off, int len) throws IOException {
+<i>365</i>&nbsp;        // Fix 4430357 - if off + len &lt; 0, overflow occurred
+<b class="nc"><i>366</i>&nbsp;        if (off &lt; 0 || len &lt; 0 || off + len &gt; s.length || off + len &lt; 0) {</b>
+<b class="nc"><i>367</i>&nbsp;            throw new IndexOutOfBoundsException</b>
+<i>368</i>&nbsp;                (&quot;off &lt; 0 || len &lt; 0 || off + len &gt; s.length!&quot;);
+<i>369</i>&nbsp;        }
+<i>370</i>&nbsp;
+<b class="nc"><i>371</i>&nbsp;        while (len &gt; 0) {</b>
+<b class="nc"><i>372</i>&nbsp;            int nelts = Math.min(len, byteBuf.length/2);</b>
+<b class="nc"><i>373</i>&nbsp;            readFully(byteBuf, 0, nelts*2);</b>
+<b class="nc"><i>374</i>&nbsp;            toShorts(byteBuf, s, off, nelts);</b>
+<b class="nc"><i>375</i>&nbsp;            off += nelts;</b>
+<b class="nc"><i>376</i>&nbsp;            len -= nelts;</b>
+<b class="nc"><i>377</i>&nbsp;        }</b>
+<i>378</i>&nbsp;    }
+<i>379</i>&nbsp;
+<i>380</i>&nbsp;    public void readFully(char[] c, int off, int len) throws IOException {
+<i>381</i>&nbsp;        // Fix 4430357 - if off + len &lt; 0, overflow occurred
+<b class="nc"><i>382</i>&nbsp;        if (off &lt; 0 || len &lt; 0 || off + len &gt; c.length || off + len &lt; 0) {</b>
+<b class="nc"><i>383</i>&nbsp;            throw new IndexOutOfBoundsException</b>
+<i>384</i>&nbsp;                (&quot;off &lt; 0 || len &lt; 0 || off + len &gt; c.length!&quot;);
+<i>385</i>&nbsp;        }
+<i>386</i>&nbsp;
+<b class="nc"><i>387</i>&nbsp;        while (len &gt; 0) {</b>
+<b class="nc"><i>388</i>&nbsp;            int nelts = Math.min(len, byteBuf.length/2);</b>
+<b class="nc"><i>389</i>&nbsp;            readFully(byteBuf, 0, nelts*2);</b>
+<b class="nc"><i>390</i>&nbsp;            toChars(byteBuf, c, off, nelts);</b>
+<b class="nc"><i>391</i>&nbsp;            off += nelts;</b>
+<b class="nc"><i>392</i>&nbsp;            len -= nelts;</b>
+<b class="nc"><i>393</i>&nbsp;        }</b>
+<i>394</i>&nbsp;    }
+<i>395</i>&nbsp;
+<i>396</i>&nbsp;    public void readFully(int[] i, int off, int len) throws IOException {
+<i>397</i>&nbsp;        // Fix 4430357 - if off + len &lt; 0, overflow occurred
+<b class="nc"><i>398</i>&nbsp;        if (off &lt; 0 || len &lt; 0 || off + len &gt; i.length || off + len &lt; 0) {</b>
+<b class="nc"><i>399</i>&nbsp;            throw new IndexOutOfBoundsException</b>
+<i>400</i>&nbsp;                (&quot;off &lt; 0 || len &lt; 0 || off + len &gt; i.length!&quot;);
+<i>401</i>&nbsp;        }
+<i>402</i>&nbsp;
+<b class="nc"><i>403</i>&nbsp;        while (len &gt; 0) {</b>
+<b class="nc"><i>404</i>&nbsp;            int nelts = Math.min(len, byteBuf.length/4);</b>
+<b class="nc"><i>405</i>&nbsp;            readFully(byteBuf, 0, nelts*4);</b>
+<b class="nc"><i>406</i>&nbsp;            toInts(byteBuf, i, off, nelts);</b>
+<b class="nc"><i>407</i>&nbsp;            off += nelts;</b>
+<b class="nc"><i>408</i>&nbsp;            len -= nelts;</b>
+<b class="nc"><i>409</i>&nbsp;        }</b>
+<i>410</i>&nbsp;    }
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;    public void readFully(long[] l, int off, int len) throws IOException {
+<i>413</i>&nbsp;        // Fix 4430357 - if off + len &lt; 0, overflow occurred
+<b class="nc"><i>414</i>&nbsp;        if (off &lt; 0 || len &lt; 0 || off + len &gt; l.length || off + len &lt; 0) {</b>
+<b class="nc"><i>415</i>&nbsp;            throw new IndexOutOfBoundsException</b>
+<i>416</i>&nbsp;                (&quot;off &lt; 0 || len &lt; 0 || off + len &gt; l.length!&quot;);
+<i>417</i>&nbsp;        }
+<i>418</i>&nbsp;
+<b class="nc"><i>419</i>&nbsp;        while (len &gt; 0) {</b>
+<b class="nc"><i>420</i>&nbsp;            int nelts = Math.min(len, byteBuf.length/8);</b>
+<b class="nc"><i>421</i>&nbsp;            readFully(byteBuf, 0, nelts*8);</b>
+<b class="nc"><i>422</i>&nbsp;            toLongs(byteBuf, l, off, nelts);</b>
+<b class="nc"><i>423</i>&nbsp;            off += nelts;</b>
+<b class="nc"><i>424</i>&nbsp;            len -= nelts;</b>
+<b class="nc"><i>425</i>&nbsp;        }</b>
+<i>426</i>&nbsp;    }
+<i>427</i>&nbsp;
+<i>428</i>&nbsp;    public void readFully(float[] f, int off, int len) throws IOException {
+<i>429</i>&nbsp;        // Fix 4430357 - if off + len &lt; 0, overflow occurred
+<b class="nc"><i>430</i>&nbsp;        if (off &lt; 0 || len &lt; 0 || off + len &gt; f.length || off + len &lt; 0) {</b>
+<b class="nc"><i>431</i>&nbsp;            throw new IndexOutOfBoundsException</b>
+<i>432</i>&nbsp;                (&quot;off &lt; 0 || len &lt; 0 || off + len &gt; f.length!&quot;);
+<i>433</i>&nbsp;        }
+<i>434</i>&nbsp;
+<b class="nc"><i>435</i>&nbsp;        while (len &gt; 0) {</b>
+<b class="nc"><i>436</i>&nbsp;            int nelts = Math.min(len, byteBuf.length/4);</b>
+<b class="nc"><i>437</i>&nbsp;            readFully(byteBuf, 0, nelts*4);</b>
+<b class="nc"><i>438</i>&nbsp;            toFloats(byteBuf, f, off, nelts);</b>
+<b class="nc"><i>439</i>&nbsp;            off += nelts;</b>
+<b class="nc"><i>440</i>&nbsp;            len -= nelts;</b>
+<b class="nc"><i>441</i>&nbsp;        }</b>
+<i>442</i>&nbsp;    }
+<i>443</i>&nbsp;
+<i>444</i>&nbsp;    public void readFully(double[] d, int off, int len) throws IOException {
+<i>445</i>&nbsp;        // Fix 4430357 - if off + len &lt; 0, overflow occurred
+<b class="nc"><i>446</i>&nbsp;        if (off &lt; 0 || len &lt; 0 || off + len &gt; d.length || off + len &lt; 0) {</b>
+<b class="nc"><i>447</i>&nbsp;            throw new IndexOutOfBoundsException</b>
+<i>448</i>&nbsp;                (&quot;off &lt; 0 || len &lt; 0 || off + len &gt; d.length!&quot;);
+<i>449</i>&nbsp;        }
+<i>450</i>&nbsp;
+<b class="nc"><i>451</i>&nbsp;        while (len &gt; 0) {</b>
+<b class="nc"><i>452</i>&nbsp;            int nelts = Math.min(len, byteBuf.length/8);</b>
+<b class="nc"><i>453</i>&nbsp;            readFully(byteBuf, 0, nelts*8);</b>
+<b class="nc"><i>454</i>&nbsp;            toDoubles(byteBuf, d, off, nelts);</b>
+<b class="nc"><i>455</i>&nbsp;            off += nelts;</b>
+<b class="nc"><i>456</i>&nbsp;            len -= nelts;</b>
+<b class="nc"><i>457</i>&nbsp;        }</b>
+<i>458</i>&nbsp;    }
+<i>459</i>&nbsp;
+<i>460</i>&nbsp;    private void toShorts(byte[] b, short[] s, int off, int len) {
+<b class="nc"><i>461</i>&nbsp;        int boff = 0;</b>
+<b class="nc"><i>462</i>&nbsp;        if (byteOrder == ByteOrder.BIG_ENDIAN) {</b>
+<b class="nc"><i>463</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>464</i>&nbsp;                int b0 = b[boff];</b>
+<b class="nc"><i>465</i>&nbsp;                int b1 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>466</i>&nbsp;                s[off + j] = (short)((b0 &lt;&lt; 8) | b1);</b>
+<b class="nc"><i>467</i>&nbsp;                boff += 2;</b>
+<i>468</i>&nbsp;            }
+<i>469</i>&nbsp;        } else {
+<b class="nc"><i>470</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>471</i>&nbsp;                int b0 = b[boff + 1];</b>
+<b class="nc"><i>472</i>&nbsp;                int b1 = b[boff] &amp; 0xff;</b>
+<b class="nc"><i>473</i>&nbsp;                s[off + j] = (short)((b0 &lt;&lt; 8) | b1);</b>
+<b class="nc"><i>474</i>&nbsp;                boff += 2;</b>
+<i>475</i>&nbsp;            }
+<i>476</i>&nbsp;        }
+<i>477</i>&nbsp;    }
+<i>478</i>&nbsp;
+<i>479</i>&nbsp;    private void toChars(byte[] b, char[] c, int off, int len) {
+<b class="nc"><i>480</i>&nbsp;        int boff = 0;</b>
+<b class="nc"><i>481</i>&nbsp;        if (byteOrder == ByteOrder.BIG_ENDIAN) {</b>
+<b class="nc"><i>482</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>483</i>&nbsp;                int b0 = b[boff];</b>
+<b class="nc"><i>484</i>&nbsp;                int b1 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>485</i>&nbsp;                c[off + j] = (char)((b0 &lt;&lt; 8) | b1);</b>
+<b class="nc"><i>486</i>&nbsp;                boff += 2;</b>
+<i>487</i>&nbsp;            }
+<i>488</i>&nbsp;        } else {
+<b class="nc"><i>489</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>490</i>&nbsp;                int b0 = b[boff + 1];</b>
+<b class="nc"><i>491</i>&nbsp;                int b1 = b[boff] &amp; 0xff;</b>
+<b class="nc"><i>492</i>&nbsp;                c[off + j] = (char)((b0 &lt;&lt; 8) | b1);</b>
+<b class="nc"><i>493</i>&nbsp;                boff += 2;</b>
+<i>494</i>&nbsp;            }
+<i>495</i>&nbsp;        }
+<i>496</i>&nbsp;    }
+<i>497</i>&nbsp;
+<i>498</i>&nbsp;    private void toInts(byte[] b, int[] i, int off, int len) {
+<b class="nc"><i>499</i>&nbsp;        int boff = 0;</b>
+<b class="nc"><i>500</i>&nbsp;        if (byteOrder == ByteOrder.BIG_ENDIAN) {</b>
+<b class="nc"><i>501</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>502</i>&nbsp;                int b0 = b[boff];</b>
+<b class="nc"><i>503</i>&nbsp;                int b1 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>504</i>&nbsp;                int b2 = b[boff + 2] &amp; 0xff;</b>
+<b class="nc"><i>505</i>&nbsp;                int b3 = b[boff + 3] &amp; 0xff;</b>
+<b class="nc"><i>506</i>&nbsp;                i[off + j] = (b0 &lt;&lt; 24) | (b1 &lt;&lt; 16) | (b2 &lt;&lt; 8) | b3;</b>
+<b class="nc"><i>507</i>&nbsp;                boff += 4;</b>
+<i>508</i>&nbsp;            }
+<i>509</i>&nbsp;        } else {
+<b class="nc"><i>510</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>511</i>&nbsp;                int b0 = b[boff + 3];</b>
+<b class="nc"><i>512</i>&nbsp;                int b1 = b[boff + 2] &amp; 0xff;</b>
+<b class="nc"><i>513</i>&nbsp;                int b2 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>514</i>&nbsp;                int b3 = b[boff] &amp; 0xff;</b>
+<b class="nc"><i>515</i>&nbsp;                i[off + j] = (b0 &lt;&lt; 24) | (b1 &lt;&lt; 16) | (b2 &lt;&lt; 8) | b3;</b>
+<b class="nc"><i>516</i>&nbsp;                boff += 4;</b>
+<i>517</i>&nbsp;            }
+<i>518</i>&nbsp;        }
+<i>519</i>&nbsp;    }
+<i>520</i>&nbsp;
+<i>521</i>&nbsp;    private void toLongs(byte[] b, long[] l, int off, int len) {
+<b class="nc"><i>522</i>&nbsp;        int boff = 0;</b>
+<b class="nc"><i>523</i>&nbsp;        if (byteOrder == ByteOrder.BIG_ENDIAN) {</b>
+<b class="nc"><i>524</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>525</i>&nbsp;                int b0 = b[boff];</b>
+<b class="nc"><i>526</i>&nbsp;                int b1 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>527</i>&nbsp;                int b2 = b[boff + 2] &amp; 0xff;</b>
+<b class="nc"><i>528</i>&nbsp;                int b3 = b[boff + 3] &amp; 0xff;</b>
+<b class="nc"><i>529</i>&nbsp;                int b4 = b[boff + 4];</b>
+<b class="nc"><i>530</i>&nbsp;                int b5 = b[boff + 5] &amp; 0xff;</b>
+<b class="nc"><i>531</i>&nbsp;                int b6 = b[boff + 6] &amp; 0xff;</b>
+<b class="nc"><i>532</i>&nbsp;                int b7 = b[boff + 7] &amp; 0xff;</b>
+<i>533</i>&nbsp;
+<b class="nc"><i>534</i>&nbsp;                int i0 = (b0 &lt;&lt; 24) | (b1 &lt;&lt; 16) | (b2 &lt;&lt; 8) | b3;</b>
+<b class="nc"><i>535</i>&nbsp;                int i1 = (b4 &lt;&lt; 24) | (b5 &lt;&lt; 16) | (b6 &lt;&lt; 8) | b7;</b>
+<i>536</i>&nbsp;
+<b class="nc"><i>537</i>&nbsp;                l[off + j] = ((long)i0 &lt;&lt; 32) | (i1 &amp; 0xffffffffL);</b>
+<b class="nc"><i>538</i>&nbsp;                boff += 8;</b>
+<i>539</i>&nbsp;            }
+<i>540</i>&nbsp;        } else {
+<b class="nc"><i>541</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>542</i>&nbsp;                int b0 = b[boff + 7];</b>
+<b class="nc"><i>543</i>&nbsp;                int b1 = b[boff + 6] &amp; 0xff;</b>
+<b class="nc"><i>544</i>&nbsp;                int b2 = b[boff + 5] &amp; 0xff;</b>
+<b class="nc"><i>545</i>&nbsp;                int b3 = b[boff + 4] &amp; 0xff;</b>
+<b class="nc"><i>546</i>&nbsp;                int b4 = b[boff + 3];</b>
+<b class="nc"><i>547</i>&nbsp;                int b5 = b[boff + 2] &amp; 0xff;</b>
+<b class="nc"><i>548</i>&nbsp;                int b6 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>549</i>&nbsp;                int b7 = b[boff]     &amp; 0xff;</b>
+<i>550</i>&nbsp;
+<b class="nc"><i>551</i>&nbsp;                int i0 = (b0 &lt;&lt; 24) | (b1 &lt;&lt; 16) | (b2 &lt;&lt; 8) | b3;</b>
+<b class="nc"><i>552</i>&nbsp;                int i1 = (b4 &lt;&lt; 24) | (b5 &lt;&lt; 16) | (b6 &lt;&lt; 8) | b7;</b>
+<i>553</i>&nbsp;
+<b class="nc"><i>554</i>&nbsp;                l[off + j] = ((long)i0 &lt;&lt; 32) | (i1 &amp; 0xffffffffL);</b>
+<b class="nc"><i>555</i>&nbsp;                boff += 8;</b>
+<i>556</i>&nbsp;            }
+<i>557</i>&nbsp;        }
+<i>558</i>&nbsp;    }
+<i>559</i>&nbsp;
+<i>560</i>&nbsp;    private void toFloats(byte[] b, float[] f, int off, int len) {
+<b class="nc"><i>561</i>&nbsp;        int boff = 0;</b>
+<b class="nc"><i>562</i>&nbsp;        if (byteOrder == ByteOrder.BIG_ENDIAN) {</b>
+<b class="nc"><i>563</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>564</i>&nbsp;                int b0 = b[boff];</b>
+<b class="nc"><i>565</i>&nbsp;                int b1 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>566</i>&nbsp;                int b2 = b[boff + 2] &amp; 0xff;</b>
+<b class="nc"><i>567</i>&nbsp;                int b3 = b[boff + 3] &amp; 0xff;</b>
+<b class="nc"><i>568</i>&nbsp;                int i = (b0 &lt;&lt; 24) | (b1 &lt;&lt; 16) | (b2 &lt;&lt; 8) | b3;</b>
+<b class="nc"><i>569</i>&nbsp;                f[off + j] = Float.intBitsToFloat(i);</b>
+<b class="nc"><i>570</i>&nbsp;                boff += 4;</b>
+<i>571</i>&nbsp;            }
+<i>572</i>&nbsp;        } else {
+<b class="nc"><i>573</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>574</i>&nbsp;                int b0 = b[boff + 3];</b>
+<b class="nc"><i>575</i>&nbsp;                int b1 = b[boff + 2] &amp; 0xff;</b>
+<b class="nc"><i>576</i>&nbsp;                int b2 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>577</i>&nbsp;                int b3 = b[boff + 0] &amp; 0xff;</b>
+<b class="nc"><i>578</i>&nbsp;                int i = (b0 &lt;&lt; 24) | (b1 &lt;&lt; 16) | (b2 &lt;&lt; 8) | b3;</b>
+<b class="nc"><i>579</i>&nbsp;                f[off + j] = Float.intBitsToFloat(i);</b>
+<b class="nc"><i>580</i>&nbsp;                boff += 4;</b>
+<i>581</i>&nbsp;            }
+<i>582</i>&nbsp;        }
+<i>583</i>&nbsp;    }
+<i>584</i>&nbsp;
+<i>585</i>&nbsp;    private void toDoubles(byte[] b, double[] d, int off, int len) {
+<b class="nc"><i>586</i>&nbsp;        int boff = 0;</b>
+<b class="nc"><i>587</i>&nbsp;        if (byteOrder == ByteOrder.BIG_ENDIAN) {</b>
+<b class="nc"><i>588</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>589</i>&nbsp;                int b0 = b[boff];</b>
+<b class="nc"><i>590</i>&nbsp;                int b1 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>591</i>&nbsp;                int b2 = b[boff + 2] &amp; 0xff;</b>
+<b class="nc"><i>592</i>&nbsp;                int b3 = b[boff + 3] &amp; 0xff;</b>
+<b class="nc"><i>593</i>&nbsp;                int b4 = b[boff + 4];</b>
+<b class="nc"><i>594</i>&nbsp;                int b5 = b[boff + 5] &amp; 0xff;</b>
+<b class="nc"><i>595</i>&nbsp;                int b6 = b[boff + 6] &amp; 0xff;</b>
+<b class="nc"><i>596</i>&nbsp;                int b7 = b[boff + 7] &amp; 0xff;</b>
+<i>597</i>&nbsp;
+<b class="nc"><i>598</i>&nbsp;                int i0 = (b0 &lt;&lt; 24) | (b1 &lt;&lt; 16) | (b2 &lt;&lt; 8) | b3;</b>
+<b class="nc"><i>599</i>&nbsp;                int i1 = (b4 &lt;&lt; 24) | (b5 &lt;&lt; 16) | (b6 &lt;&lt; 8) | b7;</b>
+<b class="nc"><i>600</i>&nbsp;                long l = ((long)i0 &lt;&lt; 32) | (i1 &amp; 0xffffffffL);</b>
+<i>601</i>&nbsp;
+<b class="nc"><i>602</i>&nbsp;                d[off + j] = Double.longBitsToDouble(l);</b>
+<b class="nc"><i>603</i>&nbsp;                boff += 8;</b>
+<i>604</i>&nbsp;            }
+<i>605</i>&nbsp;        } else {
+<b class="nc"><i>606</i>&nbsp;            for (int j = 0; j &lt; len; j++) {</b>
+<b class="nc"><i>607</i>&nbsp;                int b0 = b[boff + 7];</b>
+<b class="nc"><i>608</i>&nbsp;                int b1 = b[boff + 6] &amp; 0xff;</b>
+<b class="nc"><i>609</i>&nbsp;                int b2 = b[boff + 5] &amp; 0xff;</b>
+<b class="nc"><i>610</i>&nbsp;                int b3 = b[boff + 4] &amp; 0xff;</b>
+<b class="nc"><i>611</i>&nbsp;                int b4 = b[boff + 3];</b>
+<b class="nc"><i>612</i>&nbsp;                int b5 = b[boff + 2] &amp; 0xff;</b>
+<b class="nc"><i>613</i>&nbsp;                int b6 = b[boff + 1] &amp; 0xff;</b>
+<b class="nc"><i>614</i>&nbsp;                int b7 = b[boff] &amp; 0xff;</b>
+<i>615</i>&nbsp;
+<b class="nc"><i>616</i>&nbsp;                int i0 = (b0 &lt;&lt; 24) | (b1 &lt;&lt; 16) | (b2 &lt;&lt; 8) | b3;</b>
+<b class="nc"><i>617</i>&nbsp;                int i1 = (b4 &lt;&lt; 24) | (b5 &lt;&lt; 16) | (b6 &lt;&lt; 8) | b7;</b>
+<b class="nc"><i>618</i>&nbsp;                long l = ((long)i0 &lt;&lt; 32) | (i1 &amp; 0xffffffffL);</b>
+<i>619</i>&nbsp;
+<b class="nc"><i>620</i>&nbsp;                d[off + j] = Double.longBitsToDouble(l);</b>
+<b class="nc"><i>621</i>&nbsp;                boff += 8;</b>
+<i>622</i>&nbsp;            }
+<i>623</i>&nbsp;        }
+<i>624</i>&nbsp;    }
+<i>625</i>&nbsp;
+<i>626</i>&nbsp;    public long getStreamPosition() throws IOException {
+<b class="nc"><i>627</i>&nbsp;        checkClosed();</b>
+<b class="nc"><i>628</i>&nbsp;        return streamPos;</b>
+<i>629</i>&nbsp;    }
+<i>630</i>&nbsp;
+<i>631</i>&nbsp;    public int getBitOffset() throws IOException {
+<b class="nc"><i>632</i>&nbsp;        checkClosed();</b>
+<b class="nc"><i>633</i>&nbsp;        return bitOffset;</b>
+<i>634</i>&nbsp;    }
+<i>635</i>&nbsp;
+<i>636</i>&nbsp;    public void setBitOffset(int bitOffset) throws IOException {
+<b class="nc"><i>637</i>&nbsp;        checkClosed();</b>
+<b class="nc"><i>638</i>&nbsp;        if (bitOffset &lt; 0 || bitOffset &gt; 7) {</b>
+<b class="nc"><i>639</i>&nbsp;            throw new IllegalArgumentException(&quot;bitOffset must be betwwen 0 and 7!&quot;);</b>
+<i>640</i>&nbsp;        }
+<b class="nc"><i>641</i>&nbsp;        this.bitOffset = bitOffset;</b>
+<i>642</i>&nbsp;    }
+<i>643</i>&nbsp;
+<i>644</i>&nbsp;    public int readBit() throws IOException {
+<b class="nc"><i>645</i>&nbsp;        checkClosed();</b>
+<i>646</i>&nbsp;
+<i>647</i>&nbsp;        // Compute final bit offset before we call read() and seek()
+<b class="nc"><i>648</i>&nbsp;        int newBitOffset = (this.bitOffset + 1) &amp; 0x7;</b>
+<i>649</i>&nbsp;
+<b class="nc"><i>650</i>&nbsp;        int val = read();</b>
+<b class="nc"><i>651</i>&nbsp;        if (val == -1) {</b>
+<b class="nc"><i>652</i>&nbsp;            throw new EOFException();</b>
+<i>653</i>&nbsp;        }
+<i>654</i>&nbsp;
+<b class="nc"><i>655</i>&nbsp;        if (newBitOffset != 0) {</b>
+<i>656</i>&nbsp;            // Move byte position back if in the middle of a byte
+<b class="nc"><i>657</i>&nbsp;            seek(getStreamPosition() - 1);</b>
+<i>658</i>&nbsp;            // Shift the bit to be read to the rightmost position
+<b class="nc"><i>659</i>&nbsp;            val &gt;&gt;= 8 - newBitOffset;</b>
+<i>660</i>&nbsp;        }
+<b class="nc"><i>661</i>&nbsp;        this.bitOffset = newBitOffset;</b>
+<i>662</i>&nbsp;
+<b class="nc"><i>663</i>&nbsp;        return val &amp; 0x1;</b>
+<i>664</i>&nbsp;    }
+<i>665</i>&nbsp;
+<i>666</i>&nbsp;    public long readBits(int numBits) throws IOException {
+<b class="nc"><i>667</i>&nbsp;        checkClosed();</b>
+<i>668</i>&nbsp;
+<b class="nc"><i>669</i>&nbsp;        if (numBits &lt; 0 || numBits &gt; 64) {</b>
+<b class="nc"><i>670</i>&nbsp;            throw new IllegalArgumentException();</b>
+<i>671</i>&nbsp;        }
+<b class="nc"><i>672</i>&nbsp;        if (numBits == 0) {</b>
+<b class="nc"><i>673</i>&nbsp;            return 0L;</b>
+<i>674</i>&nbsp;        }
+<i>675</i>&nbsp;
+<i>676</i>&nbsp;        // Have to read additional bits on the left equal to the bit offset
+<b class="nc"><i>677</i>&nbsp;        int bitsToRead = numBits + bitOffset;</b>
+<i>678</i>&nbsp;
+<i>679</i>&nbsp;        // Compute final bit offset before we call read() and seek()
+<b class="nc"><i>680</i>&nbsp;        int newBitOffset = (this.bitOffset + numBits) &amp; 0x7;</b>
+<i>681</i>&nbsp;
+<i>682</i>&nbsp;        // Read a byte at a time, accumulate
+<b class="nc"><i>683</i>&nbsp;        long accum = 0L;</b>
+<b class="nc"><i>684</i>&nbsp;        while (bitsToRead &gt; 0) {</b>
+<b class="nc"><i>685</i>&nbsp;            int val = read();</b>
+<b class="nc"><i>686</i>&nbsp;            if (val == -1) {</b>
+<b class="nc"><i>687</i>&nbsp;                throw new EOFException();</b>
+<i>688</i>&nbsp;            }
+<i>689</i>&nbsp;
+<b class="nc"><i>690</i>&nbsp;            accum &lt;&lt;= 8;</b>
+<b class="nc"><i>691</i>&nbsp;            accum |= val;</b>
+<b class="nc"><i>692</i>&nbsp;            bitsToRead -= 8;</b>
+<b class="nc"><i>693</i>&nbsp;        }</b>
+<i>694</i>&nbsp;
+<i>695</i>&nbsp;        // Move byte position back if in the middle of a byte
+<b class="nc"><i>696</i>&nbsp;        if (newBitOffset != 0) {</b>
+<b class="nc"><i>697</i>&nbsp;            seek(getStreamPosition() - 1);</b>
+<i>698</i>&nbsp;        }
+<b class="nc"><i>699</i>&nbsp;        this.bitOffset = newBitOffset;</b>
+<i>700</i>&nbsp;
+<i>701</i>&nbsp;        // Shift away unwanted bits on the right.
+<b class="nc"><i>702</i>&nbsp;        accum &gt;&gt;&gt;= (-bitsToRead); // Negative of bitsToRead == extra bits read</b>
+<i>703</i>&nbsp;
+<i>704</i>&nbsp;        // Mask out unwanted bits on the left
+<b class="nc"><i>705</i>&nbsp;        accum &amp;= (-1L &gt;&gt;&gt; (64 - numBits));</b>
+<i>706</i>&nbsp;
+<b class="nc"><i>707</i>&nbsp;        return accum;</b>
+<i>708</i>&nbsp;    }
+<i>709</i>&nbsp;
+<i>710</i>&nbsp;    /**
+<i>711</i>&nbsp;     * Returns {@code -1L} to indicate that the stream has unknown
+<i>712</i>&nbsp;     * length.  Subclasses must override this method to provide actual
+<i>713</i>&nbsp;     * length information.
+<i>714</i>&nbsp;     *
+<i>715</i>&nbsp;     * @return -1L to indicate unknown length.
+<i>716</i>&nbsp;     */
+<i>717</i>&nbsp;    public long length() {
+<b class="nc"><i>718</i>&nbsp;        return -1L;</b>
+<i>719</i>&nbsp;    }
+<i>720</i>&nbsp;
+<i>721</i>&nbsp;    /**
+<i>722</i>&nbsp;     * Advances the current stream position by calling
+<i>723</i>&nbsp;     * {@code seek(getStreamPosition() + n)}.
+<i>724</i>&nbsp;     *
+<i>725</i>&nbsp;     * &lt;p&gt; The bit offset is reset to zero.
+<i>726</i>&nbsp;     *
+<i>727</i>&nbsp;     * @param n the number of bytes to seek forward.
+<i>728</i>&nbsp;     *
+<i>729</i>&nbsp;     * @return an {@code int} representing the number of bytes
+<i>730</i>&nbsp;     * skipped.
+<i>731</i>&nbsp;     *
+<i>732</i>&nbsp;     * @exception IOException if {@code getStreamPosition}
+<i>733</i>&nbsp;     * throws an {@code IOException} when computing either
+<i>734</i>&nbsp;     * the starting or ending position.
+<i>735</i>&nbsp;     */
+<i>736</i>&nbsp;    public int skipBytes(int n) throws IOException {
+<b class="nc"><i>737</i>&nbsp;        long pos = getStreamPosition();</b>
+<b class="nc"><i>738</i>&nbsp;        seek(pos + n);</b>
+<b class="nc"><i>739</i>&nbsp;        return (int)(getStreamPosition() - pos);</b>
+<i>740</i>&nbsp;    }
+<i>741</i>&nbsp;
+<i>742</i>&nbsp;    /**
+<i>743</i>&nbsp;     * Advances the current stream position by calling
+<i>744</i>&nbsp;     * {@code seek(getStreamPosition() + n)}.
+<i>745</i>&nbsp;     *
+<i>746</i>&nbsp;     * &lt;p&gt; The bit offset is reset to zero.
+<i>747</i>&nbsp;     *
+<i>748</i>&nbsp;     * @param n the number of bytes to seek forward.
+<i>749</i>&nbsp;     *
+<i>750</i>&nbsp;     * @return a {@code long} representing the number of bytes
+<i>751</i>&nbsp;     * skipped.
+<i>752</i>&nbsp;     *
+<i>753</i>&nbsp;     * @exception IOException if {@code getStreamPosition}
+<i>754</i>&nbsp;     * throws an {@code IOException} when computing either
+<i>755</i>&nbsp;     * the starting or ending position.
+<i>756</i>&nbsp;     */
+<i>757</i>&nbsp;    public long skipBytes(long n) throws IOException {
+<b class="nc"><i>758</i>&nbsp;        long pos = getStreamPosition();</b>
+<b class="nc"><i>759</i>&nbsp;        seek(pos + n);</b>
+<b class="nc"><i>760</i>&nbsp;        return getStreamPosition() - pos;</b>
+<i>761</i>&nbsp;    }
+<i>762</i>&nbsp;
+<i>763</i>&nbsp;    public void seek(long pos) throws IOException {
+<b class="nc"><i>764</i>&nbsp;        checkClosed();</b>
+<i>765</i>&nbsp;
+<i>766</i>&nbsp;        // This test also covers pos &lt; 0
+<b class="nc"><i>767</i>&nbsp;        if (pos &lt; flushedPos) {</b>
+<b class="nc"><i>768</i>&nbsp;            throw new IndexOutOfBoundsException(&quot;pos &lt; flushedPos!&quot;);</b>
+<i>769</i>&nbsp;        }
+<i>770</i>&nbsp;
+<b class="nc"><i>771</i>&nbsp;        this.streamPos = pos;</b>
+<b class="nc"><i>772</i>&nbsp;        this.bitOffset = 0;</b>
+<i>773</i>&nbsp;    }
+<i>774</i>&nbsp;
+<i>775</i>&nbsp;    /**
+<i>776</i>&nbsp;     * Pushes the current stream position onto a stack of marked
+<i>777</i>&nbsp;     * positions.
+<i>778</i>&nbsp;     */
+<i>779</i>&nbsp;    public void mark() {
+<i>780</i>&nbsp;        try {
+<b class="nc"><i>781</i>&nbsp;            markByteStack.push(Long.valueOf(getStreamPosition()));</b>
+<b class="nc"><i>782</i>&nbsp;            markBitStack.push(Integer.valueOf(getBitOffset()));</b>
+<b class="nc"><i>783</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>784</i>&nbsp;        }</b>
+<i>785</i>&nbsp;    }
+<i>786</i>&nbsp;
+<i>787</i>&nbsp;    /**
+<i>788</i>&nbsp;     * Resets the current stream byte and bit positions from the stack
+<i>789</i>&nbsp;     * of marked positions.
+<i>790</i>&nbsp;     *
+<i>791</i>&nbsp;     * &lt;p&gt; An {@code IOException} will be thrown if the previous
+<i>792</i>&nbsp;     * marked position lies in the discarded portion of the stream.
+<i>793</i>&nbsp;     *
+<i>794</i>&nbsp;     * @exception IOException if an I/O error occurs.
+<i>795</i>&nbsp;     */
+<i>796</i>&nbsp;    public void reset() throws IOException {
+<b class="nc"><i>797</i>&nbsp;        if (markByteStack.empty()) {</b>
+<i>798</i>&nbsp;            return;
+<i>799</i>&nbsp;        }
+<i>800</i>&nbsp;
+<b class="nc"><i>801</i>&nbsp;        long pos = markByteStack.pop().longValue();</b>
+<b class="nc"><i>802</i>&nbsp;        if (pos &lt; flushedPos) {</b>
+<b class="nc"><i>803</i>&nbsp;            throw new IIOException</b>
+<i>804</i>&nbsp;                (&quot;Previous marked position has been discarded!&quot;);
+<i>805</i>&nbsp;        }
+<b class="nc"><i>806</i>&nbsp;        seek(pos);</b>
+<i>807</i>&nbsp;
+<b class="nc"><i>808</i>&nbsp;        int offset = markBitStack.pop().intValue();</b>
+<b class="nc"><i>809</i>&nbsp;        setBitOffset(offset);</b>
+<i>810</i>&nbsp;    }
+<i>811</i>&nbsp;
+<i>812</i>&nbsp;    public void flushBefore(long pos) throws IOException {
+<b class="nc"><i>813</i>&nbsp;        checkClosed();</b>
+<b class="nc"><i>814</i>&nbsp;        if (pos &lt; flushedPos) {</b>
+<b class="nc"><i>815</i>&nbsp;            throw new IndexOutOfBoundsException(&quot;pos &lt; flushedPos!&quot;);</b>
+<i>816</i>&nbsp;        }
+<b class="nc"><i>817</i>&nbsp;        if (pos &gt; getStreamPosition()) {</b>
+<b class="nc"><i>818</i>&nbsp;            throw new IndexOutOfBoundsException(&quot;pos &gt; getStreamPosition()!&quot;);</b>
+<i>819</i>&nbsp;        }
+<i>820</i>&nbsp;        // Invariant: flushedPos &gt;= 0
+<b class="nc"><i>821</i>&nbsp;        flushedPos = pos;</b>
+<i>822</i>&nbsp;    }
+<i>823</i>&nbsp;
+<i>824</i>&nbsp;    public void flush() throws IOException {
+<b class="nc"><i>825</i>&nbsp;        flushBefore(getStreamPosition());</b>
+<i>826</i>&nbsp;    }
+<i>827</i>&nbsp;
+<i>828</i>&nbsp;    public long getFlushedPosition() {
+<b class="nc"><i>829</i>&nbsp;        return flushedPos;</b>
+<i>830</i>&nbsp;    }
+<i>831</i>&nbsp;
+<i>832</i>&nbsp;    /**
+<i>833</i>&nbsp;     * Default implementation returns false.  Subclasses should
+<i>834</i>&nbsp;     * override this if they cache data.
+<i>835</i>&nbsp;     */
+<i>836</i>&nbsp;    public boolean isCached() {
+<b class="nc"><i>837</i>&nbsp;        return false;</b>
+<i>838</i>&nbsp;    }
+<i>839</i>&nbsp;
+<i>840</i>&nbsp;    /**
+<i>841</i>&nbsp;     * Default implementation returns false.  Subclasses should
+<i>842</i>&nbsp;     * override this if they cache data in main memory.
+<i>843</i>&nbsp;     */
+<i>844</i>&nbsp;    public boolean isCachedMemory() {
+<b class="nc"><i>845</i>&nbsp;        return false;</b>
+<i>846</i>&nbsp;    }
+<i>847</i>&nbsp;
+<i>848</i>&nbsp;    /**
+<i>849</i>&nbsp;     * Default implementation returns false.  Subclasses should
+<i>850</i>&nbsp;     * override this if they cache data in a temporary file.
+<i>851</i>&nbsp;     */
+<i>852</i>&nbsp;    public boolean isCachedFile() {
+<b class="nc"><i>853</i>&nbsp;        return false;</b>
+<i>854</i>&nbsp;    }
+<i>855</i>&nbsp;
+<i>856</i>&nbsp;    public void close() throws IOException {
+<b class="nc"><i>857</i>&nbsp;        checkClosed();</b>
+<i>858</i>&nbsp;
+<b class="nc"><i>859</i>&nbsp;        isClosed = true;</b>
+<i>860</i>&nbsp;    }
+<i>861</i>&nbsp;
+<i>862</i>&nbsp;    /**
+<i>863</i>&nbsp;     * Finalizes this object prior to garbage collection.  The
+<i>864</i>&nbsp;     * {@code close} method is called to close any open input
+<i>865</i>&nbsp;     * source.  This method should not be called from application
+<i>866</i>&nbsp;     * code.
+<i>867</i>&nbsp;     *
+<i>868</i>&nbsp;     * @exception Throwable if an error occurs during superclass
+<i>869</i>&nbsp;     * finalization.
+<i>870</i>&nbsp;     *
+<i>871</i>&nbsp;     * @deprecated The {@code finalize} method has been deprecated.
+<b class="nc"><i>872</i>&nbsp;     *     Subclasses that override {@code finalize} in order to perform cleanup</b>
+<i>873</i>&nbsp;     *     should be modified to use alternative cleanup mechanisms and
+<b class="nc"><i>874</i>&nbsp;     *     to remove the overriding {@code finalize} method.</b>
+<b class="nc"><i>875</i>&nbsp;     *     When overriding the {@code finalize} method, its implementation must explicitly</b>
+<b class="nc"><i>876</i>&nbsp;     *     ensure that {@code super.finalize()} is invoked as described in {@link Object#finalize}.</b>
+<i>877</i>&nbsp;     *     See the specification for {@link Object#finalize()} for further
+<b class="nc"><i>878</i>&nbsp;     *     information about migration options.</b>
+<i>879</i>&nbsp;     */
+<i>880</i>&nbsp;    @Deprecated(since=&quot;9&quot;)
+<i>881</i>&nbsp;    protected void finalize() throws Throwable {
+<i>882</i>&nbsp;        if (!isClosed) {
+<i>883</i>&nbsp;            try {
+<i>884</i>&nbsp;                close();
+<i>885</i>&nbsp;            } catch (IOException e) {
+<i>886</i>&nbsp;            }
+<i>887</i>&nbsp;        }
+<i>888</i>&nbsp;        super.finalize();
+<i>889</i>&nbsp;    }
+<i>890</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

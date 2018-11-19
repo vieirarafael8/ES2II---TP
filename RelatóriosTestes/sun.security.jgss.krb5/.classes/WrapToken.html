@@ -1,0 +1,615 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: WrapToken</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.jgss.krb5</a> ]
+</div>
+
+<h1>Coverage Summary for Class: WrapToken (sun.security.jgss.krb5)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WrapToken</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 15)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 124)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.jgss.krb5;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import org.ietf.jgss.*;
+<i>29</i>&nbsp;import sun.security.jgss.*;
+<i>30</i>&nbsp;import java.io.InputStream;
+<i>31</i>&nbsp;import java.io.OutputStream;
+<i>32</i>&nbsp;import java.io.IOException;
+<i>33</i>&nbsp;import java.io.ByteArrayOutputStream;
+<i>34</i>&nbsp;import sun.security.krb5.Confounder;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;/**
+<i>37</i>&nbsp; * This class represents a token emitted by the GSSContext.wrap()
+<i>38</i>&nbsp; * call. It is a MessageToken except that it also contains plaintext
+<i>39</i>&nbsp; * or encrypted data at the end. A wrapToken has certain other rules
+<i>40</i>&nbsp; * that are peculiar to it and different from a MICToken, which is
+<i>41</i>&nbsp; * another type of MessageToken. All data in a WrapToken is prepended
+<i>42</i>&nbsp; * by a random counfounder of 8 bytes. All data in a WrapToken is
+<i>43</i>&nbsp; * also padded with one to eight bytes where all bytes are equal in
+<i>44</i>&nbsp; * value to the number of bytes being padded. Thus, all application
+<i>45</i>&nbsp; * data is replaced by (confounder || data || padding).
+<i>46</i>&nbsp; *
+<i>47</i>&nbsp; * @author Mayank Upadhyay
+<i>48</i>&nbsp; */
+<i>49</i>&nbsp;class WrapToken extends MessageToken {
+<i>50</i>&nbsp;    /**
+<i>51</i>&nbsp;     * The size of the random confounder used in a WrapToken.
+<i>52</i>&nbsp;     */
+<i>53</i>&nbsp;    static final int CONFOUNDER_SIZE = 8;
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    /*
+<i>56</i>&nbsp;     * The padding used with a WrapToken. All data is padded to the
+<i>57</i>&nbsp;     * next multiple of 8 bytes, even if its length is already
+<i>58</i>&nbsp;     * multiple of 8.
+<i>59</i>&nbsp;     * Use this table as a quick way to obtain padding bytes by
+<i>60</i>&nbsp;     * indexing it with the number of padding bytes required.
+<i>61</i>&nbsp;     */
+<b class="nc"><i>62</i>&nbsp;    static final byte[][] pads = {</b>
+<i>63</i>&nbsp;        null, // No, no one escapes padding
+<i>64</i>&nbsp;        {0x01},
+<i>65</i>&nbsp;        {0x02, 0x02},
+<i>66</i>&nbsp;        {0x03, 0x03, 0x03},
+<i>67</i>&nbsp;        {0x04, 0x04, 0x04, 0x04},
+<i>68</i>&nbsp;        {0x05, 0x05, 0x05, 0x05, 0x05},
+<i>69</i>&nbsp;        {0x06, 0x06, 0x06, 0x06, 0x06, 0x06},
+<i>70</i>&nbsp;        {0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07},
+<i>71</i>&nbsp;        {0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08}
+<i>72</i>&nbsp;    };
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    /*
+<i>75</i>&nbsp;     * A token may come in either in an InputStream or as a
+<i>76</i>&nbsp;     * byte[]. Store a reference to it in either case and process
+<i>77</i>&nbsp;     * it&#39;s data only later when getData() is called and
+<i>78</i>&nbsp;     * decryption/copying is needed to be done. Note that JCE can
+<i>79</i>&nbsp;     * decrypt both from a byte[] and from an InputStream.
+<i>80</i>&nbsp;     */
+<b class="nc"><i>81</i>&nbsp;    private boolean readTokenFromInputStream = true;</b>
+<b class="nc"><i>82</i>&nbsp;    private InputStream is = null;</b>
+<b class="nc"><i>83</i>&nbsp;    private byte[] tokenBytes = null;</b>
+<b class="nc"><i>84</i>&nbsp;    private int tokenOffset = 0;</b>
+<b class="nc"><i>85</i>&nbsp;    private int tokenLen = 0;</b>
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    /*
+<i>88</i>&nbsp;     * Application data may come from an InputStream or from a
+<i>89</i>&nbsp;     * byte[]. However, it will always be stored and processed as a
+<i>90</i>&nbsp;     * byte[] since
+<i>91</i>&nbsp;     * (a) the MessageDigest class only accepts a byte[] as input and
+<i>92</i>&nbsp;     * (b) It allows writing to an OuputStream via a CipherOutputStream.
+<i>93</i>&nbsp;     */
+<b class="nc"><i>94</i>&nbsp;    private byte[] dataBytes = null;</b>
+<b class="nc"><i>95</i>&nbsp;    private int dataOffset = 0;</b>
+<b class="nc"><i>96</i>&nbsp;    private int dataLen = 0;</b>
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    // the len of the token data: (confounder || data || padding)
+<b class="nc"><i>99</i>&nbsp;    private int dataSize = 0;</b>
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;    // Accessed by CipherHelper
+<b class="nc"><i>102</i>&nbsp;    byte[] confounder = null;</b>
+<b class="nc"><i>103</i>&nbsp;    byte[] padding = null;</b>
+<i>104</i>&nbsp;
+<b class="nc"><i>105</i>&nbsp;    private boolean privacy = false;</b>
+<i>106</i>&nbsp;
+<i>107</i>&nbsp;    /**
+<i>108</i>&nbsp;     * Constructs a WrapToken from token bytes obtained from the
+<i>109</i>&nbsp;     * peer.
+<i>110</i>&nbsp;     * @param context the mechanism context associated with this
+<i>111</i>&nbsp;     * token
+<i>112</i>&nbsp;     * @param tokenBytes the bytes of the token
+<i>113</i>&nbsp;     * @param tokenOffset the offset of the token
+<i>114</i>&nbsp;     * @param tokenLen the length of the token
+<i>115</i>&nbsp;     * @param prop the MessageProp into which characteristics of the
+<i>116</i>&nbsp;     * parsed token will be stored.
+<i>117</i>&nbsp;     * @throws GSSException if the token is defective
+<i>118</i>&nbsp;     */
+<i>119</i>&nbsp;    public WrapToken(Krb5Context context,
+<i>120</i>&nbsp;                     byte[] tokenBytes, int tokenOffset, int tokenLen,
+<i>121</i>&nbsp;                     MessageProp prop)  throws GSSException {
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;        // Just parse the MessageToken part first
+<b class="nc"><i>124</i>&nbsp;        super(Krb5Token.WRAP_ID, context,</b>
+<i>125</i>&nbsp;              tokenBytes, tokenOffset, tokenLen, prop);
+<i>126</i>&nbsp;
+<b class="nc"><i>127</i>&nbsp;        this.readTokenFromInputStream = false;</b>
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;        // Will need the token bytes again when extracting data
+<b class="nc"><i>130</i>&nbsp;        this.tokenBytes = tokenBytes;</b>
+<b class="nc"><i>131</i>&nbsp;        this.tokenOffset = tokenOffset;</b>
+<b class="nc"><i>132</i>&nbsp;        this.tokenLen = tokenLen;</b>
+<b class="nc"><i>133</i>&nbsp;        this.privacy = prop.getPrivacy();</b>
+<b class="nc"><i>134</i>&nbsp;        dataSize =</b>
+<b class="nc"><i>135</i>&nbsp;            getGSSHeader().getMechTokenLength() - getKrb5TokenSize();</b>
+<i>136</i>&nbsp;    }
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    /**
+<i>139</i>&nbsp;     * Constructs a WrapToken from token bytes read on the fly from
+<i>140</i>&nbsp;     * an InputStream.
+<i>141</i>&nbsp;     * @param context the mechanism context associated with this
+<i>142</i>&nbsp;     * token
+<i>143</i>&nbsp;     * @param is the InputStream containing the token bytes
+<i>144</i>&nbsp;     * @param prop the MessageProp into which characteristics of the
+<i>145</i>&nbsp;     * parsed token will be stored.
+<i>146</i>&nbsp;     * @throws GSSException if the token is defective or if there is
+<i>147</i>&nbsp;     * a problem reading from the InputStream
+<i>148</i>&nbsp;     */
+<i>149</i>&nbsp;    public WrapToken(Krb5Context context,
+<i>150</i>&nbsp;                     InputStream is, MessageProp prop)
+<i>151</i>&nbsp;        throws GSSException {
+<i>152</i>&nbsp;
+<i>153</i>&nbsp;        // Just parse the MessageToken part first
+<b class="nc"><i>154</i>&nbsp;        super(Krb5Token.WRAP_ID, context, is, prop);</b>
+<i>155</i>&nbsp;
+<i>156</i>&nbsp;        // Will need the token bytes again when extracting data
+<b class="nc"><i>157</i>&nbsp;        this.is = is;</b>
+<b class="nc"><i>158</i>&nbsp;        this.privacy = prop.getPrivacy();</b>
+<i>159</i>&nbsp;        /*
+<i>160</i>&nbsp;          debug(&quot;WrapToken Cons: gssHeader.getMechTokenLength=&quot; +
+<i>161</i>&nbsp;          getGSSHeader().getMechTokenLength());
+<i>162</i>&nbsp;          debug(&quot;\n                token size=&quot;
+<i>163</i>&nbsp;          + getTokenSize());
+<i>164</i>&nbsp;        */
+<i>165</i>&nbsp;
+<b class="nc"><i>166</i>&nbsp;        dataSize =</b>
+<b class="nc"><i>167</i>&nbsp;            getGSSHeader().getMechTokenLength() - getTokenSize();</b>
+<i>168</i>&nbsp;        // debug(&quot;\n                dataSize=&quot; + dataSize);
+<i>169</i>&nbsp;        // debug(&quot;\n&quot;);
+<i>170</i>&nbsp;    }
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;    /**
+<i>173</i>&nbsp;     * Obtains the application data that was transmitted in this
+<i>174</i>&nbsp;     * WrapToken.
+<i>175</i>&nbsp;     * @return a byte array containing the application data
+<i>176</i>&nbsp;     * @throws GSSException if an error occurs while decrypting any
+<i>177</i>&nbsp;     * cipher text and checking for validity
+<i>178</i>&nbsp;     */
+<i>179</i>&nbsp;    public byte[] getData() throws GSSException {
+<i>180</i>&nbsp;
+<b class="nc"><i>181</i>&nbsp;        byte[] temp = new byte[dataSize];</b>
+<b class="nc"><i>182</i>&nbsp;        getData(temp, 0);</b>
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;        // Remove the confounder and the padding
+<b class="nc"><i>185</i>&nbsp;        byte[] retVal = new byte[dataSize - confounder.length -</b>
+<i>186</i>&nbsp;                                padding.length];
+<b class="nc"><i>187</i>&nbsp;        System.arraycopy(temp, 0, retVal, 0, retVal.length);</b>
+<i>188</i>&nbsp;
+<b class="nc"><i>189</i>&nbsp;        return retVal;</b>
+<i>190</i>&nbsp;    }
+<i>191</i>&nbsp;
+<i>192</i>&nbsp;    /**
+<i>193</i>&nbsp;     * Obtains the application data that was transmitted in this
+<i>194</i>&nbsp;     * WrapToken, writing it into an application provided output
+<i>195</i>&nbsp;     * array.
+<i>196</i>&nbsp;     * @param dataBuf the output buffer into which the data must be
+<i>197</i>&nbsp;     * written
+<i>198</i>&nbsp;     * @param dataBufOffset the offset at which to write the data
+<i>199</i>&nbsp;     * @return the size of the data written
+<i>200</i>&nbsp;     * @throws GSSException if an error occurs while decrypting any
+<i>201</i>&nbsp;     * cipher text and checking for validity
+<i>202</i>&nbsp;     */
+<i>203</i>&nbsp;    public int getData(byte[] dataBuf, int dataBufOffset)
+<i>204</i>&nbsp;        throws GSSException {
+<i>205</i>&nbsp;
+<b class="nc"><i>206</i>&nbsp;        if (readTokenFromInputStream)</b>
+<b class="nc"><i>207</i>&nbsp;            getDataFromStream(dataBuf, dataBufOffset);</b>
+<i>208</i>&nbsp;        else
+<b class="nc"><i>209</i>&nbsp;            getDataFromBuffer(dataBuf, dataBufOffset);</b>
+<i>210</i>&nbsp;
+<b class="nc"><i>211</i>&nbsp;        return (dataSize - confounder.length - padding.length);</b>
+<i>212</i>&nbsp;    }
+<i>213</i>&nbsp;
+<i>214</i>&nbsp;    /**
+<i>215</i>&nbsp;     * Helper routine to obtain the application data transmitted in
+<i>216</i>&nbsp;     * this WrapToken. It is called if the WrapToken was constructed
+<i>217</i>&nbsp;     * with a byte array as input.
+<i>218</i>&nbsp;     * @param dataBuf the output buffer into which the data must be
+<i>219</i>&nbsp;     * written
+<i>220</i>&nbsp;     * @param dataBufOffset the offset at which to write the data
+<i>221</i>&nbsp;     * @throws GSSException if an error occurs while decrypting any
+<i>222</i>&nbsp;     * cipher text and checking for validity
+<i>223</i>&nbsp;     */
+<i>224</i>&nbsp;    private void getDataFromBuffer(byte[] dataBuf, int dataBufOffset)
+<i>225</i>&nbsp;        throws GSSException {
+<i>226</i>&nbsp;
+<b class="nc"><i>227</i>&nbsp;        GSSHeader gssHeader = getGSSHeader();</b>
+<b class="nc"><i>228</i>&nbsp;        int dataPos = tokenOffset +</b>
+<b class="nc"><i>229</i>&nbsp;            gssHeader.getLength() + getTokenSize();</b>
+<i>230</i>&nbsp;
+<b class="nc"><i>231</i>&nbsp;        if (dataPos + dataSize &gt; tokenOffset + tokenLen)</b>
+<b class="nc"><i>232</i>&nbsp;            throw new GSSException(GSSException.DEFECTIVE_TOKEN, -1,</b>
+<i>233</i>&nbsp;                                   &quot;Insufficient data in &quot;
+<b class="nc"><i>234</i>&nbsp;                                   + getTokenName(getTokenId()));</b>
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;        // debug(&quot;WrapToken cons: data is token is [&quot; +
+<i>237</i>&nbsp;        //      getHexBytes(tokenBytes, tokenOffset, tokenLen) + &quot;]\n&quot;);
+<i>238</i>&nbsp;
+<b class="nc"><i>239</i>&nbsp;        confounder = new byte[CONFOUNDER_SIZE];</b>
+<i>240</i>&nbsp;
+<i>241</i>&nbsp;        // Do decryption if this token was privacy protected.
+<i>242</i>&nbsp;
+<b class="nc"><i>243</i>&nbsp;        if (privacy) {</b>
+<b class="nc"><i>244</i>&nbsp;            cipherHelper.decryptData(this,</b>
+<i>245</i>&nbsp;                tokenBytes, dataPos, dataSize, dataBuf, dataBufOffset);
+<i>246</i>&nbsp;            /*
+<i>247</i>&nbsp;            debug(&quot;\t\tDecrypted data is [&quot; +
+<i>248</i>&nbsp;                getHexBytes(confounder) + &quot; &quot; +
+<i>249</i>&nbsp;                getHexBytes(dataBuf, dataBufOffset,
+<i>250</i>&nbsp;                        dataSize - CONFOUNDER_SIZE - padding.length) +
+<i>251</i>&nbsp;                getHexBytes(padding) +
+<i>252</i>&nbsp;            &quot;]\n&quot;);
+<i>253</i>&nbsp;            */
+<i>254</i>&nbsp;
+<i>255</i>&nbsp;        } else {
+<i>256</i>&nbsp;
+<i>257</i>&nbsp;            // Token data is in cleartext
+<i>258</i>&nbsp;            // debug(&quot;\t\tNo encryption was performed by peer.\n&quot;);
+<b class="nc"><i>259</i>&nbsp;            System.arraycopy(tokenBytes, dataPos,</b>
+<i>260</i>&nbsp;                             confounder, 0, CONFOUNDER_SIZE);
+<b class="nc"><i>261</i>&nbsp;            int padSize = tokenBytes[dataPos + dataSize - 1];</b>
+<b class="nc"><i>262</i>&nbsp;            if (padSize &lt; 0)</b>
+<b class="nc"><i>263</i>&nbsp;                padSize = 0;</b>
+<b class="nc"><i>264</i>&nbsp;            if (padSize &gt; 8)</b>
+<b class="nc"><i>265</i>&nbsp;                padSize %= 8;</b>
+<i>266</i>&nbsp;
+<b class="nc"><i>267</i>&nbsp;            padding = pads[padSize];</b>
+<i>268</i>&nbsp;            // debug(&quot;\t\tPadding applied was: &quot; + padSize + &quot;\n&quot;);
+<i>269</i>&nbsp;
+<b class="nc"><i>270</i>&nbsp;            System.arraycopy(tokenBytes, dataPos + CONFOUNDER_SIZE,</b>
+<i>271</i>&nbsp;                             dataBuf, dataBufOffset, dataSize -
+<i>272</i>&nbsp;                             CONFOUNDER_SIZE - padSize);
+<i>273</i>&nbsp;
+<i>274</i>&nbsp;           // byte[] debugbuf = new byte[dataSize - CONFOUNDER_SIZE - padSize];
+<i>275</i>&nbsp;           // System.arraycopy(tokenBytes, dataPos + CONFOUNDER_SIZE,
+<i>276</i>&nbsp;           //                debugbuf, 0, debugbuf.length);
+<i>277</i>&nbsp;           // debug(&quot;\t\tData is: &quot; + getHexBytes(debugbuf, debugbuf.length));
+<i>278</i>&nbsp;        }
+<i>279</i>&nbsp;
+<i>280</i>&nbsp;        /*
+<i>281</i>&nbsp;         * Make sure sign and sequence number are not corrupt
+<i>282</i>&nbsp;         */
+<i>283</i>&nbsp;
+<b class="nc"><i>284</i>&nbsp;        if (!verifySignAndSeqNumber(confounder,</b>
+<i>285</i>&nbsp;                                    dataBuf, dataBufOffset,
+<i>286</i>&nbsp;                                    dataSize - CONFOUNDER_SIZE
+<i>287</i>&nbsp;                                    - padding.length,
+<i>288</i>&nbsp;                                    padding))
+<b class="nc"><i>289</i>&nbsp;            throw new GSSException(GSSException.BAD_MIC, -1,</b>
+<i>290</i>&nbsp;                         &quot;Corrupt checksum or sequence number in Wrap token&quot;);
+<i>291</i>&nbsp;    }
+<i>292</i>&nbsp;
+<i>293</i>&nbsp;    /**
+<i>294</i>&nbsp;     * Helper routine to obtain the application data transmitted in
+<i>295</i>&nbsp;     * this WrapToken. It is called if the WrapToken was constructed
+<i>296</i>&nbsp;     * with an Inputstream.
+<i>297</i>&nbsp;     * @param dataBuf the output buffer into which the data must be
+<i>298</i>&nbsp;     * written
+<i>299</i>&nbsp;     * @param dataBufOffset the offset at which to write the data
+<i>300</i>&nbsp;     * @throws GSSException if an error occurs while decrypting any
+<i>301</i>&nbsp;     * cipher text and checking for validity
+<i>302</i>&nbsp;     */
+<i>303</i>&nbsp;    private void getDataFromStream(byte[] dataBuf, int dataBufOffset)
+<i>304</i>&nbsp;        throws GSSException {
+<i>305</i>&nbsp;
+<b class="nc"><i>306</i>&nbsp;        GSSHeader gssHeader = getGSSHeader();</b>
+<i>307</i>&nbsp;
+<i>308</i>&nbsp;        // Don&#39;t check the token length. Data will be read on demand from
+<i>309</i>&nbsp;        // the InputStream.
+<i>310</i>&nbsp;
+<i>311</i>&nbsp;        // debug(&quot;WrapToken cons: data will be read from InputStream.\n&quot;);
+<i>312</i>&nbsp;
+<b class="nc"><i>313</i>&nbsp;        confounder = new byte[CONFOUNDER_SIZE];</b>
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;        try {
+<i>316</i>&nbsp;
+<i>317</i>&nbsp;            // Do decryption if this token was privacy protected.
+<i>318</i>&nbsp;
+<b class="nc"><i>319</i>&nbsp;            if (privacy) {</b>
+<b class="nc"><i>320</i>&nbsp;                cipherHelper.decryptData(this, is, dataSize,</b>
+<i>321</i>&nbsp;                    dataBuf, dataBufOffset);
+<i>322</i>&nbsp;
+<i>323</i>&nbsp;                // debug(&quot;\t\tDecrypted data is [&quot; +
+<i>324</i>&nbsp;                //     getHexBytes(confounder) + &quot; &quot; +
+<i>325</i>&nbsp;                //     getHexBytes(dataBuf, dataBufOffset,
+<i>326</i>&nbsp;                // dataSize - CONFOUNDER_SIZE - padding.length) +
+<i>327</i>&nbsp;                //     getHexBytes(padding) +
+<i>328</i>&nbsp;                //     &quot;]\n&quot;);
+<i>329</i>&nbsp;
+<i>330</i>&nbsp;            } else {
+<i>331</i>&nbsp;
+<i>332</i>&nbsp;                // Token data is in cleartext
+<i>333</i>&nbsp;                // debug(&quot;\t\tNo encryption was performed by peer.\n&quot;);
+<b class="nc"><i>334</i>&nbsp;                readFully(is, confounder);</b>
+<i>335</i>&nbsp;
+<b class="nc"><i>336</i>&nbsp;                if (cipherHelper.isArcFour()) {</b>
+<b class="nc"><i>337</i>&nbsp;                    padding = pads[1];</b>
+<b class="nc"><i>338</i>&nbsp;                    readFully(is, dataBuf, dataBufOffset, dataSize-CONFOUNDER_SIZE-1);</b>
+<i>339</i>&nbsp;                } else {
+<i>340</i>&nbsp;                    // Data is always a multiple of 8 with this GSS Mech
+<i>341</i>&nbsp;                    // Copy all but last block as they are
+<b class="nc"><i>342</i>&nbsp;                    int numBlocks = (dataSize - CONFOUNDER_SIZE)/8 - 1;</b>
+<b class="nc"><i>343</i>&nbsp;                    int offset = dataBufOffset;</b>
+<b class="nc"><i>344</i>&nbsp;                    for (int i = 0; i &lt; numBlocks; i++) {</b>
+<b class="nc"><i>345</i>&nbsp;                        readFully(is, dataBuf, offset, 8);</b>
+<b class="nc"><i>346</i>&nbsp;                        offset += 8;</b>
+<i>347</i>&nbsp;                    }
+<i>348</i>&nbsp;
+<b class="nc"><i>349</i>&nbsp;                    byte[] finalBlock = new byte[8];</b>
+<b class="nc"><i>350</i>&nbsp;                    readFully(is, finalBlock);</b>
+<i>351</i>&nbsp;
+<b class="nc"><i>352</i>&nbsp;                    int padSize = finalBlock[7];</b>
+<b class="nc"><i>353</i>&nbsp;                    padding = pads[padSize];</b>
+<i>354</i>&nbsp;
+<i>355</i>&nbsp;                    // debug(&quot;\t\tPadding applied was: &quot; + padSize + &quot;\n&quot;);
+<b class="nc"><i>356</i>&nbsp;                    System.arraycopy(finalBlock, 0, dataBuf, offset,</b>
+<i>357</i>&nbsp;                                     finalBlock.length - padSize);
+<i>358</i>&nbsp;                }
+<i>359</i>&nbsp;            }
+<b class="nc"><i>360</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>361</i>&nbsp;            throw new GSSException(GSSException.DEFECTIVE_TOKEN, -1,</b>
+<b class="nc"><i>362</i>&nbsp;                                   getTokenName(getTokenId())</b>
+<b class="nc"><i>363</i>&nbsp;                                   + &quot;: &quot; + e.getMessage());</b>
+<b class="nc"><i>364</i>&nbsp;        }</b>
+<i>365</i>&nbsp;
+<i>366</i>&nbsp;        /*
+<i>367</i>&nbsp;         * Make sure sign and sequence number are not corrupt
+<i>368</i>&nbsp;         */
+<i>369</i>&nbsp;
+<b class="nc"><i>370</i>&nbsp;        if (!verifySignAndSeqNumber(confounder,</b>
+<i>371</i>&nbsp;                                    dataBuf, dataBufOffset,
+<i>372</i>&nbsp;                                    dataSize - CONFOUNDER_SIZE
+<i>373</i>&nbsp;                                    - padding.length,
+<i>374</i>&nbsp;                                    padding))
+<b class="nc"><i>375</i>&nbsp;            throw new GSSException(GSSException.BAD_MIC, -1,</b>
+<i>376</i>&nbsp;                         &quot;Corrupt checksum or sequence number in Wrap token&quot;);
+<i>377</i>&nbsp;    }
+<i>378</i>&nbsp;
+<i>379</i>&nbsp;
+<i>380</i>&nbsp;    /**
+<i>381</i>&nbsp;     * Helper routine to pick the right padding for a certain length
+<i>382</i>&nbsp;     * of application data. Every application message has some
+<i>383</i>&nbsp;     * padding between 1 and 8 bytes.
+<i>384</i>&nbsp;     * @param len the length of the application data
+<i>385</i>&nbsp;     * @return the padding to be applied
+<i>386</i>&nbsp;     */
+<i>387</i>&nbsp;    private byte[] getPadding(int len) {
+<b class="nc"><i>388</i>&nbsp;        int padSize = 0;</b>
+<i>389</i>&nbsp;        // For RC4-HMAC, all padding is rounded up to 1 byte.
+<i>390</i>&nbsp;        // One byte is needed to say that there is 1 byte of padding.
+<b class="nc"><i>391</i>&nbsp;        if (cipherHelper.isArcFour()) {</b>
+<b class="nc"><i>392</i>&nbsp;            padSize = 1;</b>
+<i>393</i>&nbsp;        } else {
+<b class="nc"><i>394</i>&nbsp;            padSize = len % 8;</b>
+<b class="nc"><i>395</i>&nbsp;            padSize = 8 - padSize;</b>
+<i>396</i>&nbsp;        }
+<b class="nc"><i>397</i>&nbsp;        return pads[padSize];</b>
+<i>398</i>&nbsp;    }
+<i>399</i>&nbsp;
+<i>400</i>&nbsp;    public WrapToken(Krb5Context context, MessageProp prop,
+<i>401</i>&nbsp;                     byte[] dataBytes, int dataOffset, int dataLen)
+<i>402</i>&nbsp;        throws GSSException {
+<i>403</i>&nbsp;
+<b class="nc"><i>404</i>&nbsp;        super(Krb5Token.WRAP_ID, context);</b>
+<i>405</i>&nbsp;
+<b class="nc"><i>406</i>&nbsp;        confounder = Confounder.bytes(CONFOUNDER_SIZE);</b>
+<i>407</i>&nbsp;
+<b class="nc"><i>408</i>&nbsp;        padding = getPadding(dataLen);</b>
+<b class="nc"><i>409</i>&nbsp;        dataSize = confounder.length + dataLen + padding.length;</b>
+<b class="nc"><i>410</i>&nbsp;        this.dataBytes = dataBytes;</b>
+<b class="nc"><i>411</i>&nbsp;        this.dataOffset = dataOffset;</b>
+<b class="nc"><i>412</i>&nbsp;        this.dataLen = dataLen;</b>
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;        /*
+<i>415</i>&nbsp;          debug(&quot;\nWrapToken cons: data to wrap is [&quot; +
+<i>416</i>&nbsp;          getHexBytes(confounder) + &quot; &quot; +
+<i>417</i>&nbsp;          getHexBytes(dataBytes, dataOffset, dataLen) + &quot; &quot; +
+<i>418</i>&nbsp;          // padding is never null for Wrap
+<i>419</i>&nbsp;          getHexBytes(padding) + &quot;]\n&quot;);
+<i>420</i>&nbsp;         */
+<i>421</i>&nbsp;
+<b class="nc"><i>422</i>&nbsp;        genSignAndSeqNumber(prop,</b>
+<i>423</i>&nbsp;                            confounder,
+<i>424</i>&nbsp;                            dataBytes, dataOffset, dataLen,
+<i>425</i>&nbsp;                            padding);
+<i>426</i>&nbsp;
+<i>427</i>&nbsp;        /*
+<i>428</i>&nbsp;         * If the application decides to ask for privacy when the context
+<i>429</i>&nbsp;         * did not negotiate for it, do not provide it. The peer might not
+<i>430</i>&nbsp;         * have support for it. The app will realize this with a call to
+<i>431</i>&nbsp;         * pop.getPrivacy() after wrap().
+<i>432</i>&nbsp;         */
+<b class="nc"><i>433</i>&nbsp;        if (!context.getConfState())</b>
+<b class="nc"><i>434</i>&nbsp;            prop.setPrivacy(false);</b>
+<i>435</i>&nbsp;
+<b class="nc"><i>436</i>&nbsp;        privacy = prop.getPrivacy();</b>
+<i>437</i>&nbsp;    }
+<i>438</i>&nbsp;
+<i>439</i>&nbsp;    public void encode(OutputStream os) throws IOException, GSSException {
+<i>440</i>&nbsp;
+<b class="nc"><i>441</i>&nbsp;        super.encode(os);</b>
+<i>442</i>&nbsp;
+<i>443</i>&nbsp;        // debug(&quot;Writing data: [&quot;);
+<b class="nc"><i>444</i>&nbsp;        if (!privacy) {</b>
+<i>445</i>&nbsp;
+<i>446</i>&nbsp;            // debug(getHexBytes(confounder, confounder.length));
+<b class="nc"><i>447</i>&nbsp;            os.write(confounder);</b>
+<i>448</i>&nbsp;
+<i>449</i>&nbsp;            // debug(&quot; &quot; + getHexBytes(dataBytes, dataOffset, dataLen));
+<b class="nc"><i>450</i>&nbsp;            os.write(dataBytes, dataOffset, dataLen);</b>
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;            // debug(&quot; &quot; + getHexBytes(padding, padding.length));
+<b class="nc"><i>453</i>&nbsp;            os.write(padding);</b>
+<i>454</i>&nbsp;
+<i>455</i>&nbsp;        } else {
+<i>456</i>&nbsp;
+<b class="nc"><i>457</i>&nbsp;            cipherHelper.encryptData(this, confounder,</b>
+<i>458</i>&nbsp;                dataBytes, dataOffset, dataLen, padding, os);
+<i>459</i>&nbsp;        }
+<i>460</i>&nbsp;        // debug(&quot;]\n&quot;);
+<i>461</i>&nbsp;    }
+<i>462</i>&nbsp;
+<i>463</i>&nbsp;    public byte[] encode() throws IOException, GSSException {
+<i>464</i>&nbsp;        // XXX Fine tune this initial size
+<b class="nc"><i>465</i>&nbsp;        ByteArrayOutputStream bos = new ByteArrayOutputStream(dataSize + 50);</b>
+<b class="nc"><i>466</i>&nbsp;        encode(bos);</b>
+<b class="nc"><i>467</i>&nbsp;        return bos.toByteArray();</b>
+<i>468</i>&nbsp;    }
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;    public int encode(byte[] outToken, int offset)
+<i>471</i>&nbsp;        throws IOException, GSSException  {
+<i>472</i>&nbsp;
+<i>473</i>&nbsp;        // Token header is small
+<b class="nc"><i>474</i>&nbsp;        ByteArrayOutputStream bos = new ByteArrayOutputStream();</b>
+<b class="nc"><i>475</i>&nbsp;        super.encode(bos);</b>
+<b class="nc"><i>476</i>&nbsp;        byte[] header = bos.toByteArray();</b>
+<b class="nc"><i>477</i>&nbsp;        System.arraycopy(header, 0, outToken, offset, header.length);</b>
+<b class="nc"><i>478</i>&nbsp;        offset += header.length;</b>
+<i>479</i>&nbsp;
+<i>480</i>&nbsp;        // debug(&quot;WrapToken.encode: Writing data: [&quot;);
+<b class="nc"><i>481</i>&nbsp;        if (!privacy) {</b>
+<i>482</i>&nbsp;
+<i>483</i>&nbsp;            // debug(getHexBytes(confounder, confounder.length));
+<b class="nc"><i>484</i>&nbsp;            System.arraycopy(confounder, 0, outToken, offset,</b>
+<i>485</i>&nbsp;                             confounder.length);
+<b class="nc"><i>486</i>&nbsp;            offset += confounder.length;</b>
+<i>487</i>&nbsp;
+<i>488</i>&nbsp;            // debug(&quot; &quot; + getHexBytes(dataBytes, dataOffset, dataLen));
+<b class="nc"><i>489</i>&nbsp;            System.arraycopy(dataBytes, dataOffset, outToken, offset,</b>
+<i>490</i>&nbsp;                             dataLen);
+<b class="nc"><i>491</i>&nbsp;            offset += dataLen;</b>
+<i>492</i>&nbsp;
+<i>493</i>&nbsp;            // debug(&quot; &quot; + getHexBytes(padding, padding.length));
+<b class="nc"><i>494</i>&nbsp;            System.arraycopy(padding, 0, outToken, offset, padding.length);</b>
+<i>495</i>&nbsp;
+<i>496</i>&nbsp;        } else {
+<i>497</i>&nbsp;
+<b class="nc"><i>498</i>&nbsp;            cipherHelper.encryptData(this, confounder, dataBytes,</b>
+<i>499</i>&nbsp;                dataOffset, dataLen, padding, outToken, offset);
+<i>500</i>&nbsp;
+<i>501</i>&nbsp;            // debug(getHexBytes(outToken, offset, dataSize));
+<i>502</i>&nbsp;        }
+<i>503</i>&nbsp;
+<i>504</i>&nbsp;        // debug(&quot;]\n&quot;);
+<i>505</i>&nbsp;
+<i>506</i>&nbsp;        // %%% assume that plaintext length == ciphertext len
+<b class="nc"><i>507</i>&nbsp;        return (header.length + confounder.length + dataLen + padding.length);</b>
+<i>508</i>&nbsp;
+<i>509</i>&nbsp;    }
+<i>510</i>&nbsp;
+<i>511</i>&nbsp;    protected int getKrb5TokenSize() throws GSSException {
+<b class="nc"><i>512</i>&nbsp;        return (getTokenSize() + dataSize);</b>
+<i>513</i>&nbsp;    }
+<i>514</i>&nbsp;
+<i>515</i>&nbsp;    protected int getSealAlg(boolean conf, int qop) throws GSSException {
+<b class="nc"><i>516</i>&nbsp;        if (!conf) {</b>
+<b class="nc"><i>517</i>&nbsp;            return SEAL_ALG_NONE;</b>
+<i>518</i>&nbsp;        }
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;        // ignore QOP
+<b class="nc"><i>521</i>&nbsp;        return cipherHelper.getSealAlg();</b>
+<i>522</i>&nbsp;    }
+<i>523</i>&nbsp;
+<i>524</i>&nbsp;    // This implementation is way too conservative. And it certainly
+<i>525</i>&nbsp;    // doesn&#39;t return the maximum limit.
+<i>526</i>&nbsp;    static int getSizeLimit(int qop, boolean confReq, int maxTokenSize,
+<i>527</i>&nbsp;        CipherHelper ch) throws GSSException {
+<b class="nc"><i>528</i>&nbsp;        return (GSSHeader.getMaxMechTokenSize(OID, maxTokenSize) -</b>
+<b class="nc"><i>529</i>&nbsp;                (getTokenSize(ch) + CONFOUNDER_SIZE) - 8); /* safety */</b>
+<i>530</i>&nbsp;    }
+<i>531</i>&nbsp;
+<i>532</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

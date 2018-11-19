@@ -1,0 +1,1256 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Phaser</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.concurrent</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Phaser (java.util.concurrent)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Phaser</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 37)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 248)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">Phaser$QNode</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 32)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 40)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 280)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; */
+<i>24</i>&nbsp;
+<i>25</i>&nbsp;/*
+<i>26</i>&nbsp; *
+<i>27</i>&nbsp; *
+<i>28</i>&nbsp; *
+<i>29</i>&nbsp; *
+<i>30</i>&nbsp; *
+<i>31</i>&nbsp; * Written by Doug Lea with assistance from members of JCP JSR-166
+<i>32</i>&nbsp; * Expert Group and released to the public domain, as explained at
+<i>33</i>&nbsp; * http://creativecommons.org/publicdomain/zero/1.0/
+<i>34</i>&nbsp; */
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;package java.util.concurrent;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import java.lang.invoke.MethodHandles;
+<i>39</i>&nbsp;import java.lang.invoke.VarHandle;
+<i>40</i>&nbsp;import java.util.concurrent.atomic.AtomicReference;
+<i>41</i>&nbsp;import java.util.concurrent.locks.LockSupport;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;/**
+<i>44</i>&nbsp; * A reusable synchronization barrier, similar in functionality to
+<i>45</i>&nbsp; * {@link CyclicBarrier} and {@link CountDownLatch} but supporting
+<i>46</i>&nbsp; * more flexible usage.
+<i>47</i>&nbsp; *
+<i>48</i>&nbsp; * &lt;p&gt;&lt;b&gt;Registration.&lt;/b&gt; Unlike the case for other barriers, the
+<i>49</i>&nbsp; * number of parties &lt;em&gt;registered&lt;/em&gt; to synchronize on a phaser
+<i>50</i>&nbsp; * may vary over time.  Tasks may be registered at any time (using
+<i>51</i>&nbsp; * methods {@link #register}, {@link #bulkRegister}, or forms of
+<i>52</i>&nbsp; * constructors establishing initial numbers of parties), and
+<i>53</i>&nbsp; * optionally deregistered upon any arrival (using {@link
+<i>54</i>&nbsp; * #arriveAndDeregister}).  As is the case with most basic
+<i>55</i>&nbsp; * synchronization constructs, registration and deregistration affect
+<i>56</i>&nbsp; * only internal counts; they do not establish any further internal
+<i>57</i>&nbsp; * bookkeeping, so tasks cannot query whether they are registered.
+<i>58</i>&nbsp; * (However, you can introduce such bookkeeping by subclassing this
+<i>59</i>&nbsp; * class.)
+<i>60</i>&nbsp; *
+<i>61</i>&nbsp; * &lt;p&gt;&lt;b&gt;Synchronization.&lt;/b&gt; Like a {@code CyclicBarrier}, a {@code
+<i>62</i>&nbsp; * Phaser} may be repeatedly awaited.  Method {@link
+<i>63</i>&nbsp; * #arriveAndAwaitAdvance} has effect analogous to {@link
+<i>64</i>&nbsp; * java.util.concurrent.CyclicBarrier#await CyclicBarrier.await}. Each
+<i>65</i>&nbsp; * generation of a phaser has an associated phase number. The phase
+<i>66</i>&nbsp; * number starts at zero, and advances when all parties arrive at the
+<i>67</i>&nbsp; * phaser, wrapping around to zero after reaching {@code
+<i>68</i>&nbsp; * Integer.MAX_VALUE}. The use of phase numbers enables independent
+<i>69</i>&nbsp; * control of actions upon arrival at a phaser and upon awaiting
+<i>70</i>&nbsp; * others, via two kinds of methods that may be invoked by any
+<i>71</i>&nbsp; * registered party:
+<i>72</i>&nbsp; *
+<i>73</i>&nbsp; * &lt;ul&gt;
+<i>74</i>&nbsp; *
+<i>75</i>&nbsp; *   &lt;li&gt;&lt;b&gt;Arrival.&lt;/b&gt; Methods {@link #arrive} and
+<i>76</i>&nbsp; *       {@link #arriveAndDeregister} record arrival.  These methods
+<i>77</i>&nbsp; *       do not block, but return an associated &lt;em&gt;arrival phase
+<i>78</i>&nbsp; *       number&lt;/em&gt;; that is, the phase number of the phaser to which
+<i>79</i>&nbsp; *       the arrival applied. When the final party for a given phase
+<i>80</i>&nbsp; *       arrives, an optional action is performed and the phase
+<i>81</i>&nbsp; *       advances.  These actions are performed by the party
+<i>82</i>&nbsp; *       triggering a phase advance, and are arranged by overriding
+<i>83</i>&nbsp; *       method {@link #onAdvance(int, int)}, which also controls
+<i>84</i>&nbsp; *       termination. Overriding this method is similar to, but more
+<i>85</i>&nbsp; *       flexible than, providing a barrier action to a {@code
+<i>86</i>&nbsp; *       CyclicBarrier}.
+<i>87</i>&nbsp; *
+<i>88</i>&nbsp; *   &lt;li&gt;&lt;b&gt;Waiting.&lt;/b&gt; Method {@link #awaitAdvance} requires an
+<i>89</i>&nbsp; *       argument indicating an arrival phase number, and returns when
+<i>90</i>&nbsp; *       the phaser advances to (or is already at) a different phase.
+<i>91</i>&nbsp; *       Unlike similar constructions using {@code CyclicBarrier},
+<i>92</i>&nbsp; *       method {@code awaitAdvance} continues to wait even if the
+<i>93</i>&nbsp; *       waiting thread is interrupted. Interruptible and timeout
+<i>94</i>&nbsp; *       versions are also available, but exceptions encountered while
+<i>95</i>&nbsp; *       tasks wait interruptibly or with timeout do not change the
+<i>96</i>&nbsp; *       state of the phaser. If necessary, you can perform any
+<i>97</i>&nbsp; *       associated recovery within handlers of those exceptions,
+<i>98</i>&nbsp; *       often after invoking {@code forceTermination}.  Phasers may
+<i>99</i>&nbsp; *       also be used by tasks executing in a {@link ForkJoinPool}.
+<i>100</i>&nbsp; *       Progress is ensured if the pool&#39;s parallelismLevel can
+<i>101</i>&nbsp; *       accommodate the maximum number of simultaneously blocked
+<i>102</i>&nbsp; *       parties.
+<i>103</i>&nbsp; *
+<i>104</i>&nbsp; * &lt;/ul&gt;
+<i>105</i>&nbsp; *
+<i>106</i>&nbsp; * &lt;p&gt;&lt;b&gt;Termination.&lt;/b&gt; A phaser may enter a &lt;em&gt;termination&lt;/em&gt;
+<i>107</i>&nbsp; * state, that may be checked using method {@link #isTerminated}. Upon
+<i>108</i>&nbsp; * termination, all synchronization methods immediately return without
+<i>109</i>&nbsp; * waiting for advance, as indicated by a negative return value.
+<i>110</i>&nbsp; * Similarly, attempts to register upon termination have no effect.
+<i>111</i>&nbsp; * Termination is triggered when an invocation of {@code onAdvance}
+<i>112</i>&nbsp; * returns {@code true}. The default implementation returns {@code
+<i>113</i>&nbsp; * true} if a deregistration has caused the number of registered
+<i>114</i>&nbsp; * parties to become zero.  As illustrated below, when phasers control
+<i>115</i>&nbsp; * actions with a fixed number of iterations, it is often convenient
+<i>116</i>&nbsp; * to override this method to cause termination when the current phase
+<i>117</i>&nbsp; * number reaches a threshold. Method {@link #forceTermination} is
+<i>118</i>&nbsp; * also available to abruptly release waiting threads and allow them
+<i>119</i>&nbsp; * to terminate.
+<i>120</i>&nbsp; *
+<i>121</i>&nbsp; * &lt;p&gt;&lt;b&gt;Tiering.&lt;/b&gt; Phasers may be &lt;em&gt;tiered&lt;/em&gt; (i.e.,
+<i>122</i>&nbsp; * constructed in tree structures) to reduce contention. Phasers with
+<i>123</i>&nbsp; * large numbers of parties that would otherwise experience heavy
+<i>124</i>&nbsp; * synchronization contention costs may instead be set up so that
+<i>125</i>&nbsp; * groups of sub-phasers share a common parent.  This may greatly
+<i>126</i>&nbsp; * increase throughput even though it incurs greater per-operation
+<i>127</i>&nbsp; * overhead.
+<i>128</i>&nbsp; *
+<i>129</i>&nbsp; * &lt;p&gt;In a tree of tiered phasers, registration and deregistration of
+<i>130</i>&nbsp; * child phasers with their parent are managed automatically.
+<i>131</i>&nbsp; * Whenever the number of registered parties of a child phaser becomes
+<i>132</i>&nbsp; * non-zero (as established in the {@link #Phaser(Phaser,int)}
+<i>133</i>&nbsp; * constructor, {@link #register}, or {@link #bulkRegister}), the
+<i>134</i>&nbsp; * child phaser is registered with its parent.  Whenever the number of
+<i>135</i>&nbsp; * registered parties becomes zero as the result of an invocation of
+<i>136</i>&nbsp; * {@link #arriveAndDeregister}, the child phaser is deregistered
+<i>137</i>&nbsp; * from its parent.
+<i>138</i>&nbsp; *
+<i>139</i>&nbsp; * &lt;p&gt;&lt;b&gt;Monitoring.&lt;/b&gt; While synchronization methods may be invoked
+<i>140</i>&nbsp; * only by registered parties, the current state of a phaser may be
+<i>141</i>&nbsp; * monitored by any caller.  At any given moment there are {@link
+<i>142</i>&nbsp; * #getRegisteredParties} parties in total, of which {@link
+<i>143</i>&nbsp; * #getArrivedParties} have arrived at the current phase ({@link
+<i>144</i>&nbsp; * #getPhase}).  When the remaining ({@link #getUnarrivedParties})
+<i>145</i>&nbsp; * parties arrive, the phase advances.  The values returned by these
+<i>146</i>&nbsp; * methods may reflect transient states and so are not in general
+<i>147</i>&nbsp; * useful for synchronization control.  Method {@link #toString}
+<i>148</i>&nbsp; * returns snapshots of these state queries in a form convenient for
+<i>149</i>&nbsp; * informal monitoring.
+<i>150</i>&nbsp; *
+<i>151</i>&nbsp; * &lt;p&gt;&lt;b&gt;Sample usages:&lt;/b&gt;
+<i>152</i>&nbsp; *
+<i>153</i>&nbsp; * &lt;p&gt;A {@code Phaser} may be used instead of a {@code CountDownLatch}
+<i>154</i>&nbsp; * to control a one-shot action serving a variable number of parties.
+<i>155</i>&nbsp; * The typical idiom is for the method setting this up to first
+<i>156</i>&nbsp; * register, then start all the actions, then deregister, as in:
+<i>157</i>&nbsp; *
+<i>158</i>&nbsp; * &lt;pre&gt; {@code
+<i>159</i>&nbsp; * void runTasks(List&lt;Runnable&gt; tasks) {
+<i>160</i>&nbsp; *   Phaser startingGate = new Phaser(1); // &quot;1&quot; to register self
+<i>161</i>&nbsp; *   // create and start threads
+<i>162</i>&nbsp; *   for (Runnable task : tasks) {
+<i>163</i>&nbsp; *     startingGate.register();
+<i>164</i>&nbsp; *     new Thread(() -&gt; {
+<i>165</i>&nbsp; *       startingGate.arriveAndAwaitAdvance();
+<i>166</i>&nbsp; *       task.run();
+<i>167</i>&nbsp; *     }).start();
+<i>168</i>&nbsp; *   }
+<i>169</i>&nbsp; *
+<i>170</i>&nbsp; *   // deregister self to allow threads to proceed
+<i>171</i>&nbsp; *   startingGate.arriveAndDeregister();
+<i>172</i>&nbsp; * }}&lt;/pre&gt;
+<i>173</i>&nbsp; *
+<i>174</i>&nbsp; * &lt;p&gt;One way to cause a set of threads to repeatedly perform actions
+<i>175</i>&nbsp; * for a given number of iterations is to override {@code onAdvance}:
+<i>176</i>&nbsp; *
+<i>177</i>&nbsp; * &lt;pre&gt; {@code
+<i>178</i>&nbsp; * void startTasks(List&lt;Runnable&gt; tasks, int iterations) {
+<i>179</i>&nbsp; *   Phaser phaser = new Phaser() {
+<i>180</i>&nbsp; *     protected boolean onAdvance(int phase, int registeredParties) {
+<i>181</i>&nbsp; *       return phase &gt;= iterations - 1 || registeredParties == 0;
+<i>182</i>&nbsp; *     }
+<i>183</i>&nbsp; *   };
+<i>184</i>&nbsp; *   phaser.register();
+<i>185</i>&nbsp; *   for (Runnable task : tasks) {
+<i>186</i>&nbsp; *     phaser.register();
+<i>187</i>&nbsp; *     new Thread(() -&gt; {
+<i>188</i>&nbsp; *       do {
+<i>189</i>&nbsp; *         task.run();
+<i>190</i>&nbsp; *         phaser.arriveAndAwaitAdvance();
+<i>191</i>&nbsp; *       } while (!phaser.isTerminated());
+<i>192</i>&nbsp; *     }).start();
+<i>193</i>&nbsp; *   }
+<i>194</i>&nbsp; *   // allow threads to proceed; don&#39;t wait for them
+<i>195</i>&nbsp; *   phaser.arriveAndDeregister();
+<i>196</i>&nbsp; * }}&lt;/pre&gt;
+<i>197</i>&nbsp; *
+<i>198</i>&nbsp; * If the main task must later await termination, it
+<i>199</i>&nbsp; * may re-register and then execute a similar loop:
+<i>200</i>&nbsp; * &lt;pre&gt; {@code
+<i>201</i>&nbsp; *   // ...
+<i>202</i>&nbsp; *   phaser.register();
+<i>203</i>&nbsp; *   while (!phaser.isTerminated())
+<i>204</i>&nbsp; *     phaser.arriveAndAwaitAdvance();}&lt;/pre&gt;
+<i>205</i>&nbsp; *
+<i>206</i>&nbsp; * &lt;p&gt;Related constructions may be used to await particular phase numbers
+<i>207</i>&nbsp; * in contexts where you are sure that the phase will never wrap around
+<i>208</i>&nbsp; * {@code Integer.MAX_VALUE}. For example:
+<i>209</i>&nbsp; *
+<i>210</i>&nbsp; * &lt;pre&gt; {@code
+<i>211</i>&nbsp; * void awaitPhase(Phaser phaser, int phase) {
+<i>212</i>&nbsp; *   int p = phaser.register(); // assumes caller not already registered
+<i>213</i>&nbsp; *   while (p &lt; phase) {
+<i>214</i>&nbsp; *     if (phaser.isTerminated())
+<i>215</i>&nbsp; *       // ... deal with unexpected termination
+<i>216</i>&nbsp; *     else
+<i>217</i>&nbsp; *       p = phaser.arriveAndAwaitAdvance();
+<i>218</i>&nbsp; *   }
+<i>219</i>&nbsp; *   phaser.arriveAndDeregister();
+<i>220</i>&nbsp; * }}&lt;/pre&gt;
+<i>221</i>&nbsp; *
+<i>222</i>&nbsp; * &lt;p&gt;To create a set of {@code n} tasks using a tree of phasers, you
+<i>223</i>&nbsp; * could use code of the following form, assuming a Task class with a
+<i>224</i>&nbsp; * constructor accepting a {@code Phaser} that it registers with upon
+<i>225</i>&nbsp; * construction. After invocation of {@code build(new Task[n], 0, n,
+<i>226</i>&nbsp; * new Phaser())}, these tasks could then be started, for example by
+<i>227</i>&nbsp; * submitting to a pool:
+<i>228</i>&nbsp; *
+<i>229</i>&nbsp; * &lt;pre&gt; {@code
+<i>230</i>&nbsp; * void build(Task[] tasks, int lo, int hi, Phaser ph) {
+<i>231</i>&nbsp; *   if (hi - lo &gt; TASKS_PER_PHASER) {
+<i>232</i>&nbsp; *     for (int i = lo; i &lt; hi; i += TASKS_PER_PHASER) {
+<i>233</i>&nbsp; *       int j = Math.min(i + TASKS_PER_PHASER, hi);
+<i>234</i>&nbsp; *       build(tasks, i, j, new Phaser(ph));
+<i>235</i>&nbsp; *     }
+<i>236</i>&nbsp; *   } else {
+<i>237</i>&nbsp; *     for (int i = lo; i &lt; hi; ++i)
+<i>238</i>&nbsp; *       tasks[i] = new Task(ph);
+<i>239</i>&nbsp; *       // assumes new Task(ph) performs ph.register()
+<i>240</i>&nbsp; *   }
+<i>241</i>&nbsp; * }}&lt;/pre&gt;
+<i>242</i>&nbsp; *
+<i>243</i>&nbsp; * The best value of {@code TASKS_PER_PHASER} depends mainly on
+<i>244</i>&nbsp; * expected synchronization rates. A value as low as four may
+<i>245</i>&nbsp; * be appropriate for extremely small per-phase task bodies (thus
+<i>246</i>&nbsp; * high rates), or up to hundreds for extremely large ones.
+<i>247</i>&nbsp; *
+<i>248</i>&nbsp; * &lt;p&gt;&lt;b&gt;Implementation notes&lt;/b&gt;: This implementation restricts the
+<i>249</i>&nbsp; * maximum number of parties to 65535. Attempts to register additional
+<i>250</i>&nbsp; * parties result in {@code IllegalStateException}. However, you can and
+<i>251</i>&nbsp; * should create tiered phasers to accommodate arbitrarily large sets
+<i>252</i>&nbsp; * of participants.
+<i>253</i>&nbsp; *
+<i>254</i>&nbsp; * @since 1.7
+<i>255</i>&nbsp; * @author Doug Lea
+<i>256</i>&nbsp; */
+<i>257</i>&nbsp;public class Phaser {
+<i>258</i>&nbsp;    /*
+<i>259</i>&nbsp;     * This class implements an extension of X10 &quot;clocks&quot;.  Thanks to
+<i>260</i>&nbsp;     * Vijay Saraswat for the idea, and to Vivek Sarkar for
+<i>261</i>&nbsp;     * enhancements to extend functionality.
+<i>262</i>&nbsp;     */
+<i>263</i>&nbsp;
+<i>264</i>&nbsp;    /**
+<i>265</i>&nbsp;     * Primary state representation, holding four bit-fields:
+<i>266</i>&nbsp;     *
+<i>267</i>&nbsp;     * unarrived  -- the number of parties yet to hit barrier (bits  0-15)
+<i>268</i>&nbsp;     * parties    -- the number of parties to wait            (bits 16-31)
+<i>269</i>&nbsp;     * phase      -- the generation of the barrier            (bits 32-62)
+<i>270</i>&nbsp;     * terminated -- set if barrier is terminated             (bit  63 / sign)
+<i>271</i>&nbsp;     *
+<i>272</i>&nbsp;     * Except that a phaser with no registered parties is
+<i>273</i>&nbsp;     * distinguished by the otherwise illegal state of having zero
+<i>274</i>&nbsp;     * parties and one unarrived parties (encoded as EMPTY below).
+<i>275</i>&nbsp;     *
+<i>276</i>&nbsp;     * To efficiently maintain atomicity, these values are packed into
+<i>277</i>&nbsp;     * a single (atomic) long. Good performance relies on keeping
+<i>278</i>&nbsp;     * state decoding and encoding simple, and keeping race windows
+<i>279</i>&nbsp;     * short.
+<i>280</i>&nbsp;     *
+<i>281</i>&nbsp;     * All state updates are performed via CAS except initial
+<i>282</i>&nbsp;     * registration of a sub-phaser (i.e., one with a non-null
+<i>283</i>&nbsp;     * parent).  In this (relatively rare) case, we use built-in
+<i>284</i>&nbsp;     * synchronization to lock while first registering with its
+<i>285</i>&nbsp;     * parent.
+<i>286</i>&nbsp;     *
+<i>287</i>&nbsp;     * The phase of a subphaser is allowed to lag that of its
+<i>288</i>&nbsp;     * ancestors until it is actually accessed -- see method
+<i>289</i>&nbsp;     * reconcileState.
+<i>290</i>&nbsp;     */
+<i>291</i>&nbsp;    private volatile long state;
+<i>292</i>&nbsp;
+<i>293</i>&nbsp;    private static final int  MAX_PARTIES     = 0xffff;
+<i>294</i>&nbsp;    private static final int  MAX_PHASE       = Integer.MAX_VALUE;
+<i>295</i>&nbsp;    private static final int  PARTIES_SHIFT   = 16;
+<i>296</i>&nbsp;    private static final int  PHASE_SHIFT     = 32;
+<i>297</i>&nbsp;    private static final int  UNARRIVED_MASK  = 0xffff;      // to mask ints
+<i>298</i>&nbsp;    private static final long PARTIES_MASK    = 0xffff0000L; // to mask longs
+<i>299</i>&nbsp;    private static final long COUNTS_MASK     = 0xffffffffL;
+<i>300</i>&nbsp;    private static final long TERMINATION_BIT = 1L &lt;&lt; 63;
+<i>301</i>&nbsp;
+<i>302</i>&nbsp;    // some special values
+<i>303</i>&nbsp;    private static final int  ONE_ARRIVAL     = 1;
+<i>304</i>&nbsp;    private static final int  ONE_PARTY       = 1 &lt;&lt; PARTIES_SHIFT;
+<i>305</i>&nbsp;    private static final int  ONE_DEREGISTER  = ONE_ARRIVAL|ONE_PARTY;
+<i>306</i>&nbsp;    private static final int  EMPTY           = 1;
+<i>307</i>&nbsp;
+<i>308</i>&nbsp;    // The following unpacking methods are usually manually inlined
+<i>309</i>&nbsp;
+<i>310</i>&nbsp;    private static int unarrivedOf(long s) {
+<i>311</i>&nbsp;        int counts = (int)s;
+<i>312</i>&nbsp;        return (counts == EMPTY) ? 0 : (counts &amp; UNARRIVED_MASK);
+<i>313</i>&nbsp;    }
+<i>314</i>&nbsp;
+<b class="nc"><i>315</i>&nbsp;    private static int partiesOf(long s) {</b>
+<b class="nc"><i>316</i>&nbsp;        return (int)s &gt;&gt;&gt; PARTIES_SHIFT;</b>
+<i>317</i>&nbsp;    }
+<i>318</i>&nbsp;
+<i>319</i>&nbsp;    private static int phaseOf(long s) {
+<b class="nc"><i>320</i>&nbsp;        return (int)(s &gt;&gt;&gt; PHASE_SHIFT);</b>
+<i>321</i>&nbsp;    }
+<i>322</i>&nbsp;
+<i>323</i>&nbsp;    private static int arrivedOf(long s) {
+<b class="nc"><i>324</i>&nbsp;        int counts = (int)s;</b>
+<i>325</i>&nbsp;        return (counts == EMPTY) ? 0 :
+<i>326</i>&nbsp;            (counts &gt;&gt;&gt; PARTIES_SHIFT) - (counts &amp; UNARRIVED_MASK);
+<i>327</i>&nbsp;    }
+<b class="nc"><i>328</i>&nbsp;</b>
+<b class="nc"><i>329</i>&nbsp;    /**</b>
+<i>330</i>&nbsp;     * The parent of this phaser, or null if none.
+<i>331</i>&nbsp;     */
+<i>332</i>&nbsp;    private final Phaser parent;
+<i>333</i>&nbsp;
+<i>334</i>&nbsp;    /**
+<i>335</i>&nbsp;     * The root of phaser tree. Equals this if not in a tree.
+<i>336</i>&nbsp;     */
+<i>337</i>&nbsp;    private final Phaser root;
+<i>338</i>&nbsp;
+<i>339</i>&nbsp;    /**
+<i>340</i>&nbsp;     * Heads of Treiber stacks for waiting threads. To eliminate
+<i>341</i>&nbsp;     * contention when releasing some threads while adding others, we
+<i>342</i>&nbsp;     * use two of them, alternating across even and odd phases.
+<i>343</i>&nbsp;     * Subphasers share queues with root to speed up releases.
+<i>344</i>&nbsp;     */
+<i>345</i>&nbsp;    private final AtomicReference&lt;QNode&gt; evenQ;
+<i>346</i>&nbsp;    private final AtomicReference&lt;QNode&gt; oddQ;
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;    /**
+<i>349</i>&nbsp;     * Returns message string for bounds exceptions on arrival.
+<i>350</i>&nbsp;     */
+<i>351</i>&nbsp;    private String badArrive(long s) {
+<i>352</i>&nbsp;        return &quot;Attempted arrival of unregistered party for &quot; +
+<b class="nc"><i>353</i>&nbsp;            stateToString(s);</b>
+<i>354</i>&nbsp;    }
+<i>355</i>&nbsp;
+<i>356</i>&nbsp;    /**
+<i>357</i>&nbsp;     * Returns message string for bounds exceptions on registration.
+<i>358</i>&nbsp;     */
+<i>359</i>&nbsp;    private String badRegister(long s) {
+<b class="nc"><i>360</i>&nbsp;        return &quot;Attempt to register more than &quot; +</b>
+<b class="nc"><i>361</i>&nbsp;            MAX_PARTIES + &quot; parties for &quot; + stateToString(s);</b>
+<i>362</i>&nbsp;    }
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;    /**
+<i>365</i>&nbsp;     * Main implementation for methods arrive and arriveAndDeregister.
+<i>366</i>&nbsp;     * Manually tuned to speed up and minimize race windows for the
+<i>367</i>&nbsp;     * common case of just decrementing unarrived field.
+<b class="nc"><i>368</i>&nbsp;     *</b>
+<b class="nc"><i>369</i>&nbsp;     * @param adjust value to subtract from state;</b>
+<i>370</i>&nbsp;     *               ONE_ARRIVAL for arrive,
+<i>371</i>&nbsp;     *               ONE_DEREGISTER for arriveAndDeregister
+<i>372</i>&nbsp;     */
+<i>373</i>&nbsp;    private int doArrive(int adjust) {
+<i>374</i>&nbsp;        final Phaser root = this.root;
+<i>375</i>&nbsp;        for (;;) {
+<i>376</i>&nbsp;            long s = (root == this) ? state : reconcileState();
+<i>377</i>&nbsp;            int phase = (int)(s &gt;&gt;&gt; PHASE_SHIFT);
+<i>378</i>&nbsp;            if (phase &lt; 0)
+<i>379</i>&nbsp;                return phase;
+<i>380</i>&nbsp;            int counts = (int)s;
+<i>381</i>&nbsp;            int unarrived = (counts == EMPTY) ? 0 : (counts &amp; UNARRIVED_MASK);
+<b class="nc"><i>382</i>&nbsp;            if (unarrived &lt;= 0)</b>
+<i>383</i>&nbsp;                throw new IllegalStateException(badArrive(s));
+<b class="nc"><i>384</i>&nbsp;            if (STATE.compareAndSet(this, s, s-=adjust)) {</b>
+<b class="nc"><i>385</i>&nbsp;                if (unarrived == 1) {</b>
+<b class="nc"><i>386</i>&nbsp;                    long n = s &amp; PARTIES_MASK;  // base of next state</b>
+<b class="nc"><i>387</i>&nbsp;                    int nextUnarrived = (int)n &gt;&gt;&gt; PARTIES_SHIFT;</b>
+<b class="nc"><i>388</i>&nbsp;                    if (root == this) {</b>
+<b class="nc"><i>389</i>&nbsp;                        if (onAdvance(phase, nextUnarrived))</b>
+<b class="nc"><i>390</i>&nbsp;                            n |= TERMINATION_BIT;</b>
+<b class="nc"><i>391</i>&nbsp;                        else if (nextUnarrived == 0)</b>
+<b class="nc"><i>392</i>&nbsp;                            n |= EMPTY;</b>
+<b class="nc"><i>393</i>&nbsp;                        else</b>
+<b class="nc"><i>394</i>&nbsp;                            n |= nextUnarrived;</b>
+<b class="nc"><i>395</i>&nbsp;                        int nextPhase = (phase + 1) &amp; MAX_PHASE;</b>
+<b class="nc"><i>396</i>&nbsp;                        n |= (long)nextPhase &lt;&lt; PHASE_SHIFT;</b>
+<b class="nc"><i>397</i>&nbsp;                        STATE.compareAndSet(this, s, n);</b>
+<b class="nc"><i>398</i>&nbsp;                        releaseWaiters(phase);</b>
+<b class="nc"><i>399</i>&nbsp;                    }</b>
+<b class="nc"><i>400</i>&nbsp;                    else if (nextUnarrived == 0) { // propagate deregistration</b>
+<i>401</i>&nbsp;                        phase = parent.doArrive(ONE_DEREGISTER);
+<b class="nc"><i>402</i>&nbsp;                        STATE.compareAndSet(this, s, s | EMPTY);</b>
+<b class="nc"><i>403</i>&nbsp;                    }</b>
+<b class="nc"><i>404</i>&nbsp;                    else</b>
+<b class="nc"><i>405</i>&nbsp;                        phase = parent.doArrive(ONE_ARRIVAL);</b>
+<b class="nc"><i>406</i>&nbsp;                }</b>
+<b class="nc"><i>407</i>&nbsp;                return phase;</b>
+<b class="nc"><i>408</i>&nbsp;            }</b>
+<b class="nc"><i>409</i>&nbsp;        }</b>
+<b class="nc"><i>410</i>&nbsp;    }</b>
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;    /**
+<i>413</i>&nbsp;     * Implementation of register, bulkRegister.
+<b class="nc"><i>414</i>&nbsp;     *</b>
+<i>415</i>&nbsp;     * @param registrations number to add to both parties and
+<b class="nc"><i>416</i>&nbsp;     * unarrived fields. Must be greater than zero.</b>
+<i>417</i>&nbsp;     */
+<b class="nc"><i>418</i>&nbsp;    private int doRegister(int registrations) {</b>
+<i>419</i>&nbsp;        // adjustment to state
+<i>420</i>&nbsp;        long adjust = ((long)registrations &lt;&lt; PARTIES_SHIFT) | registrations;
+<i>421</i>&nbsp;        final Phaser parent = this.parent;
+<i>422</i>&nbsp;        int phase;
+<i>423</i>&nbsp;        for (;;) {
+<i>424</i>&nbsp;            long s = (parent == null) ? state : reconcileState();
+<i>425</i>&nbsp;            int counts = (int)s;
+<i>426</i>&nbsp;            int parties = counts &gt;&gt;&gt; PARTIES_SHIFT;
+<i>427</i>&nbsp;            int unarrived = counts &amp; UNARRIVED_MASK;
+<i>428</i>&nbsp;            if (registrations &gt; MAX_PARTIES - parties)
+<b class="nc"><i>429</i>&nbsp;                throw new IllegalStateException(badRegister(s));</b>
+<b class="nc"><i>430</i>&nbsp;            phase = (int)(s &gt;&gt;&gt; PHASE_SHIFT);</b>
+<i>431</i>&nbsp;            if (phase &lt; 0)
+<i>432</i>&nbsp;                break;
+<b class="nc"><i>433</i>&nbsp;            if (counts != EMPTY) {                  // not 1st registration</b>
+<b class="nc"><i>434</i>&nbsp;                if (parent == null || reconcileState() == s) {</b>
+<b class="nc"><i>435</i>&nbsp;                    if (unarrived == 0)             // wait out advance</b>
+<b class="nc"><i>436</i>&nbsp;                        root.internalAwaitAdvance(phase, null);</b>
+<b class="nc"><i>437</i>&nbsp;                    else if (STATE.compareAndSet(this, s, s + adjust))</b>
+<b class="nc"><i>438</i>&nbsp;                        break;</b>
+<b class="nc"><i>439</i>&nbsp;                }</b>
+<b class="nc"><i>440</i>&nbsp;            }</b>
+<b class="nc"><i>441</i>&nbsp;            else if (parent == null) {              // 1st root registration</b>
+<b class="nc"><i>442</i>&nbsp;                long next = ((long)phase &lt;&lt; PHASE_SHIFT) | adjust;</b>
+<b class="nc"><i>443</i>&nbsp;                if (STATE.compareAndSet(this, s, next))</b>
+<b class="nc"><i>444</i>&nbsp;                    break;</b>
+<b class="nc"><i>445</i>&nbsp;            }</b>
+<b class="nc"><i>446</i>&nbsp;            else {</b>
+<i>447</i>&nbsp;                synchronized (this) {               // 1st sub registration
+<b class="nc"><i>448</i>&nbsp;                    if (state == s) {               // recheck under lock</b>
+<i>449</i>&nbsp;                        phase = parent.doRegister(1);
+<i>450</i>&nbsp;                        if (phase &lt; 0)
+<b class="nc"><i>451</i>&nbsp;                            break;</b>
+<b class="nc"><i>452</i>&nbsp;                        // finish registration whenever parent registration</b>
+<b class="nc"><i>453</i>&nbsp;                        // succeeded, even when racing with termination,</b>
+<b class="nc"><i>454</i>&nbsp;                        // since these are part of the same &quot;transaction&quot;.</b>
+<b class="nc"><i>455</i>&nbsp;                        while (!STATE.weakCompareAndSet</b>
+<i>456</i>&nbsp;                               (this, s,
+<b class="nc"><i>457</i>&nbsp;                                ((long)phase &lt;&lt; PHASE_SHIFT) | adjust)) {</b>
+<b class="nc"><i>458</i>&nbsp;                            s = state;</b>
+<b class="nc"><i>459</i>&nbsp;                            phase = (int)(root.state &gt;&gt;&gt; PHASE_SHIFT);</b>
+<b class="nc"><i>460</i>&nbsp;                            // assert (int)s == EMPTY;</b>
+<b class="nc"><i>461</i>&nbsp;                        }</b>
+<i>462</i>&nbsp;                        break;
+<i>463</i>&nbsp;                    }
+<i>464</i>&nbsp;                }
+<b class="nc"><i>465</i>&nbsp;            }</b>
+<b class="nc"><i>466</i>&nbsp;        }</b>
+<i>467</i>&nbsp;        return phase;
+<b class="nc"><i>468</i>&nbsp;    }</b>
+<b class="nc"><i>469</i>&nbsp;</b>
+<i>470</i>&nbsp;    /**
+<i>471</i>&nbsp;     * Resolves lagged phase propagation from root if necessary.
+<b class="nc"><i>472</i>&nbsp;     * Reconciliation normally occurs when root has advanced but</b>
+<i>473</i>&nbsp;     * subphasers have not yet done so, in which case they must finish
+<b class="nc"><i>474</i>&nbsp;     * their own advance by setting unarrived to parties (or if</b>
+<i>475</i>&nbsp;     * parties is zero, resetting to unregistered EMPTY state).
+<b class="nc"><i>476</i>&nbsp;     *</b>
+<b class="nc"><i>477</i>&nbsp;     * @return reconciled state</b>
+<i>478</i>&nbsp;     */
+<i>479</i>&nbsp;    private long reconcileState() {
+<i>480</i>&nbsp;        final Phaser root = this.root;
+<i>481</i>&nbsp;        long s = state;
+<i>482</i>&nbsp;        if (root != this) {
+<i>483</i>&nbsp;            int phase, p;
+<i>484</i>&nbsp;            // CAS to root phase with current parties, tripping unarrived
+<i>485</i>&nbsp;            while ((phase = (int)(root.state &gt;&gt;&gt; PHASE_SHIFT)) !=
+<i>486</i>&nbsp;                   (int)(s &gt;&gt;&gt; PHASE_SHIFT) &amp;&amp;
+<i>487</i>&nbsp;                   !STATE.weakCompareAndSet
+<i>488</i>&nbsp;                   (this, s,
+<i>489</i>&nbsp;                    s = (((long)phase &lt;&lt; PHASE_SHIFT) |
+<b class="nc"><i>490</i>&nbsp;                         ((phase &lt; 0) ? (s &amp; COUNTS_MASK) :</b>
+<b class="nc"><i>491</i>&nbsp;                          (((p = (int)s &gt;&gt;&gt; PARTIES_SHIFT) == 0) ? EMPTY :</b>
+<b class="nc"><i>492</i>&nbsp;                           ((s &amp; PARTIES_MASK) | p))))))</b>
+<i>493</i>&nbsp;                s = state;
+<i>494</i>&nbsp;        }
+<b class="nc"><i>495</i>&nbsp;        return s;</b>
+<i>496</i>&nbsp;    }
+<i>497</i>&nbsp;
+<b class="nc"><i>498</i>&nbsp;    /**</b>
+<i>499</i>&nbsp;     * Creates a new phaser with no initially registered parties, no
+<i>500</i>&nbsp;     * parent, and initial phase number 0. Any thread using this
+<i>501</i>&nbsp;     * phaser will need to first register for it.
+<i>502</i>&nbsp;     */
+<b class="nc"><i>503</i>&nbsp;    public Phaser() {</b>
+<i>504</i>&nbsp;        this(null, 0);
+<b class="nc"><i>505</i>&nbsp;    }</b>
+<i>506</i>&nbsp;
+<i>507</i>&nbsp;    /**
+<i>508</i>&nbsp;     * Creates a new phaser with the given number of registered
+<i>509</i>&nbsp;     * unarrived parties, no parent, and initial phase number 0.
+<i>510</i>&nbsp;     *
+<i>511</i>&nbsp;     * @param parties the number of parties required to advance to the
+<i>512</i>&nbsp;     * next phase
+<i>513</i>&nbsp;     * @throws IllegalArgumentException if parties less than zero
+<b class="nc"><i>514</i>&nbsp;     * or greater than the maximum number of parties supported</b>
+<i>515</i>&nbsp;     */
+<i>516</i>&nbsp;    public Phaser(int parties) {
+<i>517</i>&nbsp;        this(null, parties);
+<i>518</i>&nbsp;    }
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;    /**
+<i>521</i>&nbsp;     * Equivalent to {@link #Phaser(Phaser, int) Phaser(parent, 0)}.
+<i>522</i>&nbsp;     *
+<i>523</i>&nbsp;     * @param parent the parent phaser
+<i>524</i>&nbsp;     */
+<i>525</i>&nbsp;    public Phaser(Phaser parent) {
+<i>526</i>&nbsp;        this(parent, 0);
+<b class="nc"><i>527</i>&nbsp;    }</b>
+<i>528</i>&nbsp;
+<i>529</i>&nbsp;    /**
+<i>530</i>&nbsp;     * Creates a new phaser with the given parent and number of
+<i>531</i>&nbsp;     * registered unarrived parties.  When the given parent is non-null
+<i>532</i>&nbsp;     * and the given number of parties is greater than zero, this
+<i>533</i>&nbsp;     * child phaser is registered with its parent.
+<i>534</i>&nbsp;     *
+<i>535</i>&nbsp;     * @param parent the parent phaser
+<b class="nc"><i>536</i>&nbsp;     * @param parties the number of parties required to advance to the</b>
+<i>537</i>&nbsp;     * next phase
+<i>538</i>&nbsp;     * @throws IllegalArgumentException if parties less than zero
+<i>539</i>&nbsp;     * or greater than the maximum number of parties supported
+<i>540</i>&nbsp;     */
+<i>541</i>&nbsp;    public Phaser(Phaser parent, int parties) {
+<i>542</i>&nbsp;        if (parties &gt;&gt;&gt; PARTIES_SHIFT != 0)
+<i>543</i>&nbsp;            throw new IllegalArgumentException(&quot;Illegal number of parties&quot;);
+<i>544</i>&nbsp;        int phase = 0;
+<i>545</i>&nbsp;        this.parent = parent;
+<i>546</i>&nbsp;        if (parent != null) {
+<i>547</i>&nbsp;            final Phaser root = parent.root;
+<i>548</i>&nbsp;            this.root = root;
+<i>549</i>&nbsp;            this.evenQ = root.evenQ;
+<i>550</i>&nbsp;            this.oddQ = root.oddQ;
+<b class="nc"><i>551</i>&nbsp;            if (parties != 0)</b>
+<b class="nc"><i>552</i>&nbsp;                phase = parent.doRegister(1);</b>
+<b class="nc"><i>553</i>&nbsp;        }</b>
+<b class="nc"><i>554</i>&nbsp;        else {</b>
+<b class="nc"><i>555</i>&nbsp;            this.root = this;</b>
+<b class="nc"><i>556</i>&nbsp;            this.evenQ = new AtomicReference&lt;QNode&gt;();</b>
+<b class="nc"><i>557</i>&nbsp;            this.oddQ = new AtomicReference&lt;QNode&gt;();</b>
+<b class="nc"><i>558</i>&nbsp;        }</b>
+<b class="nc"><i>559</i>&nbsp;        this.state = (parties == 0) ? (long)EMPTY :</b>
+<b class="nc"><i>560</i>&nbsp;            ((long)phase &lt;&lt; PHASE_SHIFT) |</b>
+<b class="nc"><i>561</i>&nbsp;            ((long)parties &lt;&lt; PARTIES_SHIFT) |</b>
+<b class="nc"><i>562</i>&nbsp;            ((long)parties);</b>
+<b class="nc"><i>563</i>&nbsp;    }</b>
+<i>564</i>&nbsp;
+<b class="nc"><i>565</i>&nbsp;    /**</b>
+<b class="nc"><i>566</i>&nbsp;     * Adds a new unarrived party to this phaser.  If an ongoing</b>
+<b class="nc"><i>567</i>&nbsp;     * invocation of {@link #onAdvance} is in progress, this method</b>
+<i>568</i>&nbsp;     * may await its completion before returning.  If this phaser has
+<b class="nc"><i>569</i>&nbsp;     * a parent, and this phaser previously had no registered parties,</b>
+<i>570</i>&nbsp;     * this child phaser is also registered with its parent. If
+<i>571</i>&nbsp;     * this phaser is terminated, the attempt to register has
+<i>572</i>&nbsp;     * no effect, and a negative value is returned.
+<i>573</i>&nbsp;     *
+<i>574</i>&nbsp;     * @return the arrival phase number to which this registration
+<i>575</i>&nbsp;     * applied.  If this value is negative, then this phaser has
+<i>576</i>&nbsp;     * terminated, in which case registration has no effect.
+<i>577</i>&nbsp;     * @throws IllegalStateException if attempting to register more
+<i>578</i>&nbsp;     * than the maximum supported number of parties
+<i>579</i>&nbsp;     */
+<i>580</i>&nbsp;    public int register() {
+<i>581</i>&nbsp;        return doRegister(1);
+<i>582</i>&nbsp;    }
+<i>583</i>&nbsp;
+<i>584</i>&nbsp;    /**
+<i>585</i>&nbsp;     * Adds the given number of new unarrived parties to this phaser.
+<i>586</i>&nbsp;     * If an ongoing invocation of {@link #onAdvance} is in progress,
+<i>587</i>&nbsp;     * this method may await its completion before returning.  If this
+<i>588</i>&nbsp;     * phaser has a parent, and the given number of parties is greater
+<i>589</i>&nbsp;     * than zero, and this phaser previously had no registered
+<i>590</i>&nbsp;     * parties, this child phaser is also registered with its parent.
+<b class="nc"><i>591</i>&nbsp;     * If this phaser is terminated, the attempt to register has no</b>
+<i>592</i>&nbsp;     * effect, and a negative value is returned.
+<i>593</i>&nbsp;     *
+<i>594</i>&nbsp;     * @param parties the number of additional parties required to
+<i>595</i>&nbsp;     * advance to the next phase
+<i>596</i>&nbsp;     * @return the arrival phase number to which this registration
+<i>597</i>&nbsp;     * applied.  If this value is negative, then this phaser has
+<i>598</i>&nbsp;     * terminated, in which case registration has no effect.
+<i>599</i>&nbsp;     * @throws IllegalStateException if attempting to register more
+<i>600</i>&nbsp;     * than the maximum supported number of parties
+<i>601</i>&nbsp;     * @throws IllegalArgumentException if {@code parties &lt; 0}
+<i>602</i>&nbsp;     */
+<i>603</i>&nbsp;    public int bulkRegister(int parties) {
+<i>604</i>&nbsp;        if (parties &lt; 0)
+<i>605</i>&nbsp;            throw new IllegalArgumentException();
+<i>606</i>&nbsp;        if (parties == 0)
+<i>607</i>&nbsp;            return getPhase();
+<i>608</i>&nbsp;        return doRegister(parties);
+<i>609</i>&nbsp;    }
+<i>610</i>&nbsp;
+<i>611</i>&nbsp;    /**
+<i>612</i>&nbsp;     * Arrives at this phaser, without waiting for others to arrive.
+<i>613</i>&nbsp;     *
+<b class="nc"><i>614</i>&nbsp;     * &lt;p&gt;It is a usage error for an unregistered party to invoke this</b>
+<b class="nc"><i>615</i>&nbsp;     * method.  However, this error may result in an {@code</b>
+<b class="nc"><i>616</i>&nbsp;     * IllegalStateException} only upon some subsequent operation on</b>
+<b class="nc"><i>617</i>&nbsp;     * this phaser, if ever.</b>
+<b class="nc"><i>618</i>&nbsp;     *</b>
+<i>619</i>&nbsp;     * @return the arrival phase number, or a negative value if terminated
+<i>620</i>&nbsp;     * @throws IllegalStateException if not terminated and the number
+<i>621</i>&nbsp;     * of unarrived parties would become negative
+<i>622</i>&nbsp;     */
+<i>623</i>&nbsp;    public int arrive() {
+<i>624</i>&nbsp;        return doArrive(ONE_ARRIVAL);
+<i>625</i>&nbsp;    }
+<i>626</i>&nbsp;
+<i>627</i>&nbsp;    /**
+<i>628</i>&nbsp;     * Arrives at this phaser and deregisters from it without waiting
+<i>629</i>&nbsp;     * for others to arrive. Deregistration reduces the number of
+<i>630</i>&nbsp;     * parties required to advance in future phases.  If this phaser
+<i>631</i>&nbsp;     * has a parent, and deregistration causes this phaser to have
+<i>632</i>&nbsp;     * zero parties, this phaser is also deregistered from its parent.
+<i>633</i>&nbsp;     *
+<b class="nc"><i>634</i>&nbsp;     * &lt;p&gt;It is a usage error for an unregistered party to invoke this</b>
+<i>635</i>&nbsp;     * method.  However, this error may result in an {@code
+<i>636</i>&nbsp;     * IllegalStateException} only upon some subsequent operation on
+<i>637</i>&nbsp;     * this phaser, if ever.
+<i>638</i>&nbsp;     *
+<i>639</i>&nbsp;     * @return the arrival phase number, or a negative value if terminated
+<i>640</i>&nbsp;     * @throws IllegalStateException if not terminated and the number
+<i>641</i>&nbsp;     * of registered or unarrived parties would become negative
+<i>642</i>&nbsp;     */
+<i>643</i>&nbsp;    public int arriveAndDeregister() {
+<i>644</i>&nbsp;        return doArrive(ONE_DEREGISTER);
+<i>645</i>&nbsp;    }
+<i>646</i>&nbsp;
+<i>647</i>&nbsp;    /**
+<i>648</i>&nbsp;     * Arrives at this phaser and awaits others. Equivalent in effect
+<i>649</i>&nbsp;     * to {@code awaitAdvance(arrive())}.  If you need to await with
+<i>650</i>&nbsp;     * interruption or timeout, you can arrange this with an analogous
+<i>651</i>&nbsp;     * construction using one of the other forms of the {@code
+<i>652</i>&nbsp;     * awaitAdvance} method.  If instead you need to deregister upon
+<i>653</i>&nbsp;     * arrival, use {@code awaitAdvance(arriveAndDeregister())}.
+<b class="nc"><i>654</i>&nbsp;     *</b>
+<i>655</i>&nbsp;     * &lt;p&gt;It is a usage error for an unregistered party to invoke this
+<i>656</i>&nbsp;     * method.  However, this error may result in an {@code
+<i>657</i>&nbsp;     * IllegalStateException} only upon some subsequent operation on
+<i>658</i>&nbsp;     * this phaser, if ever.
+<i>659</i>&nbsp;     *
+<i>660</i>&nbsp;     * @return the arrival phase number, or the (negative)
+<i>661</i>&nbsp;     * {@linkplain #getPhase() current phase} if terminated
+<i>662</i>&nbsp;     * @throws IllegalStateException if not terminated and the number
+<i>663</i>&nbsp;     * of unarrived parties would become negative
+<i>664</i>&nbsp;     */
+<i>665</i>&nbsp;    public int arriveAndAwaitAdvance() {
+<i>666</i>&nbsp;        // Specialization of doArrive+awaitAdvance eliminating some reads/paths
+<i>667</i>&nbsp;        final Phaser root = this.root;
+<i>668</i>&nbsp;        for (;;) {
+<i>669</i>&nbsp;            long s = (root == this) ? state : reconcileState();
+<i>670</i>&nbsp;            int phase = (int)(s &gt;&gt;&gt; PHASE_SHIFT);
+<i>671</i>&nbsp;            if (phase &lt; 0)
+<i>672</i>&nbsp;                return phase;
+<i>673</i>&nbsp;            int counts = (int)s;
+<i>674</i>&nbsp;            int unarrived = (counts == EMPTY) ? 0 : (counts &amp; UNARRIVED_MASK);
+<i>675</i>&nbsp;            if (unarrived &lt;= 0)
+<i>676</i>&nbsp;                throw new IllegalStateException(badArrive(s));
+<b class="nc"><i>677</i>&nbsp;            if (STATE.compareAndSet(this, s, s -= ONE_ARRIVAL)) {</b>
+<i>678</i>&nbsp;                if (unarrived &gt; 1)
+<b class="nc"><i>679</i>&nbsp;                    return root.internalAwaitAdvance(phase, null);</b>
+<b class="nc"><i>680</i>&nbsp;                if (root != this)</b>
+<b class="nc"><i>681</i>&nbsp;                    return parent.arriveAndAwaitAdvance();</b>
+<b class="nc"><i>682</i>&nbsp;                long n = s &amp; PARTIES_MASK;  // base of next state</b>
+<b class="nc"><i>683</i>&nbsp;                int nextUnarrived = (int)n &gt;&gt;&gt; PARTIES_SHIFT;</b>
+<b class="nc"><i>684</i>&nbsp;                if (onAdvance(phase, nextUnarrived))</b>
+<b class="nc"><i>685</i>&nbsp;                    n |= TERMINATION_BIT;</b>
+<b class="nc"><i>686</i>&nbsp;                else if (nextUnarrived == 0)</b>
+<b class="nc"><i>687</i>&nbsp;                    n |= EMPTY;</b>
+<i>688</i>&nbsp;                else
+<b class="nc"><i>689</i>&nbsp;                    n |= nextUnarrived;</b>
+<b class="nc"><i>690</i>&nbsp;                int nextPhase = (phase + 1) &amp; MAX_PHASE;</b>
+<b class="nc"><i>691</i>&nbsp;                n |= (long)nextPhase &lt;&lt; PHASE_SHIFT;</b>
+<b class="nc"><i>692</i>&nbsp;                if (!STATE.compareAndSet(this, s, n))</b>
+<b class="nc"><i>693</i>&nbsp;                    return (int)(state &gt;&gt;&gt; PHASE_SHIFT); // terminated</b>
+<b class="nc"><i>694</i>&nbsp;                releaseWaiters(phase);</b>
+<b class="nc"><i>695</i>&nbsp;                return nextPhase;</b>
+<b class="nc"><i>696</i>&nbsp;            }</b>
+<b class="nc"><i>697</i>&nbsp;        }</b>
+<b class="nc"><i>698</i>&nbsp;    }</b>
+<i>699</i>&nbsp;
+<b class="nc"><i>700</i>&nbsp;    /**</b>
+<b class="nc"><i>701</i>&nbsp;     * Awaits the phase of this phaser to advance from the given phase</b>
+<b class="nc"><i>702</i>&nbsp;     * value, returning immediately if the current phase is not equal</b>
+<b class="nc"><i>703</i>&nbsp;     * to the given phase value or this phaser is terminated.</b>
+<b class="nc"><i>704</i>&nbsp;     *</b>
+<b class="nc"><i>705</i>&nbsp;     * @param phase an arrival phase number, or negative value if</b>
+<b class="nc"><i>706</i>&nbsp;     * terminated; this argument is normally the value returned by a</b>
+<i>707</i>&nbsp;     * previous call to {@code arrive} or {@code arriveAndDeregister}.
+<b class="nc"><i>708</i>&nbsp;     * @return the next arrival phase number, or the argument if it is</b>
+<i>709</i>&nbsp;     * negative, or the (negative) {@linkplain #getPhase() current phase}
+<i>710</i>&nbsp;     * if terminated
+<i>711</i>&nbsp;     */
+<i>712</i>&nbsp;    public int awaitAdvance(int phase) {
+<i>713</i>&nbsp;        final Phaser root = this.root;
+<i>714</i>&nbsp;        long s = (root == this) ? state : reconcileState();
+<i>715</i>&nbsp;        int p = (int)(s &gt;&gt;&gt; PHASE_SHIFT);
+<i>716</i>&nbsp;        if (phase &lt; 0)
+<i>717</i>&nbsp;            return phase;
+<i>718</i>&nbsp;        if (p == phase)
+<i>719</i>&nbsp;            return root.internalAwaitAdvance(phase, null);
+<i>720</i>&nbsp;        return p;
+<i>721</i>&nbsp;    }
+<i>722</i>&nbsp;
+<i>723</i>&nbsp;    /**
+<b class="nc"><i>724</i>&nbsp;     * Awaits the phase of this phaser to advance from the given phase</b>
+<b class="nc"><i>725</i>&nbsp;     * value, throwing {@code InterruptedException} if interrupted</b>
+<b class="nc"><i>726</i>&nbsp;     * while waiting, or returning immediately if the current phase is</b>
+<b class="nc"><i>727</i>&nbsp;     * not equal to the given phase value or this phaser is</b>
+<b class="nc"><i>728</i>&nbsp;     * terminated.</b>
+<b class="nc"><i>729</i>&nbsp;     *</b>
+<b class="nc"><i>730</i>&nbsp;     * @param phase an arrival phase number, or negative value if</b>
+<b class="nc"><i>731</i>&nbsp;     * terminated; this argument is normally the value returned by a</b>
+<i>732</i>&nbsp;     * previous call to {@code arrive} or {@code arriveAndDeregister}.
+<i>733</i>&nbsp;     * @return the next arrival phase number, or the argument if it is
+<i>734</i>&nbsp;     * negative, or the (negative) {@linkplain #getPhase() current phase}
+<i>735</i>&nbsp;     * if terminated
+<i>736</i>&nbsp;     * @throws InterruptedException if thread interrupted while waiting
+<i>737</i>&nbsp;     */
+<i>738</i>&nbsp;    public int awaitAdvanceInterruptibly(int phase)
+<i>739</i>&nbsp;        throws InterruptedException {
+<i>740</i>&nbsp;        final Phaser root = this.root;
+<i>741</i>&nbsp;        long s = (root == this) ? state : reconcileState();
+<i>742</i>&nbsp;        int p = (int)(s &gt;&gt;&gt; PHASE_SHIFT);
+<i>743</i>&nbsp;        if (phase &lt; 0)
+<i>744</i>&nbsp;            return phase;
+<i>745</i>&nbsp;        if (p == phase) {
+<i>746</i>&nbsp;            QNode node = new QNode(this, phase, true, false, 0L);
+<i>747</i>&nbsp;            p = root.internalAwaitAdvance(phase, node);
+<i>748</i>&nbsp;            if (node.wasInterrupted)
+<i>749</i>&nbsp;                throw new InterruptedException();
+<i>750</i>&nbsp;        }
+<b class="nc"><i>751</i>&nbsp;        return p;</b>
+<b class="nc"><i>752</i>&nbsp;    }</b>
+<b class="nc"><i>753</i>&nbsp;</b>
+<b class="nc"><i>754</i>&nbsp;    /**</b>
+<b class="nc"><i>755</i>&nbsp;     * Awaits the phase of this phaser to advance from the given phase</b>
+<b class="nc"><i>756</i>&nbsp;     * value or the given timeout to elapse, throwing {@code</b>
+<b class="nc"><i>757</i>&nbsp;     * InterruptedException} if interrupted while waiting, or</b>
+<b class="nc"><i>758</i>&nbsp;     * returning immediately if the current phase is not equal to the</b>
+<b class="nc"><i>759</i>&nbsp;     * given phase value or this phaser is terminated.</b>
+<b class="nc"><i>760</i>&nbsp;     *</b>
+<i>761</i>&nbsp;     * @param phase an arrival phase number, or negative value if
+<b class="nc"><i>762</i>&nbsp;     * terminated; this argument is normally the value returned by a</b>
+<i>763</i>&nbsp;     * previous call to {@code arrive} or {@code arriveAndDeregister}.
+<i>764</i>&nbsp;     * @param timeout how long to wait before giving up, in units of
+<i>765</i>&nbsp;     *        {@code unit}
+<i>766</i>&nbsp;     * @param unit a {@code TimeUnit} determining how to interpret the
+<i>767</i>&nbsp;     *        {@code timeout} parameter
+<i>768</i>&nbsp;     * @return the next arrival phase number, or the argument if it is
+<i>769</i>&nbsp;     * negative, or the (negative) {@linkplain #getPhase() current phase}
+<i>770</i>&nbsp;     * if terminated
+<i>771</i>&nbsp;     * @throws InterruptedException if thread interrupted while waiting
+<i>772</i>&nbsp;     * @throws TimeoutException if timed out while waiting
+<i>773</i>&nbsp;     */
+<i>774</i>&nbsp;    public int awaitAdvanceInterruptibly(int phase,
+<i>775</i>&nbsp;                                         long timeout, TimeUnit unit)
+<i>776</i>&nbsp;        throws InterruptedException, TimeoutException {
+<i>777</i>&nbsp;        long nanos = unit.toNanos(timeout);
+<i>778</i>&nbsp;        final Phaser root = this.root;
+<i>779</i>&nbsp;        long s = (root == this) ? state : reconcileState();
+<i>780</i>&nbsp;        int p = (int)(s &gt;&gt;&gt; PHASE_SHIFT);
+<i>781</i>&nbsp;        if (phase &lt; 0)
+<i>782</i>&nbsp;            return phase;
+<i>783</i>&nbsp;        if (p == phase) {
+<i>784</i>&nbsp;            QNode node = new QNode(this, phase, true, true, nanos);
+<i>785</i>&nbsp;            p = root.internalAwaitAdvance(phase, node);
+<i>786</i>&nbsp;            if (node.wasInterrupted)
+<i>787</i>&nbsp;                throw new InterruptedException();
+<b class="nc"><i>788</i>&nbsp;            else if (p == phase)</b>
+<b class="nc"><i>789</i>&nbsp;                throw new TimeoutException();</b>
+<b class="nc"><i>790</i>&nbsp;        }</b>
+<b class="nc"><i>791</i>&nbsp;        return p;</b>
+<b class="nc"><i>792</i>&nbsp;    }</b>
+<b class="nc"><i>793</i>&nbsp;</b>
+<b class="nc"><i>794</i>&nbsp;    /**</b>
+<b class="nc"><i>795</i>&nbsp;     * Forces this phaser to enter termination state.  Counts of</b>
+<b class="nc"><i>796</i>&nbsp;     * registered parties are unaffected.  If this phaser is a member</b>
+<b class="nc"><i>797</i>&nbsp;     * of a tiered set of phasers, then all of the phasers in the set</b>
+<b class="nc"><i>798</i>&nbsp;     * are terminated.  If this phaser is already terminated, this</b>
+<b class="nc"><i>799</i>&nbsp;     * method has no effect.  This method may be useful for</b>
+<b class="nc"><i>800</i>&nbsp;     * coordinating recovery after one or more tasks encounter</b>
+<i>801</i>&nbsp;     * unexpected exceptions.
+<b class="nc"><i>802</i>&nbsp;     */</b>
+<i>803</i>&nbsp;    public void forceTermination() {
+<i>804</i>&nbsp;        // Only need to change root state
+<i>805</i>&nbsp;        final Phaser root = this.root;
+<i>806</i>&nbsp;        long s;
+<i>807</i>&nbsp;        while ((s = root.state) &gt;= 0) {
+<i>808</i>&nbsp;            if (STATE.compareAndSet(root, s, s | TERMINATION_BIT)) {
+<i>809</i>&nbsp;                // signal all threads
+<i>810</i>&nbsp;                releaseWaiters(0); // Waiters on evenQ
+<i>811</i>&nbsp;                releaseWaiters(1); // Waiters on oddQ
+<i>812</i>&nbsp;                return;
+<i>813</i>&nbsp;            }
+<i>814</i>&nbsp;        }
+<i>815</i>&nbsp;    }
+<b class="nc"><i>816</i>&nbsp;</b>
+<i>817</i>&nbsp;    /**
+<b class="nc"><i>818</i>&nbsp;     * Returns the current phase number. The maximum phase number is</b>
+<b class="nc"><i>819</i>&nbsp;     * {@code Integer.MAX_VALUE}, after which it restarts at</b>
+<i>820</i>&nbsp;     * zero. Upon termination, the phase number is negative,
+<i>821</i>&nbsp;     * in which case the prevailing phase prior to termination
+<b class="nc"><i>822</i>&nbsp;     * may be obtained via {@code getPhase() + Integer.MIN_VALUE}.</b>
+<b class="nc"><i>823</i>&nbsp;     *</b>
+<i>824</i>&nbsp;     * @return the phase number, or a negative value if terminated
+<i>825</i>&nbsp;     */
+<i>826</i>&nbsp;    public final int getPhase() {
+<i>827</i>&nbsp;        return (int)(root.state &gt;&gt;&gt; PHASE_SHIFT);
+<i>828</i>&nbsp;    }
+<i>829</i>&nbsp;
+<i>830</i>&nbsp;    /**
+<i>831</i>&nbsp;     * Returns the number of parties registered at this phaser.
+<i>832</i>&nbsp;     *
+<i>833</i>&nbsp;     * @return the number of parties
+<i>834</i>&nbsp;     */
+<i>835</i>&nbsp;    public int getRegisteredParties() {
+<i>836</i>&nbsp;        return partiesOf(state);
+<i>837</i>&nbsp;    }
+<i>838</i>&nbsp;
+<b class="nc"><i>839</i>&nbsp;    /**</b>
+<i>840</i>&nbsp;     * Returns the number of registered parties that have arrived at
+<i>841</i>&nbsp;     * the current phase of this phaser. If this phaser has terminated,
+<i>842</i>&nbsp;     * the returned value is meaningless and arbitrary.
+<i>843</i>&nbsp;     *
+<i>844</i>&nbsp;     * @return the number of arrived parties
+<i>845</i>&nbsp;     */
+<i>846</i>&nbsp;    public int getArrivedParties() {
+<i>847</i>&nbsp;        return arrivedOf(reconcileState());
+<b class="nc"><i>848</i>&nbsp;    }</b>
+<i>849</i>&nbsp;
+<i>850</i>&nbsp;    /**
+<i>851</i>&nbsp;     * Returns the number of registered parties that have not yet
+<i>852</i>&nbsp;     * arrived at the current phase of this phaser. If this phaser has
+<i>853</i>&nbsp;     * terminated, the returned value is meaningless and arbitrary.
+<i>854</i>&nbsp;     *
+<i>855</i>&nbsp;     * @return the number of unarrived parties
+<i>856</i>&nbsp;     */
+<i>857</i>&nbsp;    public int getUnarrivedParties() {
+<i>858</i>&nbsp;        return unarrivedOf(reconcileState());
+<b class="nc"><i>859</i>&nbsp;    }</b>
+<i>860</i>&nbsp;
+<i>861</i>&nbsp;    /**
+<i>862</i>&nbsp;     * Returns the parent of this phaser, or {@code null} if none.
+<i>863</i>&nbsp;     *
+<i>864</i>&nbsp;     * @return the parent of this phaser, or {@code null} if none
+<i>865</i>&nbsp;     */
+<i>866</i>&nbsp;    public Phaser getParent() {
+<i>867</i>&nbsp;        return parent;
+<i>868</i>&nbsp;    }
+<i>869</i>&nbsp;
+<b class="nc"><i>870</i>&nbsp;    /**</b>
+<i>871</i>&nbsp;     * Returns the root ancestor of this phaser, which is the same as
+<i>872</i>&nbsp;     * this phaser if it has no parent.
+<i>873</i>&nbsp;     *
+<i>874</i>&nbsp;     * @return the root ancestor of this phaser
+<i>875</i>&nbsp;     */
+<i>876</i>&nbsp;    public Phaser getRoot() {
+<i>877</i>&nbsp;        return root;
+<i>878</i>&nbsp;    }
+<b class="nc"><i>879</i>&nbsp;</b>
+<i>880</i>&nbsp;    /**
+<i>881</i>&nbsp;     * Returns {@code true} if this phaser has been terminated.
+<i>882</i>&nbsp;     *
+<i>883</i>&nbsp;     * @return {@code true} if this phaser has been terminated
+<i>884</i>&nbsp;     */
+<i>885</i>&nbsp;    public boolean isTerminated() {
+<i>886</i>&nbsp;        return root.state &lt; 0L;
+<i>887</i>&nbsp;    }
+<i>888</i>&nbsp;
+<b class="nc"><i>889</i>&nbsp;    /**</b>
+<i>890</i>&nbsp;     * Overridable method to perform an action upon impending phase
+<i>891</i>&nbsp;     * advance, and to control termination. This method is invoked
+<i>892</i>&nbsp;     * upon arrival of the party advancing this phaser (when all other
+<i>893</i>&nbsp;     * waiting parties are dormant).  If this method returns {@code
+<i>894</i>&nbsp;     * true}, this phaser will be set to a final termination state
+<i>895</i>&nbsp;     * upon advance, and subsequent calls to {@link #isTerminated}
+<i>896</i>&nbsp;     * will return true. Any (unchecked) Exception or Error thrown by
+<i>897</i>&nbsp;     * an invocation of this method is propagated to the party
+<b class="nc"><i>898</i>&nbsp;     * attempting to advance this phaser, in which case no advance</b>
+<i>899</i>&nbsp;     * occurs.
+<i>900</i>&nbsp;     *
+<i>901</i>&nbsp;     * &lt;p&gt;The arguments to this method provide the state of the phaser
+<i>902</i>&nbsp;     * prevailing for the current transition.  The effects of invoking
+<i>903</i>&nbsp;     * arrival, registration, and waiting methods on this phaser from
+<i>904</i>&nbsp;     * within {@code onAdvance} are unspecified and should not be
+<i>905</i>&nbsp;     * relied on.
+<i>906</i>&nbsp;     *
+<i>907</i>&nbsp;     * &lt;p&gt;If this phaser is a member of a tiered set of phasers, then
+<i>908</i>&nbsp;     * {@code onAdvance} is invoked only for its root phaser on each
+<i>909</i>&nbsp;     * advance.
+<i>910</i>&nbsp;     *
+<i>911</i>&nbsp;     * &lt;p&gt;To support the most common use cases, the default
+<i>912</i>&nbsp;     * implementation of this method returns {@code true} when the
+<i>913</i>&nbsp;     * number of registered parties has become zero as the result of a
+<i>914</i>&nbsp;     * party invoking {@code arriveAndDeregister}.  You can disable
+<i>915</i>&nbsp;     * this behavior, thus enabling continuation upon future
+<i>916</i>&nbsp;     * registrations, by overriding this method to always return
+<i>917</i>&nbsp;     * {@code false}:
+<i>918</i>&nbsp;     *
+<i>919</i>&nbsp;     * &lt;pre&gt; {@code
+<i>920</i>&nbsp;     * Phaser phaser = new Phaser() {
+<i>921</i>&nbsp;     *   protected boolean onAdvance(int phase, int parties) { return false; }
+<i>922</i>&nbsp;     * }}&lt;/pre&gt;
+<i>923</i>&nbsp;     *
+<i>924</i>&nbsp;     * @param phase the current phase number on entry to this method,
+<i>925</i>&nbsp;     * before this phaser is advanced
+<i>926</i>&nbsp;     * @param registeredParties the current number of registered parties
+<i>927</i>&nbsp;     * @return {@code true} if this phaser should terminate
+<i>928</i>&nbsp;     */
+<i>929</i>&nbsp;    protected boolean onAdvance(int phase, int registeredParties) {
+<i>930</i>&nbsp;        return registeredParties == 0;
+<i>931</i>&nbsp;    }
+<i>932</i>&nbsp;
+<i>933</i>&nbsp;    /**
+<i>934</i>&nbsp;     * Returns a string identifying this phaser, as well as its
+<i>935</i>&nbsp;     * state.  The state, in brackets, includes the String {@code
+<i>936</i>&nbsp;     * &quot;phase = &quot;} followed by the phase number, {@code &quot;parties = &quot;}
+<i>937</i>&nbsp;     * followed by the number of registered parties, and {@code
+<i>938</i>&nbsp;     * &quot;arrived = &quot;} followed by the number of arrived parties.
+<i>939</i>&nbsp;     *
+<i>940</i>&nbsp;     * @return a string identifying this phaser, as well as its state
+<i>941</i>&nbsp;     */
+<b class="nc"><i>942</i>&nbsp;    public String toString() {</b>
+<i>943</i>&nbsp;        return stateToString(reconcileState());
+<i>944</i>&nbsp;    }
+<i>945</i>&nbsp;
+<i>946</i>&nbsp;    /**
+<i>947</i>&nbsp;     * Implementation of toString and string-based error messages.
+<i>948</i>&nbsp;     */
+<i>949</i>&nbsp;    private String stateToString(long s) {
+<i>950</i>&nbsp;        return super.toString() +
+<i>951</i>&nbsp;            &quot;[phase = &quot; + phaseOf(s) +
+<i>952</i>&nbsp;            &quot; parties = &quot; + partiesOf(s) +
+<i>953</i>&nbsp;            &quot; arrived = &quot; + arrivedOf(s) + &quot;]&quot;;
+<i>954</i>&nbsp;    }
+<b class="nc"><i>955</i>&nbsp;</b>
+<i>956</i>&nbsp;    // Waiting mechanics
+<i>957</i>&nbsp;
+<i>958</i>&nbsp;    /**
+<i>959</i>&nbsp;     * Removes and signals threads from queue for phase.
+<i>960</i>&nbsp;     */
+<i>961</i>&nbsp;    private void releaseWaiters(int phase) {
+<b class="nc"><i>962</i>&nbsp;        QNode q;   // first element of queue</b>
+<b class="nc"><i>963</i>&nbsp;        Thread t;  // its thread</b>
+<b class="nc"><i>964</i>&nbsp;        AtomicReference&lt;QNode&gt; head = (phase &amp; 1) == 0 ? evenQ : oddQ;</b>
+<b class="nc"><i>965</i>&nbsp;        while ((q = head.get()) != null &amp;&amp;</b>
+<i>966</i>&nbsp;               q.phase != (int)(root.state &gt;&gt;&gt; PHASE_SHIFT)) {
+<i>967</i>&nbsp;            if (head.compareAndSet(q, q.next) &amp;&amp;
+<i>968</i>&nbsp;                (t = q.thread) != null) {
+<i>969</i>&nbsp;                q.thread = null;
+<i>970</i>&nbsp;                LockSupport.unpark(t);
+<i>971</i>&nbsp;            }
+<i>972</i>&nbsp;        }
+<i>973</i>&nbsp;    }
+<i>974</i>&nbsp;
+<i>975</i>&nbsp;    /**
+<b class="nc"><i>976</i>&nbsp;     * Variant of releaseWaiters that additionally tries to remove any</b>
+<b class="nc"><i>977</i>&nbsp;     * nodes no longer waiting for advance due to timeout or</b>
+<i>978</i>&nbsp;     * interrupt. Currently, nodes are removed only if they are at
+<b class="nc"><i>979</i>&nbsp;     * head of queue, which suffices to reduce memory footprint in</b>
+<i>980</i>&nbsp;     * most usages.
+<b class="nc"><i>981</i>&nbsp;     *</b>
+<b class="nc"><i>982</i>&nbsp;     * @return current phase on exit</b>
+<i>983</i>&nbsp;     */
+<i>984</i>&nbsp;    private int abortWait(int phase) {
+<i>985</i>&nbsp;        AtomicReference&lt;QNode&gt; head = (phase &amp; 1) == 0 ? evenQ : oddQ;
+<i>986</i>&nbsp;        for (;;) {
+<i>987</i>&nbsp;            Thread t;
+<i>988</i>&nbsp;            QNode q = head.get();
+<i>989</i>&nbsp;            int p = (int)(root.state &gt;&gt;&gt; PHASE_SHIFT);
+<i>990</i>&nbsp;            if (q == null || ((t = q.thread) != null &amp;&amp; q.phase == p))
+<i>991</i>&nbsp;                return p;
+<i>992</i>&nbsp;            if (head.compareAndSet(q, q.next) &amp;&amp; t != null) {
+<i>993</i>&nbsp;                q.thread = null;
+<i>994</i>&nbsp;                LockSupport.unpark(t);
+<i>995</i>&nbsp;            }
+<i>996</i>&nbsp;        }
+<b class="nc"><i>997</i>&nbsp;    }</b>
+<i>998</i>&nbsp;
+<i>999</i>&nbsp;    /** The number of CPUs, for spin control */
+<b class="nc"><i>1000</i>&nbsp;    private static final int NCPU = Runtime.getRuntime().availableProcessors();</b>
+<b class="nc"><i>1001</i>&nbsp;</b>
+<b class="nc"><i>1002</i>&nbsp;    /**</b>
+<b class="nc"><i>1003</i>&nbsp;     * The number of times to spin before blocking while waiting for</b>
+<b class="nc"><i>1004</i>&nbsp;     * advance, per arrival while waiting. On multiprocessors, fully</b>
+<b class="nc"><i>1005</i>&nbsp;     * blocking and waking up a large number of threads all at once is</b>
+<b class="nc"><i>1006</i>&nbsp;     * usually a very slow process, so we use rechargeable spins to</b>
+<i>1007</i>&nbsp;     * avoid it when threads regularly arrive: When a thread in
+<b class="nc"><i>1008</i>&nbsp;     * internalAwaitAdvance notices another arrival before blocking,</b>
+<i>1009</i>&nbsp;     * and there appear to be enough CPUs available, it spins
+<i>1010</i>&nbsp;     * SPINS_PER_ARRIVAL more times before blocking. The value trades
+<i>1011</i>&nbsp;     * off good-citizenship vs big unnecessary slowdowns.
+<b class="nc"><i>1012</i>&nbsp;     */</b>
+<i>1013</i>&nbsp;    static final int SPINS_PER_ARRIVAL = (NCPU &lt; 2) ? 1 : 1 &lt;&lt; 8;
+<i>1014</i>&nbsp;
+<i>1015</i>&nbsp;    /**
+<i>1016</i>&nbsp;     * Possibly blocks and waits for phase to advance unless aborted.
+<i>1017</i>&nbsp;     * Call only on root phaser.
+<i>1018</i>&nbsp;     *
+<i>1019</i>&nbsp;     * @param phase current phase
+<i>1020</i>&nbsp;     * @param node if non-null, the wait node to track interrupt and timeout;
+<i>1021</i>&nbsp;     * if null, denotes noninterruptible wait
+<i>1022</i>&nbsp;     * @return current phase
+<i>1023</i>&nbsp;     */
+<i>1024</i>&nbsp;    private int internalAwaitAdvance(int phase, QNode node) {
+<b class="nc"><i>1025</i>&nbsp;        // assert root == this;</b>
+<i>1026</i>&nbsp;        releaseWaiters(phase-1);          // ensure old queue clean
+<i>1027</i>&nbsp;        boolean queued = false;           // true when node is enqueued
+<i>1028</i>&nbsp;        int lastUnarrived = 0;            // to increase spins upon change
+<i>1029</i>&nbsp;        int spins = SPINS_PER_ARRIVAL;
+<i>1030</i>&nbsp;        long s;
+<i>1031</i>&nbsp;        int p;
+<i>1032</i>&nbsp;        while ((p = (int)((s = state) &gt;&gt;&gt; PHASE_SHIFT)) == phase) {
+<i>1033</i>&nbsp;            if (node == null) {           // spinning in noninterruptible mode
+<i>1034</i>&nbsp;                int unarrived = (int)s &amp; UNARRIVED_MASK;
+<i>1035</i>&nbsp;                if (unarrived != lastUnarrived &amp;&amp;
+<i>1036</i>&nbsp;                    (lastUnarrived = unarrived) &lt; NCPU)
+<i>1037</i>&nbsp;                    spins += SPINS_PER_ARRIVAL;
+<b class="nc"><i>1038</i>&nbsp;                boolean interrupted = Thread.interrupted();</b>
+<b class="nc"><i>1039</i>&nbsp;                if (interrupted || --spins &lt; 0) { // need node to record intr</b>
+<b class="nc"><i>1040</i>&nbsp;                    node = new QNode(this, phase, false, false, 0L);</b>
+<b class="nc"><i>1041</i>&nbsp;                    node.wasInterrupted = interrupted;</b>
+<i>1042</i>&nbsp;                }
+<i>1043</i>&nbsp;                else
+<b class="nc"><i>1044</i>&nbsp;                    Thread.onSpinWait();</b>
+<b class="nc"><i>1045</i>&nbsp;            }</b>
+<b class="nc"><i>1046</i>&nbsp;            else if (node.isReleasable()) // done or aborted</b>
+<b class="nc"><i>1047</i>&nbsp;                break;</b>
+<i>1048</i>&nbsp;            else if (!queued) {           // push onto queue
+<b class="nc"><i>1049</i>&nbsp;                AtomicReference&lt;QNode&gt; head = (phase &amp; 1) == 0 ? evenQ : oddQ;</b>
+<b class="nc"><i>1050</i>&nbsp;                QNode q = node.next = head.get();</b>
+<b class="nc"><i>1051</i>&nbsp;                if ((q == null || q.phase == phase) &amp;&amp;</b>
+<b class="nc"><i>1052</i>&nbsp;                    (int)(state &gt;&gt;&gt; PHASE_SHIFT) == phase) // avoid stale enq</b>
+<b class="nc"><i>1053</i>&nbsp;                    queued = head.compareAndSet(q, node);</b>
+<i>1054</i>&nbsp;            }
+<b class="nc"><i>1055</i>&nbsp;            else {</b>
+<b class="nc"><i>1056</i>&nbsp;                try {</b>
+<b class="nc"><i>1057</i>&nbsp;                    ForkJoinPool.managedBlock(node);</b>
+<b class="nc"><i>1058</i>&nbsp;                } catch (InterruptedException cantHappen) {</b>
+<b class="nc"><i>1059</i>&nbsp;                    node.wasInterrupted = true;</b>
+<b class="nc"><i>1060</i>&nbsp;                }</b>
+<b class="nc"><i>1061</i>&nbsp;            }</b>
+<i>1062</i>&nbsp;        }
+<b class="nc"><i>1063</i>&nbsp;</b>
+<b class="nc"><i>1064</i>&nbsp;        if (node != null) {</b>
+<i>1065</i>&nbsp;            if (node.thread != null)
+<i>1066</i>&nbsp;                node.thread = null;       // avoid need for unpark()
+<b class="nc"><i>1067</i>&nbsp;            if (node.wasInterrupted &amp;&amp; !node.interruptible)</b>
+<b class="nc"><i>1068</i>&nbsp;                Thread.currentThread().interrupt();</b>
+<b class="nc"><i>1069</i>&nbsp;            if (p == phase &amp;&amp; (p = (int)(state &gt;&gt;&gt; PHASE_SHIFT)) == phase)</b>
+<b class="nc"><i>1070</i>&nbsp;                return abortWait(phase); // possibly clean up on abort</b>
+<i>1071</i>&nbsp;        }
+<i>1072</i>&nbsp;        releaseWaiters(phase);
+<i>1073</i>&nbsp;        return p;
+<b class="nc"><i>1074</i>&nbsp;    }</b>
+<b class="nc"><i>1075</i>&nbsp;</b>
+<b class="nc"><i>1076</i>&nbsp;    /**</b>
+<b class="nc"><i>1077</i>&nbsp;     * Wait nodes for Treiber stack representing wait queue.</b>
+<b class="nc"><i>1078</i>&nbsp;     */</b>
+<b class="nc"><i>1079</i>&nbsp;    static final class QNode implements ForkJoinPool.ManagedBlocker {</b>
+<b class="nc"><i>1080</i>&nbsp;        final Phaser phaser;</b>
+<i>1081</i>&nbsp;        final int phase;
+<b class="nc"><i>1082</i>&nbsp;        final boolean interruptible;</b>
+<b class="nc"><i>1083</i>&nbsp;        final boolean timed;</b>
+<i>1084</i>&nbsp;        boolean wasInterrupted;
+<i>1085</i>&nbsp;        long nanos;
+<i>1086</i>&nbsp;        final long deadline;
+<i>1087</i>&nbsp;        volatile Thread thread; // nulled to cancel wait
+<i>1088</i>&nbsp;        QNode next;
+<i>1089</i>&nbsp;
+<i>1090</i>&nbsp;        QNode(Phaser phaser, int phase, boolean interruptible,
+<i>1091</i>&nbsp;              boolean timed, long nanos) {
+<i>1092</i>&nbsp;            this.phaser = phaser;
+<i>1093</i>&nbsp;            this.phase = phase;
+<i>1094</i>&nbsp;            this.interruptible = interruptible;
+<i>1095</i>&nbsp;            this.nanos = nanos;
+<i>1096</i>&nbsp;            this.timed = timed;
+<i>1097</i>&nbsp;            this.deadline = timed ? System.nanoTime() + nanos : 0L;
+<i>1098</i>&nbsp;            thread = Thread.currentThread();
+<i>1099</i>&nbsp;        }
+<i>1100</i>&nbsp;
+<b class="nc"><i>1101</i>&nbsp;        public boolean isReleasable() {</b>
+<b class="nc"><i>1102</i>&nbsp;            if (thread == null)</b>
+<b class="nc"><i>1103</i>&nbsp;                return true;</b>
+<b class="nc"><i>1104</i>&nbsp;            if (phaser.getPhase() != phase) {</b>
+<b class="nc"><i>1105</i>&nbsp;                thread = null;</b>
+<b class="nc"><i>1106</i>&nbsp;                return true;</b>
+<b class="nc"><i>1107</i>&nbsp;            }</b>
+<b class="nc"><i>1108</i>&nbsp;            if (Thread.interrupted())</b>
+<i>1109</i>&nbsp;                wasInterrupted = true;
+<i>1110</i>&nbsp;            if (wasInterrupted &amp;&amp; interruptible) {
+<i>1111</i>&nbsp;                thread = null;
+<b class="nc"><i>1112</i>&nbsp;                return true;</b>
+<b class="nc"><i>1113</i>&nbsp;            }</b>
+<b class="nc"><i>1114</i>&nbsp;            if (timed &amp;&amp;</b>
+<b class="nc"><i>1115</i>&nbsp;                (nanos &lt;= 0L || (nanos = deadline - System.nanoTime()) &lt;= 0L)) {</b>
+<b class="nc"><i>1116</i>&nbsp;                thread = null;</b>
+<i>1117</i>&nbsp;                return true;
+<b class="nc"><i>1118</i>&nbsp;            }</b>
+<b class="nc"><i>1119</i>&nbsp;            return false;</b>
+<b class="nc"><i>1120</i>&nbsp;        }</b>
+<b class="nc"><i>1121</i>&nbsp;</b>
+<b class="nc"><i>1122</i>&nbsp;        public boolean block() {</b>
+<i>1123</i>&nbsp;            while (!isReleasable()) {
+<b class="nc"><i>1124</i>&nbsp;                if (timed)</b>
+<b class="nc"><i>1125</i>&nbsp;                    LockSupport.parkNanos(this, nanos);</b>
+<b class="nc"><i>1126</i>&nbsp;                else</b>
+<i>1127</i>&nbsp;                    LockSupport.park(this);
+<b class="nc"><i>1128</i>&nbsp;            }</b>
+<b class="nc"><i>1129</i>&nbsp;            return true;</b>
+<b class="nc"><i>1130</i>&nbsp;        }</b>
+<i>1131</i>&nbsp;    }
+<i>1132</i>&nbsp;
+<b class="nc"><i>1133</i>&nbsp;    // VarHandle mechanics</b>
+<i>1134</i>&nbsp;    private static final VarHandle STATE;
+<i>1135</i>&nbsp;    static {
+<i>1136</i>&nbsp;        try {
+<b class="nc"><i>1137</i>&nbsp;            MethodHandles.Lookup l = MethodHandles.lookup();</b>
+<b class="nc"><i>1138</i>&nbsp;            STATE = l.findVarHandle(Phaser.class, &quot;state&quot;, long.class);</b>
+<b class="nc"><i>1139</i>&nbsp;        } catch (ReflectiveOperationException e) {</b>
+<b class="nc"><i>1140</i>&nbsp;            throw new ExceptionInInitializerError(e);</b>
+<b class="nc"><i>1141</i>&nbsp;        }</b>
+<b class="nc"><i>1142</i>&nbsp;</b>
+<b class="nc"><i>1143</i>&nbsp;        // Reduce the risk of rare disastrous classloading in first call to</b>
+<i>1144</i>&nbsp;        // LockSupport.park: https://bugs.openjdk.java.net/browse/JDK-8074773
+<i>1145</i>&nbsp;        Class&lt;?&gt; ensureLoaded = LockSupport.class;
+<i>1146</i>&nbsp;    }
+<i>1147</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

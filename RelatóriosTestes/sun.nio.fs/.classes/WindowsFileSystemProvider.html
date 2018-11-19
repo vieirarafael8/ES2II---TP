@@ -1,0 +1,733 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: WindowsFileSystemProvider</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.fs</a> ]
+</div>
+
+<h1>Coverage Summary for Class: WindowsFileSystemProvider (sun.nio.fs)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WindowsFileSystemProvider</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 27)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 301)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">WindowsFileSystemProvider$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 28)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 302)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.fs;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.file.*;
+<i>29</i>&nbsp;import java.nio.file.attribute.*;
+<i>30</i>&nbsp;import java.nio.channels.*;
+<i>31</i>&nbsp;import java.net.URI;
+<i>32</i>&nbsp;import java.util.concurrent.ExecutorService;
+<i>33</i>&nbsp;import java.io.*;
+<i>34</i>&nbsp;import java.util.*;
+<i>35</i>&nbsp;import java.security.AccessController;
+<i>36</i>&nbsp;import jdk.internal.misc.Unsafe;
+<i>37</i>&nbsp;import jdk.internal.util.StaticProperty;
+<i>38</i>&nbsp;import sun.nio.ch.ThreadPool;
+<i>39</i>&nbsp;import sun.security.util.SecurityConstants;
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;import static sun.nio.fs.WindowsNativeDispatcher.*;
+<i>42</i>&nbsp;import static sun.nio.fs.WindowsSecurity.*;
+<i>43</i>&nbsp;import static sun.nio.fs.WindowsConstants.*;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;public class WindowsFileSystemProvider
+<i>46</i>&nbsp;    extends AbstractFileSystemProvider
+<b class="nc"><i>47</i>&nbsp;{</b>
+<i>48</i>&nbsp;    private static final Unsafe unsafe = Unsafe.getUnsafe();
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;    private final WindowsFileSystem theFileSystem;
+<i>51</i>&nbsp;
+<b class="nc"><i>52</i>&nbsp;    public WindowsFileSystemProvider() {</b>
+<b class="nc"><i>53</i>&nbsp;        theFileSystem = new WindowsFileSystem(this, StaticProperty.userDir());</b>
+<i>54</i>&nbsp;    }
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;    @Override
+<i>57</i>&nbsp;    public String getScheme() {
+<b class="nc"><i>58</i>&nbsp;        return &quot;file&quot;;</b>
+<i>59</i>&nbsp;    }
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;    private void checkUri(URI uri) {
+<b class="nc"><i>62</i>&nbsp;        if (!uri.getScheme().equalsIgnoreCase(getScheme()))</b>
+<b class="nc"><i>63</i>&nbsp;            throw new IllegalArgumentException(&quot;URI does not match this provider&quot;);</b>
+<b class="nc"><i>64</i>&nbsp;        if (uri.getRawAuthority() != null)</b>
+<b class="nc"><i>65</i>&nbsp;            throw new IllegalArgumentException(&quot;Authority component present&quot;);</b>
+<b class="nc"><i>66</i>&nbsp;        String path = uri.getPath();</b>
+<b class="nc"><i>67</i>&nbsp;        if (path == null)</b>
+<b class="nc"><i>68</i>&nbsp;            throw new IllegalArgumentException(&quot;Path component is undefined&quot;);</b>
+<b class="nc"><i>69</i>&nbsp;        if (!path.equals(&quot;/&quot;))</b>
+<b class="nc"><i>70</i>&nbsp;            throw new IllegalArgumentException(&quot;Path component should be &#39;/&#39;&quot;);</b>
+<b class="nc"><i>71</i>&nbsp;        if (uri.getRawQuery() != null)</b>
+<b class="nc"><i>72</i>&nbsp;            throw new IllegalArgumentException(&quot;Query component present&quot;);</b>
+<b class="nc"><i>73</i>&nbsp;        if (uri.getRawFragment() != null)</b>
+<i>74</i>&nbsp;            throw new IllegalArgumentException(&quot;Fragment component present&quot;);
+<i>75</i>&nbsp;    }
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    @Override
+<i>78</i>&nbsp;    public FileSystem newFileSystem(URI uri, Map&lt;String,?&gt; env)
+<i>79</i>&nbsp;        throws IOException
+<b class="nc"><i>80</i>&nbsp;    {</b>
+<b class="nc"><i>81</i>&nbsp;        checkUri(uri);</b>
+<i>82</i>&nbsp;        throw new FileSystemAlreadyExistsException();
+<i>83</i>&nbsp;    }
+<i>84</i>&nbsp;
+<i>85</i>&nbsp;    @Override
+<b class="nc"><i>86</i>&nbsp;    public final FileSystem getFileSystem(URI uri) {</b>
+<b class="nc"><i>87</i>&nbsp;        checkUri(uri);</b>
+<i>88</i>&nbsp;        return theFileSystem;
+<i>89</i>&nbsp;    }
+<i>90</i>&nbsp;
+<i>91</i>&nbsp;    @Override
+<b class="nc"><i>92</i>&nbsp;    public Path getPath(URI uri) {</b>
+<i>93</i>&nbsp;        return WindowsUriSupport.fromUri(theFileSystem, uri);
+<i>94</i>&nbsp;    }
+<i>95</i>&nbsp;
+<i>96</i>&nbsp;    @Override
+<i>97</i>&nbsp;    public FileChannel newFileChannel(Path path,
+<i>98</i>&nbsp;                                      Set&lt;? extends OpenOption&gt; options,
+<i>99</i>&nbsp;                                      FileAttribute&lt;?&gt;... attrs)
+<i>100</i>&nbsp;        throws IOException
+<b class="nc"><i>101</i>&nbsp;    {</b>
+<b class="nc"><i>102</i>&nbsp;        if (path == null)</b>
+<b class="nc"><i>103</i>&nbsp;            throw new NullPointerException();</b>
+<b class="nc"><i>104</i>&nbsp;        if (!(path instanceof WindowsPath))</b>
+<b class="nc"><i>105</i>&nbsp;            throw new ProviderMismatchException();</b>
+<i>106</i>&nbsp;        WindowsPath file = (WindowsPath)path;
+<b class="nc"><i>107</i>&nbsp;</b>
+<i>108</i>&nbsp;        WindowsSecurityDescriptor sd = WindowsSecurityDescriptor.fromAttribute(attrs);
+<b class="nc"><i>109</i>&nbsp;        try {</b>
+<b class="nc"><i>110</i>&nbsp;            return WindowsChannelFactory</b>
+<b class="nc"><i>111</i>&nbsp;                .newFileChannel(file.getPathForWin32Calls(),</b>
+<i>112</i>&nbsp;                                file.getPathForPermissionCheck(),
+<b class="nc"><i>113</i>&nbsp;                                options,</b>
+<b class="nc"><i>114</i>&nbsp;                                sd.address());</b>
+<b class="nc"><i>115</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>116</i>&nbsp;            x.rethrowAsIOException(file);</b>
+<i>117</i>&nbsp;            return null;
+<b class="nc"><i>118</i>&nbsp;        } finally {</b>
+<b class="nc"><i>119</i>&nbsp;            if (sd != null)</b>
+<i>120</i>&nbsp;                sd.release();
+<i>121</i>&nbsp;        }
+<i>122</i>&nbsp;    }
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    @Override
+<i>125</i>&nbsp;    public AsynchronousFileChannel newAsynchronousFileChannel(Path path,
+<i>126</i>&nbsp;                                                              Set&lt;? extends OpenOption&gt; options,
+<i>127</i>&nbsp;                                                              ExecutorService executor,
+<i>128</i>&nbsp;                                                              FileAttribute&lt;?&gt;... attrs)
+<i>129</i>&nbsp;        throws IOException
+<b class="nc"><i>130</i>&nbsp;    {</b>
+<b class="nc"><i>131</i>&nbsp;        if (path == null)</b>
+<b class="nc"><i>132</i>&nbsp;            throw new NullPointerException();</b>
+<b class="nc"><i>133</i>&nbsp;        if (!(path instanceof WindowsPath))</b>
+<b class="nc"><i>134</i>&nbsp;            throw new ProviderMismatchException();</b>
+<b class="nc"><i>135</i>&nbsp;        WindowsPath file = (WindowsPath)path;</b>
+<b class="nc"><i>136</i>&nbsp;        ThreadPool pool = (executor == null) ? null : ThreadPool.wrap(executor, 0);</b>
+<b class="nc"><i>137</i>&nbsp;        WindowsSecurityDescriptor sd =</b>
+<i>138</i>&nbsp;            WindowsSecurityDescriptor.fromAttribute(attrs);
+<b class="nc"><i>139</i>&nbsp;        try {</b>
+<b class="nc"><i>140</i>&nbsp;            return WindowsChannelFactory</b>
+<b class="nc"><i>141</i>&nbsp;                .newAsynchronousFileChannel(file.getPathForWin32Calls(),</b>
+<i>142</i>&nbsp;                                            file.getPathForPermissionCheck(),
+<b class="nc"><i>143</i>&nbsp;                                            options,</b>
+<i>144</i>&nbsp;                                            sd.address(),
+<b class="nc"><i>145</i>&nbsp;                                            pool);</b>
+<b class="nc"><i>146</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>147</i>&nbsp;            x.rethrowAsIOException(file);</b>
+<i>148</i>&nbsp;            return null;
+<b class="nc"><i>149</i>&nbsp;        } finally {</b>
+<b class="nc"><i>150</i>&nbsp;            if (sd != null)</b>
+<i>151</i>&nbsp;                sd.release();
+<i>152</i>&nbsp;        }
+<i>153</i>&nbsp;    }
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    @Override
+<i>156</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>157</i>&nbsp;    public &lt;V extends FileAttributeView&gt; V
+<i>158</i>&nbsp;        getFileAttributeView(Path obj, Class&lt;V&gt; view, LinkOption... options)
+<b class="nc"><i>159</i>&nbsp;    {</b>
+<b class="nc"><i>160</i>&nbsp;        WindowsPath file = WindowsPath.toWindowsPath(obj);</b>
+<b class="nc"><i>161</i>&nbsp;        if (view == null)</b>
+<b class="nc"><i>162</i>&nbsp;            throw new NullPointerException();</b>
+<b class="nc"><i>163</i>&nbsp;        boolean followLinks = Util.followLinks(options);</b>
+<b class="nc"><i>164</i>&nbsp;        if (view == BasicFileAttributeView.class)</b>
+<b class="nc"><i>165</i>&nbsp;            return (V) WindowsFileAttributeViews.createBasicView(file, followLinks);</b>
+<b class="nc"><i>166</i>&nbsp;        if (view == DosFileAttributeView.class)</b>
+<b class="nc"><i>167</i>&nbsp;            return (V) WindowsFileAttributeViews.createDosView(file, followLinks);</b>
+<b class="nc"><i>168</i>&nbsp;        if (view == AclFileAttributeView.class)</b>
+<b class="nc"><i>169</i>&nbsp;            return (V) new WindowsAclFileAttributeView(file, followLinks);</b>
+<b class="nc"><i>170</i>&nbsp;        if (view == FileOwnerAttributeView.class)</b>
+<i>171</i>&nbsp;            return (V) new FileOwnerAttributeViewImpl(
+<b class="nc"><i>172</i>&nbsp;                new WindowsAclFileAttributeView(file, followLinks));</b>
+<b class="nc"><i>173</i>&nbsp;        if (view == UserDefinedFileAttributeView.class)</b>
+<b class="nc"><i>174</i>&nbsp;            return (V) new WindowsUserDefinedFileAttributeView(file, followLinks);</b>
+<i>175</i>&nbsp;        return (V) null;
+<i>176</i>&nbsp;    }
+<i>177</i>&nbsp;
+<i>178</i>&nbsp;    @Override
+<i>179</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>180</i>&nbsp;    public &lt;A extends BasicFileAttributes&gt; A readAttributes(Path file,
+<i>181</i>&nbsp;                                                            Class&lt;A&gt; type,
+<i>182</i>&nbsp;                                                            LinkOption... options)
+<i>183</i>&nbsp;        throws IOException
+<i>184</i>&nbsp;    {
+<b class="nc"><i>185</i>&nbsp;        Class&lt;? extends BasicFileAttributeView&gt; view;</b>
+<b class="nc"><i>186</i>&nbsp;        if (type == BasicFileAttributes.class)</b>
+<b class="nc"><i>187</i>&nbsp;            view = BasicFileAttributeView.class;</b>
+<b class="nc"><i>188</i>&nbsp;        else if (type == DosFileAttributes.class)</b>
+<b class="nc"><i>189</i>&nbsp;            view = DosFileAttributeView.class;</b>
+<b class="nc"><i>190</i>&nbsp;        else if (type == null)</b>
+<i>191</i>&nbsp;            throw new NullPointerException();
+<b class="nc"><i>192</i>&nbsp;        else</b>
+<b class="nc"><i>193</i>&nbsp;            throw new UnsupportedOperationException();</b>
+<i>194</i>&nbsp;        return (A) getFileAttributeView(file, view, options).readAttributes();
+<i>195</i>&nbsp;    }
+<i>196</i>&nbsp;
+<i>197</i>&nbsp;    @Override
+<b class="nc"><i>198</i>&nbsp;    public DynamicFileAttributeView getFileAttributeView(Path obj, String name, LinkOption... options) {</b>
+<b class="nc"><i>199</i>&nbsp;        WindowsPath file = WindowsPath.toWindowsPath(obj);</b>
+<b class="nc"><i>200</i>&nbsp;        boolean followLinks = Util.followLinks(options);</b>
+<b class="nc"><i>201</i>&nbsp;        if (name.equals(&quot;basic&quot;))</b>
+<b class="nc"><i>202</i>&nbsp;            return WindowsFileAttributeViews.createBasicView(file, followLinks);</b>
+<b class="nc"><i>203</i>&nbsp;        if (name.equals(&quot;dos&quot;))</b>
+<b class="nc"><i>204</i>&nbsp;            return WindowsFileAttributeViews.createDosView(file, followLinks);</b>
+<b class="nc"><i>205</i>&nbsp;        if (name.equals(&quot;acl&quot;))</b>
+<b class="nc"><i>206</i>&nbsp;            return new WindowsAclFileAttributeView(file, followLinks);</b>
+<b class="nc"><i>207</i>&nbsp;        if (name.equals(&quot;owner&quot;))</b>
+<i>208</i>&nbsp;            return new FileOwnerAttributeViewImpl(
+<b class="nc"><i>209</i>&nbsp;                new WindowsAclFileAttributeView(file, followLinks));</b>
+<b class="nc"><i>210</i>&nbsp;        if (name.equals(&quot;user&quot;))</b>
+<b class="nc"><i>211</i>&nbsp;            return new WindowsUserDefinedFileAttributeView(file, followLinks);</b>
+<i>212</i>&nbsp;        return null;
+<i>213</i>&nbsp;    }
+<i>214</i>&nbsp;
+<i>215</i>&nbsp;    @Override
+<i>216</i>&nbsp;    public SeekableByteChannel newByteChannel(Path obj,
+<i>217</i>&nbsp;                                              Set&lt;? extends OpenOption&gt; options,
+<i>218</i>&nbsp;                                              FileAttribute&lt;?&gt;... attrs)
+<i>219</i>&nbsp;         throws IOException
+<b class="nc"><i>220</i>&nbsp;    {</b>
+<b class="nc"><i>221</i>&nbsp;        WindowsPath file = WindowsPath.toWindowsPath(obj);</b>
+<b class="nc"><i>222</i>&nbsp;        WindowsSecurityDescriptor sd =</b>
+<i>223</i>&nbsp;            WindowsSecurityDescriptor.fromAttribute(attrs);
+<b class="nc"><i>224</i>&nbsp;        try {</b>
+<b class="nc"><i>225</i>&nbsp;            return WindowsChannelFactory</b>
+<b class="nc"><i>226</i>&nbsp;                .newFileChannel(file.getPathForWin32Calls(),</b>
+<i>227</i>&nbsp;                                file.getPathForPermissionCheck(),
+<b class="nc"><i>228</i>&nbsp;                                options,</b>
+<b class="nc"><i>229</i>&nbsp;                                sd.address());</b>
+<b class="nc"><i>230</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>231</i>&nbsp;            x.rethrowAsIOException(file);</b>
+<i>232</i>&nbsp;            return null;  // keep compiler happy
+<b class="nc"><i>233</i>&nbsp;        } finally {</b>
+<i>234</i>&nbsp;            sd.release();
+<i>235</i>&nbsp;        }
+<i>236</i>&nbsp;    }
+<i>237</i>&nbsp;
+<i>238</i>&nbsp;    @Override
+<b class="nc"><i>239</i>&nbsp;    boolean implDelete(Path obj, boolean failIfNotExists) throws IOException {</b>
+<b class="nc"><i>240</i>&nbsp;        WindowsPath file = WindowsPath.toWindowsPath(obj);</b>
+<i>241</i>&nbsp;        file.checkDelete();
+<b class="nc"><i>242</i>&nbsp;</b>
+<i>243</i>&nbsp;        WindowsFileAttributes attrs = null;
+<i>244</i>&nbsp;        try {
+<b class="nc"><i>245</i>&nbsp;             // need to know if file is a directory or junction</b>
+<b class="nc"><i>246</i>&nbsp;             attrs = WindowsFileAttributes.get(file, false);</b>
+<b class="nc"><i>247</i>&nbsp;             if (attrs.isDirectory() || attrs.isDirectoryLink()) {</b>
+<i>248</i>&nbsp;                RemoveDirectory(file.getPathForWin32Calls());
+<b class="nc"><i>249</i>&nbsp;             } else {</b>
+<i>250</i>&nbsp;                DeleteFile(file.getPathForWin32Calls());
+<b class="nc"><i>251</i>&nbsp;             }</b>
+<b class="nc"><i>252</i>&nbsp;             return true;</b>
+<i>253</i>&nbsp;        } catch (WindowsException x) {
+<i>254</i>&nbsp;
+<b class="nc"><i>255</i>&nbsp;            // no-op if file does not exist</b>
+<b class="nc"><i>256</i>&nbsp;            if (!failIfNotExists &amp;&amp;</b>
+<b class="nc"><i>257</i>&nbsp;                (x.lastError() == ERROR_FILE_NOT_FOUND ||</b>
+<i>258</i>&nbsp;                 x.lastError() == ERROR_PATH_NOT_FOUND)) return false;
+<b class="nc"><i>259</i>&nbsp;</b>
+<i>260</i>&nbsp;            if (attrs != null &amp;&amp; attrs.isDirectory()) {
+<i>261</i>&nbsp;                // ERROR_ALREADY_EXISTS is returned when attempting to delete
+<b class="nc"><i>262</i>&nbsp;                // non-empty directory on SAMBA servers.</b>
+<b class="nc"><i>263</i>&nbsp;                if (x.lastError() == ERROR_DIR_NOT_EMPTY ||</b>
+<i>264</i>&nbsp;                    x.lastError() == ERROR_ALREADY_EXISTS)
+<b class="nc"><i>265</i>&nbsp;                {</b>
+<b class="nc"><i>266</i>&nbsp;                    throw new DirectoryNotEmptyException(</b>
+<i>267</i>&nbsp;                        file.getPathForExceptionMessage());
+<i>268</i>&nbsp;                }
+<b class="nc"><i>269</i>&nbsp;            }</b>
+<b class="nc"><i>270</i>&nbsp;            x.rethrowAsIOException(file);</b>
+<i>271</i>&nbsp;            return false;
+<i>272</i>&nbsp;        }
+<i>273</i>&nbsp;    }
+<i>274</i>&nbsp;
+<i>275</i>&nbsp;    @Override
+<i>276</i>&nbsp;    public void copy(Path source, Path target, CopyOption... options)
+<i>277</i>&nbsp;        throws IOException
+<b class="nc"><i>278</i>&nbsp;    {</b>
+<b class="nc"><i>279</i>&nbsp;        WindowsFileCopy.copy(WindowsPath.toWindowsPath(source),</b>
+<i>280</i>&nbsp;                             WindowsPath.toWindowsPath(target),
+<i>281</i>&nbsp;                             options);
+<i>282</i>&nbsp;    }
+<i>283</i>&nbsp;
+<i>284</i>&nbsp;    @Override
+<i>285</i>&nbsp;    public void move(Path source, Path target, CopyOption... options)
+<i>286</i>&nbsp;        throws IOException
+<b class="nc"><i>287</i>&nbsp;    {</b>
+<b class="nc"><i>288</i>&nbsp;        WindowsFileCopy.move(WindowsPath.toWindowsPath(source),</b>
+<i>289</i>&nbsp;                             WindowsPath.toWindowsPath(target),
+<i>290</i>&nbsp;                             options);
+<i>291</i>&nbsp;    }
+<i>292</i>&nbsp;
+<i>293</i>&nbsp;    /**
+<i>294</i>&nbsp;     * Checks the file security against desired access.
+<i>295</i>&nbsp;     */
+<i>296</i>&nbsp;    private static boolean hasDesiredAccess(WindowsPath file, int rights) throws IOException {
+<b class="nc"><i>297</i>&nbsp;        // read security descriptor containing ACL (symlinks are followed)</b>
+<b class="nc"><i>298</i>&nbsp;        boolean hasRights = false;</b>
+<b class="nc"><i>299</i>&nbsp;        String target = WindowsLinkSupport.getFinalPath(file, true);</b>
+<b class="nc"><i>300</i>&nbsp;        NativeBuffer aclBuffer = WindowsAclFileAttributeView</b>
+<i>301</i>&nbsp;            .getFileSecurity(target,
+<i>302</i>&nbsp;                DACL_SECURITY_INFORMATION
+<i>303</i>&nbsp;                | OWNER_SECURITY_INFORMATION
+<i>304</i>&nbsp;                | GROUP_SECURITY_INFORMATION);
+<b class="nc"><i>305</i>&nbsp;        try {</b>
+<i>306</i>&nbsp;            hasRights = checkAccessMask(aclBuffer.address(), rights,
+<i>307</i>&nbsp;                FILE_GENERIC_READ,
+<i>308</i>&nbsp;                FILE_GENERIC_WRITE,
+<i>309</i>&nbsp;                FILE_GENERIC_EXECUTE,
+<b class="nc"><i>310</i>&nbsp;                FILE_ALL_ACCESS);</b>
+<b class="nc"><i>311</i>&nbsp;        } catch (WindowsException exc) {</b>
+<i>312</i>&nbsp;            exc.rethrowAsIOException(file);
+<b class="nc"><i>313</i>&nbsp;        } finally {</b>
+<b class="nc"><i>314</i>&nbsp;            aclBuffer.release();</b>
+<b class="nc"><i>315</i>&nbsp;        }</b>
+<i>316</i>&nbsp;        return hasRights;
+<i>317</i>&nbsp;    }
+<i>318</i>&nbsp;
+<i>319</i>&nbsp;    /**
+<i>320</i>&nbsp;     * Checks if the given file(or directory) exists and is readable.
+<i>321</i>&nbsp;     */
+<i>322</i>&nbsp;    private void checkReadAccess(WindowsPath file) throws IOException {
+<b class="nc"><i>323</i>&nbsp;        try {</b>
+<b class="nc"><i>324</i>&nbsp;            Set&lt;OpenOption&gt; opts = Collections.emptySet();</b>
+<b class="nc"><i>325</i>&nbsp;            FileChannel fc = WindowsChannelFactory</b>
+<b class="nc"><i>326</i>&nbsp;                .newFileChannel(file.getPathForWin32Calls(),</b>
+<i>327</i>&nbsp;                                file.getPathForPermissionCheck(),
+<i>328</i>&nbsp;                                opts,
+<b class="nc"><i>329</i>&nbsp;                                0L);</b>
+<b class="nc"><i>330</i>&nbsp;            fc.close();</b>
+<i>331</i>&nbsp;        } catch (WindowsException exc) {
+<i>332</i>&nbsp;            // Windows errors are very inconsistent when the file is a directory
+<i>333</i>&nbsp;            // (ERROR_PATH_NOT_FOUND returned for root directories for example)
+<i>334</i>&nbsp;            // so we retry by attempting to open it as a directory.
+<b class="nc"><i>335</i>&nbsp;            try {</b>
+<b class="nc"><i>336</i>&nbsp;                new WindowsDirectoryStream(file, null).close();</b>
+<i>337</i>&nbsp;            } catch (IOException ioe) {
+<b class="nc"><i>338</i>&nbsp;                // translate and throw original exception</b>
+<b class="nc"><i>339</i>&nbsp;                exc.rethrowAsIOException(file);</b>
+<b class="nc"><i>340</i>&nbsp;            }</b>
+<i>341</i>&nbsp;        }
+<i>342</i>&nbsp;    }
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;    @Override
+<b class="nc"><i>345</i>&nbsp;    public void checkAccess(Path obj, AccessMode... modes) throws IOException {</b>
+<i>346</i>&nbsp;        WindowsPath file = WindowsPath.toWindowsPath(obj);
+<b class="nc"><i>347</i>&nbsp;</b>
+<b class="nc"><i>348</i>&nbsp;        boolean r = false;</b>
+<b class="nc"><i>349</i>&nbsp;        boolean w = false;</b>
+<b class="nc"><i>350</i>&nbsp;        boolean x = false;</b>
+<b class="nc"><i>351</i>&nbsp;        for (AccessMode mode: modes) {</b>
+<b class="nc"><i>352</i>&nbsp;            switch (mode) {</b>
+<b class="nc"><i>353</i>&nbsp;                case READ : r = true; break;</b>
+<b class="nc"><i>354</i>&nbsp;                case WRITE : w = true; break;</b>
+<b class="nc"><i>355</i>&nbsp;                case EXECUTE : x = true; break;</b>
+<i>356</i>&nbsp;                default: throw new AssertionError(&quot;Should not get here&quot;);
+<i>357</i>&nbsp;            }
+<i>358</i>&nbsp;        }
+<i>359</i>&nbsp;
+<i>360</i>&nbsp;        // special-case read access to avoid needing to determine effective
+<b class="nc"><i>361</i>&nbsp;        // access to file; default if modes not specified</b>
+<b class="nc"><i>362</i>&nbsp;        if (!w &amp;&amp; !x) {</b>
+<i>363</i>&nbsp;            checkReadAccess(file);
+<i>364</i>&nbsp;            return;
+<i>365</i>&nbsp;        }
+<b class="nc"><i>366</i>&nbsp;</b>
+<b class="nc"><i>367</i>&nbsp;        int mask = 0;</b>
+<b class="nc"><i>368</i>&nbsp;        if (r) {</b>
+<b class="nc"><i>369</i>&nbsp;            file.checkRead();</b>
+<i>370</i>&nbsp;            mask |= FILE_READ_DATA;
+<b class="nc"><i>371</i>&nbsp;        }</b>
+<b class="nc"><i>372</i>&nbsp;        if (w) {</b>
+<b class="nc"><i>373</i>&nbsp;            file.checkWrite();</b>
+<i>374</i>&nbsp;            mask |= FILE_WRITE_DATA;
+<b class="nc"><i>375</i>&nbsp;        }</b>
+<b class="nc"><i>376</i>&nbsp;        if (x) {</b>
+<b class="nc"><i>377</i>&nbsp;            SecurityManager sm = System.getSecurityManager();</b>
+<b class="nc"><i>378</i>&nbsp;            if (sm != null)</b>
+<b class="nc"><i>379</i>&nbsp;                sm.checkExec(file.getPathForPermissionCheck());</b>
+<i>380</i>&nbsp;            mask |= FILE_EXECUTE;
+<i>381</i>&nbsp;        }
+<b class="nc"><i>382</i>&nbsp;</b>
+<b class="nc"><i>383</i>&nbsp;        if (!hasDesiredAccess(file, mask))</b>
+<b class="nc"><i>384</i>&nbsp;            throw new AccessDeniedException(</b>
+<i>385</i>&nbsp;                file.getPathForExceptionMessage(), null,
+<i>386</i>&nbsp;                &quot;Permissions does not allow requested access&quot;);
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;        // for write access we need to check if the DOS readonly attribute
+<b class="nc"><i>389</i>&nbsp;        // and if the volume is read-only</b>
+<i>390</i>&nbsp;        if (w) {
+<b class="nc"><i>391</i>&nbsp;            try {</b>
+<b class="nc"><i>392</i>&nbsp;                WindowsFileAttributes attrs = WindowsFileAttributes.get(file, true);</b>
+<b class="nc"><i>393</i>&nbsp;                if (!attrs.isDirectory() &amp;&amp; attrs.isReadOnly())</b>
+<b class="nc"><i>394</i>&nbsp;                    throw new AccessDeniedException(</b>
+<i>395</i>&nbsp;                        file.getPathForExceptionMessage(), null,
+<b class="nc"><i>396</i>&nbsp;                        &quot;DOS readonly attribute is set&quot;);</b>
+<b class="nc"><i>397</i>&nbsp;            } catch (WindowsException exc) {</b>
+<b class="nc"><i>398</i>&nbsp;                exc.rethrowAsIOException(file);</b>
+<i>399</i>&nbsp;            }
+<b class="nc"><i>400</i>&nbsp;</b>
+<b class="nc"><i>401</i>&nbsp;            if (WindowsFileStore.create(file).isReadOnly()) {</b>
+<b class="nc"><i>402</i>&nbsp;                throw new AccessDeniedException(</b>
+<i>403</i>&nbsp;                    file.getPathForExceptionMessage(), null, &quot;Read-only file system&quot;);
+<i>404</i>&nbsp;            }
+<i>405</i>&nbsp;        }
+<i>406</i>&nbsp;    }
+<i>407</i>&nbsp;
+<i>408</i>&nbsp;    @Override
+<b class="nc"><i>409</i>&nbsp;    public boolean isSameFile(Path obj1, Path obj2) throws IOException {</b>
+<b class="nc"><i>410</i>&nbsp;        WindowsPath file1 = WindowsPath.toWindowsPath(obj1);</b>
+<b class="nc"><i>411</i>&nbsp;        if (file1.equals(obj2))</b>
+<b class="nc"><i>412</i>&nbsp;            return true;</b>
+<b class="nc"><i>413</i>&nbsp;        if (obj2 == null)</b>
+<b class="nc"><i>414</i>&nbsp;            throw new NullPointerException();</b>
+<b class="nc"><i>415</i>&nbsp;        if (!(obj2 instanceof WindowsPath))</b>
+<b class="nc"><i>416</i>&nbsp;            return false;</b>
+<i>417</i>&nbsp;        WindowsPath file2 = (WindowsPath)obj2;
+<i>418</i>&nbsp;
+<b class="nc"><i>419</i>&nbsp;        // check security manager access to both files</b>
+<b class="nc"><i>420</i>&nbsp;        file1.checkRead();</b>
+<i>421</i>&nbsp;        file2.checkRead();
+<i>422</i>&nbsp;
+<b class="nc"><i>423</i>&nbsp;        // open both files and see if they are the same</b>
+<i>424</i>&nbsp;        long h1 = 0L;
+<b class="nc"><i>425</i>&nbsp;        try {</b>
+<b class="nc"><i>426</i>&nbsp;            h1 = file1.openForReadAttributeAccess(true);</b>
+<b class="nc"><i>427</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>428</i>&nbsp;            x.rethrowAsIOException(file1);</b>
+<i>429</i>&nbsp;        }
+<b class="nc"><i>430</i>&nbsp;        try {</b>
+<i>431</i>&nbsp;            WindowsFileAttributes attrs1 = null;
+<b class="nc"><i>432</i>&nbsp;            try {</b>
+<b class="nc"><i>433</i>&nbsp;                attrs1 = WindowsFileAttributes.readAttributes(h1);</b>
+<b class="nc"><i>434</i>&nbsp;            } catch (WindowsException x) {</b>
+<b class="nc"><i>435</i>&nbsp;                x.rethrowAsIOException(file1);</b>
+<b class="nc"><i>436</i>&nbsp;            }</b>
+<i>437</i>&nbsp;            long h2 = 0L;
+<b class="nc"><i>438</i>&nbsp;            try {</b>
+<b class="nc"><i>439</i>&nbsp;                h2 = file2.openForReadAttributeAccess(true);</b>
+<b class="nc"><i>440</i>&nbsp;            } catch (WindowsException x) {</b>
+<b class="nc"><i>441</i>&nbsp;                x.rethrowAsIOException(file2);</b>
+<i>442</i>&nbsp;            }
+<b class="nc"><i>443</i>&nbsp;            try {</b>
+<i>444</i>&nbsp;                WindowsFileAttributes attrs2 = null;
+<b class="nc"><i>445</i>&nbsp;                try {</b>
+<b class="nc"><i>446</i>&nbsp;                    attrs2 = WindowsFileAttributes.readAttributes(h2);</b>
+<b class="nc"><i>447</i>&nbsp;                } catch (WindowsException x) {</b>
+<b class="nc"><i>448</i>&nbsp;                    x.rethrowAsIOException(file2);</b>
+<b class="nc"><i>449</i>&nbsp;                }</b>
+<i>450</i>&nbsp;                return WindowsFileAttributes.isSameFile(attrs1, attrs2);
+<b class="nc"><i>451</i>&nbsp;            } finally {</b>
+<i>452</i>&nbsp;                CloseHandle(h2);
+<i>453</i>&nbsp;            }
+<b class="nc"><i>454</i>&nbsp;        } finally {</b>
+<i>455</i>&nbsp;            CloseHandle(h1);
+<i>456</i>&nbsp;        }
+<i>457</i>&nbsp;    }
+<i>458</i>&nbsp;
+<i>459</i>&nbsp;    @Override
+<b class="nc"><i>460</i>&nbsp;    public boolean isHidden(Path obj) throws IOException {</b>
+<b class="nc"><i>461</i>&nbsp;        WindowsPath file = WindowsPath.toWindowsPath(obj);</b>
+<b class="nc"><i>462</i>&nbsp;        file.checkRead();</b>
+<i>463</i>&nbsp;        WindowsFileAttributes attrs = null;
+<b class="nc"><i>464</i>&nbsp;        try {</b>
+<b class="nc"><i>465</i>&nbsp;            attrs = WindowsFileAttributes.get(file, true);</b>
+<b class="nc"><i>466</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>467</i>&nbsp;            x.rethrowAsIOException(file);</b>
+<i>468</i>&nbsp;        }
+<b class="nc"><i>469</i>&nbsp;        // DOS hidden attribute not meaningful when set on directories</b>
+<b class="nc"><i>470</i>&nbsp;        if (attrs.isDirectory())</b>
+<b class="nc"><i>471</i>&nbsp;            return false;</b>
+<i>472</i>&nbsp;        return attrs.isHidden();
+<i>473</i>&nbsp;    }
+<i>474</i>&nbsp;
+<i>475</i>&nbsp;    @Override
+<b class="nc"><i>476</i>&nbsp;    public FileStore getFileStore(Path obj) throws IOException {</b>
+<b class="nc"><i>477</i>&nbsp;        WindowsPath file = WindowsPath.toWindowsPath(obj);</b>
+<b class="nc"><i>478</i>&nbsp;        SecurityManager sm = System.getSecurityManager();</b>
+<b class="nc"><i>479</i>&nbsp;        if (sm != null) {</b>
+<b class="nc"><i>480</i>&nbsp;            sm.checkPermission(new RuntimePermission(&quot;getFileStoreAttributes&quot;));</b>
+<i>481</i>&nbsp;            file.checkRead();
+<b class="nc"><i>482</i>&nbsp;        }</b>
+<i>483</i>&nbsp;        return WindowsFileStore.create(file);
+<i>484</i>&nbsp;    }
+<i>485</i>&nbsp;
+<i>486</i>&nbsp;
+<i>487</i>&nbsp;    @Override
+<i>488</i>&nbsp;    public void createDirectory(Path obj, FileAttribute&lt;?&gt;... attrs)
+<i>489</i>&nbsp;        throws IOException
+<b class="nc"><i>490</i>&nbsp;    {</b>
+<b class="nc"><i>491</i>&nbsp;        WindowsPath dir = WindowsPath.toWindowsPath(obj);</b>
+<b class="nc"><i>492</i>&nbsp;        dir.checkWrite();</b>
+<i>493</i>&nbsp;        WindowsSecurityDescriptor sd = WindowsSecurityDescriptor.fromAttribute(attrs);
+<b class="nc"><i>494</i>&nbsp;        try {</b>
+<b class="nc"><i>495</i>&nbsp;            CreateDirectory(dir.getPathForWin32Calls(), sd.address());</b>
+<i>496</i>&nbsp;        } catch (WindowsException x) {
+<i>497</i>&nbsp;            // convert ERROR_ACCESS_DENIED to FileAlreadyExistsException if we can
+<b class="nc"><i>498</i>&nbsp;            // verify that the directory exists</b>
+<i>499</i>&nbsp;            if (x.lastError() == ERROR_ACCESS_DENIED) {
+<b class="nc"><i>500</i>&nbsp;                try {</b>
+<b class="nc"><i>501</i>&nbsp;                    if (WindowsFileAttributes.get(dir, false).isDirectory())</b>
+<b class="nc"><i>502</i>&nbsp;                        throw new FileAlreadyExistsException(dir.toString());</b>
+<i>503</i>&nbsp;                } catch (WindowsException ignore) { }
+<b class="nc"><i>504</i>&nbsp;            }</b>
+<i>505</i>&nbsp;            x.rethrowAsIOException(dir);
+<b class="nc"><i>506</i>&nbsp;        } finally {</b>
+<b class="nc"><i>507</i>&nbsp;            sd.release();</b>
+<i>508</i>&nbsp;        }
+<i>509</i>&nbsp;    }
+<i>510</i>&nbsp;
+<i>511</i>&nbsp;    @Override
+<i>512</i>&nbsp;    public DirectoryStream&lt;Path&gt; newDirectoryStream(Path obj, DirectoryStream.Filter&lt;? super Path&gt; filter)
+<i>513</i>&nbsp;        throws IOException
+<b class="nc"><i>514</i>&nbsp;    {</b>
+<b class="nc"><i>515</i>&nbsp;        WindowsPath dir = WindowsPath.toWindowsPath(obj);</b>
+<b class="nc"><i>516</i>&nbsp;        dir.checkRead();</b>
+<b class="nc"><i>517</i>&nbsp;        if (filter == null)</b>
+<b class="nc"><i>518</i>&nbsp;            throw new NullPointerException();</b>
+<i>519</i>&nbsp;        return new WindowsDirectoryStream(dir, filter);
+<i>520</i>&nbsp;    }
+<i>521</i>&nbsp;
+<i>522</i>&nbsp;    @Override
+<i>523</i>&nbsp;    public void createSymbolicLink(Path obj1, Path obj2, FileAttribute&lt;?&gt;... attrs)
+<i>524</i>&nbsp;        throws IOException
+<b class="nc"><i>525</i>&nbsp;    {</b>
+<b class="nc"><i>526</i>&nbsp;        WindowsPath link = WindowsPath.toWindowsPath(obj1);</b>
+<i>527</i>&nbsp;        WindowsPath target = WindowsPath.toWindowsPath(obj2);
+<b class="nc"><i>528</i>&nbsp;</b>
+<b class="nc"><i>529</i>&nbsp;        // no attributes allowed</b>
+<i>530</i>&nbsp;        if (attrs.length &gt; 0) {
+<i>531</i>&nbsp;            WindowsSecurityDescriptor.fromAttribute(attrs);  // may throw NPE or UOE
+<i>532</i>&nbsp;            throw new UnsupportedOperationException(&quot;Initial file attributes&quot; +
+<i>533</i>&nbsp;                &quot;not supported when creating symbolic link&quot;);
+<b class="nc"><i>534</i>&nbsp;        }</b>
+<b class="nc"><i>535</i>&nbsp;</b>
+<b class="nc"><i>536</i>&nbsp;        // permission check</b>
+<i>537</i>&nbsp;        SecurityManager sm = System.getSecurityManager();
+<i>538</i>&nbsp;        if (sm != null) {
+<i>539</i>&nbsp;            sm.checkPermission(new LinkPermission(&quot;symbolic&quot;));
+<i>540</i>&nbsp;            link.checkWrite();
+<b class="nc"><i>541</i>&nbsp;        }</b>
+<b class="nc"><i>542</i>&nbsp;</b>
+<b class="nc"><i>543</i>&nbsp;        /**</b>
+<b class="nc"><i>544</i>&nbsp;         * Throw I/O exception for the drive-relative case because Windows</b>
+<i>545</i>&nbsp;         * creates a link with the resolved target for this case.
+<i>546</i>&nbsp;         */
+<i>547</i>&nbsp;        if (target.type() == WindowsPathType.DRIVE_RELATIVE) {
+<i>548</i>&nbsp;            throw new IOException(&quot;Cannot create symbolic link to working directory relative target&quot;);
+<i>549</i>&nbsp;        }
+<i>550</i>&nbsp;
+<b class="nc"><i>551</i>&nbsp;        /*</b>
+<b class="nc"><i>552</i>&nbsp;         * Windows treats symbolic links to directories differently than it</b>
+<i>553</i>&nbsp;         * does to other file types. For that reason we need to check if the
+<i>554</i>&nbsp;         * target is a directory (or a directory junction).
+<i>555</i>&nbsp;         */
+<i>556</i>&nbsp;        WindowsPath resolvedTarget;
+<i>557</i>&nbsp;        if (target.type() == WindowsPathType.RELATIVE) {
+<i>558</i>&nbsp;            WindowsPath parent = link.getParent();
+<i>559</i>&nbsp;            resolvedTarget = (parent == null) ? target : parent.resolve(target);
+<i>560</i>&nbsp;        } else {
+<b class="nc"><i>561</i>&nbsp;            resolvedTarget = link.resolve(target);</b>
+<b class="nc"><i>562</i>&nbsp;        }</b>
+<b class="nc"><i>563</i>&nbsp;        int flags = 0;</b>
+<b class="nc"><i>564</i>&nbsp;        try {</b>
+<b class="nc"><i>565</i>&nbsp;            WindowsFileAttributes wattrs = WindowsFileAttributes.get(resolvedTarget, false);</b>
+<i>566</i>&nbsp;            if (wattrs.isDirectory() || wattrs.isDirectoryLink())
+<b class="nc"><i>567</i>&nbsp;                flags |= SYMBOLIC_LINK_FLAG_DIRECTORY;</b>
+<i>568</i>&nbsp;        } catch (WindowsException x) {
+<b class="nc"><i>569</i>&nbsp;            // unable to access target so assume target is not a directory</b>
+<b class="nc"><i>570</i>&nbsp;        }</b>
+<b class="nc"><i>571</i>&nbsp;</b>
+<b class="nc"><i>572</i>&nbsp;        // create the link</b>
+<i>573</i>&nbsp;        try {
+<b class="nc"><i>574</i>&nbsp;            CreateSymbolicLink(link.getPathForWin32Calls(),</b>
+<i>575</i>&nbsp;                               WindowsPath.addPrefixIfNeeded(target.toString()),
+<i>576</i>&nbsp;                               flags);
+<i>577</i>&nbsp;        } catch (WindowsException x) {
+<b class="nc"><i>578</i>&nbsp;            if (x.lastError() == ERROR_INVALID_REPARSE_DATA) {</b>
+<b class="nc"><i>579</i>&nbsp;                x.rethrowAsIOException(link, target);</b>
+<i>580</i>&nbsp;            } else {
+<b class="nc"><i>581</i>&nbsp;                x.rethrowAsIOException(link);</b>
+<b class="nc"><i>582</i>&nbsp;            }</b>
+<b class="nc"><i>583</i>&nbsp;        }</b>
+<i>584</i>&nbsp;    }
+<b class="nc"><i>585</i>&nbsp;</b>
+<i>586</i>&nbsp;    @Override
+<b class="nc"><i>587</i>&nbsp;    public void createLink(Path obj1, Path obj2) throws IOException {</b>
+<i>588</i>&nbsp;        WindowsPath link = WindowsPath.toWindowsPath(obj1);
+<i>589</i>&nbsp;        WindowsPath existing = WindowsPath.toWindowsPath(obj2);
+<i>590</i>&nbsp;
+<i>591</i>&nbsp;        // permission check
+<b class="nc"><i>592</i>&nbsp;        SecurityManager sm = System.getSecurityManager();</b>
+<b class="nc"><i>593</i>&nbsp;        if (sm != null) {</b>
+<i>594</i>&nbsp;            sm.checkPermission(new LinkPermission(&quot;hard&quot;));
+<i>595</i>&nbsp;            link.checkWrite();
+<b class="nc"><i>596</i>&nbsp;            existing.checkWrite();</b>
+<b class="nc"><i>597</i>&nbsp;        }</b>
+<b class="nc"><i>598</i>&nbsp;</b>
+<b class="nc"><i>599</i>&nbsp;        // create hard link</b>
+<b class="nc"><i>600</i>&nbsp;        try {</b>
+<i>601</i>&nbsp;            CreateHardLink(link.getPathForWin32Calls(),
+<i>602</i>&nbsp;                           existing.getPathForWin32Calls());
+<i>603</i>&nbsp;        } catch (WindowsException x) {
+<i>604</i>&nbsp;            x.rethrowAsIOException(link, existing);
+<b class="nc"><i>605</i>&nbsp;        }</b>
+<b class="nc"><i>606</i>&nbsp;    }</b>
+<b class="nc"><i>607</i>&nbsp;</b>
+<b class="nc"><i>608</i>&nbsp;    @Override</b>
+<b class="nc"><i>609</i>&nbsp;    public Path readSymbolicLink(Path obj1) throws IOException {</b>
+<i>610</i>&nbsp;        WindowsPath link = WindowsPath.toWindowsPath(obj1);
+<i>611</i>&nbsp;        WindowsFileSystem fs = link.getFileSystem();
+<i>612</i>&nbsp;
+<i>613</i>&nbsp;        // permission check
+<b class="nc"><i>614</i>&nbsp;        SecurityManager sm = System.getSecurityManager();</b>
+<b class="nc"><i>615</i>&nbsp;        if (sm != null) {</b>
+<b class="nc"><i>616</i>&nbsp;            FilePermission perm = new FilePermission(link.getPathForPermissionCheck(),</b>
+<b class="nc"><i>617</i>&nbsp;                SecurityConstants.FILE_READLINK_ACTION);</b>
+<i>618</i>&nbsp;            sm.checkPermission(perm);
+<i>619</i>&nbsp;        }
+<i>620</i>&nbsp;
+<b class="nc"><i>621</i>&nbsp;        String target = WindowsLinkSupport.readLink(link);</b>
+<b class="nc"><i>622</i>&nbsp;        return WindowsPath.createFromNormalizedPath(fs, target);</b>
+<b class="nc"><i>623</i>&nbsp;    }</b>
+<i>624</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,330 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: FileLockTable</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.ch</a> ]
+</div>
+
+<h1>Coverage Summary for Class: FileLockTable (sun.nio.ch)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FileLockTable</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2005, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.ch;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.FileDescriptor;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import java.lang.ref.ReferenceQueue;
+<i>31</i>&nbsp;import java.lang.ref.WeakReference;
+<i>32</i>&nbsp;import java.nio.channels.Channel;
+<i>33</i>&nbsp;import java.nio.channels.FileLock;
+<i>34</i>&nbsp;import java.nio.channels.OverlappingFileLockException;
+<i>35</i>&nbsp;import java.util.ArrayList;
+<b class="nc"><i>36</i>&nbsp;import java.util.HashSet;</b>
+<i>37</i>&nbsp;import java.util.List;
+<i>38</i>&nbsp;import java.util.Set;
+<i>39</i>&nbsp;import java.util.concurrent.ConcurrentHashMap;
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;/**
+<i>42</i>&nbsp; * A file lock table that is over a system-wide map of all file locks.
+<i>43</i>&nbsp; */
+<i>44</i>&nbsp;class FileLockTable {
+<i>45</i>&nbsp;    /**
+<i>46</i>&nbsp;     * A weak reference to a FileLock.
+<b class="nc"><i>47</i>&nbsp;     * &lt;p&gt;</b>
+<i>48</i>&nbsp;     * FileLockTable uses a list of file lock references to avoid keeping the
+<i>49</i>&nbsp;     * FileLock (and FileChannel) alive.
+<i>50</i>&nbsp;     */
+<i>51</i>&nbsp;    private static class FileLockReference extends WeakReference&lt;FileLock&gt; {
+<i>52</i>&nbsp;        private FileKey fileKey;
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;        FileLockReference(FileLock referent,
+<i>55</i>&nbsp;                          ReferenceQueue&lt;FileLock&gt; queue,
+<i>56</i>&nbsp;                          FileKey key) {
+<i>57</i>&nbsp;            super(referent, queue);
+<i>58</i>&nbsp;            this.fileKey = key;
+<i>59</i>&nbsp;        }
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;        FileKey fileKey() {
+<i>62</i>&nbsp;            return fileKey;
+<i>63</i>&nbsp;        }
+<i>64</i>&nbsp;    }
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    // The system-wide map is a ConcurrentHashMap that is keyed on the FileKey.
+<i>67</i>&nbsp;    // The map value is a list of file locks represented by FileLockReferences.
+<i>68</i>&nbsp;    // All access to the list must be synchronized on the list.
+<i>69</i>&nbsp;    private static ConcurrentHashMap&lt;FileKey, List&lt;FileLockReference&gt;&gt; lockMap =
+<i>70</i>&nbsp;        new ConcurrentHashMap&lt;FileKey, List&lt;FileLockReference&gt;&gt;();
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    // reference queue for cleared refs
+<i>73</i>&nbsp;    private static ReferenceQueue&lt;FileLock&gt; queue = new ReferenceQueue&lt;FileLock&gt;();
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    // The connection to which this table is connected
+<i>76</i>&nbsp;    private final Channel channel;
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    // File key for the file that this channel is connected to
+<i>79</i>&nbsp;    private final FileKey fileKey;
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    // Locks obtained for this channel
+<i>82</i>&nbsp;    private final Set&lt;FileLock&gt; locks;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    /**
+<i>85</i>&nbsp;     * Creates a file lock table for a channel that is connected to the
+<i>86</i>&nbsp;     * system-wide map of all file locks for the Java virtual machine.
+<i>87</i>&nbsp;     */
+<i>88</i>&nbsp;    FileLockTable(Channel channel, FileDescriptor fd) throws IOException {
+<i>89</i>&nbsp;        this.channel = channel;
+<i>90</i>&nbsp;        this.fileKey = FileKey.create(fd);
+<i>91</i>&nbsp;        this.locks = new HashSet&lt;FileLock&gt;();
+<i>92</i>&nbsp;    }
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;    void add(FileLock fl) throws OverlappingFileLockException {
+<i>95</i>&nbsp;        List&lt;FileLockReference&gt; list = lockMap.get(fileKey);
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;        for (;;) {
+<i>98</i>&nbsp;
+<i>99</i>&nbsp;            // The key isn&#39;t in the map so we try to create it atomically
+<i>100</i>&nbsp;            if (list == null) {
+<i>101</i>&nbsp;                list = new ArrayList&lt;FileLockReference&gt;(2);
+<i>102</i>&nbsp;                List&lt;FileLockReference&gt; prev;
+<i>103</i>&nbsp;                synchronized (list) {
+<i>104</i>&nbsp;                    prev = lockMap.putIfAbsent(fileKey, list);
+<i>105</i>&nbsp;                    if (prev == null) {
+<i>106</i>&nbsp;                        // we successfully created the key so we add the file lock
+<i>107</i>&nbsp;                        list.add(new FileLockReference(fl, queue, fileKey));
+<i>108</i>&nbsp;                        locks.add(fl);
+<i>109</i>&nbsp;                        break;
+<i>110</i>&nbsp;                    }
+<i>111</i>&nbsp;                }
+<i>112</i>&nbsp;                // someone else got there first
+<i>113</i>&nbsp;                list = prev;
+<i>114</i>&nbsp;            }
+<i>115</i>&nbsp;
+<i>116</i>&nbsp;            // There is already a key. It is possible that some other thread
+<i>117</i>&nbsp;            // is removing it so we re-fetch the value from the map. If it
+<i>118</i>&nbsp;            // hasn&#39;t changed then we check the list for overlapping locks
+<i>119</i>&nbsp;            // and add the new lock to the list.
+<i>120</i>&nbsp;            synchronized (list) {
+<i>121</i>&nbsp;                List&lt;FileLockReference&gt; current = lockMap.get(fileKey);
+<i>122</i>&nbsp;                if (list == current) {
+<i>123</i>&nbsp;                    checkList(list, fl.position(), fl.size());
+<i>124</i>&nbsp;                    list.add(new FileLockReference(fl, queue, fileKey));
+<i>125</i>&nbsp;                    locks.add(fl);
+<i>126</i>&nbsp;                    break;
+<i>127</i>&nbsp;                }
+<i>128</i>&nbsp;                list = current;
+<i>129</i>&nbsp;            }
+<i>130</i>&nbsp;
+<i>131</i>&nbsp;        }
+<i>132</i>&nbsp;
+<i>133</i>&nbsp;        // process any stale entries pending in the reference queue
+<i>134</i>&nbsp;        removeStaleEntries();
+<i>135</i>&nbsp;    }
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;    private void removeKeyIfEmpty(FileKey fk, List&lt;FileLockReference&gt; list) {
+<i>138</i>&nbsp;        assert Thread.holdsLock(list);
+<i>139</i>&nbsp;        assert lockMap.get(fk) == list;
+<i>140</i>&nbsp;        if (list.isEmpty()) {
+<i>141</i>&nbsp;            lockMap.remove(fk);
+<i>142</i>&nbsp;        }
+<i>143</i>&nbsp;    }
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;    void remove(FileLock fl) {
+<i>146</i>&nbsp;        assert fl != null;
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;        // the lock must exist so the list of locks must be present
+<i>149</i>&nbsp;        List&lt;FileLockReference&gt; list = lockMap.get(fileKey);
+<i>150</i>&nbsp;        if (list == null) return;
+<i>151</i>&nbsp;
+<i>152</i>&nbsp;        synchronized (list) {
+<i>153</i>&nbsp;            int index = 0;
+<i>154</i>&nbsp;            while (index &lt; list.size()) {
+<i>155</i>&nbsp;                FileLockReference ref = list.get(index);
+<i>156</i>&nbsp;                FileLock lock = ref.get();
+<i>157</i>&nbsp;                if (lock == fl) {
+<i>158</i>&nbsp;                    assert (lock != null) &amp;&amp; (lock.acquiredBy() == channel);
+<i>159</i>&nbsp;                    ref.clear();
+<i>160</i>&nbsp;                    list.remove(index);
+<i>161</i>&nbsp;                    locks.remove(fl);
+<i>162</i>&nbsp;                    break;
+<i>163</i>&nbsp;                }
+<i>164</i>&nbsp;                index++;
+<i>165</i>&nbsp;            }
+<i>166</i>&nbsp;        }
+<i>167</i>&nbsp;    }
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;    List&lt;FileLock&gt; removeAll() {
+<i>170</i>&nbsp;        List&lt;FileLock&gt; result = new ArrayList&lt;FileLock&gt;();
+<i>171</i>&nbsp;        List&lt;FileLockReference&gt; list = lockMap.get(fileKey);
+<i>172</i>&nbsp;        if (list != null) {
+<i>173</i>&nbsp;            synchronized (list) {
+<i>174</i>&nbsp;                int index = 0;
+<i>175</i>&nbsp;                while (index &lt; list.size()) {
+<i>176</i>&nbsp;                    FileLockReference ref = list.get(index);
+<i>177</i>&nbsp;                    FileLock lock = ref.get();
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;                    // remove locks obtained by this channel
+<i>180</i>&nbsp;                    if (lock != null &amp;&amp; lock.acquiredBy() == channel) {
+<i>181</i>&nbsp;                        // remove the lock from the list
+<i>182</i>&nbsp;                        ref.clear();
+<i>183</i>&nbsp;                        list.remove(index);
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;                        // add to result
+<i>186</i>&nbsp;                        result.add(lock);
+<i>187</i>&nbsp;                    } else {
+<i>188</i>&nbsp;                        index++;
+<i>189</i>&nbsp;                    }
+<i>190</i>&nbsp;                }
+<i>191</i>&nbsp;
+<i>192</i>&nbsp;                // once the lock list is empty we remove it from the map
+<i>193</i>&nbsp;                removeKeyIfEmpty(fileKey, list);
+<i>194</i>&nbsp;
+<i>195</i>&nbsp;                locks.clear();
+<i>196</i>&nbsp;            }
+<i>197</i>&nbsp;        }
+<i>198</i>&nbsp;        return result;
+<i>199</i>&nbsp;    }
+<i>200</i>&nbsp;
+<i>201</i>&nbsp;    void replace(FileLock fromLock, FileLock toLock) {
+<i>202</i>&nbsp;        // the lock must exist so there must be a list
+<i>203</i>&nbsp;        List&lt;FileLockReference&gt; list = lockMap.get(fileKey);
+<i>204</i>&nbsp;        assert list != null;
+<i>205</i>&nbsp;
+<i>206</i>&nbsp;        synchronized (list) {
+<i>207</i>&nbsp;            for (int index=0; index&lt;list.size(); index++) {
+<i>208</i>&nbsp;                FileLockReference ref = list.get(index);
+<i>209</i>&nbsp;                FileLock lock = ref.get();
+<i>210</i>&nbsp;                if (lock == fromLock) {
+<i>211</i>&nbsp;                    ref.clear();
+<i>212</i>&nbsp;                    list.set(index, new FileLockReference(toLock, queue, fileKey));
+<i>213</i>&nbsp;                    locks.remove(fromLock);
+<i>214</i>&nbsp;                    locks.add(toLock);
+<i>215</i>&nbsp;                    break;
+<i>216</i>&nbsp;                }
+<i>217</i>&nbsp;            }
+<i>218</i>&nbsp;        }
+<i>219</i>&nbsp;    }
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;    // Check for overlapping file locks
+<i>222</i>&nbsp;    private void checkList(List&lt;FileLockReference&gt; list, long position, long size)
+<i>223</i>&nbsp;        throws OverlappingFileLockException
+<i>224</i>&nbsp;    {
+<i>225</i>&nbsp;        assert Thread.holdsLock(list);
+<i>226</i>&nbsp;        for (FileLockReference ref: list) {
+<i>227</i>&nbsp;            FileLock fl = ref.get();
+<i>228</i>&nbsp;            if (fl != null &amp;&amp; fl.overlaps(position, size))
+<i>229</i>&nbsp;                throw new OverlappingFileLockException();
+<i>230</i>&nbsp;        }
+<i>231</i>&nbsp;    }
+<i>232</i>&nbsp;
+<i>233</i>&nbsp;    // Process the reference queue
+<i>234</i>&nbsp;    private void removeStaleEntries() {
+<i>235</i>&nbsp;        FileLockReference ref;
+<i>236</i>&nbsp;        while ((ref = (FileLockReference)queue.poll()) != null) {
+<i>237</i>&nbsp;            FileKey fk = ref.fileKey();
+<i>238</i>&nbsp;            List&lt;FileLockReference&gt; list = lockMap.get(fk);
+<i>239</i>&nbsp;            if (list != null) {
+<i>240</i>&nbsp;                synchronized (list) {
+<i>241</i>&nbsp;                    list.remove(ref);
+<i>242</i>&nbsp;                    removeKeyIfEmpty(fk, list);
+<i>243</i>&nbsp;                }
+<i>244</i>&nbsp;            }
+<i>245</i>&nbsp;        }
+<i>246</i>&nbsp;    }
+<i>247</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

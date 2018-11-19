@@ -1,0 +1,605 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AtomicReferenceFieldUpdater</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.concurrent.atomic</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AtomicReferenceFieldUpdater (java.util.concurrent.atomic)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AtomicReferenceFieldUpdater</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 22)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">AtomicReferenceFieldUpdater$AtomicReferenceFieldUpdaterImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 15)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 67)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">AtomicReferenceFieldUpdater$AtomicReferenceFieldUpdaterImpl$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 24)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 91)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; */
+<i>24</i>&nbsp;
+<i>25</i>&nbsp;/*
+<i>26</i>&nbsp; *
+<i>27</i>&nbsp; *
+<i>28</i>&nbsp; *
+<i>29</i>&nbsp; *
+<i>30</i>&nbsp; *
+<i>31</i>&nbsp; * Written by Doug Lea with assistance from members of JCP JSR-166
+<i>32</i>&nbsp; * Expert Group and released to the public domain, as explained at
+<i>33</i>&nbsp; * http://creativecommons.org/publicdomain/zero/1.0/
+<i>34</i>&nbsp; */
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;package java.util.concurrent.atomic;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import java.lang.reflect.Field;
+<i>39</i>&nbsp;import java.lang.reflect.Modifier;
+<i>40</i>&nbsp;import java.security.AccessController;
+<i>41</i>&nbsp;import java.security.PrivilegedActionException;
+<i>42</i>&nbsp;import java.security.PrivilegedExceptionAction;
+<i>43</i>&nbsp;import java.util.Objects;
+<i>44</i>&nbsp;import java.util.function.BinaryOperator;
+<i>45</i>&nbsp;import java.util.function.UnaryOperator;
+<i>46</i>&nbsp;import jdk.internal.misc.Unsafe;
+<i>47</i>&nbsp;import jdk.internal.reflect.CallerSensitive;
+<i>48</i>&nbsp;import jdk.internal.reflect.Reflection;
+<i>49</i>&nbsp;import java.lang.invoke.VarHandle;
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;/**
+<i>52</i>&nbsp; * A reflection-based utility that enables atomic updates to
+<i>53</i>&nbsp; * designated {@code volatile} reference fields of designated
+<i>54</i>&nbsp; * classes.  This class is designed for use in atomic data structures
+<i>55</i>&nbsp; * in which several reference fields of the same node are
+<i>56</i>&nbsp; * independently subject to atomic updates. For example, a tree node
+<i>57</i>&nbsp; * might be declared as
+<i>58</i>&nbsp; *
+<i>59</i>&nbsp; * &lt;pre&gt; {@code
+<i>60</i>&nbsp; * class Node {
+<i>61</i>&nbsp; *   private volatile Node left, right;
+<i>62</i>&nbsp; *
+<i>63</i>&nbsp; *   private static final AtomicReferenceFieldUpdater&lt;Node, Node&gt; leftUpdater =
+<i>64</i>&nbsp; *     AtomicReferenceFieldUpdater.newUpdater(Node.class, Node.class, &quot;left&quot;);
+<i>65</i>&nbsp; *   private static AtomicReferenceFieldUpdater&lt;Node, Node&gt; rightUpdater =
+<i>66</i>&nbsp; *     AtomicReferenceFieldUpdater.newUpdater(Node.class, Node.class, &quot;right&quot;);
+<i>67</i>&nbsp; *
+<i>68</i>&nbsp; *   Node getLeft() { return left; }
+<i>69</i>&nbsp; *   boolean compareAndSetLeft(Node expect, Node update) {
+<i>70</i>&nbsp; *     return leftUpdater.compareAndSet(this, expect, update);
+<i>71</i>&nbsp; *   }
+<i>72</i>&nbsp; *   // ... and so on
+<i>73</i>&nbsp; * }}&lt;/pre&gt;
+<i>74</i>&nbsp; *
+<i>75</i>&nbsp; * &lt;p&gt;Note that the guarantees of the {@code compareAndSet}
+<i>76</i>&nbsp; * method in this class are weaker than in other atomic classes.
+<i>77</i>&nbsp; * Because this class cannot ensure that all uses of the field
+<i>78</i>&nbsp; * are appropriate for purposes of atomic access, it can
+<i>79</i>&nbsp; * guarantee atomicity only with respect to other invocations of
+<i>80</i>&nbsp; * {@code compareAndSet} and {@code set} on the same updater.
+<i>81</i>&nbsp; *
+<i>82</i>&nbsp; * &lt;p&gt;Object arguments for parameters of type {@code T} that are not
+<i>83</i>&nbsp; * instances of the class passed to {@link #newUpdater} will result in
+<i>84</i>&nbsp; * a {@link ClassCastException} being thrown.
+<i>85</i>&nbsp; *
+<i>86</i>&nbsp; * @since 1.5
+<i>87</i>&nbsp; * @author Doug Lea
+<i>88</i>&nbsp; * @param &lt;T&gt; The type of the object holding the updatable field
+<i>89</i>&nbsp; * @param &lt;V&gt; The type of the field
+<i>90</i>&nbsp; */
+<i>91</i>&nbsp;public abstract class AtomicReferenceFieldUpdater&lt;T,V&gt; {
+<i>92</i>&nbsp;
+<i>93</i>&nbsp;    /**
+<i>94</i>&nbsp;     * Creates and returns an updater for objects with the given field.
+<i>95</i>&nbsp;     * The Class arguments are needed to check that reflective types and
+<i>96</i>&nbsp;     * generic types match.
+<i>97</i>&nbsp;     *
+<i>98</i>&nbsp;     * @param tclass the class of the objects holding the field
+<i>99</i>&nbsp;     * @param vclass the class of the field
+<i>100</i>&nbsp;     * @param fieldName the name of the field to be updated
+<i>101</i>&nbsp;     * @param &lt;U&gt; the type of instances of tclass
+<i>102</i>&nbsp;     * @param &lt;W&gt; the type of instances of vclass
+<i>103</i>&nbsp;     * @return the updater
+<i>104</i>&nbsp;     * @throws ClassCastException if the field is of the wrong type
+<i>105</i>&nbsp;     * @throws IllegalArgumentException if the field is not volatile
+<i>106</i>&nbsp;     * @throws RuntimeException with a nested reflection-based
+<i>107</i>&nbsp;     * exception if the class does not hold field or is the wrong type,
+<i>108</i>&nbsp;     * or the field is inaccessible to the caller according to Java language
+<b class="nc"><i>109</i>&nbsp;     * access control</b>
+<b class="nc"><i>110</i>&nbsp;     */</b>
+<i>111</i>&nbsp;    @CallerSensitive
+<i>112</i>&nbsp;    public static &lt;U,W&gt; AtomicReferenceFieldUpdater&lt;U,W&gt; newUpdater(Class&lt;U&gt; tclass,
+<i>113</i>&nbsp;                                                                    Class&lt;W&gt; vclass,
+<i>114</i>&nbsp;                                                                    String fieldName) {
+<i>115</i>&nbsp;        return new AtomicReferenceFieldUpdaterImpl&lt;U,W&gt;
+<b class="nc"><i>116</i>&nbsp;            (tclass, vclass, fieldName, Reflection.getCallerClass());</b>
+<i>117</i>&nbsp;    }
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;    /**
+<i>120</i>&nbsp;     * Protected do-nothing constructor for use by subclasses.
+<i>121</i>&nbsp;     */
+<i>122</i>&nbsp;    protected AtomicReferenceFieldUpdater() {
+<i>123</i>&nbsp;    }
+<i>124</i>&nbsp;
+<i>125</i>&nbsp;    /**
+<i>126</i>&nbsp;     * Atomically sets the field of the given object managed by this updater
+<i>127</i>&nbsp;     * to the given updated value if the current value {@code ==} the
+<i>128</i>&nbsp;     * expected value. This method is guaranteed to be atomic with respect to
+<i>129</i>&nbsp;     * other calls to {@code compareAndSet} and {@code set}, but not
+<i>130</i>&nbsp;     * necessarily with respect to other changes in the field.
+<i>131</i>&nbsp;     *
+<i>132</i>&nbsp;     * @param obj An object whose field to conditionally set
+<i>133</i>&nbsp;     * @param expect the expected value
+<i>134</i>&nbsp;     * @param update the new value
+<i>135</i>&nbsp;     * @return {@code true} if successful
+<i>136</i>&nbsp;     */
+<i>137</i>&nbsp;    public abstract boolean compareAndSet(T obj, V expect, V update);
+<i>138</i>&nbsp;
+<i>139</i>&nbsp;    /**
+<i>140</i>&nbsp;     * Atomically sets the field of the given object managed by this updater
+<i>141</i>&nbsp;     * to the given updated value if the current value {@code ==} the
+<i>142</i>&nbsp;     * expected value. This method is guaranteed to be atomic with respect to
+<i>143</i>&nbsp;     * other calls to {@code compareAndSet} and {@code set}, but not
+<i>144</i>&nbsp;     * necessarily with respect to other changes in the field.
+<i>145</i>&nbsp;     *
+<i>146</i>&nbsp;     * &lt;p&gt;&lt;a href=&quot;package-summary.html#weakCompareAndSet&quot;&gt;May fail
+<i>147</i>&nbsp;     * spuriously and does not provide ordering guarantees&lt;/a&gt;, so is
+<i>148</i>&nbsp;     * only rarely an appropriate alternative to {@code compareAndSet}.
+<i>149</i>&nbsp;     *
+<i>150</i>&nbsp;     * @param obj An object whose field to conditionally set
+<i>151</i>&nbsp;     * @param expect the expected value
+<i>152</i>&nbsp;     * @param update the new value
+<i>153</i>&nbsp;     * @return {@code true} if successful
+<i>154</i>&nbsp;     */
+<i>155</i>&nbsp;    public abstract boolean weakCompareAndSet(T obj, V expect, V update);
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;    /**
+<i>158</i>&nbsp;     * Sets the field of the given object managed by this updater to the
+<i>159</i>&nbsp;     * given updated value. This operation is guaranteed to act as a volatile
+<i>160</i>&nbsp;     * store with respect to subsequent invocations of {@code compareAndSet}.
+<i>161</i>&nbsp;     *
+<i>162</i>&nbsp;     * @param obj An object whose field to set
+<i>163</i>&nbsp;     * @param newValue the new value
+<i>164</i>&nbsp;     */
+<i>165</i>&nbsp;    public abstract void set(T obj, V newValue);
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;    /**
+<i>168</i>&nbsp;     * Eventually sets the field of the given object managed by this
+<i>169</i>&nbsp;     * updater to the given updated value.
+<i>170</i>&nbsp;     *
+<i>171</i>&nbsp;     * @param obj An object whose field to set
+<i>172</i>&nbsp;     * @param newValue the new value
+<i>173</i>&nbsp;     * @since 1.6
+<i>174</i>&nbsp;     */
+<i>175</i>&nbsp;    public abstract void lazySet(T obj, V newValue);
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * Returns the current value held in the field of the given object
+<i>179</i>&nbsp;     * managed by this updater.
+<i>180</i>&nbsp;     *
+<i>181</i>&nbsp;     * @param obj An object whose field to get
+<i>182</i>&nbsp;     * @return the current value
+<i>183</i>&nbsp;     */
+<i>184</i>&nbsp;    public abstract V get(T obj);
+<i>185</i>&nbsp;
+<i>186</i>&nbsp;    /**
+<i>187</i>&nbsp;     * Atomically sets the field of the given object managed by this updater
+<i>188</i>&nbsp;     * to the given value and returns the old value.
+<i>189</i>&nbsp;     *
+<i>190</i>&nbsp;     * @param obj An object whose field to get and set
+<b class="nc"><i>191</i>&nbsp;     * @param newValue the new value</b>
+<b class="nc"><i>192</i>&nbsp;     * @return the previous value</b>
+<b class="nc"><i>193</i>&nbsp;     */</b>
+<i>194</i>&nbsp;    public V getAndSet(T obj, V newValue) {
+<i>195</i>&nbsp;        V prev;
+<i>196</i>&nbsp;        do {
+<i>197</i>&nbsp;            prev = get(obj);
+<i>198</i>&nbsp;        } while (!compareAndSet(obj, prev, newValue));
+<i>199</i>&nbsp;        return prev;
+<i>200</i>&nbsp;    }
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;    /**
+<i>203</i>&nbsp;     * Atomically updates (with memory effects as specified by {@link
+<i>204</i>&nbsp;     * VarHandle#compareAndSet}) the field of the given object managed
+<i>205</i>&nbsp;     * by this updater with the results of applying the given
+<i>206</i>&nbsp;     * function, returning the previous value. The function should be
+<i>207</i>&nbsp;     * side-effect-free, since it may be re-applied when attempted
+<i>208</i>&nbsp;     * updates fail due to contention among threads.
+<i>209</i>&nbsp;     *
+<b class="nc"><i>210</i>&nbsp;     * @param obj An object whose field to get and set</b>
+<b class="nc"><i>211</i>&nbsp;     * @param updateFunction a side-effect-free function</b>
+<b class="nc"><i>212</i>&nbsp;     * @return the previous value</b>
+<b class="nc"><i>213</i>&nbsp;     * @since 1.8</b>
+<i>214</i>&nbsp;     */
+<i>215</i>&nbsp;    public final V getAndUpdate(T obj, UnaryOperator&lt;V&gt; updateFunction) {
+<i>216</i>&nbsp;        V prev, next;
+<i>217</i>&nbsp;        do {
+<i>218</i>&nbsp;            prev = get(obj);
+<i>219</i>&nbsp;            next = updateFunction.apply(prev);
+<i>220</i>&nbsp;        } while (!compareAndSet(obj, prev, next));
+<i>221</i>&nbsp;        return prev;
+<i>222</i>&nbsp;    }
+<i>223</i>&nbsp;
+<i>224</i>&nbsp;    /**
+<i>225</i>&nbsp;     * Atomically updates (with memory effects as specified by {@link
+<i>226</i>&nbsp;     * VarHandle#compareAndSet}) the field of the given object managed
+<i>227</i>&nbsp;     * by this updater with the results of applying the given
+<i>228</i>&nbsp;     * function, returning the updated value. The function should be
+<i>229</i>&nbsp;     * side-effect-free, since it may be re-applied when attempted
+<b class="nc"><i>230</i>&nbsp;     * updates fail due to contention among threads.</b>
+<b class="nc"><i>231</i>&nbsp;     *</b>
+<b class="nc"><i>232</i>&nbsp;     * @param obj An object whose field to get and set</b>
+<b class="nc"><i>233</i>&nbsp;     * @param updateFunction a side-effect-free function</b>
+<i>234</i>&nbsp;     * @return the updated value
+<i>235</i>&nbsp;     * @since 1.8
+<i>236</i>&nbsp;     */
+<i>237</i>&nbsp;    public final V updateAndGet(T obj, UnaryOperator&lt;V&gt; updateFunction) {
+<i>238</i>&nbsp;        V prev, next;
+<i>239</i>&nbsp;        do {
+<i>240</i>&nbsp;            prev = get(obj);
+<i>241</i>&nbsp;            next = updateFunction.apply(prev);
+<i>242</i>&nbsp;        } while (!compareAndSet(obj, prev, next));
+<i>243</i>&nbsp;        return next;
+<i>244</i>&nbsp;    }
+<i>245</i>&nbsp;
+<i>246</i>&nbsp;    /**
+<i>247</i>&nbsp;     * Atomically updates (with memory effects as specified by {@link
+<i>248</i>&nbsp;     * VarHandle#compareAndSet}) the field of the given object managed
+<i>249</i>&nbsp;     * by this updater with the results of applying the given function
+<i>250</i>&nbsp;     * to the current and given values, returning the previous value.
+<i>251</i>&nbsp;     * The function should be side-effect-free, since it may be
+<i>252</i>&nbsp;     * re-applied when attempted updates fail due to contention among
+<i>253</i>&nbsp;     * threads.  The function is applied with the current value as its
+<i>254</i>&nbsp;     * first argument, and the given update as the second argument.
+<b class="nc"><i>255</i>&nbsp;     *</b>
+<b class="nc"><i>256</i>&nbsp;     * @param obj An object whose field to get and set</b>
+<b class="nc"><i>257</i>&nbsp;     * @param x the update value</b>
+<b class="nc"><i>258</i>&nbsp;     * @param accumulatorFunction a side-effect-free function of two arguments</b>
+<i>259</i>&nbsp;     * @return the previous value
+<i>260</i>&nbsp;     * @since 1.8
+<i>261</i>&nbsp;     */
+<i>262</i>&nbsp;    public final V getAndAccumulate(T obj, V x,
+<i>263</i>&nbsp;                                    BinaryOperator&lt;V&gt; accumulatorFunction) {
+<i>264</i>&nbsp;        V prev, next;
+<i>265</i>&nbsp;        do {
+<i>266</i>&nbsp;            prev = get(obj);
+<i>267</i>&nbsp;            next = accumulatorFunction.apply(prev, x);
+<i>268</i>&nbsp;        } while (!compareAndSet(obj, prev, next));
+<i>269</i>&nbsp;        return prev;
+<i>270</i>&nbsp;    }
+<i>271</i>&nbsp;
+<i>272</i>&nbsp;    /**
+<i>273</i>&nbsp;     * Atomically updates (with memory effects as specified by {@link
+<i>274</i>&nbsp;     * VarHandle#compareAndSet}) the field of the given object managed
+<i>275</i>&nbsp;     * by this updater with the results of applying the given function
+<i>276</i>&nbsp;     * to the current and given values, returning the updated value.
+<i>277</i>&nbsp;     * The function should be side-effect-free, since it may be
+<i>278</i>&nbsp;     * re-applied when attempted updates fail due to contention among
+<i>279</i>&nbsp;     * threads.  The function is applied with the current value as its
+<b class="nc"><i>280</i>&nbsp;     * first argument, and the given update as the second argument.</b>
+<b class="nc"><i>281</i>&nbsp;     *</b>
+<b class="nc"><i>282</i>&nbsp;     * @param obj An object whose field to get and set</b>
+<b class="nc"><i>283</i>&nbsp;     * @param x the update value</b>
+<i>284</i>&nbsp;     * @param accumulatorFunction a side-effect-free function of two arguments
+<i>285</i>&nbsp;     * @return the updated value
+<i>286</i>&nbsp;     * @since 1.8
+<i>287</i>&nbsp;     */
+<b class="nc"><i>288</i>&nbsp;    public final V accumulateAndGet(T obj, V x,</b>
+<i>289</i>&nbsp;                                    BinaryOperator&lt;V&gt; accumulatorFunction) {
+<i>290</i>&nbsp;        V prev, next;
+<i>291</i>&nbsp;        do {
+<i>292</i>&nbsp;            prev = get(obj);
+<i>293</i>&nbsp;            next = accumulatorFunction.apply(prev, x);
+<i>294</i>&nbsp;        } while (!compareAndSet(obj, prev, next));
+<i>295</i>&nbsp;        return next;
+<i>296</i>&nbsp;    }
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;    private static final class AtomicReferenceFieldUpdaterImpl&lt;T,V&gt;
+<i>299</i>&nbsp;        extends AtomicReferenceFieldUpdater&lt;T,V&gt; {
+<i>300</i>&nbsp;        private static final Unsafe U = Unsafe.getUnsafe();
+<i>301</i>&nbsp;        private final long offset;
+<i>302</i>&nbsp;        /**
+<i>303</i>&nbsp;         * if field is protected, the subclass constructing updater, else
+<i>304</i>&nbsp;         * the same as tclass
+<i>305</i>&nbsp;         */
+<i>306</i>&nbsp;        private final Class&lt;?&gt; cclass;
+<i>307</i>&nbsp;        /** class holding the field */
+<i>308</i>&nbsp;        private final Class&lt;T&gt; tclass;
+<i>309</i>&nbsp;        /** field value type */
+<i>310</i>&nbsp;        private final Class&lt;V&gt; vclass;
+<i>311</i>&nbsp;
+<i>312</i>&nbsp;        /*
+<i>313</i>&nbsp;         * Internal type checks within all update methods contain
+<i>314</i>&nbsp;         * internal inlined optimizations checking for the common
+<b class="nc"><i>315</i>&nbsp;         * cases where the class is final (in which case a simple</b>
+<i>316</i>&nbsp;         * getClass comparison suffices) or is of type Object (in
+<i>317</i>&nbsp;         * which case no check is needed because all objects are
+<i>318</i>&nbsp;         * instances of Object). The Object case is handled simply by
+<i>319</i>&nbsp;         * setting vclass to null in constructor.  The targetCheck and
+<b class="nc"><i>320</i>&nbsp;         * updateCheck methods are invoked when these faster</b>
+<b class="nc"><i>321</i>&nbsp;         * screenings fail.</b>
+<i>322</i>&nbsp;         */
+<b class="nc"><i>323</i>&nbsp;</b>
+<i>324</i>&nbsp;        AtomicReferenceFieldUpdaterImpl(final Class&lt;T&gt; tclass,
+<i>325</i>&nbsp;                                        final Class&lt;V&gt; vclass,
+<b class="nc"><i>326</i>&nbsp;                                        final String fieldName,</b>
+<b class="nc"><i>327</i>&nbsp;                                        final Class&lt;?&gt; caller) {</b>
+<i>328</i>&nbsp;            final Field field;
+<b class="nc"><i>329</i>&nbsp;            final Class&lt;?&gt; fieldClass;</b>
+<b class="nc"><i>330</i>&nbsp;            final int modifiers;</b>
+<b class="nc"><i>331</i>&nbsp;            try {</b>
+<b class="nc"><i>332</i>&nbsp;                field = AccessController.doPrivileged(</b>
+<b class="nc"><i>333</i>&nbsp;                    new PrivilegedExceptionAction&lt;Field&gt;() {</b>
+<i>334</i>&nbsp;                        public Field run() throws NoSuchFieldException {
+<b class="nc"><i>335</i>&nbsp;                            return tclass.getDeclaredField(fieldName);</b>
+<b class="nc"><i>336</i>&nbsp;                        }</b>
+<b class="nc"><i>337</i>&nbsp;                    });</b>
+<b class="nc"><i>338</i>&nbsp;                modifiers = field.getModifiers();</b>
+<b class="nc"><i>339</i>&nbsp;                sun.reflect.misc.ReflectUtil.ensureMemberAccess(</b>
+<b class="nc"><i>340</i>&nbsp;                    caller, tclass, null, modifiers);</b>
+<i>341</i>&nbsp;                ClassLoader cl = tclass.getClassLoader();
+<b class="nc"><i>342</i>&nbsp;                ClassLoader ccl = caller.getClassLoader();</b>
+<b class="nc"><i>343</i>&nbsp;                if ((ccl != null) &amp;&amp; (ccl != cl) &amp;&amp;</b>
+<b class="nc"><i>344</i>&nbsp;                    ((cl == null) || !isAncestor(cl, ccl))) {</b>
+<b class="nc"><i>345</i>&nbsp;                    sun.reflect.misc.ReflectUtil.checkPackageAccess(tclass);</b>
+<i>346</i>&nbsp;                }
+<b class="nc"><i>347</i>&nbsp;                fieldClass = field.getType();</b>
+<b class="nc"><i>348</i>&nbsp;            } catch (PrivilegedActionException pae) {</b>
+<i>349</i>&nbsp;                throw new RuntimeException(pae.getException());
+<i>350</i>&nbsp;            } catch (Exception ex) {
+<i>351</i>&nbsp;                throw new RuntimeException(ex);
+<i>352</i>&nbsp;            }
+<i>353</i>&nbsp;
+<i>354</i>&nbsp;            if (vclass != fieldClass)
+<i>355</i>&nbsp;                throw new ClassCastException();
+<i>356</i>&nbsp;            if (vclass.isPrimitive())
+<b class="nc"><i>357</i>&nbsp;                throw new IllegalArgumentException(&quot;Must be reference type&quot;);</b>
+<b class="nc"><i>358</i>&nbsp;</b>
+<b class="nc"><i>359</i>&nbsp;            if (!Modifier.isVolatile(modifiers))</b>
+<i>360</i>&nbsp;                throw new IllegalArgumentException(&quot;Must be volatile type&quot;);
+<b class="nc"><i>361</i>&nbsp;</b>
+<b class="nc"><i>362</i>&nbsp;            // Access to protected field members is restricted to receivers only</b>
+<b class="nc"><i>363</i>&nbsp;            // of the accessing class, or one of its subclasses, and the</b>
+<i>364</i>&nbsp;            // accessing class must in turn be a subclass (or package sibling)
+<i>365</i>&nbsp;            // of the protected member&#39;s defining class.
+<i>366</i>&nbsp;            // If the updater refers to a protected field of a declaring class
+<i>367</i>&nbsp;            // outside the current package, the receiver argument will be
+<i>368</i>&nbsp;            // narrowed to the type of the accessing class.
+<i>369</i>&nbsp;            this.cclass = (Modifier.isProtected(modifiers) &amp;&amp;
+<i>370</i>&nbsp;                           tclass.isAssignableFrom(caller) &amp;&amp;
+<i>371</i>&nbsp;                           !isSamePackage(tclass, caller))
+<b class="nc"><i>372</i>&nbsp;                          ? caller : tclass;</b>
+<i>373</i>&nbsp;            this.tclass = tclass;
+<b class="nc"><i>374</i>&nbsp;            this.vclass = vclass;</b>
+<b class="nc"><i>375</i>&nbsp;            this.offset = U.objectFieldOffset(field);</b>
+<b class="nc"><i>376</i>&nbsp;        }</b>
+<i>377</i>&nbsp;
+<b class="nc"><i>378</i>&nbsp;        /**</b>
+<b class="nc"><i>379</i>&nbsp;         * Returns true if the second classloader can be found in the first</b>
+<i>380</i>&nbsp;         * classloader&#39;s delegation chain.
+<i>381</i>&nbsp;         * Equivalent to the inaccessible: first.isAncestor(second).
+<i>382</i>&nbsp;         */
+<i>383</i>&nbsp;        private static boolean isAncestor(ClassLoader first, ClassLoader second) {
+<i>384</i>&nbsp;            ClassLoader acl = first;
+<i>385</i>&nbsp;            do {
+<i>386</i>&nbsp;                acl = acl.getParent();
+<b class="nc"><i>387</i>&nbsp;                if (second == acl) {</b>
+<b class="nc"><i>388</i>&nbsp;                    return true;</b>
+<i>389</i>&nbsp;                }
+<i>390</i>&nbsp;            } while (acl != null);
+<i>391</i>&nbsp;            return false;
+<b class="nc"><i>392</i>&nbsp;        }</b>
+<b class="nc"><i>393</i>&nbsp;</b>
+<b class="nc"><i>394</i>&nbsp;        /**</b>
+<i>395</i>&nbsp;         * Returns true if the two classes have the same class loader and
+<i>396</i>&nbsp;         * package qualifier
+<i>397</i>&nbsp;         */
+<i>398</i>&nbsp;        private static boolean isSamePackage(Class&lt;?&gt; class1, Class&lt;?&gt; class2) {
+<i>399</i>&nbsp;            return class1.getClassLoader() == class2.getClassLoader()
+<i>400</i>&nbsp;                   &amp;&amp; Objects.equals(class1.getPackageName(), class2.getPackageName());
+<i>401</i>&nbsp;        }
+<b class="nc"><i>402</i>&nbsp;</b>
+<b class="nc"><i>403</i>&nbsp;        /**</b>
+<i>404</i>&nbsp;         * Checks that target argument is instance of cclass.  On
+<i>405</i>&nbsp;         * failure, throws cause.
+<i>406</i>&nbsp;         */
+<i>407</i>&nbsp;        private final void accessCheck(T obj) {
+<i>408</i>&nbsp;            if (!cclass.isInstance(obj))
+<i>409</i>&nbsp;                throwAccessCheckException(obj);
+<i>410</i>&nbsp;        }
+<b class="nc"><i>411</i>&nbsp;</b>
+<b class="nc"><i>412</i>&nbsp;        /**</b>
+<i>413</i>&nbsp;         * Throws access exception if accessCheck failed due to
+<b class="nc"><i>414</i>&nbsp;         * protected access, else ClassCastException.</b>
+<i>415</i>&nbsp;         */
+<i>416</i>&nbsp;        private final void throwAccessCheckException(T obj) {
+<b class="nc"><i>417</i>&nbsp;            if (cclass == tclass)</b>
+<i>418</i>&nbsp;                throw new ClassCastException();
+<b class="nc"><i>419</i>&nbsp;            else</b>
+<i>420</i>&nbsp;                throw new RuntimeException(
+<b class="nc"><i>421</i>&nbsp;                    new IllegalAccessException(</b>
+<i>422</i>&nbsp;                        &quot;Class &quot; +
+<i>423</i>&nbsp;                        cclass.getName() +
+<i>424</i>&nbsp;                        &quot; can not access a protected member of class &quot; +
+<b class="nc"><i>425</i>&nbsp;                        tclass.getName() +</b>
+<b class="nc"><i>426</i>&nbsp;                        &quot; using an instance of &quot; +</b>
+<i>427</i>&nbsp;                        obj.getClass().getName()));
+<i>428</i>&nbsp;        }
+<i>429</i>&nbsp;
+<b class="nc"><i>430</i>&nbsp;        private final void valueCheck(V v) {</b>
+<i>431</i>&nbsp;            if (v != null &amp;&amp; !(vclass.isInstance(v)))
+<i>432</i>&nbsp;                throwCCE();
+<i>433</i>&nbsp;        }
+<b class="nc"><i>434</i>&nbsp;</b>
+<b class="nc"><i>435</i>&nbsp;        static void throwCCE() {</b>
+<b class="nc"><i>436</i>&nbsp;            throw new ClassCastException();</b>
+<i>437</i>&nbsp;        }
+<i>438</i>&nbsp;
+<i>439</i>&nbsp;        public final boolean compareAndSet(T obj, V expect, V update) {
+<i>440</i>&nbsp;            accessCheck(obj);
+<b class="nc"><i>441</i>&nbsp;            valueCheck(update);</b>
+<b class="nc"><i>442</i>&nbsp;            return U.compareAndSetObject(obj, offset, expect, update);</b>
+<b class="nc"><i>443</i>&nbsp;        }</b>
+<i>444</i>&nbsp;
+<i>445</i>&nbsp;        public final boolean weakCompareAndSet(T obj, V expect, V update) {
+<i>446</i>&nbsp;            // same implementation as strong form for now
+<b class="nc"><i>447</i>&nbsp;            accessCheck(obj);</b>
+<b class="nc"><i>448</i>&nbsp;            valueCheck(update);</b>
+<b class="nc"><i>449</i>&nbsp;            return U.compareAndSetObject(obj, offset, expect, update);</b>
+<i>450</i>&nbsp;        }
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;        public final void set(T obj, V newValue) {
+<b class="nc"><i>453</i>&nbsp;            accessCheck(obj);</b>
+<b class="nc"><i>454</i>&nbsp;            valueCheck(newValue);</b>
+<b class="nc"><i>455</i>&nbsp;            U.putObjectVolatile(obj, offset, newValue);</b>
+<i>456</i>&nbsp;        }
+<i>457</i>&nbsp;
+<i>458</i>&nbsp;        public final void lazySet(T obj, V newValue) {
+<i>459</i>&nbsp;            accessCheck(obj);
+<b class="nc"><i>460</i>&nbsp;            valueCheck(newValue);</b>
+<b class="nc"><i>461</i>&nbsp;            U.putObjectRelease(obj, offset, newValue);</b>
+<i>462</i>&nbsp;        }
+<i>463</i>&nbsp;
+<i>464</i>&nbsp;        @SuppressWarnings(&quot;unchecked&quot;)
+<i>465</i>&nbsp;        public final V get(T obj) {
+<b class="nc"><i>466</i>&nbsp;            accessCheck(obj);</b>
+<b class="nc"><i>467</i>&nbsp;            return (V)U.getObjectVolatile(obj, offset);</b>
+<b class="nc"><i>468</i>&nbsp;        }</b>
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;        @SuppressWarnings(&quot;unchecked&quot;)
+<i>471</i>&nbsp;        public final V getAndSet(T obj, V newValue) {
+<i>472</i>&nbsp;            accessCheck(obj);
+<i>473</i>&nbsp;            valueCheck(newValue);
+<i>474</i>&nbsp;            return (V)U.getAndSetObject(obj, offset, newValue);
+<i>475</i>&nbsp;        }
+<i>476</i>&nbsp;    }
+<i>477</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

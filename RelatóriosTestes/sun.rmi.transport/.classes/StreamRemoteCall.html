@@ -1,0 +1,405 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: StreamRemoteCall</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.rmi.transport</a> ]
+</div>
+
+<h1>Coverage Summary for Class: StreamRemoteCall (sun.rmi.transport)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">StreamRemoteCall</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 100)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.rmi.transport;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.DataInputStream;
+<i>29</i>&nbsp;import java.io.DataOutputStream;
+<i>30</i>&nbsp;import java.io.IOException;
+<i>31</i>&nbsp;import java.io.ObjectInput;
+<i>32</i>&nbsp;import java.io.ObjectOutput;
+<i>33</i>&nbsp;import java.io.StreamCorruptedException;
+<i>34</i>&nbsp;import java.rmi.RemoteException;
+<i>35</i>&nbsp;import java.rmi.MarshalException;
+<i>36</i>&nbsp;import java.rmi.UnmarshalException;
+<i>37</i>&nbsp;import java.rmi.server.ObjID;
+<i>38</i>&nbsp;import java.rmi.server.RemoteCall;
+<i>39</i>&nbsp;import sun.rmi.runtime.Log;
+<i>40</i>&nbsp;import sun.rmi.server.UnicastRef;
+<i>41</i>&nbsp;import sun.rmi.transport.tcp.TCPEndpoint;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;/**
+<i>44</i>&nbsp; * Stream-based implementation of the RemoteCall interface.
+<i>45</i>&nbsp; *
+<i>46</i>&nbsp; * @author Ann Wollrath
+<i>47</i>&nbsp; */
+<i>48</i>&nbsp;@SuppressWarnings(&quot;deprecation&quot;)
+<i>49</i>&nbsp;public class StreamRemoteCall implements RemoteCall {
+<b class="nc"><i>50</i>&nbsp;    private ConnectionInputStream in = null;</b>
+<b class="nc"><i>51</i>&nbsp;    private ConnectionOutputStream out = null;</b>
+<i>52</i>&nbsp;    private Connection conn;
+<b class="nc"><i>53</i>&nbsp;    private boolean resultStarted = false;</b>
+<b class="nc"><i>54</i>&nbsp;    private Exception serverException = null;</b>
+<i>55</i>&nbsp;
+<b class="nc"><i>56</i>&nbsp;    public StreamRemoteCall(Connection c) {</b>
+<b class="nc"><i>57</i>&nbsp;        conn = c;</b>
+<i>58</i>&nbsp;    }
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    public StreamRemoteCall(Connection c, ObjID id, int op, long hash)
+<i>61</i>&nbsp;        throws RemoteException
+<b class="nc"><i>62</i>&nbsp;    {</b>
+<i>63</i>&nbsp;        try {
+<b class="nc"><i>64</i>&nbsp;            conn = c;</b>
+<b class="nc"><i>65</i>&nbsp;            Transport.transportLog.log(Log.VERBOSE,</b>
+<i>66</i>&nbsp;                &quot;write remote call header...&quot;);
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;            // write out remote call header info...
+<i>69</i>&nbsp;            // call header, part 1 (read by Transport)
+<b class="nc"><i>70</i>&nbsp;            conn.getOutputStream().write(TransportConstants.Call);</b>
+<b class="nc"><i>71</i>&nbsp;            getOutputStream();           // creates a MarshalOutputStream</b>
+<b class="nc"><i>72</i>&nbsp;            id.write(out);               // object id (target of call)</b>
+<i>73</i>&nbsp;            // call header, part 2 (read by Dispatcher)
+<b class="nc"><i>74</i>&nbsp;            out.writeInt(op);            // method number (operation index)</b>
+<b class="nc"><i>75</i>&nbsp;            out.writeLong(hash);         // stub/skeleton hash</b>
+<b class="nc"><i>76</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>77</i>&nbsp;            throw new MarshalException(&quot;Error marshaling call header&quot;, e);</b>
+<b class="nc"><i>78</i>&nbsp;        }</b>
+<i>79</i>&nbsp;    }
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    /**
+<i>82</i>&nbsp;     * Return the connection associated with this call.
+<i>83</i>&nbsp;     */
+<i>84</i>&nbsp;    public Connection getConnection() {
+<b class="nc"><i>85</i>&nbsp;        return conn;</b>
+<i>86</i>&nbsp;    }
+<i>87</i>&nbsp;
+<i>88</i>&nbsp;    /**
+<i>89</i>&nbsp;     * Return the output stream the stub/skeleton should put arguments/results
+<i>90</i>&nbsp;     * into.
+<i>91</i>&nbsp;     */
+<i>92</i>&nbsp;    public ObjectOutput getOutputStream() throws IOException {
+<b class="nc"><i>93</i>&nbsp;        return getOutputStream(false);</b>
+<i>94</i>&nbsp;    }
+<i>95</i>&nbsp;
+<i>96</i>&nbsp;    private ObjectOutput getOutputStream(boolean resultStream)
+<i>97</i>&nbsp;        throws IOException
+<i>98</i>&nbsp;    {
+<b class="nc"><i>99</i>&nbsp;        if (out == null) {</b>
+<b class="nc"><i>100</i>&nbsp;            Transport.transportLog.log(Log.VERBOSE, &quot;getting output stream&quot;);</b>
+<i>101</i>&nbsp;
+<b class="nc"><i>102</i>&nbsp;            out = new ConnectionOutputStream(conn, resultStream);</b>
+<i>103</i>&nbsp;        }
+<b class="nc"><i>104</i>&nbsp;        return out;</b>
+<i>105</i>&nbsp;    }
+<i>106</i>&nbsp;
+<i>107</i>&nbsp;    /**
+<i>108</i>&nbsp;     * Release the outputStream  Currently, will not complain if the
+<i>109</i>&nbsp;     * output stream is released more than once.
+<i>110</i>&nbsp;     */
+<i>111</i>&nbsp;    public void releaseOutputStream() throws IOException {
+<i>112</i>&nbsp;        try {
+<b class="nc"><i>113</i>&nbsp;            if (out != null) {</b>
+<i>114</i>&nbsp;                try {
+<b class="nc"><i>115</i>&nbsp;                    out.flush();</b>
+<i>116</i>&nbsp;                } finally {
+<b class="nc"><i>117</i>&nbsp;                    out.done();         // always start DGC ack timer</b>
+<b class="nc"><i>118</i>&nbsp;                }</b>
+<i>119</i>&nbsp;            }
+<b class="nc"><i>120</i>&nbsp;            conn.releaseOutputStream();</b>
+<i>121</i>&nbsp;        } finally {
+<b class="nc"><i>122</i>&nbsp;            out = null;</b>
+<b class="nc"><i>123</i>&nbsp;        }</b>
+<i>124</i>&nbsp;    }
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;    /**
+<i>127</i>&nbsp;     * Get the InputStream the stub/skeleton should get results/arguments
+<i>128</i>&nbsp;     * from.
+<i>129</i>&nbsp;     */
+<i>130</i>&nbsp;    public ObjectInput getInputStream() throws IOException {
+<b class="nc"><i>131</i>&nbsp;        if (in == null) {</b>
+<b class="nc"><i>132</i>&nbsp;            Transport.transportLog.log(Log.VERBOSE, &quot;getting input stream&quot;);</b>
+<i>133</i>&nbsp;
+<b class="nc"><i>134</i>&nbsp;            in = new ConnectionInputStream(conn.getInputStream());</b>
+<i>135</i>&nbsp;        }
+<b class="nc"><i>136</i>&nbsp;        return in;</b>
+<i>137</i>&nbsp;    }
+<i>138</i>&nbsp;
+<i>139</i>&nbsp;    /**
+<i>140</i>&nbsp;     * Release the input stream, this would allow some transports to release
+<i>141</i>&nbsp;     * the channel early.
+<i>142</i>&nbsp;     */
+<i>143</i>&nbsp;    public void releaseInputStream() throws IOException {
+<i>144</i>&nbsp;        /* WARNING: Currently, the UnicastRef.java invoke methods rely
+<i>145</i>&nbsp;         * upon this method not throwing an IOException.
+<i>146</i>&nbsp;         */
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;        try {
+<b class="nc"><i>149</i>&nbsp;            if (in != null) {</b>
+<i>150</i>&nbsp;                // execute MarshalInputStream &quot;done&quot; callbacks
+<i>151</i>&nbsp;                try {
+<b class="nc"><i>152</i>&nbsp;                    in.done();</b>
+<b class="nc"><i>153</i>&nbsp;                } catch (RuntimeException e) {</b>
+<b class="nc"><i>154</i>&nbsp;                }</b>
+<i>155</i>&nbsp;
+<i>156</i>&nbsp;                // add saved references to DGC table
+<b class="nc"><i>157</i>&nbsp;                in.registerRefs();</b>
+<i>158</i>&nbsp;
+<i>159</i>&nbsp;                /* WARNING: The connection being passed to done may have
+<i>160</i>&nbsp;                 * already been freed.
+<i>161</i>&nbsp;                 */
+<b class="nc"><i>162</i>&nbsp;                in.done(conn);</b>
+<i>163</i>&nbsp;            }
+<b class="nc"><i>164</i>&nbsp;            conn.releaseInputStream();</b>
+<i>165</i>&nbsp;        } finally {
+<b class="nc"><i>166</i>&nbsp;            in = null;</b>
+<b class="nc"><i>167</i>&nbsp;        }</b>
+<i>168</i>&nbsp;    }
+<i>169</i>&nbsp;
+<i>170</i>&nbsp;    /**
+<i>171</i>&nbsp;     * Discard any post-processing of refs the InputStream.
+<i>172</i>&nbsp;     */
+<i>173</i>&nbsp;    public void discardPendingRefs() {
+<i>174</i>&nbsp;        in.discardRefs();
+<i>175</i>&nbsp;    }
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * Returns an output stream (may put out header information
+<i>179</i>&nbsp;     * relating to the success of the call).
+<i>180</i>&nbsp;     * @param success If true, indicates normal return, else indicates
+<b class="nc"><i>181</i>&nbsp;     * exceptional return.</b>
+<b class="nc"><i>182</i>&nbsp;     * @exception StreamCorruptedException If result stream previously</b>
+<i>183</i>&nbsp;     * acquired
+<b class="nc"><i>184</i>&nbsp;     * @exception IOException For any other problem with I/O.</b>
+<i>185</i>&nbsp;     */
+<i>186</i>&nbsp;    public ObjectOutput getResultStream(boolean success) throws IOException {
+<i>187</i>&nbsp;        /* make sure result code only marshaled once. */
+<b class="nc"><i>188</i>&nbsp;        if (resultStarted)</b>
+<b class="nc"><i>189</i>&nbsp;            throw new StreamCorruptedException(&quot;result already in progress&quot;);</b>
+<b class="nc"><i>190</i>&nbsp;        else</b>
+<i>191</i>&nbsp;            resultStarted = true;
+<b class="nc"><i>192</i>&nbsp;</b>
+<b class="nc"><i>193</i>&nbsp;        // write out return header</b>
+<i>194</i>&nbsp;        // return header, part 1 (read by Transport)
+<b class="nc"><i>195</i>&nbsp;        DataOutputStream wr = new DataOutputStream(conn.getOutputStream());</b>
+<b class="nc"><i>196</i>&nbsp;        wr.writeByte(TransportConstants.Return);// transport op</b>
+<b class="nc"><i>197</i>&nbsp;        getOutputStream(true);  // creates a MarshalOutputStream</b>
+<i>198</i>&nbsp;        // return header, part 2 (read by client-side RemoteCall)
+<i>199</i>&nbsp;        if (success)            //
+<i>200</i>&nbsp;            out.writeByte(TransportConstants.NormalReturn);
+<i>201</i>&nbsp;        else
+<i>202</i>&nbsp;            out.writeByte(TransportConstants.ExceptionalReturn);
+<i>203</i>&nbsp;        out.writeID();          // write id for gcAck
+<i>204</i>&nbsp;        return out;
+<i>205</i>&nbsp;    }
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;    /**
+<b class="nc"><i>208</i>&nbsp;     * Do whatever it takes to execute the call.</b>
+<i>209</i>&nbsp;     */
+<b class="nc"><i>210</i>&nbsp;    @SuppressWarnings(&quot;fallthrough&quot;)</b>
+<b class="nc"><i>211</i>&nbsp;    public void executeCall() throws Exception {</b>
+<i>212</i>&nbsp;        byte returnType;
+<b class="nc"><i>213</i>&nbsp;</b>
+<b class="nc"><i>214</i>&nbsp;        // read result header</b>
+<b class="nc"><i>215</i>&nbsp;        DGCAckHandler ackHandler = null;</b>
+<b class="nc"><i>216</i>&nbsp;        try {</b>
+<b class="nc"><i>217</i>&nbsp;            if (out != null) {</b>
+<b class="nc"><i>218</i>&nbsp;                ackHandler = out.getDGCAckHandler();</b>
+<i>219</i>&nbsp;            }
+<i>220</i>&nbsp;            releaseOutputStream();
+<b class="nc"><i>221</i>&nbsp;            DataInputStream rd = new DataInputStream(conn.getInputStream());</b>
+<i>222</i>&nbsp;            byte op = rd.readByte();
+<b class="nc"><i>223</i>&nbsp;            if (op != TransportConstants.Return) {</b>
+<b class="nc"><i>224</i>&nbsp;                if (Transport.transportLog.isLoggable(Log.BRIEF)) {</b>
+<b class="nc"><i>225</i>&nbsp;                    Transport.transportLog.log(Log.BRIEF,</b>
+<b class="nc"><i>226</i>&nbsp;                        &quot;transport return code invalid: &quot; + op);</b>
+<b class="nc"><i>227</i>&nbsp;                }</b>
+<b class="nc"><i>228</i>&nbsp;                throw new UnmarshalException(&quot;Transport return code invalid&quot;);</b>
+<b class="nc"><i>229</i>&nbsp;            }</b>
+<i>230</i>&nbsp;            getInputStream();
+<i>231</i>&nbsp;            returnType = in.readByte();
+<b class="nc"><i>232</i>&nbsp;            in.readID();        // id for DGC acknowledgement</b>
+<b class="nc"><i>233</i>&nbsp;        } catch (UnmarshalException e) {</b>
+<i>234</i>&nbsp;            throw e;
+<i>235</i>&nbsp;        } catch (IOException e) {
+<i>236</i>&nbsp;            throw new UnmarshalException(&quot;Error unmarshaling return header&quot;,
+<i>237</i>&nbsp;                                         e);
+<b class="nc"><i>238</i>&nbsp;        } finally {</b>
+<i>239</i>&nbsp;            if (ackHandler != null) {
+<b class="nc"><i>240</i>&nbsp;                ackHandler.release();</b>
+<i>241</i>&nbsp;            }
+<i>242</i>&nbsp;        }
+<i>243</i>&nbsp;
+<i>244</i>&nbsp;        // read return value
+<b class="nc"><i>245</i>&nbsp;        switch (returnType) {</b>
+<b class="nc"><i>246</i>&nbsp;        case TransportConstants.NormalReturn:</b>
+<b class="nc"><i>247</i>&nbsp;            break;</b>
+<b class="nc"><i>248</i>&nbsp;</b>
+<i>249</i>&nbsp;        case TransportConstants.ExceptionalReturn:
+<i>250</i>&nbsp;            Object ex;
+<i>251</i>&nbsp;            try {
+<b class="nc"><i>252</i>&nbsp;                ex = in.readObject();</b>
+<b class="nc"><i>253</i>&nbsp;            } catch (Exception e) {</b>
+<i>254</i>&nbsp;                throw new UnmarshalException(&quot;Error unmarshaling return&quot;, e);
+<b class="nc"><i>255</i>&nbsp;            }</b>
+<i>256</i>&nbsp;
+<i>257</i>&nbsp;            // An exception should have been received,
+<i>258</i>&nbsp;            // if so throw it, else flag error
+<b class="nc"><i>259</i>&nbsp;            if (ex instanceof Exception) {</b>
+<b class="nc"><i>260</i>&nbsp;                exceptionReceivedFromServer((Exception) ex);</b>
+<i>261</i>&nbsp;            } else {
+<i>262</i>&nbsp;                throw new UnmarshalException(&quot;Return type not Exception&quot;);
+<b class="nc"><i>263</i>&nbsp;            }</b>
+<i>264</i>&nbsp;            // Exception is thrown before fallthrough can occur
+<i>265</i>&nbsp;        default:
+<i>266</i>&nbsp;            if (Transport.transportLog.isLoggable(Log.BRIEF)) {
+<i>267</i>&nbsp;                Transport.transportLog.log(Log.BRIEF,
+<i>268</i>&nbsp;                    &quot;return code invalid: &quot; + returnType);
+<i>269</i>&nbsp;            }
+<i>270</i>&nbsp;            throw new UnmarshalException(&quot;Return code invalid&quot;);
+<i>271</i>&nbsp;        }
+<i>272</i>&nbsp;    }
+<b class="nc"><i>273</i>&nbsp;</b>
+<i>274</i>&nbsp;    /**
+<b class="nc"><i>275</i>&nbsp;     * Routine that causes the stack traces of remote exceptions to be</b>
+<b class="nc"><i>276</i>&nbsp;     * filled in with the current stack trace on the client.  Detail</b>
+<b class="nc"><i>277</i>&nbsp;     * exceptions are filled in iteratively.</b>
+<i>278</i>&nbsp;     */
+<b class="nc"><i>279</i>&nbsp;    protected void exceptionReceivedFromServer(Exception ex) throws Exception {</b>
+<i>280</i>&nbsp;        serverException = ex;
+<b class="nc"><i>281</i>&nbsp;</b>
+<i>282</i>&nbsp;        StackTraceElement[] serverTrace = ex.getStackTrace();
+<b class="nc"><i>283</i>&nbsp;        StackTraceElement[] clientTrace = (new Throwable()).getStackTrace();</b>
+<i>284</i>&nbsp;        StackTraceElement[] combinedTrace =
+<i>285</i>&nbsp;            new StackTraceElement[serverTrace.length + clientTrace.length];
+<i>286</i>&nbsp;        System.arraycopy(serverTrace, 0, combinedTrace, 0,
+<i>287</i>&nbsp;                         serverTrace.length);
+<i>288</i>&nbsp;        System.arraycopy(clientTrace, 0, combinedTrace, serverTrace.length,
+<b class="nc"><i>289</i>&nbsp;                         clientTrace.length);</b>
+<i>290</i>&nbsp;        ex.setStackTrace(combinedTrace);
+<b class="nc"><i>291</i>&nbsp;</b>
+<b class="nc"><i>292</i>&nbsp;        /*</b>
+<b class="nc"><i>293</i>&nbsp;         * Log the details of a server exception thrown as a result of a</b>
+<b class="nc"><i>294</i>&nbsp;         * remote method invocation.</b>
+<i>295</i>&nbsp;         */
+<i>296</i>&nbsp;        if (UnicastRef.clientCallLog.isLoggable(Log.BRIEF)) {
+<b class="nc"><i>297</i>&nbsp;            /* log call exception returned from server before it is rethrown */</b>
+<i>298</i>&nbsp;            TCPEndpoint ep = (TCPEndpoint) conn.getChannel().getEndpoint();
+<i>299</i>&nbsp;            UnicastRef.clientCallLog.log(Log.BRIEF, &quot;outbound call &quot; +
+<i>300</i>&nbsp;                &quot;received exception: [&quot; + ep.getHost() + &quot;:&quot; +
+<i>301</i>&nbsp;                ep.getPort() + &quot;] exception: &quot;, ex);
+<i>302</i>&nbsp;        }
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;        throw ex;
+<b class="nc"><i>305</i>&nbsp;    }</b>
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;    /*
+<i>308</i>&nbsp;     * method to retrieve possible server side exceptions (which will
+<i>309</i>&nbsp;     * be throw from exceptionReceivedFromServer(...) )
+<i>310</i>&nbsp;     */
+<i>311</i>&nbsp;    public Exception getServerException() {
+<i>312</i>&nbsp;        return serverException;
+<b class="nc"><i>313</i>&nbsp;    }</b>
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;    public void done() throws IOException {
+<i>316</i>&nbsp;        /* WARNING: Currently, the UnicastRef.java invoke methods rely
+<i>317</i>&nbsp;         * upon this method not throwing an IOException.
+<i>318</i>&nbsp;         */
+<i>319</i>&nbsp;
+<i>320</i>&nbsp;        releaseInputStream();
+<i>321</i>&nbsp;    }
+<i>322</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

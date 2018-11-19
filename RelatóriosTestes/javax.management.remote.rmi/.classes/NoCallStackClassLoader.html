@@ -1,0 +1,379 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: NoCallStackClassLoader</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">javax.management.remote.rmi</a> ]
+</div>
+
+<h1>Coverage Summary for Class: NoCallStackClassLoader (javax.management.remote.rmi)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">NoCallStackClassLoader</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 28)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2003, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package javax.management.remote.rmi;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.security.ProtectionDomain;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;/**
+<i>31</i>&nbsp;    &lt;p&gt;A class loader that only knows how to define a limited number
+<i>32</i>&nbsp;    of classes, and load a limited number of other classes through
+<i>33</i>&nbsp;    delegation to another loader.  It is used to get around a problem
+<i>34</i>&nbsp;    with Serialization, in particular as used by RMI. The JMX Remote API
+<i>35</i>&nbsp;    defines exactly what class loader must be used to deserialize arguments on
+<i>36</i>&nbsp;    the server, and return values on the client.  We communicate this class
+<i>37</i>&nbsp;    loader to RMI by setting it as the context class loader.  RMI uses the
+<i>38</i>&nbsp;    context class loader to load classes as it deserializes, which is what we
+<i>39</i>&nbsp;    want.  However, before consulting the context class loader, it
+<i>40</i>&nbsp;    looks up the call stack for a class with a non-null class loader,
+<i>41</i>&nbsp;    and uses that if it finds one.  So, in the standalone version of
+<i>42</i>&nbsp;    javax.management.remote, if the class you&#39;re looking for is known
+<i>43</i>&nbsp;    to the loader of jmxremote.jar (typically the system class loader)
+<i>44</i>&nbsp;    then that loader will load it.  This contradicts the class-loading
+<i>45</i>&nbsp;    semantics required.
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;    &lt;p&gt;We get around the problem by ensuring that the search up the
+<i>48</i>&nbsp;    call stack will find a non-null class loader that doesn&#39;t load any
+<i>49</i>&nbsp;    classes of interest, namely this one.  So even though this loader
+<i>50</i>&nbsp;    is indeed consulted during deserialization, it never finds the
+<i>51</i>&nbsp;    class being deserialized.  RMI then proceeds to use the context
+<i>52</i>&nbsp;    class loader, as we require.
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;    &lt;p&gt;This loader is constructed with the name and byte-code of one
+<i>55</i>&nbsp;    or more classes that it defines, and a class-loader to which it
+<i>56</i>&nbsp;    will delegate certain other classes required by that byte-code.
+<i>57</i>&nbsp;    We construct the byte-code somewhat painstakingly, by compiling
+<i>58</i>&nbsp;    the Java code directly, converting into a string, copying that
+<i>59</i>&nbsp;    string into the class that needs this loader, and using the
+<i>60</i>&nbsp;    stringToBytes method to convert it into the byte array.  We
+<i>61</i>&nbsp;    compile with -g:none because there&#39;s not much point in having
+<i>62</i>&nbsp;    line-number information and the like in these directly-encoded
+<i>63</i>&nbsp;    classes.
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    &lt;p&gt;The referencedClassNames should contain the names of all
+<i>66</i>&nbsp;    classes that are referenced by the classes defined by this loader.
+<i>67</i>&nbsp;    It is not necessary to include standard J2SE classes, however.
+<i>68</i>&nbsp;    Here, a class is referenced if it is the superclass or a
+<i>69</i>&nbsp;    superinterface of a defined class, or if it is the type of a
+<i>70</i>&nbsp;    field, parameter, or return value.  A class is not referenced if
+<i>71</i>&nbsp;    it only appears in the throws clause of a method or constructor.
+<i>72</i>&nbsp;    Of course, referencedClassNames should not contain any classes
+<i>73</i>&nbsp;    that the user might want to deserialize, because the whole point
+<i>74</i>&nbsp;    of this loader is that it does not find such classes.
+<i>75</i>&nbsp;*/
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;class NoCallStackClassLoader extends ClassLoader {
+<i>78</i>&nbsp;    /** Simplified constructor when this loader only defines one class.  */
+<i>79</i>&nbsp;    public NoCallStackClassLoader(String className,
+<i>80</i>&nbsp;                                  byte[] byteCode,
+<i>81</i>&nbsp;                                  String[] referencedClassNames,
+<i>82</i>&nbsp;                                  ClassLoader referencedClassLoader,
+<i>83</i>&nbsp;                                  ProtectionDomain protectionDomain) {
+<i>84</i>&nbsp;        this(new String[] {className}, new byte[][] {byteCode},
+<b class="nc"><i>85</i>&nbsp;             referencedClassNames, referencedClassLoader, protectionDomain);</b>
+<i>86</i>&nbsp;    }
+<i>87</i>&nbsp;
+<i>88</i>&nbsp;    public NoCallStackClassLoader(String[] classNames,
+<i>89</i>&nbsp;                                  byte[][] byteCodes,
+<i>90</i>&nbsp;                                  String[] referencedClassNames,
+<i>91</i>&nbsp;                                  ClassLoader referencedClassLoader,
+<i>92</i>&nbsp;                                  ProtectionDomain protectionDomain) {
+<i>93</i>&nbsp;        super(null);
+<b class="nc"><i>94</i>&nbsp;</b>
+<i>95</i>&nbsp;        /* Validation. */
+<i>96</i>&nbsp;        if (classNames == null || classNames.length == 0
+<b class="nc"><i>97</i>&nbsp;            || byteCodes == null || classNames.length != byteCodes.length</b>
+<i>98</i>&nbsp;            || referencedClassNames == null || protectionDomain == null)
+<i>99</i>&nbsp;            throw new IllegalArgumentException();
+<b class="nc"><i>100</i>&nbsp;        for (int i = 0; i &lt; classNames.length; i++) {</b>
+<b class="nc"><i>101</i>&nbsp;            if (classNames[i] == null || byteCodes[i] == null)</b>
+<b class="nc"><i>102</i>&nbsp;                throw new IllegalArgumentException();</b>
+<b class="nc"><i>103</i>&nbsp;        }</b>
+<i>104</i>&nbsp;        for (int i = 0; i &lt; referencedClassNames.length; i++) {
+<b class="nc"><i>105</i>&nbsp;            if (referencedClassNames[i] == null)</b>
+<b class="nc"><i>106</i>&nbsp;                throw new IllegalArgumentException();</b>
+<b class="nc"><i>107</i>&nbsp;        }</b>
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;        this.classNames = classNames;
+<b class="nc"><i>110</i>&nbsp;        this.byteCodes = byteCodes;</b>
+<b class="nc"><i>111</i>&nbsp;        this.referencedClassNames = referencedClassNames;</b>
+<b class="nc"><i>112</i>&nbsp;        this.referencedClassLoader = referencedClassLoader;</b>
+<b class="nc"><i>113</i>&nbsp;        this.protectionDomain = protectionDomain;</b>
+<b class="nc"><i>114</i>&nbsp;    }</b>
+<i>115</i>&nbsp;
+<i>116</i>&nbsp;    /* This method is called at most once per name.  Define the name
+<i>117</i>&nbsp;     * if it is one of the classes whose byte code we have, or
+<i>118</i>&nbsp;     * delegate the load if it is one of the referenced classes.
+<i>119</i>&nbsp;     */
+<i>120</i>&nbsp;    @Override
+<i>121</i>&nbsp;    protected Class&lt;?&gt; findClass(String name) throws ClassNotFoundException {
+<i>122</i>&nbsp;        // Note: classNames is guaranteed by the constructor to be non-null.
+<i>123</i>&nbsp;        for (int i = 0; i &lt; classNames.length; i++) {
+<b class="nc"><i>124</i>&nbsp;            if (name.equals(classNames[i])) {</b>
+<b class="nc"><i>125</i>&nbsp;                return defineClass(classNames[i], byteCodes[i], 0,</b>
+<b class="nc"><i>126</i>&nbsp;                                   byteCodes[i].length, protectionDomain);</b>
+<i>127</i>&nbsp;            }
+<i>128</i>&nbsp;        }
+<i>129</i>&nbsp;
+<i>130</i>&nbsp;        /* If the referencedClassLoader is null, it is the bootstrap
+<i>131</i>&nbsp;         * class loader, and there&#39;s no point in delegating to it
+<i>132</i>&nbsp;         * because it&#39;s already our parent class loader.
+<i>133</i>&nbsp;         */
+<i>134</i>&nbsp;        if (referencedClassLoader != null) {
+<b class="nc"><i>135</i>&nbsp;            for (int i = 0; i &lt; referencedClassNames.length; i++) {</b>
+<b class="nc"><i>136</i>&nbsp;                if (name.equals(referencedClassNames[i]))</b>
+<b class="nc"><i>137</i>&nbsp;                    return referencedClassLoader.loadClass(name);</b>
+<b class="nc"><i>138</i>&nbsp;            }</b>
+<i>139</i>&nbsp;        }
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;        throw new ClassNotFoundException(name);
+<b class="nc"><i>142</i>&nbsp;    }</b>
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;    private final String[] classNames;
+<i>145</i>&nbsp;    private final byte[][] byteCodes;
+<i>146</i>&nbsp;    private final String[] referencedClassNames;
+<i>147</i>&nbsp;    private final ClassLoader referencedClassLoader;
+<i>148</i>&nbsp;    private final ProtectionDomain protectionDomain;
+<i>149</i>&nbsp;
+<i>150</i>&nbsp;    /**
+<i>151</i>&nbsp;     * &lt;p&gt;Construct a &lt;code&gt;byte[]&lt;/code&gt; using the characters of the
+<i>152</i>&nbsp;     * given &lt;code&gt;String&lt;/code&gt;.  Only the low-order byte of each
+<i>153</i>&nbsp;     * character is used.  This method is useful to reduce the
+<i>154</i>&nbsp;     * footprint of classes that include big byte arrays (e.g. the
+<i>155</i>&nbsp;     * byte code of other classes), because a string takes up much
+<i>156</i>&nbsp;     * less space in a class file than the byte code to initialize a
+<i>157</i>&nbsp;     * &lt;code&gt;byte[]&lt;/code&gt; with the same number of bytes.&lt;/p&gt;
+<i>158</i>&nbsp;     *
+<i>159</i>&nbsp;     * &lt;p&gt;We use just one byte per character even though characters
+<i>160</i>&nbsp;     * contain two bytes.  The resultant output length is much the
+<i>161</i>&nbsp;     * same: using one byte per character is shorter because it has
+<i>162</i>&nbsp;     * more characters in the optimal 1-127 range but longer because
+<i>163</i>&nbsp;     * it has more zero bytes (which are frequent, and are encoded as
+<i>164</i>&nbsp;     * two bytes in classfile UTF-8).  But one byte per character has
+<i>165</i>&nbsp;     * two key advantages: (1) you can see the string constants, which
+<i>166</i>&nbsp;     * is reassuring, (2) you don&#39;t need to know whether the class
+<i>167</i>&nbsp;     * file length is odd.&lt;/p&gt;
+<i>168</i>&nbsp;     *
+<i>169</i>&nbsp;     * &lt;p&gt;This method differs from {@link String#getBytes()} in that
+<i>170</i>&nbsp;     * it does not use any encoding.  So it is guaranteed that each
+<i>171</i>&nbsp;     * byte of the result is numerically identical (mod 256) to the
+<i>172</i>&nbsp;     * corresponding character of the input.
+<i>173</i>&nbsp;     */
+<i>174</i>&nbsp;    public static byte[] stringToBytes(String s) {
+<i>175</i>&nbsp;        final int slen = s.length();
+<b class="nc"><i>176</i>&nbsp;        byte[] bytes = new byte[slen];</b>
+<b class="nc"><i>177</i>&nbsp;        for (int i = 0; i &lt; slen; i++)</b>
+<b class="nc"><i>178</i>&nbsp;            bytes[i] = (byte) s.charAt(i);</b>
+<b class="nc"><i>179</i>&nbsp;        return bytes;</b>
+<b class="nc"><i>180</i>&nbsp;    }</b>
+<i>181</i>&nbsp;}
+<i>182</i>&nbsp;
+<i>183</i>&nbsp;/*
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;You can use the following Emacs function to convert class files into
+<i>186</i>&nbsp;strings to be used by the stringToBytes method above.  Select the
+<i>187</i>&nbsp;whole (defun...) with the mouse and type M-x eval-region, or save it
+<i>188</i>&nbsp;to a file and do M-x load-file.  Then visit the *.class file and do
+<i>189</i>&nbsp;M-x class-string.
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;;; class-string.el
+<i>192</i>&nbsp;;; visit the *.class file with emacs, then invoke this function
+<i>193</i>&nbsp;
+<i>194</i>&nbsp;(defun class-string ()
+<i>195</i>&nbsp;  &quot;Construct a Java string whose bytes are the same as the current
+<i>196</i>&nbsp;buffer.  The resultant string is put in a buffer called *string*,
+<i>197</i>&nbsp;possibly with a numeric suffix like &lt;2&gt;.  From there it can be
+<i>198</i>&nbsp;insert-buffer&#39;d into a Java program.&quot;
+<i>199</i>&nbsp;  (interactive)
+<i>200</i>&nbsp;  (let* ((s (buffer-string))
+<i>201</i>&nbsp;         (slen (length s))
+<i>202</i>&nbsp;         (i 0)
+<i>203</i>&nbsp;         (buf (generate-new-buffer &quot;*string*&quot;)))
+<i>204</i>&nbsp;    (set-buffer buf)
+<i>205</i>&nbsp;    (insert &quot;\&quot;&quot;)
+<i>206</i>&nbsp;    (while (&lt; i slen)
+<i>207</i>&nbsp;      (if (&gt; (current-column) 61)
+<i>208</i>&nbsp;          (insert &quot;\&quot;+\n\&quot;&quot;))
+<i>209</i>&nbsp;      (let ((c (aref s i)))
+<i>210</i>&nbsp;        (insert (cond
+<i>211</i>&nbsp;                 ((&gt; c 126) (format &quot;\\%o&quot; c))
+<i>212</i>&nbsp;                 ((= c ?\&quot;) &quot;\\\&quot;&quot;)
+<i>213</i>&nbsp;                 ((= c ?\\) &quot;\\\\&quot;)
+<i>214</i>&nbsp;                 ((&lt; c 33)
+<i>215</i>&nbsp;                  (let ((nextc (if (&lt; (1+ i) slen)
+<i>216</i>&nbsp;                                   (aref s (1+ i))
+<i>217</i>&nbsp;                                 ?\0)))
+<i>218</i>&nbsp;                    (cond
+<i>219</i>&nbsp;                     ((and (&lt;= nextc ?7) (&gt;= nextc ?0))
+<i>220</i>&nbsp;                      (format &quot;\\%03o&quot; c))
+<i>221</i>&nbsp;                     (t
+<i>222</i>&nbsp;                      (format &quot;\\%o&quot; c)))))
+<i>223</i>&nbsp;                 (t c))))
+<i>224</i>&nbsp;      (setq i (1+ i)))
+<i>225</i>&nbsp;    (insert &quot;\&quot;&quot;)
+<i>226</i>&nbsp;    (switch-to-buffer buf)))
+<i>227</i>&nbsp;
+<i>228</i>&nbsp;Alternatively, the following class reads a class file and outputs a string
+<i>229</i>&nbsp;that can be used by the stringToBytes method above.
+<i>230</i>&nbsp;
+<i>231</i>&nbsp;import java.io.File;
+<i>232</i>&nbsp;import java.io.FileInputStream;
+<i>233</i>&nbsp;import java.io.IOException;
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;public class BytesToString {
+<i>236</i>&nbsp;
+<i>237</i>&nbsp;    public static void main(String[] args) throws IOException {
+<i>238</i>&nbsp;        File f = new File(args[0]);
+<i>239</i>&nbsp;        int len = (int)f.length();
+<i>240</i>&nbsp;        byte[] classBytes = new byte[len];
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;        FileInputStream in = new FileInputStream(args[0]);
+<i>243</i>&nbsp;        try {
+<i>244</i>&nbsp;            int pos = 0;
+<i>245</i>&nbsp;            for (;;) {
+<i>246</i>&nbsp;                int n = in.read(classBytes, pos, (len-pos));
+<i>247</i>&nbsp;                if (n &lt; 0)
+<i>248</i>&nbsp;                    throw new RuntimeException(&quot;class file changed??&quot;);
+<i>249</i>&nbsp;                pos += n;
+<i>250</i>&nbsp;                if (pos &gt;= n)
+<i>251</i>&nbsp;                    break;
+<i>252</i>&nbsp;            }
+<i>253</i>&nbsp;        } finally {
+<i>254</i>&nbsp;            in.close();
+<i>255</i>&nbsp;        }
+<i>256</i>&nbsp;
+<i>257</i>&nbsp;        int pos = 0;
+<i>258</i>&nbsp;        boolean lastWasOctal = false;
+<i>259</i>&nbsp;        for (int i=0; i&lt;len; i++) {
+<i>260</i>&nbsp;            int value = classBytes[i];
+<i>261</i>&nbsp;            if (value &lt; 0)
+<i>262</i>&nbsp;                value += 256;
+<i>263</i>&nbsp;            String s = null;
+<i>264</i>&nbsp;            if (value == &#39;\\&#39;)
+<i>265</i>&nbsp;                s = &quot;\\\\&quot;;
+<i>266</i>&nbsp;            else if (value == &#39;\&quot;&#39;)
+<i>267</i>&nbsp;                s = &quot;\\\&quot;&quot;;
+<i>268</i>&nbsp;            else {
+<i>269</i>&nbsp;                if ((value &gt;= 32 &amp;&amp; value &lt; 127) &amp;&amp; ((!lastWasOctal ||
+<i>270</i>&nbsp;                    (value &lt; &#39;0&#39; || value &gt; &#39;7&#39;)))) {
+<i>271</i>&nbsp;                    s = Character.toString((char)value);
+<i>272</i>&nbsp;                }
+<i>273</i>&nbsp;            }
+<i>274</i>&nbsp;            if (s == null) {
+<i>275</i>&nbsp;                s = &quot;\\&quot; + Integer.toString(value, 8);
+<i>276</i>&nbsp;                lastWasOctal = true;
+<i>277</i>&nbsp;            } else {
+<i>278</i>&nbsp;                lastWasOctal = false;
+<i>279</i>&nbsp;            }
+<i>280</i>&nbsp;            if (pos &gt; 61) {
+<i>281</i>&nbsp;                System.out.print(&quot;\&quot;&quot;);
+<i>282</i>&nbsp;                if (i&lt;len)
+<i>283</i>&nbsp;                    System.out.print(&quot;+&quot;);
+<i>284</i>&nbsp;                System.out.println();
+<i>285</i>&nbsp;                pos = 0;
+<i>286</i>&nbsp;            }
+<i>287</i>&nbsp;            if (pos == 0)
+<i>288</i>&nbsp;                System.out.print(&quot;                \&quot;&quot;);
+<i>289</i>&nbsp;            System.out.print(s);
+<i>290</i>&nbsp;            pos += s.length();
+<i>291</i>&nbsp;        }
+<i>292</i>&nbsp;        System.out.println(&quot;\&quot;&quot;);
+<i>293</i>&nbsp;    }
+<i>294</i>&nbsp;}
+<i>295</i>&nbsp;
+<i>296</i>&nbsp;*/
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:16</div>
+</div>
+</body>
+</html>

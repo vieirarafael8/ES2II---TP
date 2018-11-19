@@ -1,0 +1,448 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: GssKrb5Server</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.security.sasl.gsskerb</a> ]
+</div>
+
+<h1>Coverage Summary for Class: GssKrb5Server (com.sun.security.sasl.gsskerb)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">GssKrb5Server</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 115)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.security.sasl.gsskerb;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import javax.security.sasl.*;
+<i>29</i>&nbsp;import java.io.*;
+<i>30</i>&nbsp;import java.util.Map;
+<i>31</i>&nbsp;import java.util.logging.Level;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;// JAAS
+<i>34</i>&nbsp;import javax.security.auth.callback.*;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;// JGSS
+<i>37</i>&nbsp;import org.ietf.jgss.*;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp;  * Implements the GSSAPI SASL server mechanism for Kerberos V5.
+<i>41</i>&nbsp;  * (&lt;A HREF=&quot;http://www.ietf.org/rfc/rfc2222.txt&quot;&gt;RFC 2222&lt;/A&gt;,
+<i>42</i>&nbsp;  * &lt;a HREF=&quot;http://www.ietf.org/internet-drafts/draft-ietf-cat-sasl-gssapi-00.txt&quot;&gt;draft-ietf-cat-sasl-gssapi-00.txt&lt;/a&gt;).
+<i>43</i>&nbsp;  *
+<i>44</i>&nbsp;  * Expects thread&#39;s Subject to contain server&#39;s Kerberos credentials
+<i>45</i>&nbsp;  * - If not, underlying KRB5 mech will attempt to acquire Kerberos creds
+<i>46</i>&nbsp;  *   by logging into Kerberos (via default TextCallbackHandler).
+<i>47</i>&nbsp;  * - These creds will be used for exchange with client.
+<i>48</i>&nbsp;  *
+<i>49</i>&nbsp;  * Required callbacks:
+<i>50</i>&nbsp;  * - AuthorizeCallback
+<i>51</i>&nbsp;  *      handler must verify that authid/authzids are allowed and set
+<i>52</i>&nbsp;  *      authorized ID to be the canonicalized authzid (if applicable).
+<i>53</i>&nbsp;  *
+<i>54</i>&nbsp;  * Environment properties that affect behavior of implementation:
+<i>55</i>&nbsp;  *
+<i>56</i>&nbsp;  * javax.security.sasl.qop
+<i>57</i>&nbsp;  * - quality of protection; list of auth, auth-int, auth-conf; default is &quot;auth&quot;
+<i>58</i>&nbsp;  * javax.security.sasl.maxbuf
+<i>59</i>&nbsp;  * - max receive buffer size; default is 65536
+<i>60</i>&nbsp;  * javax.security.sasl.sendmaxbuffer
+<i>61</i>&nbsp;  * - max send buffer size; default is 65536; (min with client max recv size)
+<i>62</i>&nbsp;  *
+<i>63</i>&nbsp;  * @author Rosanna Lee
+<i>64</i>&nbsp;  */
+<i>65</i>&nbsp;final class GssKrb5Server extends GssKrb5Base implements SaslServer {
+<b class="nc"><i>66</i>&nbsp;    private static final String MY_CLASS_NAME = GssKrb5Server.class.getName();</b>
+<i>67</i>&nbsp;
+<b class="nc"><i>68</i>&nbsp;    private int handshakeStage = 0;</b>
+<i>69</i>&nbsp;    private String peer;
+<i>70</i>&nbsp;    private String me;
+<i>71</i>&nbsp;    private String authzid;
+<i>72</i>&nbsp;    private CallbackHandler cbh;
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    // When serverName is null, the server will be unbound. We need to save and
+<i>75</i>&nbsp;    // check the protocol name after the context is established. This value
+<i>76</i>&nbsp;    // will be null if serverName is not null.
+<i>77</i>&nbsp;    private final String protocolSaved;
+<i>78</i>&nbsp;    /**
+<i>79</i>&nbsp;     * Creates a SASL mechanism with server credentials that it needs
+<i>80</i>&nbsp;     * to participate in GSS-API/Kerberos v5 authentication exchange
+<i>81</i>&nbsp;     * with the client.
+<i>82</i>&nbsp;     */
+<i>83</i>&nbsp;    GssKrb5Server(String protocol, String serverName,
+<i>84</i>&nbsp;        Map&lt;String, ?&gt; props, CallbackHandler cbh) throws SaslException {
+<i>85</i>&nbsp;
+<b class="nc"><i>86</i>&nbsp;        super(props, MY_CLASS_NAME);</b>
+<i>87</i>&nbsp;
+<b class="nc"><i>88</i>&nbsp;        this.cbh = cbh;</b>
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;        String service;
+<b class="nc"><i>91</i>&nbsp;        if (serverName == null) {</b>
+<b class="nc"><i>92</i>&nbsp;            protocolSaved = protocol;</b>
+<b class="nc"><i>93</i>&nbsp;            service = null;</b>
+<i>94</i>&nbsp;        } else {
+<b class="nc"><i>95</i>&nbsp;            protocolSaved = null;</b>
+<b class="nc"><i>96</i>&nbsp;            service = protocol + &quot;@&quot; + serverName;</b>
+<i>97</i>&nbsp;        }
+<i>98</i>&nbsp;
+<b class="nc"><i>99</i>&nbsp;        logger.log(Level.FINE, &quot;KRB5SRV01:Using service name: {0}&quot;, service);</b>
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;        try {
+<b class="nc"><i>102</i>&nbsp;            GSSManager mgr = GSSManager.getInstance();</b>
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;            // Create the name for the requested service entity for Krb5 mech
+<b class="nc"><i>105</i>&nbsp;            GSSName serviceName = service == null ? null:</b>
+<b class="nc"><i>106</i>&nbsp;                    mgr.createName(service, GSSName.NT_HOSTBASED_SERVICE, KRB5_OID);</b>
+<i>107</i>&nbsp;
+<b class="nc"><i>108</i>&nbsp;            GSSCredential cred = mgr.createCredential(serviceName,</b>
+<i>109</i>&nbsp;                GSSCredential.INDEFINITE_LIFETIME,
+<i>110</i>&nbsp;                KRB5_OID, GSSCredential.ACCEPT_ONLY);
+<i>111</i>&nbsp;
+<i>112</i>&nbsp;            // Create a context using the server&#39;s credentials
+<b class="nc"><i>113</i>&nbsp;            secCtx = mgr.createContext(cred);</b>
+<i>114</i>&nbsp;
+<b class="nc"><i>115</i>&nbsp;            if ((allQop&amp;INTEGRITY_ONLY_PROTECTION) != 0) {</b>
+<i>116</i>&nbsp;                // Might need integrity
+<b class="nc"><i>117</i>&nbsp;                secCtx.requestInteg(true);</b>
+<i>118</i>&nbsp;            }
+<i>119</i>&nbsp;
+<b class="nc"><i>120</i>&nbsp;            if ((allQop&amp;PRIVACY_PROTECTION) != 0) {</b>
+<i>121</i>&nbsp;                // Might need privacy
+<b class="nc"><i>122</i>&nbsp;                secCtx.requestConf(true);</b>
+<i>123</i>&nbsp;            }
+<b class="nc"><i>124</i>&nbsp;        } catch (GSSException e) {</b>
+<b class="nc"><i>125</i>&nbsp;            throw new SaslException(&quot;Failure to initialize security context&quot;, e);</b>
+<b class="nc"><i>126</i>&nbsp;        }</b>
+<b class="nc"><i>127</i>&nbsp;        logger.log(Level.FINE, &quot;KRB5SRV02:Initialization complete&quot;);</b>
+<i>128</i>&nbsp;    }
+<i>129</i>&nbsp;
+<i>130</i>&nbsp;
+<i>131</i>&nbsp;    /**
+<i>132</i>&nbsp;     * Processes the response data.
+<i>133</i>&nbsp;     *
+<i>134</i>&nbsp;     * The client sends response data to which the server must
+<i>135</i>&nbsp;     * process using GSS_accept_sec_context.
+<i>136</i>&nbsp;     * As per RFC 2222, the GSS authenication completes (GSS_S_COMPLETE)
+<i>137</i>&nbsp;     * we do an extra hand shake to determine the negotiated security protection
+<i>138</i>&nbsp;     * and buffer sizes.
+<i>139</i>&nbsp;     *
+<i>140</i>&nbsp;     * @param responseData A non-null but possible empty byte array containing the
+<i>141</i>&nbsp;     * response data from the client.
+<i>142</i>&nbsp;     * @return A non-null byte array containing the challenge to be
+<i>143</i>&nbsp;     * sent to the client, or null when no more data is to be sent.
+<i>144</i>&nbsp;     */
+<i>145</i>&nbsp;    public byte[] evaluateResponse(byte[] responseData) throws SaslException {
+<b class="nc"><i>146</i>&nbsp;        if (completed) {</b>
+<b class="nc"><i>147</i>&nbsp;            throw new SaslException(</b>
+<i>148</i>&nbsp;                &quot;SASL authentication already complete&quot;);
+<i>149</i>&nbsp;        }
+<i>150</i>&nbsp;
+<b class="nc"><i>151</i>&nbsp;        if (logger.isLoggable(Level.FINER)) {</b>
+<b class="nc"><i>152</i>&nbsp;            traceOutput(MY_CLASS_NAME, &quot;evaluateResponse&quot;,</b>
+<i>153</i>&nbsp;                &quot;KRB5SRV03:Response [raw]:&quot;, responseData);
+<i>154</i>&nbsp;        }
+<i>155</i>&nbsp;
+<b class="nc"><i>156</i>&nbsp;        switch (handshakeStage) {</b>
+<i>157</i>&nbsp;        case 1:
+<b class="nc"><i>158</i>&nbsp;            return doHandshake1(responseData);</b>
+<i>159</i>&nbsp;
+<i>160</i>&nbsp;        case 2:
+<b class="nc"><i>161</i>&nbsp;            return doHandshake2(responseData);</b>
+<i>162</i>&nbsp;
+<i>163</i>&nbsp;        default:
+<i>164</i>&nbsp;            // Security context not established yet; continue with accept
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;            try {
+<b class="nc"><i>167</i>&nbsp;                byte[] gssOutToken = secCtx.acceptSecContext(responseData,</b>
+<i>168</i>&nbsp;                    0, responseData.length);
+<i>169</i>&nbsp;
+<b class="nc"><i>170</i>&nbsp;                if (logger.isLoggable(Level.FINER)) {</b>
+<b class="nc"><i>171</i>&nbsp;                    traceOutput(MY_CLASS_NAME, &quot;evaluateResponse&quot;,</b>
+<i>172</i>&nbsp;                        &quot;KRB5SRV04:Challenge: [after acceptSecCtx]&quot;, gssOutToken);
+<i>173</i>&nbsp;                }
+<i>174</i>&nbsp;
+<b class="nc"><i>175</i>&nbsp;                if (secCtx.isEstablished()) {</b>
+<b class="nc"><i>176</i>&nbsp;                    handshakeStage = 1;</b>
+<i>177</i>&nbsp;
+<b class="nc"><i>178</i>&nbsp;                    peer = secCtx.getSrcName().toString();</b>
+<b class="nc"><i>179</i>&nbsp;                    me = secCtx.getTargName().toString();</b>
+<i>180</i>&nbsp;
+<b class="nc"><i>181</i>&nbsp;                    logger.log(Level.FINE,</b>
+<i>182</i>&nbsp;                            &quot;KRB5SRV05:Peer name is : {0}, my name is : {1}&quot;,
+<i>183</i>&nbsp;                            new Object[]{peer, me});
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;                    // me might take the form of proto@host or proto/host
+<b class="nc"><i>186</i>&nbsp;                    if (protocolSaved != null &amp;&amp;</b>
+<b class="nc"><i>187</i>&nbsp;                            !protocolSaved.equalsIgnoreCase(me.split(&quot;[/@]&quot;)[0])) {</b>
+<b class="nc"><i>188</i>&nbsp;                        throw new SaslException(</b>
+<i>189</i>&nbsp;                                &quot;GSS context targ name protocol error: &quot; + me);
+<i>190</i>&nbsp;                    }
+<i>191</i>&nbsp;
+<b class="nc"><i>192</i>&nbsp;                    if (gssOutToken == null) {</b>
+<b class="nc"><i>193</i>&nbsp;                        return doHandshake1(EMPTY);</b>
+<i>194</i>&nbsp;                    }
+<i>195</i>&nbsp;                }
+<i>196</i>&nbsp;
+<b class="nc"><i>197</i>&nbsp;                return gssOutToken;</b>
+<b class="nc"><i>198</i>&nbsp;            } catch (GSSException e) {</b>
+<b class="nc"><i>199</i>&nbsp;                throw new SaslException(&quot;GSS initiate failed&quot;, e);</b>
+<i>200</i>&nbsp;            }
+<i>201</i>&nbsp;        }
+<i>202</i>&nbsp;    }
+<i>203</i>&nbsp;
+<i>204</i>&nbsp;    private byte[] doHandshake1(byte[] responseData) throws SaslException {
+<i>205</i>&nbsp;        try {
+<i>206</i>&nbsp;            // Security context already established. responseData
+<i>207</i>&nbsp;            // should contain no data
+<b class="nc"><i>208</i>&nbsp;            if (responseData != null &amp;&amp; responseData.length &gt; 0) {</b>
+<b class="nc"><i>209</i>&nbsp;                throw new SaslException(</b>
+<i>210</i>&nbsp;                    &quot;Handshake expecting no response data from server&quot;);
+<i>211</i>&nbsp;            }
+<i>212</i>&nbsp;
+<i>213</i>&nbsp;            // Construct 4 octets of data:
+<i>214</i>&nbsp;            // First octet contains bitmask specifying protections supported
+<i>215</i>&nbsp;            // 2nd-4th octets contains max receive buffer of server
+<i>216</i>&nbsp;
+<b class="nc"><i>217</i>&nbsp;            byte[] gssInToken = new byte[4];</b>
+<b class="nc"><i>218</i>&nbsp;            gssInToken[0] = allQop;</b>
+<b class="nc"><i>219</i>&nbsp;            intToNetworkByteOrder(recvMaxBufSize, gssInToken, 1, 3);</b>
+<i>220</i>&nbsp;
+<b class="nc"><i>221</i>&nbsp;            if (logger.isLoggable(Level.FINE)) {</b>
+<b class="nc"><i>222</i>&nbsp;                logger.log(Level.FINE,</b>
+<i>223</i>&nbsp;                    &quot;KRB5SRV06:Supported protections: {0}; recv max buf size: {1}&quot;,
+<i>224</i>&nbsp;                    new Object[]{allQop,
+<i>225</i>&nbsp;                                 recvMaxBufSize});
+<i>226</i>&nbsp;            }
+<i>227</i>&nbsp;
+<b class="nc"><i>228</i>&nbsp;            handshakeStage = 2;  // progress to next stage</b>
+<i>229</i>&nbsp;
+<b class="nc"><i>230</i>&nbsp;            if (logger.isLoggable(Level.FINER)) {</b>
+<b class="nc"><i>231</i>&nbsp;                traceOutput(MY_CLASS_NAME, &quot;doHandshake1&quot;,</b>
+<i>232</i>&nbsp;                    &quot;KRB5SRV07:Challenge [raw]&quot;, gssInToken);
+<i>233</i>&nbsp;            }
+<i>234</i>&nbsp;
+<b class="nc"><i>235</i>&nbsp;            byte[] gssOutToken = secCtx.wrap(gssInToken, 0, gssInToken.length,</b>
+<i>236</i>&nbsp;                new MessageProp(0 /* gop */, false /* privacy */));
+<i>237</i>&nbsp;
+<b class="nc"><i>238</i>&nbsp;            if (logger.isLoggable(Level.FINER)) {</b>
+<b class="nc"><i>239</i>&nbsp;                traceOutput(MY_CLASS_NAME, &quot;doHandshake1&quot;,</b>
+<i>240</i>&nbsp;                    &quot;KRB5SRV08:Challenge [after wrap]&quot;, gssOutToken);
+<i>241</i>&nbsp;            }
+<b class="nc"><i>242</i>&nbsp;            return gssOutToken;</b>
+<i>243</i>&nbsp;
+<b class="nc"><i>244</i>&nbsp;        } catch (GSSException e) {</b>
+<b class="nc"><i>245</i>&nbsp;            throw new SaslException(&quot;Problem wrapping handshake1&quot;, e);</b>
+<i>246</i>&nbsp;        }
+<i>247</i>&nbsp;    }
+<i>248</i>&nbsp;
+<i>249</i>&nbsp;    private byte[] doHandshake2(byte[] responseData) throws SaslException {
+<i>250</i>&nbsp;        try {
+<i>251</i>&nbsp;            // Expecting 4 octets from client selected protection
+<i>252</i>&nbsp;            // and client&#39;s receive buffer size
+<b class="nc"><i>253</i>&nbsp;            byte[] gssOutToken = secCtx.unwrap(responseData, 0,</b>
+<i>254</i>&nbsp;                responseData.length, new MessageProp(0, false));
+<i>255</i>&nbsp;
+<b class="nc"><i>256</i>&nbsp;            if (logger.isLoggable(Level.FINER)) {</b>
+<b class="nc"><i>257</i>&nbsp;                traceOutput(MY_CLASS_NAME, &quot;doHandshake2&quot;,</b>
+<i>258</i>&nbsp;                    &quot;KRB5SRV09:Response [after unwrap]&quot;, gssOutToken);
+<i>259</i>&nbsp;            }
+<i>260</i>&nbsp;
+<i>261</i>&nbsp;            // First octet is a bit-mask specifying the selected protection
+<b class="nc"><i>262</i>&nbsp;            byte selectedQop = gssOutToken[0];</b>
+<b class="nc"><i>263</i>&nbsp;            if ((selectedQop&amp;allQop) == 0) {</b>
+<b class="nc"><i>264</i>&nbsp;                throw new SaslException(&quot;Client selected unsupported protection: &quot;</b>
+<i>265</i>&nbsp;                    + selectedQop);
+<i>266</i>&nbsp;            }
+<b class="nc"><i>267</i>&nbsp;            if ((selectedQop&amp;PRIVACY_PROTECTION) != 0) {</b>
+<b class="nc"><i>268</i>&nbsp;                privacy = true;</b>
+<b class="nc"><i>269</i>&nbsp;                integrity = true;</b>
+<b class="nc"><i>270</i>&nbsp;            } else if ((selectedQop&amp;INTEGRITY_ONLY_PROTECTION) != 0) {</b>
+<b class="nc"><i>271</i>&nbsp;                integrity = true;</b>
+<i>272</i>&nbsp;            }
+<i>273</i>&nbsp;
+<i>274</i>&nbsp;            // 2nd-4th octets specifies maximum buffer size expected by
+<i>275</i>&nbsp;            // client (in network byte order). This is the server&#39;s send
+<i>276</i>&nbsp;            // buffer maximum.
+<b class="nc"><i>277</i>&nbsp;            int clntMaxBufSize = networkByteOrderToInt(gssOutToken, 1, 3);</b>
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;            // Determine the max send buffer size based on what the
+<i>280</i>&nbsp;            // client is able to receive and our specified max
+<b class="nc"><i>281</i>&nbsp;            sendMaxBufSize = (sendMaxBufSize == 0) ? clntMaxBufSize :</b>
+<b class="nc"><i>282</i>&nbsp;                Math.min(sendMaxBufSize, clntMaxBufSize);</b>
+<i>283</i>&nbsp;
+<i>284</i>&nbsp;            // Update context to limit size of returned buffer
+<b class="nc"><i>285</i>&nbsp;            rawSendSize = secCtx.getWrapSizeLimit(JGSS_QOP, privacy,</b>
+<i>286</i>&nbsp;                sendMaxBufSize);
+<i>287</i>&nbsp;
+<b class="nc"><i>288</i>&nbsp;            if (logger.isLoggable(Level.FINE)) {</b>
+<b class="nc"><i>289</i>&nbsp;                logger.log(Level.FINE,</b>
+<i>290</i>&nbsp;            &quot;KRB5SRV10:Selected protection: {0}; privacy: {1}; integrity: {2}&quot;,
+<i>291</i>&nbsp;                    new Object[]{selectedQop,
+<b class="nc"><i>292</i>&nbsp;                                 Boolean.valueOf(privacy),</b>
+<b class="nc"><i>293</i>&nbsp;                                 Boolean.valueOf(integrity)});</b>
+<b class="nc"><i>294</i>&nbsp;                logger.log(Level.FINE,</b>
+<i>295</i>&nbsp;&quot;KRB5SRV11:Client max recv size: {0}; server max send size: {1}; rawSendSize: {2}&quot;,
+<i>296</i>&nbsp;                    new Object[] {clntMaxBufSize,
+<i>297</i>&nbsp;                                  sendMaxBufSize,
+<i>298</i>&nbsp;                                  rawSendSize});
+<i>299</i>&nbsp;            }
+<i>300</i>&nbsp;
+<i>301</i>&nbsp;            // Get authorization identity, if any
+<b class="nc"><i>302</i>&nbsp;            if (gssOutToken.length &gt; 4) {</b>
+<i>303</i>&nbsp;                try {
+<b class="nc"><i>304</i>&nbsp;                    authzid = new String(gssOutToken, 4,</b>
+<i>305</i>&nbsp;                        gssOutToken.length - 4, &quot;UTF-8&quot;);
+<b class="nc"><i>306</i>&nbsp;                } catch (UnsupportedEncodingException uee) {</b>
+<b class="nc"><i>307</i>&nbsp;                    throw new SaslException (&quot;Cannot decode authzid&quot;, uee);</b>
+<b class="nc"><i>308</i>&nbsp;                }</b>
+<i>309</i>&nbsp;            } else {
+<b class="nc"><i>310</i>&nbsp;                authzid = peer;</b>
+<i>311</i>&nbsp;            }
+<b class="nc"><i>312</i>&nbsp;            logger.log(Level.FINE, &quot;KRB5SRV12:Authzid: {0}&quot;, authzid);</b>
+<i>313</i>&nbsp;
+<b class="nc"><i>314</i>&nbsp;            AuthorizeCallback acb = new AuthorizeCallback(peer, authzid);</b>
+<i>315</i>&nbsp;
+<i>316</i>&nbsp;            // In Kerberos, realm is embedded in peer name
+<b class="nc"><i>317</i>&nbsp;            cbh.handle(new Callback[] {acb});</b>
+<b class="nc"><i>318</i>&nbsp;            if (acb.isAuthorized()) {</b>
+<b class="nc"><i>319</i>&nbsp;                authzid = acb.getAuthorizedID();</b>
+<b class="nc"><i>320</i>&nbsp;                completed = true;</b>
+<i>321</i>&nbsp;            } else {
+<i>322</i>&nbsp;                // Authorization failed
+<b class="nc"><i>323</i>&nbsp;                throw new SaslException(peer +</b>
+<i>324</i>&nbsp;                    &quot; is not authorized to connect as &quot; + authzid);
+<i>325</i>&nbsp;            }
+<i>326</i>&nbsp;
+<b class="nc"><i>327</i>&nbsp;            return null;</b>
+<b class="nc"><i>328</i>&nbsp;        } catch (GSSException e) {</b>
+<b class="nc"><i>329</i>&nbsp;            throw new SaslException(&quot;Final handshake step failed&quot;, e);</b>
+<b class="nc"><i>330</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>331</i>&nbsp;            throw new SaslException(&quot;Problem with callback handler&quot;, e);</b>
+<b class="nc"><i>332</i>&nbsp;        } catch (UnsupportedCallbackException e) {</b>
+<b class="nc"><i>333</i>&nbsp;            throw new SaslException(&quot;Problem with callback handler&quot;, e);</b>
+<i>334</i>&nbsp;        }
+<i>335</i>&nbsp;    }
+<i>336</i>&nbsp;
+<i>337</i>&nbsp;    public String getAuthorizationID() {
+<b class="nc"><i>338</i>&nbsp;        if (completed) {</b>
+<b class="nc"><i>339</i>&nbsp;            return authzid;</b>
+<i>340</i>&nbsp;        } else {
+<b class="nc"><i>341</i>&nbsp;            throw new IllegalStateException(&quot;Authentication incomplete&quot;);</b>
+<i>342</i>&nbsp;        }
+<i>343</i>&nbsp;    }
+<i>344</i>&nbsp;
+<i>345</i>&nbsp;    public Object getNegotiatedProperty(String propName) {
+<b class="nc"><i>346</i>&nbsp;        if (!completed) {</b>
+<b class="nc"><i>347</i>&nbsp;            throw new IllegalStateException(&quot;Authentication incomplete&quot;);</b>
+<i>348</i>&nbsp;        }
+<i>349</i>&nbsp;
+<i>350</i>&nbsp;        Object result;
+<b class="nc"><i>351</i>&nbsp;        switch (propName) {</b>
+<i>352</i>&nbsp;            case Sasl.BOUND_SERVER_NAME:
+<i>353</i>&nbsp;                try {
+<i>354</i>&nbsp;                    // me might take the form of proto@host or proto/host
+<b class="nc"><i>355</i>&nbsp;                    result = me.split(&quot;[/@]&quot;)[1];</b>
+<b class="nc"><i>356</i>&nbsp;                } catch (Exception e) {</b>
+<b class="nc"><i>357</i>&nbsp;                    result = null;</b>
+<b class="nc"><i>358</i>&nbsp;                }</b>
+<b class="nc"><i>359</i>&nbsp;                break;</b>
+<i>360</i>&nbsp;            default:
+<b class="nc"><i>361</i>&nbsp;                result = super.getNegotiatedProperty(propName);</b>
+<i>362</i>&nbsp;        }
+<b class="nc"><i>363</i>&nbsp;        return result;</b>
+<i>364</i>&nbsp;    }
+<i>365</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

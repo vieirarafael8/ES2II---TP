@@ -1,0 +1,474 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Connections</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.jndi.ldap.pool</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Connections (com.sun.jndi.ldap.pool)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Connections</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 15)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 123)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.jndi.ldap.pool;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.ArrayList; // JDK 1.2
+<i>29</i>&nbsp;import java.util.List;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;import java.lang.ref.Reference;
+<i>32</i>&nbsp;import java.lang.ref.SoftReference;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import javax.naming.NamingException;
+<i>35</i>&nbsp;import javax.naming.InterruptedNamingException;
+<i>36</i>&nbsp;import javax.naming.CommunicationException;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * Represents a list of PooledConnections (actually, ConnectionDescs) with the
+<i>40</i>&nbsp; * same pool id.
+<i>41</i>&nbsp; * The list starts out with an initial number of connections.
+<i>42</i>&nbsp; * Additional PooledConnections are created lazily upon demand.
+<i>43</i>&nbsp; * The list has a maximum size. When the number of connections
+<i>44</i>&nbsp; * reaches the maximum size, a request for a PooledConnection blocks until
+<i>45</i>&nbsp; * a connection is returned to the list. A maximum size of zero means that
+<i>46</i>&nbsp; * there is no maximum: connection creation will be attempted when
+<i>47</i>&nbsp; * no idle connection is available.
+<i>48</i>&nbsp; *
+<i>49</i>&nbsp; * The list may also have a preferred size. If the current list size
+<i>50</i>&nbsp; * is less than the preferred size, a request for a connection will result in
+<i>51</i>&nbsp; * a PooledConnection being created (even if an idle connection is available).
+<i>52</i>&nbsp; * If the current list size is greater than the preferred size,
+<i>53</i>&nbsp; * a connection being returned to the list will be closed and removed from
+<i>54</i>&nbsp; * the list. A preferred size of zero means that there is no preferred size:
+<i>55</i>&nbsp; * connections are created only when no idle connection is available and
+<i>56</i>&nbsp; * a connection being returned to the list is not closed. Regardless of the
+<i>57</i>&nbsp; * preferred size, connection creation always observes the maximum size:
+<i>58</i>&nbsp; * a connection won&#39;t be created if the list size is at or exceeds the
+<i>59</i>&nbsp; * maximum size.
+<i>60</i>&nbsp; *
+<i>61</i>&nbsp; * @author Rosanna Lee
+<i>62</i>&nbsp; */
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;// Package private: accessed only by Pool
+<i>65</i>&nbsp;final class Connections implements PoolCallback {
+<b class="nc"><i>66</i>&nbsp;    private static final boolean debug = Pool.debug;</b>
+<b class="nc"><i>67</i>&nbsp;    private static final boolean trace =</b>
+<i>68</i>&nbsp;        com.sun.jndi.ldap.LdapPoolManager.trace;
+<i>69</i>&nbsp;    private static final int DEFAULT_SIZE = 10;
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;    final private int maxSize;
+<i>72</i>&nbsp;    final private int prefSize;
+<i>73</i>&nbsp;    final private List&lt;ConnectionDesc&gt; conns;
+<i>74</i>&nbsp;
+<b class="nc"><i>75</i>&nbsp;    private boolean closed = false;   // Closed for business</b>
+<i>76</i>&nbsp;    private Reference&lt;Object&gt; ref; // maintains reference to id to prevent premature GC
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    /**
+<i>79</i>&nbsp;     * @param id the identity (connection request) of the connections in the list
+<i>80</i>&nbsp;     * @param initSize the number of connections to create initially
+<i>81</i>&nbsp;     * @param prefSize the preferred size of the pool. The pool will try
+<i>82</i>&nbsp;     * to maintain a pool of this size by creating and closing connections
+<i>83</i>&nbsp;     * as needed.
+<i>84</i>&nbsp;     * @param maxSize the maximum size of the pool. The pool will not exceed
+<i>85</i>&nbsp;     * this size. If the pool is at this size, a request for a connection
+<i>86</i>&nbsp;     * will block until an idle connection is released to the pool or
+<i>87</i>&nbsp;     * when one is removed.
+<i>88</i>&nbsp;     * @param factory The factory responsible for creating a connection
+<i>89</i>&nbsp;     */
+<i>90</i>&nbsp;    Connections(Object id, int initSize, int prefSize, int maxSize,
+<b class="nc"><i>91</i>&nbsp;        PooledConnectionFactory factory) throws NamingException {</b>
+<i>92</i>&nbsp;
+<b class="nc"><i>93</i>&nbsp;        this.maxSize = maxSize;</b>
+<b class="nc"><i>94</i>&nbsp;        if (maxSize &gt; 0) {</b>
+<i>95</i>&nbsp;            // prefSize and initSize cannot exceed specified maxSize
+<b class="nc"><i>96</i>&nbsp;            this.prefSize = Math.min(prefSize, maxSize);</b>
+<b class="nc"><i>97</i>&nbsp;            initSize = Math.min(initSize, maxSize);</b>
+<i>98</i>&nbsp;        } else {
+<b class="nc"><i>99</i>&nbsp;            this.prefSize = prefSize;</b>
+<i>100</i>&nbsp;        }
+<b class="nc"><i>101</i>&nbsp;        conns = new ArrayList&lt;&gt;(maxSize &gt; 0 ? maxSize : DEFAULT_SIZE);</b>
+<i>102</i>&nbsp;
+<i>103</i>&nbsp;        // Maintain soft ref to id so that this Connections&#39; entry in
+<i>104</i>&nbsp;        // Pool doesn&#39;t get GC&#39;ed prematurely
+<b class="nc"><i>105</i>&nbsp;        ref = new SoftReference&lt;&gt;(id);</b>
+<i>106</i>&nbsp;
+<b class="nc"><i>107</i>&nbsp;        d(&quot;init size=&quot;, initSize);</b>
+<b class="nc"><i>108</i>&nbsp;        d(&quot;max size=&quot;, maxSize);</b>
+<b class="nc"><i>109</i>&nbsp;        d(&quot;preferred size=&quot;, prefSize);</b>
+<i>110</i>&nbsp;
+<i>111</i>&nbsp;        // Create initial connections
+<i>112</i>&nbsp;        PooledConnection conn;
+<b class="nc"><i>113</i>&nbsp;        for (int i = 0; i &lt; initSize; i++) {</b>
+<b class="nc"><i>114</i>&nbsp;            conn = factory.createPooledConnection(this);</b>
+<b class="nc"><i>115</i>&nbsp;            td(&quot;Create &quot;, conn ,factory);</b>
+<b class="nc"><i>116</i>&nbsp;            conns.add(new ConnectionDesc(conn)); // Add new idle conn to pool</b>
+<i>117</i>&nbsp;        }
+<i>118</i>&nbsp;    }
+<i>119</i>&nbsp;
+<i>120</i>&nbsp;    /**
+<i>121</i>&nbsp;     * Retrieves a PooledConnection from this list of connections.
+<i>122</i>&nbsp;     * Use an existing one if one is idle, or create one if the list&#39;s
+<i>123</i>&nbsp;     * max size hasn&#39;t been reached. If max size has been reached, wait
+<i>124</i>&nbsp;     * for a PooledConnection to be returned, or one to be removed (thus
+<i>125</i>&nbsp;     * not reaching the max size any longer).
+<i>126</i>&nbsp;     *
+<i>127</i>&nbsp;     * @param timeout if &gt; 0, msec to wait until connection is available
+<i>128</i>&nbsp;     * @param factory creates the PooledConnection if one needs to be created
+<i>129</i>&nbsp;     *
+<i>130</i>&nbsp;     * @return A non-null PooledConnection
+<i>131</i>&nbsp;     * @throws NamingException PooledConnection cannot be created, because this
+<i>132</i>&nbsp;     * thread was interrupted while it waited for an available connection,
+<i>133</i>&nbsp;     * or if it timed out while waiting, or the creation of a connection
+<i>134</i>&nbsp;     * resulted in an error.
+<i>135</i>&nbsp;     */
+<i>136</i>&nbsp;    synchronized PooledConnection get(long timeout,
+<i>137</i>&nbsp;        PooledConnectionFactory factory) throws NamingException {
+<i>138</i>&nbsp;        PooledConnection conn;
+<b class="nc"><i>139</i>&nbsp;        long start = (timeout &gt; 0 ? System.currentTimeMillis() : 0);</b>
+<b class="nc"><i>140</i>&nbsp;        long waittime = timeout;</b>
+<i>141</i>&nbsp;
+<b class="nc"><i>142</i>&nbsp;        d(&quot;get(): before&quot;);</b>
+<b class="nc"><i>143</i>&nbsp;        while ((conn = getOrCreateConnection(factory)) == null) {</b>
+<b class="nc"><i>144</i>&nbsp;            if (timeout &gt; 0 &amp;&amp; waittime &lt;= 0) {</b>
+<b class="nc"><i>145</i>&nbsp;                throw new CommunicationException(</b>
+<i>146</i>&nbsp;                    &quot;Timeout exceeded while waiting for a connection: &quot; +
+<i>147</i>&nbsp;                    timeout + &quot;ms&quot;);
+<i>148</i>&nbsp;            }
+<i>149</i>&nbsp;            try {
+<b class="nc"><i>150</i>&nbsp;                d(&quot;get(): waiting&quot;);</b>
+<b class="nc"><i>151</i>&nbsp;                if (waittime &gt; 0) {</b>
+<b class="nc"><i>152</i>&nbsp;                    wait(waittime);  // Wait until one is released or removed</b>
+<i>153</i>&nbsp;                } else {
+<b class="nc"><i>154</i>&nbsp;                    wait();</b>
+<i>155</i>&nbsp;                }
+<b class="nc"><i>156</i>&nbsp;            } catch (InterruptedException e) {</b>
+<b class="nc"><i>157</i>&nbsp;                throw new InterruptedNamingException(</b>
+<i>158</i>&nbsp;                    &quot;Interrupted while waiting for a connection&quot;);
+<b class="nc"><i>159</i>&nbsp;            }</b>
+<i>160</i>&nbsp;            // Check whether we timed out
+<b class="nc"><i>161</i>&nbsp;            if (timeout &gt; 0) {</b>
+<b class="nc"><i>162</i>&nbsp;                long now = System.currentTimeMillis();</b>
+<b class="nc"><i>163</i>&nbsp;                waittime = timeout - (now - start);</b>
+<b class="nc"><i>164</i>&nbsp;            }</b>
+<i>165</i>&nbsp;        }
+<i>166</i>&nbsp;
+<b class="nc"><i>167</i>&nbsp;        d(&quot;get(): after&quot;);</b>
+<b class="nc"><i>168</i>&nbsp;        return conn;</b>
+<i>169</i>&nbsp;    }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;    /**
+<i>172</i>&nbsp;     * Retrieves an idle connection from this list if one is available.
+<i>173</i>&nbsp;     * If none is available, create a new one if maxSize hasn&#39;t been reached.
+<i>174</i>&nbsp;     * If maxSize has been reached, return null.
+<i>175</i>&nbsp;     * Always called from a synchronized method.
+<i>176</i>&nbsp;     */
+<i>177</i>&nbsp;    private PooledConnection getOrCreateConnection(
+<i>178</i>&nbsp;        PooledConnectionFactory factory) throws NamingException {
+<i>179</i>&nbsp;
+<b class="nc"><i>180</i>&nbsp;        int size = conns.size(); // Current number of idle/nonidle conns</b>
+<b class="nc"><i>181</i>&nbsp;        PooledConnection conn = null;</b>
+<i>182</i>&nbsp;
+<b class="nc"><i>183</i>&nbsp;        if (prefSize &lt;= 0 || size &gt;= prefSize) {</b>
+<i>184</i>&nbsp;            // If no prefSize specified, or list size already meets or
+<i>185</i>&nbsp;            // exceeds prefSize, then first look for an idle connection
+<i>186</i>&nbsp;            ConnectionDesc entry;
+<b class="nc"><i>187</i>&nbsp;            for (int i = 0; i &lt; size; i++) {</b>
+<b class="nc"><i>188</i>&nbsp;                entry = conns.get(i);</b>
+<b class="nc"><i>189</i>&nbsp;                if ((conn = entry.tryUse()) != null) {</b>
+<b class="nc"><i>190</i>&nbsp;                    d(&quot;get(): use &quot;, conn);</b>
+<b class="nc"><i>191</i>&nbsp;                    td(&quot;Use &quot;, conn);</b>
+<b class="nc"><i>192</i>&nbsp;                    return conn;</b>
+<i>193</i>&nbsp;                }
+<i>194</i>&nbsp;            }
+<i>195</i>&nbsp;        }
+<i>196</i>&nbsp;
+<i>197</i>&nbsp;        // Check if list size already at maxSize specified
+<b class="nc"><i>198</i>&nbsp;        if (maxSize &gt; 0 &amp;&amp; size &gt;= maxSize) {</b>
+<b class="nc"><i>199</i>&nbsp;            return null;   // List size is at limit; cannot create any more</b>
+<i>200</i>&nbsp;        }
+<i>201</i>&nbsp;
+<b class="nc"><i>202</i>&nbsp;        conn = factory.createPooledConnection(this);</b>
+<b class="nc"><i>203</i>&nbsp;        td(&quot;Create and use &quot;, conn, factory);</b>
+<b class="nc"><i>204</i>&nbsp;        conns.add(new ConnectionDesc(conn, true)); // Add new conn to pool</b>
+<i>205</i>&nbsp;
+<b class="nc"><i>206</i>&nbsp;        return conn;</b>
+<i>207</i>&nbsp;    }
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    /**
+<i>210</i>&nbsp;     * Releases connection back into list.
+<i>211</i>&nbsp;     * If the list size is below prefSize, the connection may be reused.
+<i>212</i>&nbsp;     * If the list size exceeds prefSize, then the connection is closed
+<i>213</i>&nbsp;     * and removed from the list.
+<i>214</i>&nbsp;     *
+<i>215</i>&nbsp;     * public because implemented as part of PoolCallback.
+<i>216</i>&nbsp;     */
+<i>217</i>&nbsp;    public synchronized boolean releasePooledConnection(PooledConnection conn) {
+<i>218</i>&nbsp;        ConnectionDesc entry;
+<b class="nc"><i>219</i>&nbsp;        int loc = conns.indexOf(entry=new ConnectionDesc(conn));</b>
+<i>220</i>&nbsp;
+<b class="nc"><i>221</i>&nbsp;        d(&quot;release(): &quot;, conn);</b>
+<i>222</i>&nbsp;
+<b class="nc"><i>223</i>&nbsp;        if (loc &gt;= 0) {</b>
+<i>224</i>&nbsp;            // Found entry
+<i>225</i>&nbsp;
+<b class="nc"><i>226</i>&nbsp;            if (closed || (prefSize &gt; 0 &amp;&amp; conns.size() &gt; prefSize)) {</b>
+<i>227</i>&nbsp;                // If list size exceeds prefSize, close connection
+<i>228</i>&nbsp;
+<b class="nc"><i>229</i>&nbsp;                d(&quot;release(): closing &quot;, conn);</b>
+<b class="nc"><i>230</i>&nbsp;                td(&quot;Close &quot;, conn);</b>
+<i>231</i>&nbsp;
+<i>232</i>&nbsp;                // size must be &gt;= 2 so don&#39;t worry about empty list
+<b class="nc"><i>233</i>&nbsp;                conns.remove(entry);</b>
+<b class="nc"><i>234</i>&nbsp;                conn.closeConnection();</b>
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;            } else {
+<b class="nc"><i>237</i>&nbsp;                d(&quot;release(): release &quot;, conn);</b>
+<b class="nc"><i>238</i>&nbsp;                td(&quot;Release &quot;, conn);</b>
+<i>239</i>&nbsp;
+<i>240</i>&nbsp;                // Get ConnectionDesc from list to get correct state info
+<b class="nc"><i>241</i>&nbsp;                entry = conns.get(loc);</b>
+<i>242</i>&nbsp;                // Return connection to list, ready for reuse
+<b class="nc"><i>243</i>&nbsp;                entry.release();</b>
+<i>244</i>&nbsp;            }
+<b class="nc"><i>245</i>&nbsp;            notifyAll();</b>
+<b class="nc"><i>246</i>&nbsp;            d(&quot;release(): notify&quot;);</b>
+<b class="nc"><i>247</i>&nbsp;            return true;</b>
+<i>248</i>&nbsp;        } else {
+<b class="nc"><i>249</i>&nbsp;            return false;</b>
+<i>250</i>&nbsp;        }
+<i>251</i>&nbsp;    }
+<i>252</i>&nbsp;
+<i>253</i>&nbsp;    /**
+<i>254</i>&nbsp;     * Removes PooledConnection from list of connections.
+<i>255</i>&nbsp;     * The closing of the connection is separate from this method.
+<i>256</i>&nbsp;     * This method is called usually when the caller encounters an error
+<i>257</i>&nbsp;     * when using the connection and wants it removed from the pool.
+<i>258</i>&nbsp;     *
+<i>259</i>&nbsp;     * @return true if conn removed; false if it was not in pool
+<i>260</i>&nbsp;     *
+<i>261</i>&nbsp;     * public because implemented as part of PoolCallback.
+<i>262</i>&nbsp;     */
+<i>263</i>&nbsp;    public synchronized boolean removePooledConnection(PooledConnection conn) {
+<b class="nc"><i>264</i>&nbsp;        if (conns.remove(new ConnectionDesc(conn))) {</b>
+<b class="nc"><i>265</i>&nbsp;            d(&quot;remove(): &quot;, conn);</b>
+<i>266</i>&nbsp;
+<b class="nc"><i>267</i>&nbsp;            notifyAll();</b>
+<i>268</i>&nbsp;
+<b class="nc"><i>269</i>&nbsp;            d(&quot;remove(): notify&quot;);</b>
+<b class="nc"><i>270</i>&nbsp;            td(&quot;Remove &quot;, conn);</b>
+<i>271</i>&nbsp;
+<b class="nc"><i>272</i>&nbsp;            if (conns.isEmpty()) {</b>
+<i>273</i>&nbsp;                // Remove softref to make pool entry eligible for GC.
+<i>274</i>&nbsp;                // Once ref has been removed, it cannot be reinstated.
+<b class="nc"><i>275</i>&nbsp;                ref = null;</b>
+<i>276</i>&nbsp;            }
+<i>277</i>&nbsp;
+<b class="nc"><i>278</i>&nbsp;            return true;</b>
+<i>279</i>&nbsp;        } else {
+<b class="nc"><i>280</i>&nbsp;            d(&quot;remove(): not found &quot;, conn);</b>
+<b class="nc"><i>281</i>&nbsp;            return false;</b>
+<i>282</i>&nbsp;        }
+<i>283</i>&nbsp;    }
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;    /**
+<i>286</i>&nbsp;     * Goes through all entries in list, removes and closes ones that have been
+<i>287</i>&nbsp;     * idle before threshold.
+<i>288</i>&nbsp;     *
+<i>289</i>&nbsp;     * @param threshold an entry idle since this time has expired.
+<i>290</i>&nbsp;     * @return true if no more connections in list
+<i>291</i>&nbsp;     */
+<i>292</i>&nbsp;    boolean expire(long threshold) {
+<i>293</i>&nbsp;        List&lt;ConnectionDesc&gt; clonedConns;
+<b class="nc"><i>294</i>&nbsp;        synchronized(this) {</b>
+<b class="nc"><i>295</i>&nbsp;            clonedConns = new ArrayList&lt;&gt;(conns);</b>
+<b class="nc"><i>296</i>&nbsp;        }</b>
+<b class="nc"><i>297</i>&nbsp;        List&lt;ConnectionDesc&gt; expired = new ArrayList&lt;&gt;();</b>
+<i>298</i>&nbsp;
+<b class="nc"><i>299</i>&nbsp;        for (ConnectionDesc entry : clonedConns) {</b>
+<b class="nc"><i>300</i>&nbsp;            d(&quot;expire(): &quot;, entry);</b>
+<b class="nc"><i>301</i>&nbsp;            if (entry.expire(threshold)) {</b>
+<b class="nc"><i>302</i>&nbsp;                expired.add(entry);</b>
+<b class="nc"><i>303</i>&nbsp;                td(&quot;expire(): Expired &quot;, entry);</b>
+<i>304</i>&nbsp;            }
+<b class="nc"><i>305</i>&nbsp;        }</b>
+<i>306</i>&nbsp;
+<b class="nc"><i>307</i>&nbsp;        synchronized (this) {</b>
+<b class="nc"><i>308</i>&nbsp;            conns.removeAll(expired);</b>
+<i>309</i>&nbsp;            // Don&#39;t need to call notify() because we&#39;re
+<i>310</i>&nbsp;            // removing only idle connections. If there were
+<i>311</i>&nbsp;            // idle connections, then there should be no waiters.
+<b class="nc"><i>312</i>&nbsp;            return conns.isEmpty();  // whether whole list has &#39;expired&#39;</b>
+<b class="nc"><i>313</i>&nbsp;        }</b>
+<i>314</i>&nbsp;    }
+<i>315</i>&nbsp;
+<i>316</i>&nbsp;    /**
+<i>317</i>&nbsp;     * Called when this instance of Connections has been removed from Pool.
+<i>318</i>&nbsp;     * This means that no one can get any pooled connections from this
+<i>319</i>&nbsp;     * Connections any longer. Expire all idle connections as of &#39;now&#39;
+<i>320</i>&nbsp;     * and leave indicator so that any in-use connections will be closed upon
+<i>321</i>&nbsp;     * their return.
+<i>322</i>&nbsp;     */
+<i>323</i>&nbsp;    synchronized void close() {
+<b class="nc"><i>324</i>&nbsp;        expire(System.currentTimeMillis());     // Expire idle connections</b>
+<b class="nc"><i>325</i>&nbsp;        closed = true;   // Close in-use connections when they are returned</b>
+<i>326</i>&nbsp;    }
+<i>327</i>&nbsp;
+<i>328</i>&nbsp;    String getStats() {
+<b class="nc"><i>329</i>&nbsp;        int idle = 0;</b>
+<b class="nc"><i>330</i>&nbsp;        int busy = 0;</b>
+<b class="nc"><i>331</i>&nbsp;        int expired = 0;</b>
+<b class="nc"><i>332</i>&nbsp;        long use = 0;</b>
+<i>333</i>&nbsp;        int len;
+<i>334</i>&nbsp;
+<b class="nc"><i>335</i>&nbsp;        synchronized (this) {</b>
+<b class="nc"><i>336</i>&nbsp;            len = conns.size();</b>
+<i>337</i>&nbsp;
+<i>338</i>&nbsp;            ConnectionDesc entry;
+<b class="nc"><i>339</i>&nbsp;            for (int i = 0; i &lt; len; i++) {</b>
+<b class="nc"><i>340</i>&nbsp;                entry = conns.get(i);</b>
+<b class="nc"><i>341</i>&nbsp;                use += entry.getUseCount();</b>
+<b class="nc"><i>342</i>&nbsp;                switch (entry.getState()) {</b>
+<i>343</i>&nbsp;                case ConnectionDesc.BUSY:
+<b class="nc"><i>344</i>&nbsp;                    ++busy;</b>
+<b class="nc"><i>345</i>&nbsp;                    break;</b>
+<i>346</i>&nbsp;                case ConnectionDesc.IDLE:
+<b class="nc"><i>347</i>&nbsp;                    ++idle;</b>
+<b class="nc"><i>348</i>&nbsp;                    break;</b>
+<i>349</i>&nbsp;                case ConnectionDesc.EXPIRED:
+<b class="nc"><i>350</i>&nbsp;                    ++expired;</b>
+<i>351</i>&nbsp;                }
+<i>352</i>&nbsp;            }
+<b class="nc"><i>353</i>&nbsp;        }</b>
+<b class="nc"><i>354</i>&nbsp;        return &quot;size=&quot; + len + &quot;; use=&quot; + use + &quot;; busy=&quot; + busy</b>
+<i>355</i>&nbsp;            + &quot;; idle=&quot; + idle + &quot;; expired=&quot; + expired;
+<i>356</i>&nbsp;    }
+<i>357</i>&nbsp;
+<i>358</i>&nbsp;    private void d(String msg, Object o1) {
+<b class="nc"><i>359</i>&nbsp;        if (debug) {</b>
+<b class="nc"><i>360</i>&nbsp;            d(msg + o1);</b>
+<i>361</i>&nbsp;        }
+<i>362</i>&nbsp;    }
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;    private void d(String msg, int i) {
+<b class="nc"><i>365</i>&nbsp;        if (debug) {</b>
+<b class="nc"><i>366</i>&nbsp;            d(msg + i);</b>
+<i>367</i>&nbsp;        }
+<i>368</i>&nbsp;    }
+<i>369</i>&nbsp;
+<i>370</i>&nbsp;    private void d(String msg) {
+<b class="nc"><i>371</i>&nbsp;        if (debug) {</b>
+<b class="nc"><i>372</i>&nbsp;            System.err.println(this + &quot;.&quot; + msg + &quot;; size: &quot; + conns.size());</b>
+<i>373</i>&nbsp;        }
+<i>374</i>&nbsp;    }
+<i>375</i>&nbsp;
+<i>376</i>&nbsp;    private void td(String msg, Object o1, Object o2) {
+<b class="nc"><i>377</i>&nbsp;        if (trace) { // redo test to avoid object creation</b>
+<b class="nc"><i>378</i>&nbsp;            td(msg + o1 + &quot;[&quot; + o2 + &quot;]&quot;);</b>
+<i>379</i>&nbsp;        }
+<i>380</i>&nbsp;    }
+<i>381</i>&nbsp;    private void td(String msg, Object o1) {
+<b class="nc"><i>382</i>&nbsp;        if (trace) { // redo test to avoid object creation</b>
+<b class="nc"><i>383</i>&nbsp;            td(msg + o1);</b>
+<i>384</i>&nbsp;        }
+<i>385</i>&nbsp;    }
+<i>386</i>&nbsp;    private void td(String msg) {
+<b class="nc"><i>387</i>&nbsp;        if (trace) {</b>
+<b class="nc"><i>388</i>&nbsp;            System.err.println(msg);</b>
+<i>389</i>&nbsp;        }
+<i>390</i>&nbsp;    }
+<i>391</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

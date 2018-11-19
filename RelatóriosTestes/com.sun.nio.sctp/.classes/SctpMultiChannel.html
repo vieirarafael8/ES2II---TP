@@ -1,0 +1,831 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: SctpMultiChannel</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.nio.sctp</a> ]
+</div>
+
+<h1>Coverage Summary for Class: SctpMultiChannel (com.sun.nio.sctp)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SctpMultiChannel</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2009, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;package com.sun.nio.sctp;
+<i>26</i>&nbsp;
+<i>27</i>&nbsp;import java.net.SocketAddress;
+<i>28</i>&nbsp;import java.net.InetAddress;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import java.util.Set;
+<i>31</i>&nbsp;import java.nio.ByteBuffer;
+<i>32</i>&nbsp;import java.nio.channels.spi.AbstractSelectableChannel;
+<i>33</i>&nbsp;import java.nio.channels.spi.SelectorProvider;
+<i>34</i>&nbsp;import java.nio.channels.ClosedChannelException;
+<i>35</i>&nbsp;import java.nio.channels.NotYetBoundException;
+<i>36</i>&nbsp;import java.nio.channels.SelectionKey;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * A selectable channel for message-oriented SCTP sockets.
+<i>40</i>&nbsp; *
+<i>41</i>&nbsp; * &lt;P&gt; An SCTP multi channel supports many associations on a single socket.
+<i>42</i>&nbsp; * An {@code SctpMultiChannel} is created by invoking the
+<i>43</i>&nbsp; * {@link #open open} method of this class. A newly-created channel is open but
+<i>44</i>&nbsp; * not yet bound. An attempt to invoke the {@link #receive receive} method of an
+<i>45</i>&nbsp; * unbound channel will cause the {@link NotYetBoundException}
+<i>46</i>&nbsp; * to be thrown. An attempt to invoke the {@link #send send} method of an
+<i>47</i>&nbsp; * unbound channel will cause it to first invoke the {@link #bind bind} method.
+<i>48</i>&nbsp; * The address(es) that the channel&#39;s socket is bound to can be retrieved by
+<i>49</i>&nbsp; * calling {@link #getAllLocalAddresses getAllLocalAddresses}.
+<i>50</i>&nbsp; *
+<i>51</i>&nbsp; * &lt;P&gt; Messages may be sent and received without explicitly setting up an
+<i>52</i>&nbsp; * association with the remote peer. The channel will implicitly setup
+<i>53</i>&nbsp; * a new association whenever it sends or receives a message from a remote
+<i>54</i>&nbsp; * peer if there is not already an association with that peer. Upon successful
+<i>55</i>&nbsp; * association setup, an {@link AssociationChangeNotification
+<i>56</i>&nbsp; * association changed} notification will be put to the SCTP stack with its
+<i>57</i>&nbsp; * {@code event} parameter set to {@link
+<i>58</i>&nbsp; * AssociationChangeNotification.AssocChangeEvent#COMM_UP
+<i>59</i>&nbsp; * COMM_UP}. This notification can be received by invoking {@link #receive
+<i>60</i>&nbsp; * receive}.
+<i>61</i>&nbsp; *
+<i>62</i>&nbsp; * &lt;P&gt; Socket options are configured using the
+<i>63</i>&nbsp; * {@link #setOption(SctpSocketOption,Object,Association) setOption} method. An
+<i>64</i>&nbsp; * {@code SctpMultiChannel} supports the following options:
+<i>65</i>&nbsp; * &lt;blockquote&gt;
+<i>66</i>&nbsp; * &lt;table class=&quot;striped&quot;&gt;
+<i>67</i>&nbsp; *   &lt;caption style=&quot;display:none&quot;&gt;Socket options&lt;/caption&gt;
+<i>68</i>&nbsp; *   &lt;thead&gt;
+<i>69</i>&nbsp; *   &lt;tr&gt;
+<i>70</i>&nbsp; *     &lt;th scope=&quot;col&quot;&gt;Option Name&lt;/th&gt;
+<i>71</i>&nbsp; *     &lt;th scope=&quot;col&quot;&gt;Description&lt;/th&gt;
+<i>72</i>&nbsp; *   &lt;/tr&gt;
+<i>73</i>&nbsp; *   &lt;/thead&gt;
+<i>74</i>&nbsp; *   &lt;tbody&gt;
+<i>75</i>&nbsp; *   &lt;tr&gt;
+<i>76</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SCTP_DISABLE_FRAGMENTS
+<i>77</i>&nbsp; *                                          SCTP_DISABLE_FRAGMENTS} &lt;/th&gt;
+<i>78</i>&nbsp; *     &lt;td&gt; Enables or disables message fragmentation &lt;/td&gt;
+<i>79</i>&nbsp; *   &lt;/tr&gt;
+<i>80</i>&nbsp; *   &lt;tr&gt;
+<i>81</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SCTP_EXPLICIT_COMPLETE
+<i>82</i>&nbsp; *                                          SCTP_EXPLICIT_COMPLETE} &lt;/th&gt;
+<i>83</i>&nbsp; *     &lt;td&gt; Enables or disables explicit message completion &lt;/td&gt;
+<i>84</i>&nbsp; *   &lt;/tr&gt;
+<i>85</i>&nbsp; *    &lt;tr&gt;
+<i>86</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SCTP_FRAGMENT_INTERLEAVE
+<i>87</i>&nbsp; *                                          SCTP_FRAGMENT_INTERLEAVE} &lt;/th&gt;
+<i>88</i>&nbsp; *     &lt;td&gt; Controls how the presentation of messages occur for the message
+<i>89</i>&nbsp; *          receiver &lt;/td&gt;
+<i>90</i>&nbsp; *   &lt;/tr&gt;
+<i>91</i>&nbsp; *   &lt;tr&gt;
+<i>92</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SCTP_INIT_MAXSTREAMS
+<i>93</i>&nbsp; *                                          SCTP_INIT_MAXSTREAMS} &lt;/th&gt;
+<i>94</i>&nbsp; *     &lt;td&gt; The maximum number of streams requested by the local endpoint during
+<i>95</i>&nbsp; *          association initialization &lt;/td&gt;
+<i>96</i>&nbsp; *   &lt;/tr&gt;
+<i>97</i>&nbsp; *   &lt;tr&gt;
+<i>98</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SCTP_NODELAY SCTP_NODELAY} &lt;/th&gt;
+<i>99</i>&nbsp; *     &lt;td&gt; Enables or disable a Nagle-like algorithm &lt;/td&gt;
+<i>100</i>&nbsp; *   &lt;/tr&gt;
+<i>101</i>&nbsp; *   &lt;tr&gt;
+<i>102</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SCTP_PRIMARY_ADDR
+<i>103</i>&nbsp; *                                          SCTP_PRIMARY_ADDR} &lt;/th&gt;
+<i>104</i>&nbsp; *     &lt;td&gt; Requests that the local SCTP stack use the given peer address as the
+<i>105</i>&nbsp; *          association primary &lt;/td&gt;
+<i>106</i>&nbsp; *   &lt;/tr&gt;
+<i>107</i>&nbsp; *   &lt;tr&gt;
+<i>108</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SCTP_SET_PEER_PRIMARY_ADDR
+<i>109</i>&nbsp; *                                          SCTP_SET_PEER_PRIMARY_ADDR} &lt;/th&gt;
+<i>110</i>&nbsp; *     &lt;td&gt; Requests that the peer mark the enclosed address as the association
+<i>111</i>&nbsp; *          primary &lt;/td&gt;
+<i>112</i>&nbsp; *   &lt;/tr&gt;
+<i>113</i>&nbsp; *   &lt;tr&gt;
+<i>114</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SO_SNDBUF
+<i>115</i>&nbsp; *                                          SO_SNDBUF} &lt;/th&gt;
+<i>116</i>&nbsp; *     &lt;td&gt; The size of the socket send buffer &lt;/td&gt;
+<i>117</i>&nbsp; *   &lt;/tr&gt;
+<i>118</i>&nbsp; *   &lt;tr&gt;
+<i>119</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SO_RCVBUF
+<i>120</i>&nbsp; *                                          SO_RCVBUF} &lt;/th&gt;
+<i>121</i>&nbsp; *     &lt;td&gt; The size of the socket receive buffer &lt;/td&gt;
+<i>122</i>&nbsp; *   &lt;/tr&gt;
+<i>123</i>&nbsp; *   &lt;tr&gt;
+<i>124</i>&nbsp; *     &lt;th scope=&quot;row&quot;&gt; {@link SctpStandardSocketOptions#SO_LINGER
+<i>125</i>&nbsp; *                                          SO_LINGER} &lt;/th&gt;
+<i>126</i>&nbsp; *     &lt;td&gt; Linger on close if data is present (when configured in blocking mode
+<i>127</i>&nbsp; *          only) &lt;/td&gt;
+<i>128</i>&nbsp; *   &lt;/tr&gt;
+<i>129</i>&nbsp; *   &lt;/tbody&gt;
+<i>130</i>&nbsp; * &lt;/table&gt;
+<i>131</i>&nbsp; * &lt;/blockquote&gt;
+<i>132</i>&nbsp; * Additional (implementation specific) options may also be supported. The list
+<i>133</i>&nbsp; * of options supported is obtained by invoking the {@link #supportedOptions()
+<i>134</i>&nbsp; * supportedOptions} method.
+<i>135</i>&nbsp; *
+<i>136</i>&nbsp; * &lt;p&gt; SCTP multi channels are safe for use by multiple concurrent threads.
+<i>137</i>&nbsp; * They support concurrent sending and receiving, though at most one thread may be
+<i>138</i>&nbsp; * sending and at most one thread may be receiving at any given time.
+<i>139</i>&nbsp; *
+<i>140</i>&nbsp; * @since 1.7
+<i>141</i>&nbsp; */
+<i>142</i>&nbsp;public abstract class SctpMultiChannel
+<i>143</i>&nbsp;    extends AbstractSelectableChannel
+<i>144</i>&nbsp;{
+<i>145</i>&nbsp;    /**
+<i>146</i>&nbsp;     * Initializes a new instance of this class.
+<i>147</i>&nbsp;     *
+<b class="nc"><i>148</i>&nbsp;     * @param  provider</b>
+<i>149</i>&nbsp;     *         The selector provider for this channel
+<i>150</i>&nbsp;     */
+<i>151</i>&nbsp;    protected SctpMultiChannel(SelectorProvider provider) {
+<i>152</i>&nbsp;        super(provider);
+<i>153</i>&nbsp;    }
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    /**
+<i>156</i>&nbsp;     * Opens an SCTP multi channel.
+<i>157</i>&nbsp;     *
+<i>158</i>&nbsp;     * &lt;P&gt; The new channel is unbound.
+<i>159</i>&nbsp;     *
+<i>160</i>&nbsp;     * @return  A new SCTP multi channel
+<i>161</i>&nbsp;     *
+<i>162</i>&nbsp;     * @throws UnsupportedOperationException
+<i>163</i>&nbsp;     *         If the SCTP protocol is not supported
+<i>164</i>&nbsp;     *
+<i>165</i>&nbsp;     * @throws  IOException
+<b class="nc"><i>166</i>&nbsp;     *          If an I/O error occurs</b>
+<i>167</i>&nbsp;     */
+<i>168</i>&nbsp;    public static SctpMultiChannel open() throws
+<i>169</i>&nbsp;        IOException {
+<i>170</i>&nbsp;        return new sun.nio.ch.sctp.SctpMultiChannelImpl((SelectorProvider)null);
+<i>171</i>&nbsp;    }
+<i>172</i>&nbsp;
+<i>173</i>&nbsp;    /**
+<i>174</i>&nbsp;     * Returns the open associations on this channel&#39;s socket.
+<i>175</i>&nbsp;     *
+<i>176</i>&nbsp;     * &lt;P&gt; Only associations whose {@link AssociationChangeNotification.AssocChangeEvent#COMM_UP
+<i>177</i>&nbsp;     * COMM_UP} association change event has been received are included
+<i>178</i>&nbsp;     * in the returned set of associations. Associations for which a
+<i>179</i>&nbsp;     * {@link AssociationChangeNotification.AssocChangeEvent#COMM_LOST COMM_LOST} or {@link
+<i>180</i>&nbsp;     * AssociationChangeNotification.AssocChangeEvent#SHUTDOWN SHUTDOWN} association change
+<i>181</i>&nbsp;     * event have been receive are removed from the set of associations.
+<i>182</i>&nbsp;     *
+<i>183</i>&nbsp;     * &lt;P&gt; The returned set of associations is a snapshot of the open
+<i>184</i>&nbsp;     * associations at the time that this method is invoked.
+<i>185</i>&nbsp;     *
+<i>186</i>&nbsp;     * @return  A {@code Set} containing the open associations, or an empty
+<i>187</i>&nbsp;     *          {@code Set} if there are none.
+<i>188</i>&nbsp;     *
+<i>189</i>&nbsp;     * @throws  ClosedChannelException
+<i>190</i>&nbsp;     *          If this channel is closed
+<i>191</i>&nbsp;     *
+<i>192</i>&nbsp;     * @throws  IOException
+<i>193</i>&nbsp;     *          If some other I/O error occurs
+<i>194</i>&nbsp;     */
+<i>195</i>&nbsp;    public abstract Set&lt;Association&gt; associations()
+<i>196</i>&nbsp;        throws IOException;
+<i>197</i>&nbsp;
+<i>198</i>&nbsp;    /**
+<i>199</i>&nbsp;     * Binds the channel&#39;s socket to a local address and configures the socket
+<i>200</i>&nbsp;     * to listen for connections.
+<i>201</i>&nbsp;     *
+<i>202</i>&nbsp;     * &lt;P&gt; This method is used to establish a relationship between the socket
+<i>203</i>&nbsp;     * and the local address. Once a relationship is established then
+<i>204</i>&nbsp;     * the socket remains bound until the channel is closed. This relationship
+<i>205</i>&nbsp;     * may not necesssarily be with the address {@code local} as it may be removed
+<i>206</i>&nbsp;     * by {@link #unbindAddress unbindAddress}, but there will always be at least one local
+<i>207</i>&nbsp;     * address bound to the channel&#39;s socket once an invocation of this method
+<i>208</i>&nbsp;     * successfully completes.
+<i>209</i>&nbsp;     *
+<i>210</i>&nbsp;     * &lt;P&gt; Once the channel&#39;s socket has been successfully bound to a specific
+<i>211</i>&nbsp;     * address, that is not automatically assigned, more addresses
+<i>212</i>&nbsp;     * may be bound to it using {@link #bindAddress bindAddress}, or removed
+<i>213</i>&nbsp;     * using {@link #unbindAddress unbindAddress}.
+<i>214</i>&nbsp;     *
+<i>215</i>&nbsp;     * &lt;P&gt; The backlog parameter is the maximum number of pending connections on
+<i>216</i>&nbsp;     * the socket. Its exact semantics are implementation specific. An implementation
+<i>217</i>&nbsp;     * may impose an implementation specific maximum length or may choose to ignore
+<i>218</i>&nbsp;     * the parameter. If the backlog parameter has the value {@code 0}, or a negative
+<i>219</i>&nbsp;     * value, then an implementation specific default is used.
+<i>220</i>&nbsp;     *
+<i>221</i>&nbsp;     * @param  local
+<i>222</i>&nbsp;     *         The local address to bind the socket, or {@code null} to
+<i>223</i>&nbsp;     *         bind the socket to an automatically assigned socket address
+<i>224</i>&nbsp;     *
+<i>225</i>&nbsp;     * @param  backlog
+<i>226</i>&nbsp;     *         The maximum number of pending connections
+<i>227</i>&nbsp;     *
+<i>228</i>&nbsp;     * @return  This channel
+<i>229</i>&nbsp;     *
+<i>230</i>&nbsp;     * @throws  ClosedChannelException
+<i>231</i>&nbsp;     *          If this channel is closed
+<i>232</i>&nbsp;     *
+<i>233</i>&nbsp;     * @throws  java.nio.channels.AlreadyBoundException
+<i>234</i>&nbsp;     *          If this channel is already bound
+<i>235</i>&nbsp;     *
+<i>236</i>&nbsp;     * @throws  java.nio.channels.UnsupportedAddressTypeException
+<i>237</i>&nbsp;     *          If the type of the given address is not supported
+<i>238</i>&nbsp;     *
+<i>239</i>&nbsp;     * @throws  SecurityException
+<i>240</i>&nbsp;     *          If a security manager has been installed and its {@link
+<i>241</i>&nbsp;     *          java.lang.SecurityManager#checkListen(int) checkListen} method
+<i>242</i>&nbsp;     *          denies the operation
+<i>243</i>&nbsp;     *
+<i>244</i>&nbsp;     * @throws  IOException
+<i>245</i>&nbsp;     *          If some other I/O error occurs
+<i>246</i>&nbsp;     */
+<i>247</i>&nbsp;    public abstract SctpMultiChannel bind(SocketAddress local,
+<i>248</i>&nbsp;                                          int backlog)
+<i>249</i>&nbsp;        throws IOException;
+<i>250</i>&nbsp;
+<i>251</i>&nbsp;    /**
+<i>252</i>&nbsp;     * Binds the channel&#39;s socket to a local address and configures the socket
+<i>253</i>&nbsp;     * to listen for connections.
+<i>254</i>&nbsp;     *
+<i>255</i>&nbsp;     * &lt;P&gt; This method works as if invoking it were equivalent to evaluating the
+<i>256</i>&nbsp;     * expression:
+<i>257</i>&nbsp;     * &lt;blockquote&gt;&lt;pre&gt;
+<i>258</i>&nbsp;     * bind(local, 0);
+<i>259</i>&nbsp;     * &lt;/pre&gt;&lt;/blockquote&gt;
+<i>260</i>&nbsp;     *
+<i>261</i>&nbsp;     * @param  local
+<i>262</i>&nbsp;     *         The local address to bind the socket, or {@code null} to
+<i>263</i>&nbsp;     *         bind the socket to an automatically assigned socket address
+<i>264</i>&nbsp;     *
+<i>265</i>&nbsp;     * @return  This channel
+<i>266</i>&nbsp;     *
+<i>267</i>&nbsp;     * @throws  ClosedChannelException
+<i>268</i>&nbsp;     *          If this channel is closed
+<i>269</i>&nbsp;     *
+<i>270</i>&nbsp;     * @throws  java.nio.channels.AlreadyBoundException
+<i>271</i>&nbsp;     *          If this channel is already bound
+<i>272</i>&nbsp;     *
+<i>273</i>&nbsp;     * @throws  java.nio.channels.UnsupportedAddressTypeException
+<i>274</i>&nbsp;     *          If the type of the given address is not supported
+<i>275</i>&nbsp;     *
+<i>276</i>&nbsp;     * @throws  SecurityException
+<i>277</i>&nbsp;     *          If a security manager has been installed and its {@link
+<i>278</i>&nbsp;     *          java.lang.SecurityManager#checkListen(int) checkListen} method
+<i>279</i>&nbsp;     *          denies the operation
+<i>280</i>&nbsp;     *
+<i>281</i>&nbsp;     * @throws  IOException
+<b class="nc"><i>282</i>&nbsp;     *          If some other I/O error occurs</b>
+<i>283</i>&nbsp;     */
+<i>284</i>&nbsp;    public final SctpMultiChannel bind(SocketAddress local)
+<i>285</i>&nbsp;        throws IOException {
+<i>286</i>&nbsp;        return bind(local, 0);
+<i>287</i>&nbsp;    }
+<i>288</i>&nbsp;
+<i>289</i>&nbsp;    /**
+<i>290</i>&nbsp;     * Adds the given address to the bound addresses for the channel&#39;s
+<i>291</i>&nbsp;     * socket.
+<i>292</i>&nbsp;     *
+<i>293</i>&nbsp;     * &lt;P&gt; The given address must not be the {@link
+<i>294</i>&nbsp;     * java.net.InetAddress#isAnyLocalAddress wildcard} address.
+<i>295</i>&nbsp;     * The channel must be first bound using {@link #bind bind} before
+<i>296</i>&nbsp;     * invoking this method, otherwise {@link NotYetBoundException} is thrown.
+<i>297</i>&nbsp;     * The {@link #bind bind} method takes a {@code SocketAddress} as its
+<i>298</i>&nbsp;     * argument which typically contains a port number as well as an address.
+<i>299</i>&nbsp;     * Addresses subquently bound using this method are simply addresses as the
+<i>300</i>&nbsp;     * SCTP port number remains the same for the lifetime of the channel.
+<i>301</i>&nbsp;     *
+<i>302</i>&nbsp;     * &lt;P&gt; New associations setup after this method successfully completes
+<i>303</i>&nbsp;     * will be associated with the given address. Adding addresses to existing
+<i>304</i>&nbsp;     * associations is optional functionality. If the endpoint supports
+<i>305</i>&nbsp;     * dynamic address reconfiguration then it may send the appropriate message
+<i>306</i>&nbsp;     * to the peer to change the peers address lists.
+<i>307</i>&nbsp;     *
+<i>308</i>&nbsp;     * @param  address
+<i>309</i>&nbsp;     *         The address to add to the bound addresses for the socket
+<i>310</i>&nbsp;     *
+<i>311</i>&nbsp;     * @return  This channel
+<i>312</i>&nbsp;     *
+<i>313</i>&nbsp;     * @throws  ClosedChannelException
+<i>314</i>&nbsp;     *          If this channel is closed
+<i>315</i>&nbsp;     *
+<i>316</i>&nbsp;     * @throws  NotYetBoundException
+<i>317</i>&nbsp;     *          If this channel is not yet bound
+<i>318</i>&nbsp;     *
+<i>319</i>&nbsp;     * @throws  java.nio.channels.AlreadyBoundException
+<i>320</i>&nbsp;     *          If this channel is already bound to the given address
+<i>321</i>&nbsp;     *
+<i>322</i>&nbsp;     * @throws  IllegalArgumentException
+<i>323</i>&nbsp;     *          If address is {@code null} or the {@link
+<i>324</i>&nbsp;     *          java.net.InetAddress#isAnyLocalAddress wildcard} address
+<i>325</i>&nbsp;     *
+<i>326</i>&nbsp;     * @throws  IOException
+<i>327</i>&nbsp;     *          If some other I/O error occurs
+<i>328</i>&nbsp;     */
+<i>329</i>&nbsp;    public abstract SctpMultiChannel bindAddress(InetAddress address)
+<i>330</i>&nbsp;         throws IOException;
+<i>331</i>&nbsp;
+<i>332</i>&nbsp;    /**
+<i>333</i>&nbsp;     * Removes the given address from the bound addresses for the channel&#39;s
+<i>334</i>&nbsp;     * socket.
+<i>335</i>&nbsp;     *
+<i>336</i>&nbsp;     * &lt;P&gt; The given address must not be the {@link
+<i>337</i>&nbsp;     * java.net.InetAddress#isAnyLocalAddress wildcard} address.
+<i>338</i>&nbsp;     * The channel must be first bound using {@link #bind bind} before
+<i>339</i>&nbsp;     * invoking this method, otherwise {@link NotYetBoundException} is thrown.
+<i>340</i>&nbsp;     *
+<i>341</i>&nbsp;     * &lt;P&gt; If this method is invoked on a channel that does
+<i>342</i>&nbsp;     * not have {@code address} as one of its bound addresses, or that has only
+<i>343</i>&nbsp;     * one local address bound to it, then this method throws
+<i>344</i>&nbsp;     * {@link IllegalUnbindException}.
+<i>345</i>&nbsp;     *
+<i>346</i>&nbsp;     * &lt;P&gt; The initial address that the channel&#39;s socket is bound to using
+<i>347</i>&nbsp;     * {@link #bind bind} may be removed from the bound addresses for the
+<i>348</i>&nbsp;     * channel&#39;s socket.
+<i>349</i>&nbsp;     *
+<i>350</i>&nbsp;     * &lt;P&gt; New associations setup after this method successfully completes
+<i>351</i>&nbsp;     * will not be associated with the given address. Removing addresses from
+<i>352</i>&nbsp;     * existing associations is optional functionality. If the endpoint supports
+<i>353</i>&nbsp;     * dynamic address reconfiguration then it may send the appropriate message
+<i>354</i>&nbsp;     * to the peer to change the peers address lists.
+<i>355</i>&nbsp;     *
+<i>356</i>&nbsp;     * @param  address
+<i>357</i>&nbsp;     *         The address to remove from the bound addresses for the socket
+<i>358</i>&nbsp;     *
+<i>359</i>&nbsp;     * @return  This channel
+<i>360</i>&nbsp;     *
+<i>361</i>&nbsp;     * @throws  ClosedChannelException
+<i>362</i>&nbsp;     *          If this channel is closed
+<i>363</i>&nbsp;     *
+<i>364</i>&nbsp;     * @throws  NotYetBoundException
+<i>365</i>&nbsp;     *          If this channel is not yet bound
+<i>366</i>&nbsp;     *
+<i>367</i>&nbsp;     * @throws  IllegalUnbindException
+<i>368</i>&nbsp;     *          {@code address} is not bound to the channel&#39;s socket, or the
+<i>369</i>&nbsp;     *          channel has only one address  bound to it
+<i>370</i>&nbsp;     *
+<i>371</i>&nbsp;     * @throws  IllegalArgumentException
+<i>372</i>&nbsp;     *          If address is {@code null} or the {@link
+<i>373</i>&nbsp;     *          java.net.InetAddress#isAnyLocalAddress wildcard} address
+<i>374</i>&nbsp;     *
+<i>375</i>&nbsp;     * @throws  IOException
+<i>376</i>&nbsp;     *          If some other I/O error occurs
+<i>377</i>&nbsp;     */
+<i>378</i>&nbsp;    public abstract SctpMultiChannel unbindAddress(InetAddress address)
+<i>379</i>&nbsp;         throws IOException;
+<i>380</i>&nbsp;
+<i>381</i>&nbsp;    /**
+<i>382</i>&nbsp;     * Returns all of the socket addresses to which this channel&#39;s socket is
+<i>383</i>&nbsp;     * bound.
+<i>384</i>&nbsp;     *
+<i>385</i>&nbsp;     * @return  All the socket addresses that this channel&#39;s socket is
+<i>386</i>&nbsp;     *          bound to, or an empty {@code Set} if the channel&#39;s socket is not
+<i>387</i>&nbsp;     *          bound
+<i>388</i>&nbsp;     *
+<i>389</i>&nbsp;     * @throws  ClosedChannelException
+<i>390</i>&nbsp;     *          If the channel is closed
+<i>391</i>&nbsp;     *
+<i>392</i>&nbsp;     * @throws  IOException
+<i>393</i>&nbsp;     *          If an I/O error occurs
+<i>394</i>&nbsp;     */
+<i>395</i>&nbsp;    public abstract Set&lt;SocketAddress&gt; getAllLocalAddresses()
+<i>396</i>&nbsp;        throws IOException;
+<i>397</i>&nbsp;
+<i>398</i>&nbsp;    /**
+<i>399</i>&nbsp;     * Returns all of the remote addresses to which the given association on
+<i>400</i>&nbsp;     * this channel&#39;s socket is connected.
+<i>401</i>&nbsp;     *
+<i>402</i>&nbsp;     * @param  association
+<i>403</i>&nbsp;     *         The association
+<i>404</i>&nbsp;     *
+<i>405</i>&nbsp;     * @return  All of the remote addresses for the given association, or
+<i>406</i>&nbsp;     *          an empty {@code Set} if the association has been shutdown
+<i>407</i>&nbsp;     *
+<i>408</i>&nbsp;     * @throws  ClosedChannelException
+<i>409</i>&nbsp;     *          If the channel is closed
+<i>410</i>&nbsp;     *
+<i>411</i>&nbsp;     * @throws  IOException
+<i>412</i>&nbsp;     *          If an I/O error occurs
+<i>413</i>&nbsp;     */
+<i>414</i>&nbsp;    public abstract Set&lt;SocketAddress&gt; getRemoteAddresses(Association association)
+<i>415</i>&nbsp;        throws IOException;
+<i>416</i>&nbsp;
+<i>417</i>&nbsp;    /**
+<i>418</i>&nbsp;     * Shutdown an association without closing the channel.
+<i>419</i>&nbsp;     *
+<i>420</i>&nbsp;     * @param  association
+<i>421</i>&nbsp;     *         The association to shutdown
+<i>422</i>&nbsp;     *
+<i>423</i>&nbsp;     * @return  This channel
+<i>424</i>&nbsp;     *
+<i>425</i>&nbsp;     * @throws  ClosedChannelException
+<i>426</i>&nbsp;     *          If this channel is closed
+<i>427</i>&nbsp;     *
+<i>428</i>&nbsp;     * @throws  IOException
+<i>429</i>&nbsp;     *          If some other I/O error occurs
+<i>430</i>&nbsp;     */
+<i>431</i>&nbsp;    public abstract SctpMultiChannel shutdown(Association association)
+<i>432</i>&nbsp;            throws IOException;
+<i>433</i>&nbsp;
+<i>434</i>&nbsp;    /**
+<i>435</i>&nbsp;     * Returns the value of a socket option.
+<i>436</i>&nbsp;     *
+<i>437</i>&nbsp;     * &lt;P&gt; Note that some options are retrieved on the channel&#39;s socket,
+<i>438</i>&nbsp;     * therefore the {@code association} parameter is not applicable and will be
+<i>439</i>&nbsp;     * ignored if given. However, if the option is association specific then the
+<i>440</i>&nbsp;     * association must be given.
+<i>441</i>&nbsp;     *
+<i>442</i>&nbsp;     * @param  &lt;T&gt;
+<i>443</i>&nbsp;     *         The type of the socket option value
+<i>444</i>&nbsp;     *
+<i>445</i>&nbsp;     * @param  name
+<i>446</i>&nbsp;     *         The socket option
+<i>447</i>&nbsp;     *
+<i>448</i>&nbsp;     * @param  association
+<i>449</i>&nbsp;     *         The association whose option should be retrieved, or {@code null}
+<i>450</i>&nbsp;     *         if this option should be retrieved at the channel&#39;s socket level.
+<i>451</i>&nbsp;     *
+<i>452</i>&nbsp;     * @return  The value of the socket option. A value of {@code null} may be
+<i>453</i>&nbsp;     *          a valid value for some socket options.
+<i>454</i>&nbsp;     *
+<i>455</i>&nbsp;     * @throws  UnsupportedOperationException
+<i>456</i>&nbsp;     *          If the socket option is not supported by this channel
+<i>457</i>&nbsp;     *
+<i>458</i>&nbsp;     * @throws  ClosedChannelException
+<i>459</i>&nbsp;     *          If this channel is closed
+<i>460</i>&nbsp;     *
+<i>461</i>&nbsp;     * @throws  IOException
+<i>462</i>&nbsp;     *          If an I/O error occurs
+<i>463</i>&nbsp;     *
+<i>464</i>&nbsp;     * @see SctpStandardSocketOptions
+<i>465</i>&nbsp;     */
+<i>466</i>&nbsp;    public abstract &lt;T&gt; T getOption(SctpSocketOption&lt;T&gt; name,
+<i>467</i>&nbsp;                                    Association association)
+<i>468</i>&nbsp;        throws IOException;
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;    /**
+<i>471</i>&nbsp;     * Sets the value of a socket option.
+<i>472</i>&nbsp;     *
+<i>473</i>&nbsp;     * &lt;P&gt; Note that some options are retrieved on the channel&#39;s socket,
+<i>474</i>&nbsp;     * therefore the {@code association} parameter is not applicable and will be
+<i>475</i>&nbsp;     * ignored if given. However, if the option is association specific then the
+<i>476</i>&nbsp;     * association must be given.
+<i>477</i>&nbsp;     *
+<i>478</i>&nbsp;     * @param   &lt;T&gt;
+<i>479</i>&nbsp;     *          The type of the socket option value
+<i>480</i>&nbsp;     *
+<i>481</i>&nbsp;     * @param   name
+<i>482</i>&nbsp;     *          The socket option
+<i>483</i>&nbsp;     *
+<i>484</i>&nbsp;     * @param  association
+<i>485</i>&nbsp;     *         The association whose option should be set, or {@code null}
+<i>486</i>&nbsp;     *         if this option should be set at the channel&#39;s socket level.
+<i>487</i>&nbsp;     *
+<i>488</i>&nbsp;     * @param   value
+<i>489</i>&nbsp;     *          The value of the socket option. A value of {@code null} may be
+<i>490</i>&nbsp;     *          a valid value for some socket options.
+<i>491</i>&nbsp;     *
+<i>492</i>&nbsp;     * @return  This channel
+<i>493</i>&nbsp;     *
+<i>494</i>&nbsp;     * @throws  UnsupportedOperationException
+<i>495</i>&nbsp;     *          If the socket option is not supported by this channel
+<i>496</i>&nbsp;     *
+<i>497</i>&nbsp;     * @throws  IllegalArgumentException
+<i>498</i>&nbsp;     *          If the value is not a valid value for this socket option
+<i>499</i>&nbsp;     *
+<i>500</i>&nbsp;     * @throws  ClosedChannelException
+<i>501</i>&nbsp;     *          If this channel is closed
+<i>502</i>&nbsp;     *
+<i>503</i>&nbsp;     * @throws  IOException
+<i>504</i>&nbsp;     *          If an I/O error occurs
+<i>505</i>&nbsp;     *
+<i>506</i>&nbsp;     * @see SctpStandardSocketOptions
+<i>507</i>&nbsp;     */
+<i>508</i>&nbsp;    public abstract &lt;T&gt; SctpMultiChannel setOption(SctpSocketOption&lt;T&gt; name,
+<i>509</i>&nbsp;                                                   T value,
+<i>510</i>&nbsp;                                                   Association association)
+<i>511</i>&nbsp;         throws IOException;
+<i>512</i>&nbsp;
+<i>513</i>&nbsp;     /**
+<i>514</i>&nbsp;     * Returns a set of the socket options supported by this channel.
+<i>515</i>&nbsp;     *
+<i>516</i>&nbsp;     * &lt;P&gt; This method will continue to return the set of options even after the
+<i>517</i>&nbsp;     * channel has been closed.
+<i>518</i>&nbsp;     *
+<i>519</i>&nbsp;     * @return  A set of the socket options supported by this channel
+<i>520</i>&nbsp;     */
+<i>521</i>&nbsp;    public abstract Set&lt;SctpSocketOption&lt;?&gt;&gt; supportedOptions();
+<i>522</i>&nbsp;
+<i>523</i>&nbsp;    /**
+<i>524</i>&nbsp;     * Returns an operation set identifying this channel&#39;s supported operations.
+<i>525</i>&nbsp;     *
+<i>526</i>&nbsp;     * &lt;P&gt; SCTP multi channels support reading, and writing, so this
+<i>527</i>&nbsp;     * method returns
+<i>528</i>&nbsp;     * {@code (}{@link SelectionKey#OP_READ} {@code |}&amp;nbsp;{@link
+<i>529</i>&nbsp;     * SelectionKey#OP_WRITE}{@code )}.  &lt;/p&gt;
+<i>530</i>&nbsp;     *
+<b class="nc"><i>531</i>&nbsp;     * @return  The valid-operation set</b>
+<i>532</i>&nbsp;     */
+<i>533</i>&nbsp;    @Override
+<i>534</i>&nbsp;    public final int validOps() {
+<i>535</i>&nbsp;        return (SelectionKey.OP_READ |
+<i>536</i>&nbsp;                SelectionKey.OP_WRITE );
+<i>537</i>&nbsp;    }
+<i>538</i>&nbsp;
+<i>539</i>&nbsp;    /**
+<i>540</i>&nbsp;     * Receives a message and/or handles a notification via this channel.
+<i>541</i>&nbsp;     *
+<i>542</i>&nbsp;     * &lt;P&gt; If a message or notification is immediately available, or if this
+<i>543</i>&nbsp;     * channel is in blocking mode and one eventually becomes available, then
+<i>544</i>&nbsp;     * the message or notification is returned or handled, respectively. If this
+<i>545</i>&nbsp;     * channel is in non-blocking mode and a message or notification is not
+<i>546</i>&nbsp;     * immediately available then this method immediately returns {@code null}.
+<i>547</i>&nbsp;     *
+<i>548</i>&nbsp;     * &lt;P&gt; If this method receives a message it is copied into the given byte
+<i>549</i>&nbsp;     * buffer and an {@link MessageInfo} is returned.
+<i>550</i>&nbsp;     * The message is transferred into the given byte buffer starting at its
+<i>551</i>&nbsp;     * current position and the buffers position is incremented by the number of
+<i>552</i>&nbsp;     * bytes read. If there are fewer bytes remaining in the buffer than are
+<i>553</i>&nbsp;     * required to hold the message, or the underlying input buffer does not
+<i>554</i>&nbsp;     * contain the complete message, then an invocation of {@link
+<i>555</i>&nbsp;     * MessageInfo#isComplete isComplete} on the returned {@code
+<i>556</i>&nbsp;     * MessageInfo} will return {@code false}, and more invocations of this
+<i>557</i>&nbsp;     * method will be necessary to completely consume the messgae. Only
+<i>558</i>&nbsp;     * one message at a time will be partially delivered in any stream. The
+<i>559</i>&nbsp;     * socket option {@link SctpStandardSocketOptions#SCTP_FRAGMENT_INTERLEAVE
+<i>560</i>&nbsp;     * SCTP_FRAGMENT_INTERLEAVE} controls various aspects of what interlacing of
+<i>561</i>&nbsp;     * messages occurs.
+<i>562</i>&nbsp;     *
+<i>563</i>&nbsp;     * &lt;P&gt; If this method receives a notification then the appropriate method of
+<i>564</i>&nbsp;     * the given handler, if there is one, is invoked. If the handler returns {@link
+<i>565</i>&nbsp;     * HandlerResult#CONTINUE CONTINUE} then this method will try to receive another
+<i>566</i>&nbsp;     * message/notification, otherwise, if {@link HandlerResult#RETURN RETURN} is returned
+<i>567</i>&nbsp;     * this method will return {@code null}. If an uncaught exception is thrown by the
+<i>568</i>&nbsp;     * handler it will be propagated up the stack through this method.
+<i>569</i>&nbsp;     *
+<i>570</i>&nbsp;     * &lt;P&gt; If a security manager has been installed then for each new association
+<i>571</i>&nbsp;     * setup this method verifies that the associations source address and port
+<i>572</i>&nbsp;     * number are permitted by the security manager&#39;s {@link
+<i>573</i>&nbsp;     * java.lang.SecurityManager#checkAccept(String,int) checkAccept} method.
+<i>574</i>&nbsp;     *
+<i>575</i>&nbsp;     * &lt;P&gt; This method may be invoked at any time. If another thread has
+<i>576</i>&nbsp;     * already initiated a receive operation upon this channel, then an
+<i>577</i>&nbsp;     * invocation of this method will block until the first operation is
+<i>578</i>&nbsp;     * complete. The given handler is invoked without holding any locks used
+<i>579</i>&nbsp;     * to enforce the above synchronization policy, that way handlers
+<i>580</i>&nbsp;     * will not stall other threads from receiving. A handler should not invoke
+<i>581</i>&nbsp;     * the {@code receive} method of this channel, if it does an
+<i>582</i>&nbsp;     * {@link IllegalReceiveException} will be thrown.
+<i>583</i>&nbsp;     *
+<i>584</i>&nbsp;     * @param  &lt;T&gt;
+<i>585</i>&nbsp;     *         The type of the attachment
+<i>586</i>&nbsp;     *
+<i>587</i>&nbsp;     * @param  buffer
+<i>588</i>&nbsp;     *         The buffer into which bytes are to be transferred
+<i>589</i>&nbsp;     *
+<i>590</i>&nbsp;     * @param  attachment
+<i>591</i>&nbsp;     *         The object to attach to the receive operation; can be
+<i>592</i>&nbsp;     *         {@code null}
+<i>593</i>&nbsp;     *
+<i>594</i>&nbsp;     * @param  handler
+<i>595</i>&nbsp;     *         A handler to handle notifications from the SCTP stack, or
+<i>596</i>&nbsp;     *         {@code null} to ignore any notifications.
+<i>597</i>&nbsp;     *
+<i>598</i>&nbsp;     * @return  The {@code MessageInfo}, {@code null} if this channel is in
+<i>599</i>&nbsp;     *          non-blocking mode and no messages are immediately available or
+<i>600</i>&nbsp;     *          the notification handler returns {@code RETURN} after handling
+<i>601</i>&nbsp;     *          a notification
+<i>602</i>&nbsp;     *
+<i>603</i>&nbsp;     * @throws  java.nio.channels.ClosedChannelException
+<i>604</i>&nbsp;     *          If this channel is closed
+<i>605</i>&nbsp;     *
+<i>606</i>&nbsp;     * @throws  java.nio.channels.AsynchronousCloseException
+<i>607</i>&nbsp;     *          If another thread closes this channel
+<i>608</i>&nbsp;     *          while the read operation is in progress
+<i>609</i>&nbsp;     *
+<i>610</i>&nbsp;     * @throws  java.nio.channels.ClosedByInterruptException
+<i>611</i>&nbsp;     *          If another thread interrupts the current thread
+<i>612</i>&nbsp;     *          while the read operation is in progress, thereby
+<i>613</i>&nbsp;     *          closing the channel and setting the current thread&#39;s
+<i>614</i>&nbsp;     *          interrupt status
+<i>615</i>&nbsp;     *
+<i>616</i>&nbsp;     * @throws  NotYetBoundException
+<i>617</i>&nbsp;     *          If this channel is not yet bound
+<i>618</i>&nbsp;     *
+<i>619</i>&nbsp;     * @throws  IllegalReceiveException
+<i>620</i>&nbsp;     *          If the given handler invokes the {@code receive} method of this
+<i>621</i>&nbsp;     *          channel
+<i>622</i>&nbsp;     *
+<i>623</i>&nbsp;     * @throws  SecurityException
+<i>624</i>&nbsp;     *          If a security manager has been installed and it does not permit
+<i>625</i>&nbsp;     *          new associations to be accepted from the message&#39;s sender
+<i>626</i>&nbsp;     *
+<i>627</i>&nbsp;     * @throws  IOException
+<i>628</i>&nbsp;     *          If some other I/O error occurs
+<i>629</i>&nbsp;     */
+<i>630</i>&nbsp;    public abstract &lt;T&gt; MessageInfo receive(ByteBuffer buffer,
+<i>631</i>&nbsp;                                            T attachment,
+<i>632</i>&nbsp;                                            NotificationHandler&lt;T&gt; handler)
+<i>633</i>&nbsp;        throws IOException;
+<i>634</i>&nbsp;
+<i>635</i>&nbsp;    /**
+<i>636</i>&nbsp;     * Sends a message via this channel.
+<i>637</i>&nbsp;     *
+<i>638</i>&nbsp;     * &lt;P&gt; If this channel is unbound then this method will invoke {@link
+<i>639</i>&nbsp;     * #bind(SocketAddress, int) bind(null, 0)} before sending any data.
+<i>640</i>&nbsp;     *
+<i>641</i>&nbsp;     * &lt;P&gt; If there is no association existing between this channel&#39;s socket
+<i>642</i>&nbsp;     * and the intended receiver, identified by the address in the given messageInfo, then one
+<i>643</i>&nbsp;     * will be automatically setup to the intended receiver. This is considered
+<i>644</i>&nbsp;     * to be Implicit Association Setup. Upon successful association setup, an
+<i>645</i>&nbsp;     * {@link AssociationChangeNotification association changed}
+<i>646</i>&nbsp;     * notification will be put to the SCTP stack with its {@code event} parameter set
+<i>647</i>&nbsp;     * to {@link AssociationChangeNotification.AssocChangeEvent#COMM_UP COMM_UP}
+<i>648</i>&nbsp;     * . This notification can be received by invoking {@link #receive
+<i>649</i>&nbsp;     * receive}.
+<i>650</i>&nbsp;     *
+<i>651</i>&nbsp;     * &lt;P&gt; If this channel is in blocking mode, there is sufficient room in the
+<i>652</i>&nbsp;     * underlying output buffer, then the remaining bytes in the given byte
+<i>653</i>&nbsp;     * buffer are transmitted as a single message. Sending a message
+<i>654</i>&nbsp;     * is atomic unless explicit message completion {@link
+<i>655</i>&nbsp;     * SctpStandardSocketOptions#SCTP_EXPLICIT_COMPLETE SCTP_EXPLICIT_COMPLETE}
+<i>656</i>&nbsp;     * socket option is enabled on this channel&#39;s socket.
+<i>657</i>&nbsp;     *
+<i>658</i>&nbsp;     * &lt;P&gt; If this channel is in non-blocking mode, there is sufficient room
+<i>659</i>&nbsp;     * in the underlying output buffer, and an implicit association setup is
+<i>660</i>&nbsp;     * required, then the remaining bytes in the given byte buffer are
+<i>661</i>&nbsp;     * transmitted as a single message, subject to {@link
+<i>662</i>&nbsp;     * SctpStandardSocketOptions#SCTP_EXPLICIT_COMPLETE SCTP_EXPLICIT_COMPLETE}.
+<i>663</i>&nbsp;     * If for any reason the message cannot
+<i>664</i>&nbsp;     * be delivered an {@link AssociationChangeNotification association
+<i>665</i>&nbsp;     * changed} notification is put on the SCTP stack with its {@code event} parameter set
+<i>666</i>&nbsp;     * to {@link AssociationChangeNotification.AssocChangeEvent#CANT_START CANT_START}.
+<i>667</i>&nbsp;     *
+<i>668</i>&nbsp;     * &lt;P&gt; The message is transferred from the byte buffer as if by a regular
+<i>669</i>&nbsp;     * {@link java.nio.channels.WritableByteChannel#write(java.nio.ByteBuffer)
+<i>670</i>&nbsp;     * write} operation.
+<i>671</i>&nbsp;     *
+<i>672</i>&nbsp;     * &lt;P&gt; If a security manager has been installed then for each new association
+<i>673</i>&nbsp;     * setup this method verifies that the given remote peers address and port
+<i>674</i>&nbsp;     * number are permitted by the security manager&#39;s {@link
+<i>675</i>&nbsp;     * java.lang.SecurityManager#checkConnect(String,int) checkConnect} method.
+<i>676</i>&nbsp;     *
+<i>677</i>&nbsp;     * &lt;P&gt; This method may be invoked at any time. If another thread has already
+<i>678</i>&nbsp;     * initiated a send operation upon this channel, then an invocation of
+<i>679</i>&nbsp;     * this method will block until the first operation is complete.
+<i>680</i>&nbsp;     *
+<i>681</i>&nbsp;     * @param  buffer
+<i>682</i>&nbsp;     *         The buffer containing the message to be sent
+<i>683</i>&nbsp;     *
+<i>684</i>&nbsp;     * @param  messageInfo
+<i>685</i>&nbsp;     *         Ancillary data about the message to be sent
+<i>686</i>&nbsp;     *
+<i>687</i>&nbsp;     * @return  The number of bytes sent, which will be either the number of
+<i>688</i>&nbsp;     *          bytes that were remaining in the messages buffer when this method
+<i>689</i>&nbsp;     *          was invoked or, if this channel is non-blocking, may be zero if
+<i>690</i>&nbsp;     *          there was insufficient room for the message in the underlying
+<i>691</i>&nbsp;     *          output buffer
+<i>692</i>&nbsp;     *
+<i>693</i>&nbsp;     * @throws  InvalidStreamException
+<i>694</i>&nbsp;     *          If {@code streamNumber} is negative, or if an association already
+<i>695</i>&nbsp;     *          exists and {@code streamNumber} is greater than the maximum number
+<i>696</i>&nbsp;     *          of outgoing streams
+<i>697</i>&nbsp;     *
+<i>698</i>&nbsp;     * @throws  java.nio.channels.ClosedChannelException
+<i>699</i>&nbsp;     *          If this channel is closed
+<i>700</i>&nbsp;     *
+<i>701</i>&nbsp;     * @throws  java.nio.channels.AsynchronousCloseException
+<i>702</i>&nbsp;     *          If another thread closes this channel
+<i>703</i>&nbsp;     *          while the read operation is in progress
+<i>704</i>&nbsp;     *
+<i>705</i>&nbsp;     * @throws  java.nio.channels.ClosedByInterruptException
+<i>706</i>&nbsp;     *          If another thread interrupts the current thread
+<i>707</i>&nbsp;     *          while the read operation is in progress, thereby
+<i>708</i>&nbsp;     *          closing the channel and setting the current thread&#39;s
+<i>709</i>&nbsp;     *          interrupt status
+<i>710</i>&nbsp;     *
+<i>711</i>&nbsp;     * @throws  SecurityException
+<i>712</i>&nbsp;     *          If a security manager has been installed and it does not permit
+<i>713</i>&nbsp;     *          new associations to be setup with the messages&#39;s address
+<i>714</i>&nbsp;     *
+<i>715</i>&nbsp;     * @throws  IOException
+<i>716</i>&nbsp;     *          If some other I/O error occurs
+<i>717</i>&nbsp;     */
+<i>718</i>&nbsp;    public abstract int send(ByteBuffer buffer, MessageInfo messageInfo)
+<i>719</i>&nbsp;        throws IOException;
+<i>720</i>&nbsp;
+<i>721</i>&nbsp;    /**
+<i>722</i>&nbsp;     * Branches off an association.
+<i>723</i>&nbsp;     *
+<i>724</i>&nbsp;     * &lt;P&gt; An application can invoke this method to branch off an association
+<i>725</i>&nbsp;     * into a separate channel. The new bound and connected {@link SctpChannel}
+<i>726</i>&nbsp;     * will be created for the association. The branched off association will no
+<i>727</i>&nbsp;     * longer be part of this channel.
+<i>728</i>&nbsp;     *
+<i>729</i>&nbsp;     * &lt;P&gt; This is particularly useful when, for instance, the application
+<i>730</i>&nbsp;     * wishes to have a number of sporadic message senders/receivers remain
+<i>731</i>&nbsp;     * under the original SCTP multi channel but branch off those
+<i>732</i>&nbsp;     * associations carrying high volume data traffic into their own
+<i>733</i>&nbsp;     * separate SCTP channels.
+<i>734</i>&nbsp;     *
+<i>735</i>&nbsp;     * @param  association
+<i>736</i>&nbsp;     *         The association to branch off
+<i>737</i>&nbsp;     *
+<i>738</i>&nbsp;     * @return  The {@code SctpChannel}
+<i>739</i>&nbsp;     *
+<i>740</i>&nbsp;     * @throws  java.nio.channels.ClosedChannelException
+<i>741</i>&nbsp;     *          If this channel is closed
+<i>742</i>&nbsp;     *
+<i>743</i>&nbsp;     * @throws  IOException
+<i>744</i>&nbsp;     *          If some other I/O error occurs
+<i>745</i>&nbsp;     */
+<i>746</i>&nbsp;    public abstract SctpChannel branch(Association association)
+<i>747</i>&nbsp;        throws IOException;
+<i>748</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

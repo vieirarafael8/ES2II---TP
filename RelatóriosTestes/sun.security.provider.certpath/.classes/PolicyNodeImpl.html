@@ -1,0 +1,507 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: PolicyNodeImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.provider.certpath</a> ]
+</div>
+
+<h1>Coverage Summary for Class: PolicyNodeImpl (sun.security.provider.certpath)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">PolicyNodeImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 25)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 116)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.provider.certpath;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.Collections;
+<i>29</i>&nbsp;import java.util.HashSet;
+<i>30</i>&nbsp;import java.util.Iterator;
+<i>31</i>&nbsp;import java.util.Set;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;import java.security.cert.*;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;/**
+<i>36</i>&nbsp; * Implements the &lt;code&gt;PolicyNode&lt;/code&gt; interface.
+<i>37</i>&nbsp; * &lt;p&gt;
+<i>38</i>&nbsp; * This class provides an implementation of the &lt;code&gt;PolicyNode&lt;/code&gt;
+<i>39</i>&nbsp; * interface, and is used internally to build and search Policy Trees.
+<i>40</i>&nbsp; * While the implementation is mutable during construction, it is immutable
+<i>41</i>&nbsp; * before returning to a client and no mutable public or protected methods
+<i>42</i>&nbsp; * are exposed by this implementation, as per the contract of PolicyNode.
+<i>43</i>&nbsp; *
+<i>44</i>&nbsp; * @since       1.4
+<i>45</i>&nbsp; * @author      Seth Proctor
+<i>46</i>&nbsp; * @author      Sean Mullan
+<i>47</i>&nbsp; */
+<i>48</i>&nbsp;final class PolicyNodeImpl implements PolicyNode {
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;    /**
+<i>51</i>&nbsp;     * Use to specify the special policy &quot;Any Policy&quot;
+<i>52</i>&nbsp;     */
+<i>53</i>&nbsp;    private static final String ANY_POLICY = &quot;2.5.29.32.0&quot;;
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    // every node has one parent, and zero or more children
+<i>56</i>&nbsp;    private PolicyNodeImpl mParent;
+<i>57</i>&nbsp;    private HashSet&lt;PolicyNodeImpl&gt; mChildren;
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    // the 4 fields specified by RFC 5280
+<i>60</i>&nbsp;    private String mValidPolicy;
+<i>61</i>&nbsp;    private HashSet&lt;PolicyQualifierInfo&gt; mQualifierSet;
+<i>62</i>&nbsp;    private boolean mCriticalityIndicator;
+<i>63</i>&nbsp;    private HashSet&lt;String&gt; mExpectedPolicySet;
+<i>64</i>&nbsp;    private boolean mOriginalExpectedPolicySet;
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    // the tree depth
+<i>67</i>&nbsp;    private int mDepth;
+<i>68</i>&nbsp;    // immutability flag
+<b class="nc"><i>69</i>&nbsp;    private boolean isImmutable = false;</b>
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;    /**
+<i>72</i>&nbsp;     * Constructor which takes a &lt;code&gt;PolicyNodeImpl&lt;/code&gt; representing the
+<i>73</i>&nbsp;     * parent in the Policy Tree to this node. If null, this is the
+<i>74</i>&nbsp;     * root of the tree. The constructor also takes the associated data
+<i>75</i>&nbsp;     * for this node, as found in the certificate. It also takes a boolean
+<i>76</i>&nbsp;     * argument specifying whether this node is being created as a result
+<i>77</i>&nbsp;     * of policy mapping.
+<i>78</i>&nbsp;     *
+<i>79</i>&nbsp;     * @param parent the PolicyNode above this in the tree, or null if this
+<i>80</i>&nbsp;     *               node is the tree&#39;s root node
+<i>81</i>&nbsp;     * @param validPolicy a String representing this node&#39;s valid policy OID
+<i>82</i>&nbsp;     * @param qualifierSet the Set of qualifiers for this policy
+<i>83</i>&nbsp;     * @param criticalityIndicator a boolean representing whether or not the
+<i>84</i>&nbsp;     *                             extension is critical
+<i>85</i>&nbsp;     * @param expectedPolicySet a Set of expected policies
+<i>86</i>&nbsp;     * @param generatedByPolicyMapping a boolean indicating whether this
+<i>87</i>&nbsp;     * node was generated by a policy mapping
+<i>88</i>&nbsp;     */
+<i>89</i>&nbsp;    PolicyNodeImpl(PolicyNodeImpl parent, String validPolicy,
+<i>90</i>&nbsp;                Set&lt;PolicyQualifierInfo&gt; qualifierSet,
+<i>91</i>&nbsp;                boolean criticalityIndicator, Set&lt;String&gt; expectedPolicySet,
+<b class="nc"><i>92</i>&nbsp;                boolean generatedByPolicyMapping) {</b>
+<b class="nc"><i>93</i>&nbsp;        mParent = parent;</b>
+<b class="nc"><i>94</i>&nbsp;        mChildren = new HashSet&lt;PolicyNodeImpl&gt;();</b>
+<i>95</i>&nbsp;
+<b class="nc"><i>96</i>&nbsp;        if (validPolicy != null)</b>
+<b class="nc"><i>97</i>&nbsp;            mValidPolicy = validPolicy;</b>
+<i>98</i>&nbsp;        else
+<b class="nc"><i>99</i>&nbsp;            mValidPolicy = &quot;&quot;;</b>
+<i>100</i>&nbsp;
+<b class="nc"><i>101</i>&nbsp;        if (qualifierSet != null)</b>
+<b class="nc"><i>102</i>&nbsp;            mQualifierSet = new HashSet&lt;PolicyQualifierInfo&gt;(qualifierSet);</b>
+<i>103</i>&nbsp;        else
+<b class="nc"><i>104</i>&nbsp;            mQualifierSet = new HashSet&lt;PolicyQualifierInfo&gt;();</b>
+<i>105</i>&nbsp;
+<b class="nc"><i>106</i>&nbsp;        mCriticalityIndicator = criticalityIndicator;</b>
+<i>107</i>&nbsp;
+<b class="nc"><i>108</i>&nbsp;        if (expectedPolicySet != null)</b>
+<b class="nc"><i>109</i>&nbsp;            mExpectedPolicySet = new HashSet&lt;String&gt;(expectedPolicySet);</b>
+<i>110</i>&nbsp;        else
+<b class="nc"><i>111</i>&nbsp;            mExpectedPolicySet = new HashSet&lt;String&gt;();</b>
+<i>112</i>&nbsp;
+<b class="nc"><i>113</i>&nbsp;        mOriginalExpectedPolicySet = !generatedByPolicyMapping;</b>
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;        // see if we&#39;re the root, and act appropriately
+<b class="nc"><i>116</i>&nbsp;        if (mParent != null) {</b>
+<b class="nc"><i>117</i>&nbsp;            mDepth = mParent.getDepth() + 1;</b>
+<b class="nc"><i>118</i>&nbsp;            mParent.addChild(this);</b>
+<i>119</i>&nbsp;        } else {
+<b class="nc"><i>120</i>&nbsp;            mDepth = 0;</b>
+<i>121</i>&nbsp;        }
+<i>122</i>&nbsp;    }
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    /**
+<i>125</i>&nbsp;     * Alternate constructor which makes a new node with the policy data
+<i>126</i>&nbsp;     * in an existing &lt;code&gt;PolicyNodeImpl&lt;/code&gt;.
+<i>127</i>&nbsp;     *
+<i>128</i>&nbsp;     * @param parent a PolicyNode that&#39;s the new parent of the node, or
+<i>129</i>&nbsp;     *               null if this is the root node
+<i>130</i>&nbsp;     * @param node a PolicyNode containing the policy data to copy
+<i>131</i>&nbsp;     */
+<i>132</i>&nbsp;    PolicyNodeImpl(PolicyNodeImpl parent, PolicyNodeImpl node) {
+<b class="nc"><i>133</i>&nbsp;        this(parent, node.mValidPolicy, node.mQualifierSet,</b>
+<i>134</i>&nbsp;             node.mCriticalityIndicator, node.mExpectedPolicySet, false);
+<i>135</i>&nbsp;    }
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;    @Override
+<i>138</i>&nbsp;    public PolicyNode getParent() {
+<b class="nc"><i>139</i>&nbsp;        return mParent;</b>
+<i>140</i>&nbsp;    }
+<i>141</i>&nbsp;
+<i>142</i>&nbsp;    @Override
+<i>143</i>&nbsp;    public Iterator&lt;PolicyNodeImpl&gt; getChildren() {
+<b class="nc"><i>144</i>&nbsp;        return Collections.unmodifiableSet(mChildren).iterator();</b>
+<i>145</i>&nbsp;    }
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;    @Override
+<i>148</i>&nbsp;    public int getDepth() {
+<b class="nc"><i>149</i>&nbsp;        return mDepth;</b>
+<i>150</i>&nbsp;    }
+<i>151</i>&nbsp;
+<i>152</i>&nbsp;    @Override
+<i>153</i>&nbsp;    public String getValidPolicy() {
+<b class="nc"><i>154</i>&nbsp;        return mValidPolicy;</b>
+<i>155</i>&nbsp;    }
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;    @Override
+<i>158</i>&nbsp;    public Set&lt;PolicyQualifierInfo&gt; getPolicyQualifiers() {
+<b class="nc"><i>159</i>&nbsp;        return Collections.unmodifiableSet(mQualifierSet);</b>
+<i>160</i>&nbsp;    }
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;    @Override
+<i>163</i>&nbsp;    public Set&lt;String&gt; getExpectedPolicies() {
+<b class="nc"><i>164</i>&nbsp;        return Collections.unmodifiableSet(mExpectedPolicySet);</b>
+<i>165</i>&nbsp;    }
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;    @Override
+<i>168</i>&nbsp;    public boolean isCritical() {
+<b class="nc"><i>169</i>&nbsp;        return mCriticalityIndicator;</b>
+<i>170</i>&nbsp;    }
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;    /**
+<i>173</i>&nbsp;     * Return a printable representation of the PolicyNode.
+<i>174</i>&nbsp;     * Starting at the node on which this method is called,
+<i>175</i>&nbsp;     * it recurses through the tree and prints out each node.
+<i>176</i>&nbsp;     *
+<i>177</i>&nbsp;     * @return a String describing the contents of the Policy Node
+<i>178</i>&nbsp;     */
+<i>179</i>&nbsp;    @Override
+<i>180</i>&nbsp;    public String toString() {
+<b class="nc"><i>181</i>&nbsp;        StringBuilder buffer = new StringBuilder(this.asString());</b>
+<i>182</i>&nbsp;
+<b class="nc"><i>183</i>&nbsp;        for (PolicyNodeImpl node : mChildren) {</b>
+<b class="nc"><i>184</i>&nbsp;            buffer.append(node);</b>
+<b class="nc"><i>185</i>&nbsp;        }</b>
+<b class="nc"><i>186</i>&nbsp;        return buffer.toString();</b>
+<i>187</i>&nbsp;    }
+<i>188</i>&nbsp;
+<i>189</i>&nbsp;    // private methods and package private operations
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;    boolean isImmutable() {
+<b class="nc"><i>192</i>&nbsp;        return isImmutable;</b>
+<i>193</i>&nbsp;    }
+<i>194</i>&nbsp;
+<i>195</i>&nbsp;    /**
+<i>196</i>&nbsp;     * Sets the immutability flag of this node and all of its children
+<i>197</i>&nbsp;     * to true.
+<i>198</i>&nbsp;     */
+<i>199</i>&nbsp;    void setImmutable() {
+<b class="nc"><i>200</i>&nbsp;        if (isImmutable)</b>
+<i>201</i>&nbsp;            return;
+<b class="nc"><i>202</i>&nbsp;        for (PolicyNodeImpl node : mChildren) {</b>
+<b class="nc"><i>203</i>&nbsp;            node.setImmutable();</b>
+<b class="nc"><i>204</i>&nbsp;        }</b>
+<b class="nc"><i>205</i>&nbsp;        isImmutable = true;</b>
+<i>206</i>&nbsp;    }
+<i>207</i>&nbsp;
+<i>208</i>&nbsp;    /**
+<i>209</i>&nbsp;     * Private method sets a child node. This is called from the child&#39;s
+<i>210</i>&nbsp;     * constructor.
+<i>211</i>&nbsp;     *
+<i>212</i>&nbsp;     * @param child new &lt;code&gt;PolicyNodeImpl&lt;/code&gt; child node
+<i>213</i>&nbsp;     */
+<i>214</i>&nbsp;    private void addChild(PolicyNodeImpl child) {
+<b class="nc"><i>215</i>&nbsp;        if (isImmutable) {</b>
+<b class="nc"><i>216</i>&nbsp;            throw new IllegalStateException(&quot;PolicyNode is immutable&quot;);</b>
+<i>217</i>&nbsp;        }
+<b class="nc"><i>218</i>&nbsp;        mChildren.add(child);</b>
+<i>219</i>&nbsp;    }
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;    /**
+<i>222</i>&nbsp;     * Adds an expectedPolicy to the expected policy set.
+<i>223</i>&nbsp;     * If this is the original expected policy set initialized
+<i>224</i>&nbsp;     * by the constructor, then the expected policy set is cleared
+<i>225</i>&nbsp;     * before the expected policy is added.
+<i>226</i>&nbsp;     *
+<i>227</i>&nbsp;     * @param expectedPolicy a String representing an expected policy.
+<i>228</i>&nbsp;     */
+<i>229</i>&nbsp;    void addExpectedPolicy(String expectedPolicy) {
+<b class="nc"><i>230</i>&nbsp;        if (isImmutable) {</b>
+<b class="nc"><i>231</i>&nbsp;            throw new IllegalStateException(&quot;PolicyNode is immutable&quot;);</b>
+<i>232</i>&nbsp;        }
+<b class="nc"><i>233</i>&nbsp;        if (mOriginalExpectedPolicySet) {</b>
+<b class="nc"><i>234</i>&nbsp;            mExpectedPolicySet.clear();</b>
+<b class="nc"><i>235</i>&nbsp;            mOriginalExpectedPolicySet = false;</b>
+<i>236</i>&nbsp;        }
+<b class="nc"><i>237</i>&nbsp;        mExpectedPolicySet.add(expectedPolicy);</b>
+<i>238</i>&nbsp;    }
+<i>239</i>&nbsp;
+<i>240</i>&nbsp;    /**
+<i>241</i>&nbsp;     * Removes all paths which don&#39;t reach the specified depth.
+<i>242</i>&nbsp;     *
+<i>243</i>&nbsp;     * @param depth an int representing the desired minimum depth of all paths
+<i>244</i>&nbsp;     */
+<i>245</i>&nbsp;    void prune(int depth) {
+<b class="nc"><i>246</i>&nbsp;        if (isImmutable)</b>
+<b class="nc"><i>247</i>&nbsp;            throw new IllegalStateException(&quot;PolicyNode is immutable&quot;);</b>
+<i>248</i>&nbsp;
+<i>249</i>&nbsp;        // if we have no children, we can&#39;t prune below us...
+<b class="nc"><i>250</i>&nbsp;        if (mChildren.size() == 0)</b>
+<i>251</i>&nbsp;            return;
+<i>252</i>&nbsp;
+<b class="nc"><i>253</i>&nbsp;        Iterator&lt;PolicyNodeImpl&gt; it = mChildren.iterator();</b>
+<b class="nc"><i>254</i>&nbsp;        while (it.hasNext()) {</b>
+<b class="nc"><i>255</i>&nbsp;            PolicyNodeImpl node = it.next();</b>
+<b class="nc"><i>256</i>&nbsp;            node.prune(depth);</b>
+<i>257</i>&nbsp;            // now that we&#39;ve called prune on the child, see if we should
+<i>258</i>&nbsp;            // remove it from the tree
+<b class="nc"><i>259</i>&nbsp;            if ((node.mChildren.size() == 0) &amp;&amp; (depth &gt; mDepth + 1))</b>
+<b class="nc"><i>260</i>&nbsp;                it.remove();</b>
+<b class="nc"><i>261</i>&nbsp;        }</b>
+<i>262</i>&nbsp;    }
+<i>263</i>&nbsp;
+<i>264</i>&nbsp;    /**
+<i>265</i>&nbsp;     * Deletes the specified child node of this node, if it exists.
+<i>266</i>&nbsp;     *
+<i>267</i>&nbsp;     * @param childNode the child node to be deleted
+<i>268</i>&nbsp;     */
+<i>269</i>&nbsp;    void deleteChild(PolicyNode childNode) {
+<b class="nc"><i>270</i>&nbsp;        if (isImmutable) {</b>
+<b class="nc"><i>271</i>&nbsp;            throw new IllegalStateException(&quot;PolicyNode is immutable&quot;);</b>
+<i>272</i>&nbsp;        }
+<b class="nc"><i>273</i>&nbsp;        mChildren.remove(childNode);</b>
+<i>274</i>&nbsp;    }
+<i>275</i>&nbsp;
+<i>276</i>&nbsp;    /**
+<i>277</i>&nbsp;     * Returns a copy of the tree, without copying the policy-related data,
+<i>278</i>&nbsp;     * rooted at the node on which this was called.
+<i>279</i>&nbsp;     *
+<i>280</i>&nbsp;     * @return a copy of the tree
+<i>281</i>&nbsp;     */
+<i>282</i>&nbsp;    PolicyNodeImpl copyTree() {
+<b class="nc"><i>283</i>&nbsp;        return copyTree(null);</b>
+<i>284</i>&nbsp;    }
+<i>285</i>&nbsp;
+<i>286</i>&nbsp;    private PolicyNodeImpl copyTree(PolicyNodeImpl parent) {
+<b class="nc"><i>287</i>&nbsp;        PolicyNodeImpl newNode = new PolicyNodeImpl(parent, this);</b>
+<i>288</i>&nbsp;
+<b class="nc"><i>289</i>&nbsp;        for (PolicyNodeImpl node : mChildren) {</b>
+<b class="nc"><i>290</i>&nbsp;            node.copyTree(newNode);</b>
+<b class="nc"><i>291</i>&nbsp;        }</b>
+<i>292</i>&nbsp;
+<b class="nc"><i>293</i>&nbsp;        return newNode;</b>
+<i>294</i>&nbsp;    }
+<i>295</i>&nbsp;
+<i>296</i>&nbsp;    /**
+<i>297</i>&nbsp;     * Returns all nodes at the specified depth in the tree.
+<i>298</i>&nbsp;     *
+<i>299</i>&nbsp;     * @param depth an int representing the depth of the desired nodes
+<i>300</i>&nbsp;     * @return a &lt;code&gt;Set&lt;/code&gt; of all nodes at the specified depth
+<i>301</i>&nbsp;     */
+<i>302</i>&nbsp;    Set&lt;PolicyNodeImpl&gt; getPolicyNodes(int depth) {
+<b class="nc"><i>303</i>&nbsp;        Set&lt;PolicyNodeImpl&gt; set = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>304</i>&nbsp;        getPolicyNodes(depth, set);</b>
+<b class="nc"><i>305</i>&nbsp;        return set;</b>
+<i>306</i>&nbsp;    }
+<i>307</i>&nbsp;
+<i>308</i>&nbsp;    /**
+<i>309</i>&nbsp;     * Add all nodes at depth to set and return the Set.
+<i>310</i>&nbsp;     * Internal recursion helper.
+<i>311</i>&nbsp;     */
+<i>312</i>&nbsp;    private void getPolicyNodes(int depth, Set&lt;PolicyNodeImpl&gt; set) {
+<i>313</i>&nbsp;        // if we&#39;ve reached the desired depth, then return ourself
+<b class="nc"><i>314</i>&nbsp;        if (mDepth == depth) {</b>
+<b class="nc"><i>315</i>&nbsp;            set.add(this);</b>
+<i>316</i>&nbsp;        } else {
+<b class="nc"><i>317</i>&nbsp;            for (PolicyNodeImpl node : mChildren) {</b>
+<b class="nc"><i>318</i>&nbsp;                node.getPolicyNodes(depth, set);</b>
+<b class="nc"><i>319</i>&nbsp;            }</b>
+<i>320</i>&nbsp;        }
+<i>321</i>&nbsp;    }
+<i>322</i>&nbsp;
+<i>323</i>&nbsp;    /**
+<i>324</i>&nbsp;     * Finds all nodes at the specified depth whose expected_policy_set
+<i>325</i>&nbsp;     * contains the specified expected OID (if matchAny is false)
+<i>326</i>&nbsp;     * or the special OID &quot;any value&quot; (if matchAny is true).
+<i>327</i>&nbsp;     *
+<i>328</i>&nbsp;     * @param depth an int representing the desired depth
+<i>329</i>&nbsp;     * @param expectedOID a String encoding the valid OID to match
+<i>330</i>&nbsp;     * @param matchAny a boolean indicating whether an expected_policy_set
+<i>331</i>&nbsp;     * containing ANY_POLICY should be considered a match
+<i>332</i>&nbsp;     * @return a Set of matched &lt;code&gt;PolicyNode&lt;/code&gt;s
+<i>333</i>&nbsp;     */
+<i>334</i>&nbsp;    Set&lt;PolicyNodeImpl&gt; getPolicyNodesExpected(int depth,
+<i>335</i>&nbsp;        String expectedOID, boolean matchAny) {
+<i>336</i>&nbsp;
+<b class="nc"><i>337</i>&nbsp;        if (expectedOID.equals(ANY_POLICY)) {</b>
+<b class="nc"><i>338</i>&nbsp;            return getPolicyNodes(depth);</b>
+<i>339</i>&nbsp;        } else {
+<b class="nc"><i>340</i>&nbsp;            return getPolicyNodesExpectedHelper(depth, expectedOID, matchAny);</b>
+<i>341</i>&nbsp;        }
+<i>342</i>&nbsp;    }
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;    private Set&lt;PolicyNodeImpl&gt; getPolicyNodesExpectedHelper(int depth,
+<i>345</i>&nbsp;        String expectedOID, boolean matchAny) {
+<i>346</i>&nbsp;
+<b class="nc"><i>347</i>&nbsp;        HashSet&lt;PolicyNodeImpl&gt; set = new HashSet&lt;&gt;();</b>
+<i>348</i>&nbsp;
+<b class="nc"><i>349</i>&nbsp;        if (mDepth &lt; depth) {</b>
+<b class="nc"><i>350</i>&nbsp;            for (PolicyNodeImpl node : mChildren) {</b>
+<b class="nc"><i>351</i>&nbsp;                set.addAll(node.getPolicyNodesExpectedHelper(depth,</b>
+<i>352</i>&nbsp;                                                             expectedOID,
+<i>353</i>&nbsp;                                                             matchAny));
+<b class="nc"><i>354</i>&nbsp;            }</b>
+<i>355</i>&nbsp;        } else {
+<b class="nc"><i>356</i>&nbsp;            if (matchAny) {</b>
+<b class="nc"><i>357</i>&nbsp;                if (mExpectedPolicySet.contains(ANY_POLICY))</b>
+<b class="nc"><i>358</i>&nbsp;                    set.add(this);</b>
+<i>359</i>&nbsp;            } else {
+<b class="nc"><i>360</i>&nbsp;                if (mExpectedPolicySet.contains(expectedOID))</b>
+<b class="nc"><i>361</i>&nbsp;                    set.add(this);</b>
+<i>362</i>&nbsp;            }
+<i>363</i>&nbsp;        }
+<i>364</i>&nbsp;
+<b class="nc"><i>365</i>&nbsp;        return set;</b>
+<i>366</i>&nbsp;    }
+<i>367</i>&nbsp;
+<i>368</i>&nbsp;    /**
+<i>369</i>&nbsp;     * Finds all nodes at the specified depth that contains the
+<i>370</i>&nbsp;     * specified valid OID
+<i>371</i>&nbsp;     *
+<i>372</i>&nbsp;     * @param depth an int representing the desired depth
+<i>373</i>&nbsp;     * @param validOID a String encoding the valid OID to match
+<i>374</i>&nbsp;     * @return a Set of matched &lt;code&gt;PolicyNode&lt;/code&gt;s
+<i>375</i>&nbsp;     */
+<i>376</i>&nbsp;    Set&lt;PolicyNodeImpl&gt; getPolicyNodesValid(int depth, String validOID) {
+<b class="nc"><i>377</i>&nbsp;        HashSet&lt;PolicyNodeImpl&gt; set = new HashSet&lt;&gt;();</b>
+<i>378</i>&nbsp;
+<b class="nc"><i>379</i>&nbsp;        if (mDepth &lt; depth) {</b>
+<b class="nc"><i>380</i>&nbsp;            for (PolicyNodeImpl node : mChildren) {</b>
+<b class="nc"><i>381</i>&nbsp;                set.addAll(node.getPolicyNodesValid(depth, validOID));</b>
+<b class="nc"><i>382</i>&nbsp;            }</b>
+<i>383</i>&nbsp;        } else {
+<b class="nc"><i>384</i>&nbsp;            if (mValidPolicy.equals(validOID))</b>
+<b class="nc"><i>385</i>&nbsp;                set.add(this);</b>
+<i>386</i>&nbsp;        }
+<i>387</i>&nbsp;
+<b class="nc"><i>388</i>&nbsp;        return set;</b>
+<i>389</i>&nbsp;    }
+<i>390</i>&nbsp;
+<i>391</i>&nbsp;    private static String policyToString(String oid) {
+<b class="nc"><i>392</i>&nbsp;        if (oid.equals(ANY_POLICY)) {</b>
+<b class="nc"><i>393</i>&nbsp;            return &quot;anyPolicy&quot;;</b>
+<i>394</i>&nbsp;        } else {
+<b class="nc"><i>395</i>&nbsp;            return oid;</b>
+<i>396</i>&nbsp;        }
+<i>397</i>&nbsp;    }
+<i>398</i>&nbsp;
+<i>399</i>&nbsp;    /**
+<i>400</i>&nbsp;     * Prints out some data on this node.
+<i>401</i>&nbsp;     */
+<i>402</i>&nbsp;    String asString() {
+<b class="nc"><i>403</i>&nbsp;        if (mParent == null) {</b>
+<b class="nc"><i>404</i>&nbsp;            return &quot;anyPolicy  ROOT\n&quot;;</b>
+<i>405</i>&nbsp;        } else {
+<b class="nc"><i>406</i>&nbsp;            StringBuilder sb = new StringBuilder();</b>
+<b class="nc"><i>407</i>&nbsp;            for (int i = 0, n = getDepth(); i &lt; n; i++) {</b>
+<b class="nc"><i>408</i>&nbsp;                sb.append(&quot;  &quot;);</b>
+<i>409</i>&nbsp;            }
+<b class="nc"><i>410</i>&nbsp;            sb.append(policyToString(getValidPolicy()));</b>
+<b class="nc"><i>411</i>&nbsp;            sb.append(&quot;  CRIT: &quot;);</b>
+<b class="nc"><i>412</i>&nbsp;            sb.append(isCritical());</b>
+<b class="nc"><i>413</i>&nbsp;            sb.append(&quot;  EP: &quot;);</b>
+<b class="nc"><i>414</i>&nbsp;            for (String policy : getExpectedPolicies()) {</b>
+<b class="nc"><i>415</i>&nbsp;                sb.append(policyToString(policy));</b>
+<b class="nc"><i>416</i>&nbsp;                sb.append(&quot; &quot;);</b>
+<b class="nc"><i>417</i>&nbsp;            }</b>
+<b class="nc"><i>418</i>&nbsp;            sb.append(&quot; (&quot;);</b>
+<b class="nc"><i>419</i>&nbsp;            sb.append(getDepth());</b>
+<b class="nc"><i>420</i>&nbsp;            sb.append(&quot;)\n&quot;);</b>
+<b class="nc"><i>421</i>&nbsp;            return sb.toString();</b>
+<i>422</i>&nbsp;        }
+<i>423</i>&nbsp;    }
+<i>424</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

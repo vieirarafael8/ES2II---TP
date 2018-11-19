@@ -1,0 +1,283 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: KeepAliveStreamCleaner</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.net.www.http</a> ]
+</div>
+
+<h1>Coverage Summary for Class: KeepAliveStreamCleaner (sun.net.www.http)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">KeepAliveStreamCleaner</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 57)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">KeepAliveStreamCleaner$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">KeepAliveStreamCleaner$2</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 61)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2005, 2008, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.net.www.http;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.util.LinkedList;
+<i>30</i>&nbsp;import sun.net.NetProperties;
+<i>31</i>&nbsp;import java.security.AccessController;
+<i>32</i>&nbsp;import java.security.PrivilegedAction;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;/**
+<i>35</i>&nbsp; * This class is used to cleanup any remaining data that may be on a KeepAliveStream
+<i>36</i>&nbsp; * so that the connection can be cached in the KeepAliveCache.
+<i>37</i>&nbsp; * Instances of this class can be used as a FIFO queue for KeepAliveCleanerEntry objects.
+<i>38</i>&nbsp; * Executing this Runnable removes each KeepAliveCleanerEntry from the Queue, reads
+<i>39</i>&nbsp; * the reamining bytes on its KeepAliveStream, and if successful puts the connection in
+<i>40</i>&nbsp; * the KeepAliveCache.
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * @author Chris Hegarty
+<i>43</i>&nbsp; */
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;@SuppressWarnings(&quot;serial&quot;)  // never serialized
+<b class="nc"><i>46</i>&nbsp;class KeepAliveStreamCleaner</b>
+<i>47</i>&nbsp;    extends LinkedList&lt;KeepAliveCleanerEntry&gt;
+<i>48</i>&nbsp;    implements Runnable
+<i>49</i>&nbsp;{
+<i>50</i>&nbsp;    // maximum amount of remaining data that we will try to cleanup
+<b class="nc"><i>51</i>&nbsp;    protected static int MAX_DATA_REMAINING = 512;</b>
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;    // maximum amount of KeepAliveStreams to be queued
+<b class="nc"><i>54</i>&nbsp;    protected static int MAX_CAPACITY = 10;</b>
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;    // timeout for both socket and poll on the queue
+<i>57</i>&nbsp;    protected static final int TIMEOUT = 5000;
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    // max retries for skipping data
+<i>60</i>&nbsp;    private static final int MAX_RETRIES = 5;
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    static {
+<i>63</i>&nbsp;        final String maxDataKey = &quot;http.KeepAlive.remainingData&quot;;
+<b class="nc"><i>64</i>&nbsp;        int maxData = AccessController.doPrivileged(</b>
+<b class="nc"><i>65</i>&nbsp;            new PrivilegedAction&lt;Integer&gt;() {</b>
+<i>66</i>&nbsp;                public Integer run() {
+<b class="nc"><i>67</i>&nbsp;                    return NetProperties.getInteger(maxDataKey, MAX_DATA_REMAINING);</b>
+<b class="nc"><i>68</i>&nbsp;                }}).intValue() * 1024;</b>
+<b class="nc"><i>69</i>&nbsp;        MAX_DATA_REMAINING = maxData;</b>
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;        final String maxCapacityKey = &quot;http.KeepAlive.queuedConnections&quot;;
+<b class="nc"><i>72</i>&nbsp;        int maxCapacity = AccessController.doPrivileged(</b>
+<b class="nc"><i>73</i>&nbsp;            new PrivilegedAction&lt;Integer&gt;() {</b>
+<i>74</i>&nbsp;                public Integer run() {
+<b class="nc"><i>75</i>&nbsp;                    return NetProperties.getInteger(maxCapacityKey, MAX_CAPACITY);</b>
+<b class="nc"><i>76</i>&nbsp;                }}).intValue();</b>
+<b class="nc"><i>77</i>&nbsp;        MAX_CAPACITY = maxCapacity;</b>
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    }
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;    @Override
+<i>83</i>&nbsp;    public boolean offer(KeepAliveCleanerEntry e) {
+<b class="nc"><i>84</i>&nbsp;        if (size() &gt;= MAX_CAPACITY)</b>
+<b class="nc"><i>85</i>&nbsp;            return false;</b>
+<i>86</i>&nbsp;
+<b class="nc"><i>87</i>&nbsp;        return super.offer(e);</b>
+<i>88</i>&nbsp;    }
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    @Override
+<i>91</i>&nbsp;    public void run()
+<i>92</i>&nbsp;    {
+<b class="nc"><i>93</i>&nbsp;        KeepAliveCleanerEntry kace = null;</b>
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;        do {
+<i>96</i>&nbsp;            try {
+<b class="nc"><i>97</i>&nbsp;                synchronized(this) {</b>
+<b class="nc"><i>98</i>&nbsp;                    long before = System.currentTimeMillis();</b>
+<b class="nc"><i>99</i>&nbsp;                    long timeout = TIMEOUT;</b>
+<b class="nc"><i>100</i>&nbsp;                    while ((kace = poll()) == null) {</b>
+<b class="nc"><i>101</i>&nbsp;                        this.wait(timeout);</b>
+<i>102</i>&nbsp;
+<b class="nc"><i>103</i>&nbsp;                        long after = System.currentTimeMillis();</b>
+<b class="nc"><i>104</i>&nbsp;                        long elapsed = after - before;</b>
+<b class="nc"><i>105</i>&nbsp;                        if (elapsed &gt; timeout) {</b>
+<i>106</i>&nbsp;                            /* one last try */
+<b class="nc"><i>107</i>&nbsp;                            kace = poll();</b>
+<b class="nc"><i>108</i>&nbsp;                            break;</b>
+<i>109</i>&nbsp;                        }
+<b class="nc"><i>110</i>&nbsp;                        before = after;</b>
+<b class="nc"><i>111</i>&nbsp;                        timeout -= elapsed;</b>
+<b class="nc"><i>112</i>&nbsp;                    }</b>
+<b class="nc"><i>113</i>&nbsp;                }</b>
+<i>114</i>&nbsp;
+<b class="nc"><i>115</i>&nbsp;                if(kace == null)</b>
+<b class="nc"><i>116</i>&nbsp;                    break;</b>
+<i>117</i>&nbsp;
+<b class="nc"><i>118</i>&nbsp;                KeepAliveStream kas = kace.getKeepAliveStream();</b>
+<i>119</i>&nbsp;
+<b class="nc"><i>120</i>&nbsp;                if (kas != null) {</b>
+<b class="nc"><i>121</i>&nbsp;                    synchronized(kas) {</b>
+<b class="nc"><i>122</i>&nbsp;                        HttpClient hc = kace.getHttpClient();</b>
+<i>123</i>&nbsp;                        try {
+<b class="nc"><i>124</i>&nbsp;                            if (hc != null &amp;&amp; !hc.isInKeepAliveCache()) {</b>
+<b class="nc"><i>125</i>&nbsp;                                int oldTimeout = hc.getReadTimeout();</b>
+<b class="nc"><i>126</i>&nbsp;                                hc.setReadTimeout(TIMEOUT);</b>
+<b class="nc"><i>127</i>&nbsp;                                long remainingToRead = kas.remainingToRead();</b>
+<b class="nc"><i>128</i>&nbsp;                                if (remainingToRead &gt; 0) {</b>
+<b class="nc"><i>129</i>&nbsp;                                    long n = 0;</b>
+<b class="nc"><i>130</i>&nbsp;                                    int retries = 0;</b>
+<b class="nc"><i>131</i>&nbsp;                                    while (n &lt; remainingToRead &amp;&amp; retries &lt; MAX_RETRIES) {</b>
+<b class="nc"><i>132</i>&nbsp;                                        remainingToRead = remainingToRead - n;</b>
+<b class="nc"><i>133</i>&nbsp;                                        n = kas.skip(remainingToRead);</b>
+<b class="nc"><i>134</i>&nbsp;                                        if (n == 0)</b>
+<b class="nc"><i>135</i>&nbsp;                                            retries++;</b>
+<i>136</i>&nbsp;                                    }
+<b class="nc"><i>137</i>&nbsp;                                    remainingToRead = remainingToRead - n;</b>
+<i>138</i>&nbsp;                                }
+<b class="nc"><i>139</i>&nbsp;                                if (remainingToRead == 0) {</b>
+<b class="nc"><i>140</i>&nbsp;                                    hc.setReadTimeout(oldTimeout);</b>
+<b class="nc"><i>141</i>&nbsp;                                    hc.finished();</b>
+<i>142</i>&nbsp;                                } else
+<b class="nc"><i>143</i>&nbsp;                                    hc.closeServer();</b>
+<i>144</i>&nbsp;                            }
+<b class="nc"><i>145</i>&nbsp;                        } catch (IOException ioe) {</b>
+<b class="nc"><i>146</i>&nbsp;                            hc.closeServer();</b>
+<i>147</i>&nbsp;                        } finally {
+<b class="nc"><i>148</i>&nbsp;                            kas.setClosed();</b>
+<b class="nc"><i>149</i>&nbsp;                        }</b>
+<b class="nc"><i>150</i>&nbsp;                    }</b>
+<i>151</i>&nbsp;                }
+<b class="nc"><i>152</i>&nbsp;            } catch (InterruptedException ie) { }</b>
+<b class="nc"><i>153</i>&nbsp;        } while (kace != null);</b>
+<i>154</i>&nbsp;    }
+<i>155</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

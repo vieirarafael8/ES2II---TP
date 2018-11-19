@@ -1,0 +1,950 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ReliableLog</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.rmi.log</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ReliableLog (sun.rmi.log)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ReliableLog</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 28)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 242)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">ReliableLog$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">ReliableLog$LogFile</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 33)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 248)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.rmi.log;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.*;
+<i>29</i>&nbsp;import java.lang.reflect.Constructor;
+<i>30</i>&nbsp;import java.rmi.server.RMIClassLoader;
+<i>31</i>&nbsp;import java.security.AccessController;
+<i>32</i>&nbsp;import java.security.PrivilegedAction;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;/**
+<i>35</i>&nbsp; * This class is a simple implementation of a reliable Log.  The
+<i>36</i>&nbsp; * client of a ReliableLog must provide a set of callbacks (via a
+<i>37</i>&nbsp; * LogHandler) that enables a ReliableLog to read and write
+<i>38</i>&nbsp; * checkpoints and log records.  This implementation ensures that the
+<i>39</i>&nbsp; * current value of the data stored (via a ReliableLog) is recoverable
+<i>40</i>&nbsp; * after a system crash. &lt;p&gt;
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * The secondary storage strategy is to record values in files using a
+<i>43</i>&nbsp; * representation of the caller&#39;s choosing.  Two sorts of files are
+<i>44</i>&nbsp; * kept: snapshots and logs.  At any instant, one snapshot is current.
+<i>45</i>&nbsp; * The log consists of a sequence of updates that have occurred since
+<i>46</i>&nbsp; * the current snapshot was taken.  The current stable state is the
+<i>47</i>&nbsp; * value of the snapshot, as modified by the sequence of updates in
+<i>48</i>&nbsp; * the log.  From time to time, the client of a ReliableLog instructs
+<i>49</i>&nbsp; * the package to make a new snapshot and clear the log.  A ReliableLog
+<i>50</i>&nbsp; * arranges disk writes such that updates are stable (as long as the
+<i>51</i>&nbsp; * changes are force-written to disk) and atomic : no update is lost,
+<i>52</i>&nbsp; * and each update either is recorded completely in the log or not at
+<i>53</i>&nbsp; * all.  Making a new snapshot is also atomic. &lt;p&gt;
+<i>54</i>&nbsp; *
+<i>55</i>&nbsp; * Normal use for maintaining the recoverable store is as follows: The
+<i>56</i>&nbsp; * client maintains the relevant data structure in virtual memory.  As
+<i>57</i>&nbsp; * updates happen to the structure, the client informs the ReliableLog
+<i>58</i>&nbsp; * (all it &quot;log&quot;) by calling log.update.  Periodically, the client
+<i>59</i>&nbsp; * calls log.snapshot to provide the current value of the data
+<i>60</i>&nbsp; * structure.  On restart, the client calls log.recover to obtain the
+<i>61</i>&nbsp; * latest snapshot and the following sequences of updates; the client
+<i>62</i>&nbsp; * applies the updates to the snapshot to obtain the state that
+<i>63</i>&nbsp; * existed before the crash. &lt;p&gt;
+<i>64</i>&nbsp; *
+<i>65</i>&nbsp; * The current logfile format is: &lt;ol&gt;
+<i>66</i>&nbsp; * &lt;li&gt; a format version number (two 4-octet integers, major and
+<i>67</i>&nbsp; * minor), followed by
+<i>68</i>&nbsp; * &lt;li&gt; a sequence of log records.  Each log record contains, in
+<i>69</i>&nbsp; * order, &lt;ol&gt;
+<i>70</i>&nbsp; * &lt;li&gt; a 4-octet integer representing the length of the following log
+<i>71</i>&nbsp; * data,
+<i>72</i>&nbsp; * &lt;li&gt; the log data (variable length). &lt;/ol&gt; &lt;/ol&gt; &lt;p&gt;
+<i>73</i>&nbsp; *
+<i>74</i>&nbsp; * @see LogHandler
+<i>75</i>&nbsp; *
+<i>76</i>&nbsp; * @author Ann Wollrath
+<i>77</i>&nbsp; *
+<i>78</i>&nbsp; */
+<i>79</i>&nbsp;public class ReliableLog {
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    public final static int PreferredMajorVersion = 0;
+<i>82</i>&nbsp;    public final static int PreferredMinorVersion = 2;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    // sun.rmi.log.debug=false
+<i>85</i>&nbsp;    private boolean Debug = false;
+<i>86</i>&nbsp;
+<b class="nc"><i>87</i>&nbsp;    private static String snapshotPrefix = &quot;Snapshot.&quot;;</b>
+<i>88</i>&nbsp;    private static String logfilePrefix = &quot;Logfile.&quot;;
+<b class="nc"><i>89</i>&nbsp;    private static String versionFile = &quot;Version_Number&quot;;</b>
+<b class="nc"><i>90</i>&nbsp;    private static String newVersionFile = &quot;New_Version_Number&quot;;</b>
+<b class="nc"><i>91</i>&nbsp;    private static int    intBytes = 4;</b>
+<b class="nc"><i>92</i>&nbsp;    private static long   diskPageSize = 512;</b>
+<b class="nc"><i>93</i>&nbsp;</b>
+<b class="nc"><i>94</i>&nbsp;    private File dir;                   // base directory</b>
+<i>95</i>&nbsp;    private int version = 0;            // current snapshot and log version
+<i>96</i>&nbsp;    private String logName = null;
+<b class="nc"><i>97</i>&nbsp;    private LogFile log = null;</b>
+<b class="nc"><i>98</i>&nbsp;    private long snapshotBytes = 0;</b>
+<b class="nc"><i>99</i>&nbsp;    private long logBytes = 0;</b>
+<b class="nc"><i>100</i>&nbsp;    private int logEntries = 0;</b>
+<b class="nc"><i>101</i>&nbsp;    private long lastSnapshot = 0;</b>
+<b class="nc"><i>102</i>&nbsp;    private long lastLog = 0;</b>
+<b class="nc"><i>103</i>&nbsp;    //private long padBoundary = intBytes;</b>
+<b class="nc"><i>104</i>&nbsp;    private LogHandler handler;</b>
+<i>105</i>&nbsp;    private final byte[] intBuf = new byte[4];
+<i>106</i>&nbsp;
+<b class="nc"><i>107</i>&nbsp;    // format version numbers read from/written to this.log</b>
+<i>108</i>&nbsp;    private int majorFormatVersion = 0;
+<i>109</i>&nbsp;    private int minorFormatVersion = 0;
+<b class="nc"><i>110</i>&nbsp;</b>
+<b class="nc"><i>111</i>&nbsp;</b>
+<i>112</i>&nbsp;    /**
+<i>113</i>&nbsp;     * Constructor for the log file.  If the system property
+<i>114</i>&nbsp;     * sun.rmi.log.class is non-null and the class specified by this
+<i>115</i>&nbsp;     * property a) can be loaded, b) is a subclass of LogFile, and c) has a
+<i>116</i>&nbsp;     * public two-arg constructor (String, String), ReliableLog uses the
+<i>117</i>&nbsp;     * constructor to construct the LogFile.
+<i>118</i>&nbsp;     **/
+<i>119</i>&nbsp;    private static final Constructor&lt;? extends LogFile&gt;
+<i>120</i>&nbsp;        logClassConstructor = getLogClassConstructor();
+<i>121</i>&nbsp;
+<b class="nc"><i>122</i>&nbsp;    /**</b>
+<i>123</i>&nbsp;     * Creates a ReliableLog to handle checkpoints and logging in a
+<i>124</i>&nbsp;     * stable storage directory.
+<i>125</i>&nbsp;     *
+<i>126</i>&nbsp;     * @param dirPath path to the stable storage directory
+<i>127</i>&nbsp;     * @param handler the closure object containing callbacks for logging and
+<i>128</i>&nbsp;     * recovery
+<i>129</i>&nbsp;     * @param pad ignored
+<i>130</i>&nbsp;     * @exception IOException If a directory creation error has
+<i>131</i>&nbsp;     * occurred or if initialSnapshot callback raises an exception or
+<i>132</i>&nbsp;     * if an exception occurs during invocation of the handler&#39;s
+<i>133</i>&nbsp;     * snapshot method or if other IOException occurs.
+<i>134</i>&nbsp;     */
+<i>135</i>&nbsp;    public ReliableLog(String dirPath,
+<i>136</i>&nbsp;                     LogHandler handler,
+<i>137</i>&nbsp;                     boolean pad)
+<i>138</i>&nbsp;        throws IOException
+<i>139</i>&nbsp;    {
+<i>140</i>&nbsp;        super();
+<i>141</i>&nbsp;        this.Debug = AccessController.doPrivileged(
+<b class="nc"><i>142</i>&nbsp;            (PrivilegedAction&lt;Boolean&gt;) () -&gt; Boolean.getBoolean(&quot;sun.rmi.log.debug&quot;));</b>
+<b class="nc"><i>143</i>&nbsp;        dir = new File(dirPath);</b>
+<b class="nc"><i>144</i>&nbsp;        if (!(dir.exists() &amp;&amp; dir.isDirectory())) {</b>
+<b class="nc"><i>145</i>&nbsp;            // create directory</b>
+<b class="nc"><i>146</i>&nbsp;            if (!dir.mkdir()) {</b>
+<i>147</i>&nbsp;                throw new IOException(&quot;could not create directory for log: &quot; +
+<b class="nc"><i>148</i>&nbsp;                                      dirPath);</b>
+<b class="nc"><i>149</i>&nbsp;            }</b>
+<i>150</i>&nbsp;        }
+<i>151</i>&nbsp;        //padBoundary = (pad ? diskPageSize : intBytes);
+<i>152</i>&nbsp;        this.handler = handler;
+<i>153</i>&nbsp;        lastSnapshot = 0;
+<b class="nc"><i>154</i>&nbsp;        lastLog = 0;</b>
+<b class="nc"><i>155</i>&nbsp;        getVersion();</b>
+<b class="nc"><i>156</i>&nbsp;        if (version == 0) {</b>
+<b class="nc"><i>157</i>&nbsp;            try {</b>
+<b class="nc"><i>158</i>&nbsp;                snapshot(handler.initialSnapshot());</b>
+<i>159</i>&nbsp;            } catch (IOException e) {
+<b class="nc"><i>160</i>&nbsp;                throw e;</b>
+<b class="nc"><i>161</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i>162</i>&nbsp;                throw new IOException(&quot;initial snapshot failed with &quot; +</b>
+<b class="nc"><i>163</i>&nbsp;                                      &quot;exception: &quot; + e);</b>
+<b class="nc"><i>164</i>&nbsp;            }</b>
+<i>165</i>&nbsp;        }
+<b class="nc"><i>166</i>&nbsp;    }</b>
+<i>167</i>&nbsp;
+<i>168</i>&nbsp;    /**
+<i>169</i>&nbsp;     * Creates a ReliableLog to handle checkpoints and logging in a
+<i>170</i>&nbsp;     * stable storage directory.
+<i>171</i>&nbsp;     *
+<i>172</i>&nbsp;     * @param dirPath path to the stable storage directory
+<i>173</i>&nbsp;     * @param handler the closure object containing callbacks for logging and
+<i>174</i>&nbsp;     *        recovery
+<i>175</i>&nbsp;     * @exception IOException If a directory creation error has
+<i>176</i>&nbsp;     * occurred or if initialSnapshot callback raises an exception
+<i>177</i>&nbsp;     */
+<i>178</i>&nbsp;    public ReliableLog(String dirPath,
+<i>179</i>&nbsp;                     LogHandler handler)
+<i>180</i>&nbsp;        throws IOException
+<i>181</i>&nbsp;    {
+<i>182</i>&nbsp;        this(dirPath, handler, false);
+<i>183</i>&nbsp;    }
+<b class="nc"><i>184</i>&nbsp;</b>
+<i>185</i>&nbsp;    /* public methods */
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;    /**
+<i>188</i>&nbsp;     * Returns an object which is the value recorded in the current
+<i>189</i>&nbsp;     * snapshot.  This snapshot is recovered by calling the client
+<i>190</i>&nbsp;     * supplied callback &quot;recover&quot; and then subsequently invoking
+<i>191</i>&nbsp;     * the &quot;readUpdate&quot; callback to apply any logged updates to the state.
+<i>192</i>&nbsp;     *
+<i>193</i>&nbsp;     * @exception IOException If recovery fails due to serious log
+<i>194</i>&nbsp;     * corruption, read update failure, or if an exception occurs
+<i>195</i>&nbsp;     * during the recover callback
+<i>196</i>&nbsp;     */
+<i>197</i>&nbsp;    public synchronized Object recover()
+<i>198</i>&nbsp;        throws IOException
+<i>199</i>&nbsp;    {
+<i>200</i>&nbsp;        if (Debug)
+<i>201</i>&nbsp;            System.err.println(&quot;log.debug: recover()&quot;);
+<b class="nc"><i>202</i>&nbsp;</b>
+<b class="nc"><i>203</i>&nbsp;        if (version == 0)</b>
+<i>204</i>&nbsp;            return null;
+<b class="nc"><i>205</i>&nbsp;</b>
+<b class="nc"><i>206</i>&nbsp;        Object snapshot;</b>
+<i>207</i>&nbsp;        String fname = versionName(snapshotPrefix);
+<i>208</i>&nbsp;        File snapshotFile = new File(fname);
+<b class="nc"><i>209</i>&nbsp;        InputStream in =</b>
+<b class="nc"><i>210</i>&nbsp;                new BufferedInputStream(new FileInputStream(snapshotFile));</b>
+<b class="nc"><i>211</i>&nbsp;</b>
+<i>212</i>&nbsp;        if (Debug)
+<i>213</i>&nbsp;            System.err.println(&quot;log.debug: recovering from &quot; + fname);
+<b class="nc"><i>214</i>&nbsp;</b>
+<b class="nc"><i>215</i>&nbsp;        try {</b>
+<i>216</i>&nbsp;            try {
+<i>217</i>&nbsp;                snapshot = handler.recover(in);
+<i>218</i>&nbsp;
+<b class="nc"><i>219</i>&nbsp;            } catch (IOException e) {</b>
+<i>220</i>&nbsp;                throw e;
+<b class="nc"><i>221</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i>222</i>&nbsp;                if (Debug)</b>
+<b class="nc"><i>223</i>&nbsp;                    System.err.println(&quot;log.debug: recovery failed: &quot; + e);</b>
+<b class="nc"><i>224</i>&nbsp;                throw new IOException(&quot;log recover failed with &quot; +</b>
+<b class="nc"><i>225</i>&nbsp;                                      &quot;exception: &quot; + e);</b>
+<b class="nc"><i>226</i>&nbsp;            }</b>
+<i>227</i>&nbsp;            snapshotBytes = snapshotFile.length();
+<b class="nc"><i>228</i>&nbsp;        } finally {</b>
+<b class="nc"><i>229</i>&nbsp;            in.close();</b>
+<i>230</i>&nbsp;        }
+<b class="nc"><i>231</i>&nbsp;</b>
+<b class="nc"><i>232</i>&nbsp;        return recoverUpdates(snapshot);</b>
+<i>233</i>&nbsp;    }
+<b class="nc"><i>234</i>&nbsp;</b>
+<i>235</i>&nbsp;    /**
+<i>236</i>&nbsp;     * Records this update in the log file (does not force update to disk).
+<i>237</i>&nbsp;     * The update is recorded by calling the client&#39;s &quot;writeUpdate&quot; callback.
+<i>238</i>&nbsp;     * This method must not be called until this log&#39;s recover method has
+<i>239</i>&nbsp;     * been invoked (and completed).
+<i>240</i>&nbsp;     *
+<i>241</i>&nbsp;     * @param value the object representing the update
+<i>242</i>&nbsp;     * @exception IOException If an exception occurred during a
+<i>243</i>&nbsp;     * writeUpdate callback or if other I/O error has occurred.
+<i>244</i>&nbsp;     */
+<i>245</i>&nbsp;    public synchronized void update(Object value) throws IOException {
+<i>246</i>&nbsp;        update(value, true);
+<i>247</i>&nbsp;    }
+<b class="nc"><i>248</i>&nbsp;</b>
+<i>249</i>&nbsp;    /**
+<i>250</i>&nbsp;     * Records this update in the log file.  The update is recorded by
+<i>251</i>&nbsp;     * calling the client&#39;s writeUpdate callback.  This method must not be
+<i>252</i>&nbsp;     * called until this log&#39;s recover method has been invoked
+<i>253</i>&nbsp;     * (and completed).
+<i>254</i>&nbsp;     *
+<i>255</i>&nbsp;     * @param value the object representing the update
+<i>256</i>&nbsp;     * @param forceToDisk ignored; changes are always forced to disk
+<i>257</i>&nbsp;     * @exception IOException If force-write to log failed or an
+<i>258</i>&nbsp;     * exception occurred during the writeUpdate callback or if other
+<i>259</i>&nbsp;     * I/O error occurs while updating the log.
+<i>260</i>&nbsp;     */
+<i>261</i>&nbsp;    public synchronized void update(Object value, boolean forceToDisk)
+<i>262</i>&nbsp;        throws IOException
+<i>263</i>&nbsp;    {
+<i>264</i>&nbsp;        // avoid accessing a null log field.
+<i>265</i>&nbsp;        if (log == null) {
+<i>266</i>&nbsp;            throw new IOException(&quot;log is inaccessible, &quot; +
+<b class="nc"><i>267</i>&nbsp;                &quot;it may have been corrupted or closed&quot;);</b>
+<b class="nc"><i>268</i>&nbsp;        }</b>
+<i>269</i>&nbsp;
+<i>270</i>&nbsp;        /*
+<i>271</i>&nbsp;         * If the entry length field spans a sector boundary, write
+<i>272</i>&nbsp;         * the high order bit of the entry length, otherwise write zero for
+<i>273</i>&nbsp;         * the entry length.
+<i>274</i>&nbsp;         */
+<i>275</i>&nbsp;        long entryStart = log.getFilePointer();
+<i>276</i>&nbsp;        boolean spansBoundary = log.checkSpansBoundary(entryStart);
+<b class="nc"><i>277</i>&nbsp;        writeInt(log, spansBoundary? 1&lt;&lt;31 : 0);</b>
+<b class="nc"><i>278</i>&nbsp;</b>
+<b class="nc"><i>279</i>&nbsp;        /*</b>
+<i>280</i>&nbsp;         * Write update, and sync.
+<i>281</i>&nbsp;         */
+<i>282</i>&nbsp;        try {
+<i>283</i>&nbsp;            handler.writeUpdate(new LogOutputStream(log), value);
+<i>284</i>&nbsp;        } catch (IOException e) {
+<b class="nc"><i>285</i>&nbsp;            throw e;</b>
+<b class="nc"><i>286</i>&nbsp;        } catch (Exception e) {</b>
+<b class="nc"><i>287</i>&nbsp;            throw (IOException)</b>
+<b class="nc"><i>288</i>&nbsp;                new IOException(&quot;write update failed&quot;).initCause(e);</b>
+<b class="nc"><i>289</i>&nbsp;        }</b>
+<b class="nc"><i>290</i>&nbsp;        log.sync();</b>
+<b class="nc"><i>291</i>&nbsp;</b>
+<b class="nc"><i>292</i>&nbsp;        long entryEnd = log.getFilePointer();</b>
+<i>293</i>&nbsp;        int updateLen = (int) ((entryEnd - entryStart) - intBytes);
+<b class="nc"><i>294</i>&nbsp;        log.seek(entryStart);</b>
+<b class="nc"><i>295</i>&nbsp;</b>
+<b class="nc"><i>296</i>&nbsp;        if (spansBoundary) {</b>
+<i>297</i>&nbsp;            /*
+<b class="nc"><i>298</i>&nbsp;             * If length field spans a sector boundary, then</b>
+<i>299</i>&nbsp;             * the next two steps are required (see 4652922):
+<i>300</i>&nbsp;             *
+<i>301</i>&nbsp;             * 1) Write actual length with high order bit set; sync.
+<i>302</i>&nbsp;             * 2) Then clear high order bit of length; sync.
+<i>303</i>&nbsp;             */
+<i>304</i>&nbsp;            writeInt(log, updateLen | 1&lt;&lt;31);
+<i>305</i>&nbsp;            log.sync();
+<b class="nc"><i>306</i>&nbsp;</b>
+<b class="nc"><i>307</i>&nbsp;            log.seek(entryStart);</b>
+<i>308</i>&nbsp;            log.writeByte(updateLen &gt;&gt; 24);
+<b class="nc"><i>309</i>&nbsp;            log.sync();</b>
+<b class="nc"><i>310</i>&nbsp;</b>
+<b class="nc"><i>311</i>&nbsp;        } else {</b>
+<i>312</i>&nbsp;            /*
+<i>313</i>&nbsp;             * Write actual length; sync.
+<i>314</i>&nbsp;             */
+<i>315</i>&nbsp;            writeInt(log, updateLen);
+<i>316</i>&nbsp;            log.sync();
+<b class="nc"><i>317</i>&nbsp;        }</b>
+<b class="nc"><i>318</i>&nbsp;</b>
+<i>319</i>&nbsp;        log.seek(entryEnd);
+<i>320</i>&nbsp;        logBytes = entryEnd;
+<b class="nc"><i>321</i>&nbsp;        lastLog = System.currentTimeMillis();</b>
+<b class="nc"><i>322</i>&nbsp;        logEntries++;</b>
+<b class="nc"><i>323</i>&nbsp;    }</b>
+<b class="nc"><i>324</i>&nbsp;</b>
+<i>325</i>&nbsp;    /**
+<i>326</i>&nbsp;     * Returns the constructor for the log file if the system property
+<i>327</i>&nbsp;     * sun.rmi.log.class is non-null and the class specified by the
+<i>328</i>&nbsp;     * property a) can be loaded, b) is a subclass of LogFile, and c) has a
+<i>329</i>&nbsp;     * public two-arg constructor (String, String); otherwise returns null.
+<i>330</i>&nbsp;     **/
+<i>331</i>&nbsp;    private static Constructor&lt;? extends LogFile&gt;
+<i>332</i>&nbsp;        getLogClassConstructor() {
+<i>333</i>&nbsp;
+<i>334</i>&nbsp;        String logClassName = AccessController.doPrivileged(
+<i>335</i>&nbsp;            (PrivilegedAction&lt;String&gt;) () -&gt; System.getProperty(&quot;sun.rmi.log.class&quot;));
+<b class="nc"><i>336</i>&nbsp;        if (logClassName != null) {</b>
+<i>337</i>&nbsp;            try {
+<b class="nc"><i>338</i>&nbsp;                ClassLoader loader =</b>
+<i>339</i>&nbsp;                    AccessController.doPrivileged(
+<b class="nc"><i>340</i>&nbsp;                        new PrivilegedAction&lt;ClassLoader&gt;() {</b>
+<b class="nc"><i>341</i>&nbsp;                            public ClassLoader run() {</b>
+<b class="nc"><i>342</i>&nbsp;                               return ClassLoader.getSystemClassLoader();</b>
+<i>343</i>&nbsp;                            }
+<b class="nc"><i>344</i>&nbsp;                        });</b>
+<i>345</i>&nbsp;                Class&lt;? extends LogFile&gt; cl =
+<i>346</i>&nbsp;                    loader.loadClass(logClassName).asSubclass(LogFile.class);
+<b class="nc"><i>347</i>&nbsp;                return cl.getConstructor(String.class, String.class);</b>
+<b class="nc"><i>348</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i>349</i>&nbsp;                System.err.println(&quot;Exception occurred:&quot;);</b>
+<b class="nc"><i>350</i>&nbsp;                e.printStackTrace();</b>
+<b class="nc"><i>351</i>&nbsp;            }</b>
+<b class="nc"><i>352</i>&nbsp;        }</b>
+<i>353</i>&nbsp;        return null;
+<i>354</i>&nbsp;    }
+<b class="nc"><i>355</i>&nbsp;</b>
+<i>356</i>&nbsp;    /**
+<i>357</i>&nbsp;     * Records this value as the current snapshot by invoking the client
+<i>358</i>&nbsp;     * supplied &quot;snapshot&quot; callback and then empties the log.
+<i>359</i>&nbsp;     *
+<i>360</i>&nbsp;     * @param value the object representing the new snapshot
+<i>361</i>&nbsp;     * @exception IOException If an exception occurred during the
+<i>362</i>&nbsp;     * snapshot callback or if other I/O error has occurred during the
+<i>363</i>&nbsp;     * snapshot process
+<i>364</i>&nbsp;     */
+<i>365</i>&nbsp;    public synchronized void snapshot(Object value)
+<i>366</i>&nbsp;        throws IOException
+<i>367</i>&nbsp;    {
+<i>368</i>&nbsp;        int oldVersion = version;
+<i>369</i>&nbsp;        incrVersion();
+<b class="nc"><i>370</i>&nbsp;</b>
+<b class="nc"><i>371</i>&nbsp;        String fname = versionName(snapshotPrefix);</b>
+<i>372</i>&nbsp;        File snapshotFile = new File(fname);
+<b class="nc"><i>373</i>&nbsp;        FileOutputStream out = new FileOutputStream(snapshotFile);</b>
+<b class="nc"><i>374</i>&nbsp;        try {</b>
+<b class="nc"><i>375</i>&nbsp;            try {</b>
+<i>376</i>&nbsp;                handler.snapshot(out, value);
+<i>377</i>&nbsp;            } catch (IOException e) {
+<b class="nc"><i>378</i>&nbsp;                throw e;</b>
+<b class="nc"><i>379</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i>380</i>&nbsp;                throw new IOException(&quot;snapshot failed&quot;, e);</b>
+<b class="nc"><i>381</i>&nbsp;            }</b>
+<b class="nc"><i>382</i>&nbsp;            lastSnapshot = System.currentTimeMillis();</b>
+<b class="nc"><i>383</i>&nbsp;        } finally {</b>
+<b class="nc"><i>384</i>&nbsp;            out.close();</b>
+<i>385</i>&nbsp;            snapshotBytes = snapshotFile.length();
+<b class="nc"><i>386</i>&nbsp;        }</b>
+<b class="nc"><i>387</i>&nbsp;</b>
+<b class="nc"><i>388</i>&nbsp;        openLogFile(true);</b>
+<i>389</i>&nbsp;        writeVersionFile(true);
+<b class="nc"><i>390</i>&nbsp;        commitToNewVersion();</b>
+<b class="nc"><i>391</i>&nbsp;        deleteSnapshot(oldVersion);</b>
+<b class="nc"><i>392</i>&nbsp;        deleteLogFile(oldVersion);</b>
+<b class="nc"><i>393</i>&nbsp;    }</b>
+<b class="nc"><i>394</i>&nbsp;</b>
+<i>395</i>&nbsp;    /**
+<i>396</i>&nbsp;     * Close the stable storage directory in an orderly manner.
+<i>397</i>&nbsp;     *
+<i>398</i>&nbsp;     * @exception IOException If an I/O error occurs when the log is
+<i>399</i>&nbsp;     * closed
+<i>400</i>&nbsp;     */
+<i>401</i>&nbsp;    public synchronized void close() throws IOException {
+<i>402</i>&nbsp;        if (log == null) return;
+<i>403</i>&nbsp;        try {
+<b class="nc"><i>404</i>&nbsp;            log.close();</b>
+<i>405</i>&nbsp;        } finally {
+<b class="nc"><i>406</i>&nbsp;            log = null;</b>
+<i>407</i>&nbsp;        }
+<b class="nc"><i>408</i>&nbsp;    }</b>
+<b class="nc"><i>409</i>&nbsp;</b>
+<i>410</i>&nbsp;    /**
+<i>411</i>&nbsp;     * Returns the size of the snapshot file in bytes;
+<i>412</i>&nbsp;     */
+<i>413</i>&nbsp;    public long snapshotSize() {
+<i>414</i>&nbsp;        return snapshotBytes;
+<i>415</i>&nbsp;    }
+<b class="nc"><i>416</i>&nbsp;</b>
+<i>417</i>&nbsp;    /**
+<i>418</i>&nbsp;     * Returns the size of the log file in bytes;
+<i>419</i>&nbsp;     */
+<i>420</i>&nbsp;    public long logSize() {
+<i>421</i>&nbsp;        return logBytes;
+<i>422</i>&nbsp;    }
+<b class="nc"><i>423</i>&nbsp;</b>
+<i>424</i>&nbsp;    /* private methods */
+<i>425</i>&nbsp;
+<i>426</i>&nbsp;    /**
+<i>427</i>&nbsp;     * Write an int value in single write operation.  This method
+<i>428</i>&nbsp;     * assumes that the caller is synchronized on the log file.
+<i>429</i>&nbsp;     *
+<i>430</i>&nbsp;     * @param out output stream
+<i>431</i>&nbsp;     * @param val int value
+<i>432</i>&nbsp;     * @throws IOException if any other I/O error occurs
+<i>433</i>&nbsp;     */
+<i>434</i>&nbsp;    private void writeInt(DataOutput out, int val)
+<i>435</i>&nbsp;        throws IOException
+<i>436</i>&nbsp;    {
+<i>437</i>&nbsp;        intBuf[0] = (byte) (val &gt;&gt; 24);
+<i>438</i>&nbsp;        intBuf[1] = (byte) (val &gt;&gt; 16);
+<b class="nc"><i>439</i>&nbsp;        intBuf[2] = (byte) (val &gt;&gt; 8);</b>
+<b class="nc"><i>440</i>&nbsp;        intBuf[3] = (byte) val;</b>
+<b class="nc"><i>441</i>&nbsp;        out.write(intBuf);</b>
+<b class="nc"><i>442</i>&nbsp;    }</b>
+<b class="nc"><i>443</i>&nbsp;</b>
+<i>444</i>&nbsp;    /**
+<i>445</i>&nbsp;     * Generates a filename prepended with the stable storage directory path.
+<i>446</i>&nbsp;     *
+<i>447</i>&nbsp;     * @param name the leaf name of the file
+<i>448</i>&nbsp;     */
+<i>449</i>&nbsp;    private String fName(String name) {
+<i>450</i>&nbsp;        return dir.getPath() + File.separator + name;
+<i>451</i>&nbsp;    }
+<b class="nc"><i>452</i>&nbsp;</b>
+<i>453</i>&nbsp;    /**
+<i>454</i>&nbsp;     * Generates a version 0 filename prepended with the stable storage
+<i>455</i>&nbsp;     * directory path
+<i>456</i>&nbsp;     *
+<i>457</i>&nbsp;     * @param name version file name
+<i>458</i>&nbsp;     */
+<i>459</i>&nbsp;    private String versionName(String name) {
+<i>460</i>&nbsp;        return versionName(name, 0);
+<i>461</i>&nbsp;    }
+<b class="nc"><i>462</i>&nbsp;</b>
+<i>463</i>&nbsp;    /**
+<i>464</i>&nbsp;     * Generates a version filename prepended with the stable storage
+<i>465</i>&nbsp;     * directory path with the version number as a suffix.
+<i>466</i>&nbsp;     *
+<i>467</i>&nbsp;     * @param name version file name
+<i>468</i>&nbsp;     * @thisversion a version number
+<i>469</i>&nbsp;     */
+<i>470</i>&nbsp;    private String versionName(String prefix, int ver) {
+<i>471</i>&nbsp;        ver = (ver == 0) ? version : ver;
+<i>472</i>&nbsp;        return fName(prefix) + String.valueOf(ver);
+<b class="nc"><i>473</i>&nbsp;    }</b>
+<b class="nc"><i>474</i>&nbsp;</b>
+<i>475</i>&nbsp;    /**
+<i>476</i>&nbsp;     * Increments the directory version number.
+<i>477</i>&nbsp;     */
+<i>478</i>&nbsp;    private void incrVersion() {
+<i>479</i>&nbsp;        do { version++; } while (version==0);
+<i>480</i>&nbsp;    }
+<b class="nc"><i>481</i>&nbsp;</b>
+<i>482</i>&nbsp;    /**
+<i>483</i>&nbsp;     * Delete a file.
+<i>484</i>&nbsp;     *
+<i>485</i>&nbsp;     * @param name the name of the file
+<i>486</i>&nbsp;     * @exception IOException If new version file couldn&#39;t be removed
+<i>487</i>&nbsp;     */
+<i>488</i>&nbsp;    private void deleteFile(String name) throws IOException {
+<i>489</i>&nbsp;
+<i>490</i>&nbsp;        File f = new File(name);
+<i>491</i>&nbsp;        if (!f.delete())
+<b class="nc"><i>492</i>&nbsp;            throw new IOException(&quot;couldn&#39;t remove file: &quot; + name);</b>
+<b class="nc"><i>493</i>&nbsp;    }</b>
+<b class="nc"><i>494</i>&nbsp;</b>
+<i>495</i>&nbsp;    /**
+<i>496</i>&nbsp;     * Removes the new version number file.
+<i>497</i>&nbsp;     *
+<i>498</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>499</i>&nbsp;     */
+<i>500</i>&nbsp;    private void deleteNewVersionFile() throws IOException {
+<i>501</i>&nbsp;        deleteFile(fName(newVersionFile));
+<i>502</i>&nbsp;    }
+<b class="nc"><i>503</i>&nbsp;</b>
+<i>504</i>&nbsp;    /**
+<i>505</i>&nbsp;     * Removes the snapshot file.
+<i>506</i>&nbsp;     *
+<i>507</i>&nbsp;     * @param ver the version to remove
+<i>508</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>509</i>&nbsp;     */
+<i>510</i>&nbsp;    private void deleteSnapshot(int ver) throws IOException {
+<i>511</i>&nbsp;        if (ver == 0) return;
+<i>512</i>&nbsp;        deleteFile(versionName(snapshotPrefix, ver));
+<b class="nc"><i>513</i>&nbsp;    }</b>
+<b class="nc"><i>514</i>&nbsp;</b>
+<i>515</i>&nbsp;    /**
+<i>516</i>&nbsp;     * Removes the log file.
+<i>517</i>&nbsp;     *
+<i>518</i>&nbsp;     * @param ver the version to remove
+<i>519</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>520</i>&nbsp;     */
+<i>521</i>&nbsp;    private void deleteLogFile(int ver) throws IOException {
+<i>522</i>&nbsp;        if (ver == 0) return;
+<i>523</i>&nbsp;        deleteFile(versionName(logfilePrefix, ver));
+<b class="nc"><i>524</i>&nbsp;    }</b>
+<b class="nc"><i>525</i>&nbsp;</b>
+<i>526</i>&nbsp;    /**
+<i>527</i>&nbsp;     * Opens the log file in read/write mode.  If file does not exist, it is
+<i>528</i>&nbsp;     * created.
+<i>529</i>&nbsp;     *
+<i>530</i>&nbsp;     * @param truncate if true and file exists, file is truncated to zero
+<i>531</i>&nbsp;     * length
+<i>532</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>533</i>&nbsp;     */
+<i>534</i>&nbsp;    private void openLogFile(boolean truncate) throws IOException {
+<i>535</i>&nbsp;        try {
+<i>536</i>&nbsp;            close();
+<i>537</i>&nbsp;        } catch (IOException e) { /* assume this is okay */
+<b class="nc"><i>538</i>&nbsp;        }</b>
+<b class="nc"><i>539</i>&nbsp;</b>
+<b class="nc"><i>540</i>&nbsp;        logName = versionName(logfilePrefix);</b>
+<i>541</i>&nbsp;
+<b class="nc"><i>542</i>&nbsp;        try {</b>
+<i>543</i>&nbsp;            log = (logClassConstructor == null ?
+<i>544</i>&nbsp;                   new LogFile(logName, &quot;rw&quot;) :
+<b class="nc"><i>545</i>&nbsp;                   logClassConstructor.newInstance(logName, &quot;rw&quot;));</b>
+<i>546</i>&nbsp;        } catch (Exception e) {
+<b class="nc"><i>547</i>&nbsp;            throw (IOException) new IOException(</b>
+<b class="nc"><i>548</i>&nbsp;                &quot;unable to construct LogFile instance&quot;).initCause(e);</b>
+<b class="nc"><i>549</i>&nbsp;        }</b>
+<b class="nc"><i>550</i>&nbsp;</b>
+<b class="nc"><i>551</i>&nbsp;        if (truncate) {</b>
+<i>552</i>&nbsp;            initializeLogFile();
+<b class="nc"><i>553</i>&nbsp;        }</b>
+<b class="nc"><i>554</i>&nbsp;    }</b>
+<i>555</i>&nbsp;
+<i>556</i>&nbsp;    /**
+<i>557</i>&nbsp;     * Creates a new log file, truncated and initialized with the format
+<i>558</i>&nbsp;     * version number preferred by this implementation.
+<i>559</i>&nbsp;     * &lt;p&gt;Environment: inited, synchronized
+<i>560</i>&nbsp;     * &lt;p&gt;Precondition: valid: log, log contains nothing useful
+<i>561</i>&nbsp;     * &lt;p&gt;Postcondition: if successful, log is initialised with the format
+<i>562</i>&nbsp;     * version number (Preferred{Major,Minor}Version), and logBytes is
+<i>563</i>&nbsp;     * set to the resulting size of the updatelog, and logEntries is set to
+<i>564</i>&nbsp;     * zero.  Otherwise, log is in an indeterminate state, and logBytes
+<i>565</i>&nbsp;     * is unchanged, and logEntries is unchanged.
+<i>566</i>&nbsp;     *
+<i>567</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>568</i>&nbsp;     */
+<i>569</i>&nbsp;    private void initializeLogFile()
+<i>570</i>&nbsp;        throws IOException
+<i>571</i>&nbsp;    {
+<i>572</i>&nbsp;        log.setLength(0);
+<i>573</i>&nbsp;        majorFormatVersion = PreferredMajorVersion;
+<b class="nc"><i>574</i>&nbsp;        writeInt(log, PreferredMajorVersion);</b>
+<b class="nc"><i>575</i>&nbsp;        minorFormatVersion = PreferredMinorVersion;</b>
+<b class="nc"><i>576</i>&nbsp;        writeInt(log, PreferredMinorVersion);</b>
+<b class="nc"><i>577</i>&nbsp;        logBytes = intBytes * 2;</b>
+<b class="nc"><i>578</i>&nbsp;        logEntries = 0;</b>
+<b class="nc"><i>579</i>&nbsp;    }</b>
+<b class="nc"><i>580</i>&nbsp;</b>
+<i>581</i>&nbsp;
+<i>582</i>&nbsp;    /**
+<i>583</i>&nbsp;     * Writes out version number to file.
+<i>584</i>&nbsp;     *
+<i>585</i>&nbsp;     * @param newVersion if true, writes to a new version file
+<i>586</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>587</i>&nbsp;     */
+<i>588</i>&nbsp;    private void writeVersionFile(boolean newVersion) throws IOException {
+<i>589</i>&nbsp;        String name;
+<i>590</i>&nbsp;        if (newVersion) {
+<i>591</i>&nbsp;            name = newVersionFile;
+<b class="nc"><i>592</i>&nbsp;        } else {</b>
+<b class="nc"><i>593</i>&nbsp;            name = versionFile;</b>
+<i>594</i>&nbsp;        }
+<b class="nc"><i>595</i>&nbsp;        try (FileOutputStream fos = new FileOutputStream(fName(name));</b>
+<i>596</i>&nbsp;             DataOutputStream out = new DataOutputStream(fos)) {
+<b class="nc"><i>597</i>&nbsp;            writeInt(out, version);</b>
+<b class="nc"><i>598</i>&nbsp;        }</b>
+<b class="nc"><i>599</i>&nbsp;    }</b>
+<b class="nc"><i>600</i>&nbsp;</b>
+<i>601</i>&nbsp;    /**
+<i>602</i>&nbsp;     * Creates the initial version file
+<i>603</i>&nbsp;     *
+<i>604</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>605</i>&nbsp;     */
+<i>606</i>&nbsp;    private void createFirstVersion() throws IOException {
+<i>607</i>&nbsp;        version = 0;
+<i>608</i>&nbsp;        writeVersionFile(false);
+<b class="nc"><i>609</i>&nbsp;    }</b>
+<b class="nc"><i>610</i>&nbsp;</b>
+<i>611</i>&nbsp;    /**
+<i>612</i>&nbsp;     * Commits (atomically) the new version.
+<i>613</i>&nbsp;     *
+<i>614</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>615</i>&nbsp;     */
+<i>616</i>&nbsp;    private void commitToNewVersion() throws IOException {
+<i>617</i>&nbsp;        writeVersionFile(false);
+<i>618</i>&nbsp;        deleteNewVersionFile();
+<b class="nc"><i>619</i>&nbsp;    }</b>
+<b class="nc"><i>620</i>&nbsp;</b>
+<i>621</i>&nbsp;    /**
+<i>622</i>&nbsp;     * Reads version number from a file.
+<i>623</i>&nbsp;     *
+<i>624</i>&nbsp;     * @param name the name of the version file
+<i>625</i>&nbsp;     * @return the version
+<i>626</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>627</i>&nbsp;     */
+<i>628</i>&nbsp;    private int readVersion(String name) throws IOException {
+<i>629</i>&nbsp;        try (DataInputStream in = new DataInputStream
+<i>630</i>&nbsp;                (new FileInputStream(name))) {
+<b class="nc"><i>631</i>&nbsp;            return in.readInt();</b>
+<i>632</i>&nbsp;        }
+<b class="nc"><i>633</i>&nbsp;    }</b>
+<b class="nc"><i>634</i>&nbsp;</b>
+<i>635</i>&nbsp;    /**
+<i>636</i>&nbsp;     * Sets the version.  If version file does not exist, the initial
+<i>637</i>&nbsp;     * version file is created.
+<i>638</i>&nbsp;     *
+<i>639</i>&nbsp;     * @exception IOException If an I/O error has occurred.
+<i>640</i>&nbsp;     */
+<i>641</i>&nbsp;    private void getVersion() throws IOException {
+<i>642</i>&nbsp;        try {
+<i>643</i>&nbsp;            version = readVersion(fName(newVersionFile));
+<i>644</i>&nbsp;            commitToNewVersion();
+<b class="nc"><i>645</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>646</i>&nbsp;            try {</b>
+<b class="nc"><i>647</i>&nbsp;                deleteNewVersionFile();</b>
+<i>648</i>&nbsp;            }
+<b class="nc"><i>649</i>&nbsp;            catch (IOException ex) {</b>
+<i>650</i>&nbsp;            }
+<b class="nc"><i>651</i>&nbsp;</b>
+<b class="nc"><i>652</i>&nbsp;            try {</b>
+<i>653</i>&nbsp;                version = readVersion(fName(versionFile));
+<i>654</i>&nbsp;            }
+<b class="nc"><i>655</i>&nbsp;            catch (IOException ex) {</b>
+<i>656</i>&nbsp;                createFirstVersion();
+<b class="nc"><i>657</i>&nbsp;            }</b>
+<b class="nc"><i>658</i>&nbsp;        }</b>
+<b class="nc"><i>659</i>&nbsp;    }</b>
+<b class="nc"><i>660</i>&nbsp;</b>
+<i>661</i>&nbsp;    /**
+<i>662</i>&nbsp;     * Applies outstanding updates to the snapshot.
+<i>663</i>&nbsp;     *
+<i>664</i>&nbsp;     * @param state the most recent snapshot
+<i>665</i>&nbsp;     * @exception IOException If serious log corruption is detected or
+<i>666</i>&nbsp;     * if an exception occurred during a readUpdate callback or if
+<i>667</i>&nbsp;     * other I/O error has occurred.
+<i>668</i>&nbsp;     * @return the resulting state of the object after all updates
+<i>669</i>&nbsp;     */
+<i>670</i>&nbsp;    private Object recoverUpdates(Object state)
+<i>671</i>&nbsp;        throws IOException
+<i>672</i>&nbsp;    {
+<i>673</i>&nbsp;        logBytes = 0;
+<i>674</i>&nbsp;        logEntries = 0;
+<b class="nc"><i>675</i>&nbsp;</b>
+<b class="nc"><i>676</i>&nbsp;        if (version == 0) return state;</b>
+<i>677</i>&nbsp;
+<b class="nc"><i>678</i>&nbsp;        String fname = versionName(logfilePrefix);</b>
+<i>679</i>&nbsp;        InputStream in =
+<b class="nc"><i>680</i>&nbsp;                new BufferedInputStream(new FileInputStream(fname));</b>
+<b class="nc"><i>681</i>&nbsp;        DataInputStream dataIn = new DataInputStream(in);</b>
+<i>682</i>&nbsp;
+<b class="nc"><i>683</i>&nbsp;        if (Debug)</b>
+<i>684</i>&nbsp;            System.err.println(&quot;log.debug: reading updates from &quot; + fname);
+<b class="nc"><i>685</i>&nbsp;</b>
+<b class="nc"><i>686</i>&nbsp;        try {</b>
+<i>687</i>&nbsp;            majorFormatVersion = dataIn.readInt(); logBytes += intBytes;
+<i>688</i>&nbsp;            minorFormatVersion = dataIn.readInt(); logBytes += intBytes;
+<b class="nc"><i>689</i>&nbsp;        } catch (EOFException e) {</b>
+<b class="nc"><i>690</i>&nbsp;            /* This is a log which was corrupted and/or cleared (by</b>
+<b class="nc"><i>691</i>&nbsp;             * fsck or equivalent).  This is not an error.</b>
+<i>692</i>&nbsp;             */
+<i>693</i>&nbsp;            openLogFile(true);  // create and truncate
+<i>694</i>&nbsp;            in = null;
+<b class="nc"><i>695</i>&nbsp;        }</b>
+<b class="nc"><i>696</i>&nbsp;        /* A new major version number is a catastrophe (it means</b>
+<b class="nc"><i>697</i>&nbsp;         * that the file format is incompatible with older</b>
+<i>698</i>&nbsp;         * clients, and we&#39;ll only be breaking things by trying to
+<i>699</i>&nbsp;         * use the log).  A new minor version is no big deal for
+<i>700</i>&nbsp;         * upward compatibility.
+<i>701</i>&nbsp;         */
+<i>702</i>&nbsp;        if (majorFormatVersion != PreferredMajorVersion) {
+<i>703</i>&nbsp;            if (Debug) {
+<b class="nc"><i>704</i>&nbsp;                System.err.println(&quot;log.debug: major version mismatch: &quot; +</b>
+<b class="nc"><i>705</i>&nbsp;                        majorFormatVersion + &quot;.&quot; + minorFormatVersion);</b>
+<b class="nc"><i>706</i>&nbsp;            }</b>
+<i>707</i>&nbsp;            throw new IOException(&quot;Log file &quot; + logName + &quot; has a &quot; +
+<i>708</i>&nbsp;                                  &quot;version &quot; + majorFormatVersion +
+<b class="nc"><i>709</i>&nbsp;                                  &quot;.&quot; + minorFormatVersion +</b>
+<i>710</i>&nbsp;                                  &quot; format, and this implementation &quot; +
+<i>711</i>&nbsp;                                  &quot; understands only version &quot; +
+<i>712</i>&nbsp;                                  PreferredMajorVersion + &quot;.&quot; +
+<i>713</i>&nbsp;                                  PreferredMinorVersion);
+<i>714</i>&nbsp;        }
+<i>715</i>&nbsp;
+<i>716</i>&nbsp;        try {
+<i>717</i>&nbsp;            while (in != null) {
+<i>718</i>&nbsp;                int updateLen = 0;
+<b class="nc"><i>719</i>&nbsp;</b>
+<b class="nc"><i>720</i>&nbsp;                try {</b>
+<i>721</i>&nbsp;                    updateLen = dataIn.readInt();
+<i>722</i>&nbsp;                } catch (EOFException e) {
+<b class="nc"><i>723</i>&nbsp;                    if (Debug)</b>
+<b class="nc"><i>724</i>&nbsp;                        System.err.println(&quot;log.debug: log was sync&#39;d cleanly&quot;);</b>
+<b class="nc"><i>725</i>&nbsp;                    break;</b>
+<b class="nc"><i>726</i>&nbsp;                }</b>
+<b class="nc"><i>727</i>&nbsp;                if (updateLen &lt;= 0) {/* crashed while writing last log entry */</b>
+<b class="nc"><i>728</i>&nbsp;                    if (Debug) {</b>
+<b class="nc"><i>729</i>&nbsp;                        System.err.println(</b>
+<b class="nc"><i>730</i>&nbsp;                            &quot;log.debug: last update incomplete, &quot; +</b>
+<b class="nc"><i>731</i>&nbsp;                            &quot;updateLen = 0x&quot; +</b>
+<i>732</i>&nbsp;                            Integer.toHexString(updateLen));
+<i>733</i>&nbsp;                    }
+<b class="nc"><i>734</i>&nbsp;                    break;</b>
+<i>735</i>&nbsp;                }
+<i>736</i>&nbsp;
+<i>737</i>&nbsp;                // this is a fragile use of available() which relies on the
+<i>738</i>&nbsp;                // twin facts that BufferedInputStream correctly consults
+<i>739</i>&nbsp;                // the underlying stream, and that FileInputStream returns
+<i>740</i>&nbsp;                // the number of bytes remaining in the file (via FIONREAD).
+<i>741</i>&nbsp;                if (in.available() &lt; updateLen) {
+<i>742</i>&nbsp;                    /* corrupted record at end of log (can happen since we
+<b class="nc"><i>743</i>&nbsp;                     * do only one fsync)</b>
+<i>744</i>&nbsp;                     */
+<i>745</i>&nbsp;                    if (Debug)
+<i>746</i>&nbsp;                        System.err.println(&quot;log.debug: log was truncated&quot;);
+<b class="nc"><i>747</i>&nbsp;                    break;</b>
+<b class="nc"><i>748</i>&nbsp;                }</b>
+<i>749</i>&nbsp;
+<i>750</i>&nbsp;                if (Debug)
+<i>751</i>&nbsp;                    System.err.println(&quot;log.debug: rdUpdate size &quot; + updateLen);
+<b class="nc"><i>752</i>&nbsp;                try {</b>
+<b class="nc"><i>753</i>&nbsp;                    state = handler.readUpdate(new LogInputStream(in, updateLen),</b>
+<i>754</i>&nbsp;                                          state);
+<b class="nc"><i>755</i>&nbsp;                } catch (IOException e) {</b>
+<i>756</i>&nbsp;                    throw e;
+<b class="nc"><i>757</i>&nbsp;                } catch (Exception e) {</b>
+<b class="nc"><i>758</i>&nbsp;                    e.printStackTrace();</b>
+<b class="nc"><i>759</i>&nbsp;                    throw new IOException(&quot;read update failed with &quot; +</b>
+<b class="nc"><i>760</i>&nbsp;                                          &quot;exception: &quot; + e);</b>
+<b class="nc"><i>761</i>&nbsp;                }</b>
+<i>762</i>&nbsp;                logBytes += (intBytes + updateLen);
+<b class="nc"><i>763</i>&nbsp;                logEntries++;</b>
+<b class="nc"><i>764</i>&nbsp;            } /* while */</b>
+<b class="nc"><i>765</i>&nbsp;        } finally {</b>
+<b class="nc"><i>766</i>&nbsp;            if (in != null)</b>
+<i>767</i>&nbsp;                in.close();
+<b class="nc"><i>768</i>&nbsp;        }</b>
+<b class="nc"><i>769</i>&nbsp;</b>
+<i>770</i>&nbsp;        if (Debug)
+<i>771</i>&nbsp;            System.err.println(&quot;log.debug: recovered updates: &quot; + logEntries);
+<b class="nc"><i>772</i>&nbsp;</b>
+<b class="nc"><i>773</i>&nbsp;        /* reopen log file at end */</b>
+<i>774</i>&nbsp;        openLogFile(false);
+<i>775</i>&nbsp;
+<b class="nc"><i>776</i>&nbsp;        // avoid accessing a null log field</b>
+<i>777</i>&nbsp;        if (log == null) {
+<i>778</i>&nbsp;            throw new IOException(&quot;rmid&#39;s log is inaccessible, &quot; +
+<b class="nc"><i>779</i>&nbsp;                &quot;it may have been corrupted or closed&quot;);</b>
+<b class="nc"><i>780</i>&nbsp;        }</b>
+<i>781</i>&nbsp;
+<i>782</i>&nbsp;        log.seek(logBytes);
+<i>783</i>&nbsp;        log.setLength(logBytes);
+<b class="nc"><i>784</i>&nbsp;</b>
+<b class="nc"><i>785</i>&nbsp;        return state;</b>
+<i>786</i>&nbsp;    }
+<b class="nc"><i>787</i>&nbsp;</b>
+<i>788</i>&nbsp;    /**
+<i>789</i>&nbsp;     * ReliableLog&#39;s log file implementation.  This implementation
+<i>790</i>&nbsp;     * is subclassable for testing purposes.
+<i>791</i>&nbsp;     */
+<i>792</i>&nbsp;    public static class LogFile extends RandomAccessFile {
+<i>793</i>&nbsp;
+<i>794</i>&nbsp;        private final FileDescriptor fd;
+<i>795</i>&nbsp;
+<i>796</i>&nbsp;        /**
+<i>797</i>&nbsp;         * Constructs a LogFile and initializes the file descriptor.
+<i>798</i>&nbsp;         **/
+<i>799</i>&nbsp;        public LogFile(String name, String mode)
+<i>800</i>&nbsp;            throws FileNotFoundException, IOException
+<i>801</i>&nbsp;        {
+<i>802</i>&nbsp;            super(name, mode);
+<i>803</i>&nbsp;            this.fd = getFD();
+<b class="nc"><i>804</i>&nbsp;        }</b>
+<b class="nc"><i>805</i>&nbsp;</b>
+<i>806</i>&nbsp;        /**
+<i>807</i>&nbsp;         * Invokes sync on the file descriptor for this log file.
+<i>808</i>&nbsp;         */
+<i>809</i>&nbsp;        protected void sync() throws IOException {
+<i>810</i>&nbsp;            fd.sync();
+<i>811</i>&nbsp;        }
+<b class="nc"><i>812</i>&nbsp;</b>
+<i>813</i>&nbsp;        /**
+<i>814</i>&nbsp;         * Returns true if writing 4 bytes starting at the specified file
+<i>815</i>&nbsp;         * position, would span a 512 byte sector boundary; otherwise returns
+<i>816</i>&nbsp;         * false.
+<i>817</i>&nbsp;         **/
+<i>818</i>&nbsp;        protected boolean checkSpansBoundary(long fp) {
+<i>819</i>&nbsp;            return  fp % 512 &gt; 508;
+<i>820</i>&nbsp;        }
+<b class="nc"><i>821</i>&nbsp;    }</b>
+<i>822</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:16</div>
+</div>
+</body>
+</html>

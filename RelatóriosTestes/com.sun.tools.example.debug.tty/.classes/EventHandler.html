@@ -1,0 +1,373 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: EventHandler</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.tools.example.debug.tty</a> ]
+</div>
+
+<h1>Coverage Summary for Class: EventHandler (com.sun.tools.example.debug.tty)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">EventHandler</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 22)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 139)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1998, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;/*
+<i>27</i>&nbsp; * This source code is provided to illustrate the usage of a given feature
+<i>28</i>&nbsp; * or technique and has been deliberately simplified. Additional steps
+<i>29</i>&nbsp; * required for a production-quality application, such as security checks,
+<i>30</i>&nbsp; * input validation and proper error handling, might not be present in
+<i>31</i>&nbsp; * this sample code.
+<i>32</i>&nbsp; */
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;package com.sun.tools.example.debug.tty;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;import com.sun.jdi.*;
+<i>38</i>&nbsp;import com.sun.jdi.event.*;
+<i>39</i>&nbsp;import com.sun.jdi.request.EventRequest;
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;public class EventHandler implements Runnable {
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;    EventNotifier notifier;
+<i>44</i>&nbsp;    Thread thread;
+<b class="nc"><i>45</i>&nbsp;    volatile boolean connected = true;</b>
+<b class="nc"><i>46</i>&nbsp;    boolean completed = false;</b>
+<i>47</i>&nbsp;    String shutdownMessageKey;
+<i>48</i>&nbsp;    boolean stopOnVMStart;
+<i>49</i>&nbsp;
+<b class="nc"><i>50</i>&nbsp;    EventHandler(EventNotifier notifier, boolean stopOnVMStart) {</b>
+<b class="nc"><i>51</i>&nbsp;        this.notifier = notifier;</b>
+<b class="nc"><i>52</i>&nbsp;        this.stopOnVMStart = stopOnVMStart;</b>
+<b class="nc"><i>53</i>&nbsp;        this.thread = new Thread(this, &quot;event-handler&quot;);</b>
+<b class="nc"><i>54</i>&nbsp;        this.thread.start();</b>
+<i>55</i>&nbsp;    }
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;    synchronized void shutdown() {
+<b class="nc"><i>58</i>&nbsp;        connected = false;  // force run() loop termination</b>
+<b class="nc"><i>59</i>&nbsp;        thread.interrupt();</b>
+<b class="nc"><i>60</i>&nbsp;        while (!completed) {</b>
+<b class="nc"><i>61</i>&nbsp;            try {wait();} catch (InterruptedException exc) {}</b>
+<i>62</i>&nbsp;        }
+<i>63</i>&nbsp;    }
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    @Override
+<i>66</i>&nbsp;    public void run() {
+<b class="nc"><i>67</i>&nbsp;        EventQueue queue = Env.vm().eventQueue();</b>
+<b class="nc"><i>68</i>&nbsp;        while (connected) {</b>
+<i>69</i>&nbsp;            try {
+<b class="nc"><i>70</i>&nbsp;                EventSet eventSet = queue.remove();</b>
+<b class="nc"><i>71</i>&nbsp;                boolean resumeStoppedApp = false;</b>
+<b class="nc"><i>72</i>&nbsp;                EventIterator it = eventSet.eventIterator();</b>
+<b class="nc"><i>73</i>&nbsp;                while (it.hasNext()) {</b>
+<b class="nc"><i>74</i>&nbsp;                    resumeStoppedApp |= !handleEvent(it.nextEvent());</b>
+<i>75</i>&nbsp;                }
+<i>76</i>&nbsp;
+<b class="nc"><i>77</i>&nbsp;                if (resumeStoppedApp) {</b>
+<b class="nc"><i>78</i>&nbsp;                    eventSet.resume();</b>
+<b class="nc"><i>79</i>&nbsp;                } else if (eventSet.suspendPolicy() == EventRequest.SUSPEND_ALL) {</b>
+<b class="nc"><i>80</i>&nbsp;                    setCurrentThread(eventSet);</b>
+<b class="nc"><i>81</i>&nbsp;                    notifier.vmInterrupted();</b>
+<i>82</i>&nbsp;                }
+<b class="nc"><i>83</i>&nbsp;            } catch (InterruptedException exc) {</b>
+<i>84</i>&nbsp;                // Do nothing. Any changes will be seen at top of loop.
+<b class="nc"><i>85</i>&nbsp;            } catch (VMDisconnectedException discExc) {</b>
+<b class="nc"><i>86</i>&nbsp;                handleDisconnectedException();</b>
+<b class="nc"><i>87</i>&nbsp;                break;</b>
+<b class="nc"><i>88</i>&nbsp;            }</b>
+<i>89</i>&nbsp;        }
+<b class="nc"><i>90</i>&nbsp;        synchronized (this) {</b>
+<b class="nc"><i>91</i>&nbsp;            completed = true;</b>
+<b class="nc"><i>92</i>&nbsp;            notifyAll();</b>
+<b class="nc"><i>93</i>&nbsp;        }</b>
+<i>94</i>&nbsp;    }
+<i>95</i>&nbsp;
+<i>96</i>&nbsp;    private boolean handleEvent(Event event) {
+<b class="nc"><i>97</i>&nbsp;        notifier.receivedEvent(event);</b>
+<i>98</i>&nbsp;
+<b class="nc"><i>99</i>&nbsp;        if (event instanceof ExceptionEvent) {</b>
+<b class="nc"><i>100</i>&nbsp;            return exceptionEvent(event);</b>
+<b class="nc"><i>101</i>&nbsp;        } else if (event instanceof BreakpointEvent) {</b>
+<b class="nc"><i>102</i>&nbsp;            return breakpointEvent(event);</b>
+<b class="nc"><i>103</i>&nbsp;        } else if (event instanceof WatchpointEvent) {</b>
+<b class="nc"><i>104</i>&nbsp;            return fieldWatchEvent(event);</b>
+<b class="nc"><i>105</i>&nbsp;        } else if (event instanceof StepEvent) {</b>
+<b class="nc"><i>106</i>&nbsp;            return stepEvent(event);</b>
+<b class="nc"><i>107</i>&nbsp;        } else if (event instanceof MethodEntryEvent) {</b>
+<b class="nc"><i>108</i>&nbsp;            return methodEntryEvent(event);</b>
+<b class="nc"><i>109</i>&nbsp;        } else if (event instanceof MethodExitEvent) {</b>
+<b class="nc"><i>110</i>&nbsp;            return methodExitEvent(event);</b>
+<b class="nc"><i>111</i>&nbsp;        } else if (event instanceof ClassPrepareEvent) {</b>
+<b class="nc"><i>112</i>&nbsp;            return classPrepareEvent(event);</b>
+<b class="nc"><i>113</i>&nbsp;        } else if (event instanceof ClassUnloadEvent) {</b>
+<b class="nc"><i>114</i>&nbsp;            return classUnloadEvent(event);</b>
+<b class="nc"><i>115</i>&nbsp;        } else if (event instanceof ThreadStartEvent) {</b>
+<b class="nc"><i>116</i>&nbsp;            return threadStartEvent(event);</b>
+<b class="nc"><i>117</i>&nbsp;        } else if (event instanceof ThreadDeathEvent) {</b>
+<b class="nc"><i>118</i>&nbsp;            return threadDeathEvent(event);</b>
+<b class="nc"><i>119</i>&nbsp;        } else if (event instanceof VMStartEvent) {</b>
+<b class="nc"><i>120</i>&nbsp;            return vmStartEvent(event);</b>
+<i>121</i>&nbsp;        } else {
+<b class="nc"><i>122</i>&nbsp;            return handleExitEvent(event);</b>
+<i>123</i>&nbsp;        }
+<i>124</i>&nbsp;    }
+<i>125</i>&nbsp;
+<b class="nc"><i>126</i>&nbsp;    private boolean vmDied = false;</b>
+<i>127</i>&nbsp;    private boolean handleExitEvent(Event event) {
+<b class="nc"><i>128</i>&nbsp;        if (event instanceof VMDeathEvent) {</b>
+<b class="nc"><i>129</i>&nbsp;            vmDied = true;</b>
+<b class="nc"><i>130</i>&nbsp;            return vmDeathEvent(event);</b>
+<b class="nc"><i>131</i>&nbsp;        } else if (event instanceof VMDisconnectEvent) {</b>
+<b class="nc"><i>132</i>&nbsp;            connected = false;</b>
+<b class="nc"><i>133</i>&nbsp;            if (!vmDied) {</b>
+<b class="nc"><i>134</i>&nbsp;                vmDisconnectEvent(event);</b>
+<i>135</i>&nbsp;            }
+<i>136</i>&nbsp;            /*
+<i>137</i>&nbsp;             * Inform jdb command line processor that jdb is being shutdown. JDK-8154144.
+<i>138</i>&nbsp;             */
+<b class="nc"><i>139</i>&nbsp;            ((TTY)notifier).setShuttingDown(true);</b>
+<b class="nc"><i>140</i>&nbsp;            Env.shutdown(shutdownMessageKey);</b>
+<b class="nc"><i>141</i>&nbsp;            return false;</b>
+<i>142</i>&nbsp;        } else {
+<b class="nc"><i>143</i>&nbsp;            throw new InternalError(MessageOutput.format(&quot;Unexpected event type&quot;,</b>
+<b class="nc"><i>144</i>&nbsp;                                                         new Object[] {event.getClass()}));</b>
+<i>145</i>&nbsp;        }
+<i>146</i>&nbsp;    }
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;    synchronized void handleDisconnectedException() {
+<i>149</i>&nbsp;        /*
+<i>150</i>&nbsp;         * A VMDisconnectedException has happened while dealing with
+<i>151</i>&nbsp;         * another event. We need to flush the event queue, dealing only
+<i>152</i>&nbsp;         * with exit events (VMDeath, VMDisconnect) so that we terminate
+<i>153</i>&nbsp;         * correctly.
+<i>154</i>&nbsp;         */
+<b class="nc"><i>155</i>&nbsp;        EventQueue queue = Env.vm().eventQueue();</b>
+<b class="nc"><i>156</i>&nbsp;        while (connected) {</b>
+<i>157</i>&nbsp;            try {
+<b class="nc"><i>158</i>&nbsp;                EventSet eventSet = queue.remove();</b>
+<b class="nc"><i>159</i>&nbsp;                EventIterator iter = eventSet.eventIterator();</b>
+<b class="nc"><i>160</i>&nbsp;                while (iter.hasNext()) {</b>
+<b class="nc"><i>161</i>&nbsp;                    handleExitEvent(iter.next());</b>
+<i>162</i>&nbsp;                }
+<b class="nc"><i>163</i>&nbsp;            } catch (InterruptedException exc) {</b>
+<i>164</i>&nbsp;                // ignore
+<b class="nc"><i>165</i>&nbsp;            } catch (InternalError exc) {</b>
+<i>166</i>&nbsp;                // ignore
+<b class="nc"><i>167</i>&nbsp;            }</b>
+<i>168</i>&nbsp;        }
+<i>169</i>&nbsp;    }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;    private ThreadReference eventThread(Event event) {
+<b class="nc"><i>172</i>&nbsp;        if (event instanceof ClassPrepareEvent) {</b>
+<b class="nc"><i>173</i>&nbsp;            return ((ClassPrepareEvent)event).thread();</b>
+<b class="nc"><i>174</i>&nbsp;        } else if (event instanceof LocatableEvent) {</b>
+<b class="nc"><i>175</i>&nbsp;            return ((LocatableEvent)event).thread();</b>
+<b class="nc"><i>176</i>&nbsp;        } else if (event instanceof ThreadStartEvent) {</b>
+<b class="nc"><i>177</i>&nbsp;            return ((ThreadStartEvent)event).thread();</b>
+<b class="nc"><i>178</i>&nbsp;        } else if (event instanceof ThreadDeathEvent) {</b>
+<b class="nc"><i>179</i>&nbsp;            return ((ThreadDeathEvent)event).thread();</b>
+<b class="nc"><i>180</i>&nbsp;        } else if (event instanceof VMStartEvent) {</b>
+<b class="nc"><i>181</i>&nbsp;            return ((VMStartEvent)event).thread();</b>
+<i>182</i>&nbsp;        } else {
+<b class="nc"><i>183</i>&nbsp;            return null;</b>
+<i>184</i>&nbsp;        }
+<i>185</i>&nbsp;    }
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;    private void setCurrentThread(EventSet set) {
+<i>188</i>&nbsp;        ThreadReference thread;
+<b class="nc"><i>189</i>&nbsp;        if (set.size() &gt; 0) {</b>
+<i>190</i>&nbsp;            /*
+<i>191</i>&nbsp;             * If any event in the set has a thread associated with it,
+<i>192</i>&nbsp;             * they all will, so just grab the first one.
+<i>193</i>&nbsp;             */
+<b class="nc"><i>194</i>&nbsp;            Event event = set.iterator().next(); // Is there a better way?</b>
+<b class="nc"><i>195</i>&nbsp;            thread = eventThread(event);</b>
+<b class="nc"><i>196</i>&nbsp;        } else {</b>
+<b class="nc"><i>197</i>&nbsp;            thread = null;</b>
+<i>198</i>&nbsp;        }
+<b class="nc"><i>199</i>&nbsp;        setCurrentThread(thread);</b>
+<i>200</i>&nbsp;    }
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;    private void setCurrentThread(ThreadReference thread) {
+<b class="nc"><i>203</i>&nbsp;        ThreadInfo.invalidateAll();</b>
+<b class="nc"><i>204</i>&nbsp;        ThreadInfo.setCurrentThread(thread);</b>
+<i>205</i>&nbsp;    }
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;    private boolean vmStartEvent(Event event)  {
+<b class="nc"><i>208</i>&nbsp;        VMStartEvent se = (VMStartEvent)event;</b>
+<b class="nc"><i>209</i>&nbsp;        notifier.vmStartEvent(se);</b>
+<b class="nc"><i>210</i>&nbsp;        return stopOnVMStart;</b>
+<i>211</i>&nbsp;    }
+<i>212</i>&nbsp;
+<i>213</i>&nbsp;    private boolean breakpointEvent(Event event)  {
+<b class="nc"><i>214</i>&nbsp;        BreakpointEvent be = (BreakpointEvent)event;</b>
+<b class="nc"><i>215</i>&nbsp;        notifier.breakpointEvent(be);</b>
+<b class="nc"><i>216</i>&nbsp;        return true;</b>
+<i>217</i>&nbsp;    }
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;    private boolean methodEntryEvent(Event event)  {
+<b class="nc"><i>220</i>&nbsp;        MethodEntryEvent me = (MethodEntryEvent)event;</b>
+<b class="nc"><i>221</i>&nbsp;        notifier.methodEntryEvent(me);</b>
+<b class="nc"><i>222</i>&nbsp;        return true;</b>
+<i>223</i>&nbsp;    }
+<i>224</i>&nbsp;
+<i>225</i>&nbsp;    private boolean methodExitEvent(Event event)  {
+<b class="nc"><i>226</i>&nbsp;        MethodExitEvent me = (MethodExitEvent)event;</b>
+<b class="nc"><i>227</i>&nbsp;        return notifier.methodExitEvent(me);</b>
+<i>228</i>&nbsp;    }
+<i>229</i>&nbsp;
+<i>230</i>&nbsp;    private boolean fieldWatchEvent(Event event)  {
+<b class="nc"><i>231</i>&nbsp;        WatchpointEvent fwe = (WatchpointEvent)event;</b>
+<b class="nc"><i>232</i>&nbsp;        notifier.fieldWatchEvent(fwe);</b>
+<b class="nc"><i>233</i>&nbsp;        return true;</b>
+<i>234</i>&nbsp;    }
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;    private boolean stepEvent(Event event)  {
+<b class="nc"><i>237</i>&nbsp;        StepEvent se = (StepEvent)event;</b>
+<b class="nc"><i>238</i>&nbsp;        notifier.stepEvent(se);</b>
+<b class="nc"><i>239</i>&nbsp;        return true;</b>
+<i>240</i>&nbsp;    }
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;    private boolean classPrepareEvent(Event event)  {
+<b class="nc"><i>243</i>&nbsp;        ClassPrepareEvent cle = (ClassPrepareEvent)event;</b>
+<b class="nc"><i>244</i>&nbsp;        notifier.classPrepareEvent(cle);</b>
+<i>245</i>&nbsp;
+<b class="nc"><i>246</i>&nbsp;        if (!Env.specList.resolve(cle)) {</b>
+<b class="nc"><i>247</i>&nbsp;            MessageOutput.lnprint(&quot;Stopping due to deferred breakpoint errors.&quot;);</b>
+<b class="nc"><i>248</i>&nbsp;            return true;</b>
+<i>249</i>&nbsp;        } else {
+<b class="nc"><i>250</i>&nbsp;            return false;</b>
+<i>251</i>&nbsp;        }
+<i>252</i>&nbsp;    }
+<i>253</i>&nbsp;
+<i>254</i>&nbsp;    private boolean classUnloadEvent(Event event)  {
+<b class="nc"><i>255</i>&nbsp;        ClassUnloadEvent cue = (ClassUnloadEvent)event;</b>
+<b class="nc"><i>256</i>&nbsp;        notifier.classUnloadEvent(cue);</b>
+<b class="nc"><i>257</i>&nbsp;        return false;</b>
+<i>258</i>&nbsp;    }
+<i>259</i>&nbsp;
+<i>260</i>&nbsp;    private boolean exceptionEvent(Event event) {
+<b class="nc"><i>261</i>&nbsp;        ExceptionEvent ee = (ExceptionEvent)event;</b>
+<b class="nc"><i>262</i>&nbsp;        notifier.exceptionEvent(ee);</b>
+<b class="nc"><i>263</i>&nbsp;        return true;</b>
+<i>264</i>&nbsp;    }
+<i>265</i>&nbsp;
+<i>266</i>&nbsp;    private boolean threadDeathEvent(Event event) {
+<b class="nc"><i>267</i>&nbsp;        ThreadDeathEvent tee = (ThreadDeathEvent)event;</b>
+<b class="nc"><i>268</i>&nbsp;        ThreadInfo.removeThread(tee.thread());</b>
+<b class="nc"><i>269</i>&nbsp;        return false;</b>
+<i>270</i>&nbsp;    }
+<i>271</i>&nbsp;
+<i>272</i>&nbsp;    private boolean threadStartEvent(Event event) {
+<b class="nc"><i>273</i>&nbsp;        ThreadStartEvent tse = (ThreadStartEvent)event;</b>
+<b class="nc"><i>274</i>&nbsp;        ThreadInfo.addThread(tse.thread());</b>
+<b class="nc"><i>275</i>&nbsp;        notifier.threadStartEvent(tse);</b>
+<b class="nc"><i>276</i>&nbsp;        return false;</b>
+<i>277</i>&nbsp;    }
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;    public boolean vmDeathEvent(Event event) {
+<b class="nc"><i>280</i>&nbsp;        shutdownMessageKey = &quot;The application exited&quot;;</b>
+<b class="nc"><i>281</i>&nbsp;        notifier.vmDeathEvent((VMDeathEvent)event);</b>
+<b class="nc"><i>282</i>&nbsp;        return false;</b>
+<i>283</i>&nbsp;    }
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;    public boolean vmDisconnectEvent(Event event) {
+<b class="nc"><i>286</i>&nbsp;        shutdownMessageKey = &quot;The application has been disconnected&quot;;</b>
+<b class="nc"><i>287</i>&nbsp;        notifier.vmDisconnectEvent((VMDisconnectEvent)event);</b>
+<b class="nc"><i>288</i>&nbsp;        return false;</b>
+<i>289</i>&nbsp;    }
+<i>290</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

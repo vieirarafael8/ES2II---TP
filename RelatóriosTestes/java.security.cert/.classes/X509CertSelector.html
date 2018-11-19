@@ -1,0 +1,2706 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: X509CertSelector</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.security.cert</a> ]
+</div>
+
+<h1>Coverage Summary for Class: X509CertSelector (java.security.cert)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">X509CertSelector</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 78)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 724)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.security.cert;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.math.BigInteger;
+<i>30</i>&nbsp;import java.security.PublicKey;
+<i>31</i>&nbsp;import java.util.*;
+<i>32</i>&nbsp;import javax.security.auth.x500.X500Principal;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import sun.security.util.HexDumpEncoder;
+<i>35</i>&nbsp;import sun.security.util.Debug;
+<i>36</i>&nbsp;import sun.security.util.DerInputStream;
+<i>37</i>&nbsp;import sun.security.util.DerValue;
+<i>38</i>&nbsp;import sun.security.util.ObjectIdentifier;
+<i>39</i>&nbsp;import sun.security.x509.*;
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;/**
+<i>42</i>&nbsp; * A {@code CertSelector} that selects {@code X509Certificates} that
+<i>43</i>&nbsp; * match all specified criteria. This class is particularly useful when
+<i>44</i>&nbsp; * selecting certificates from a {@code CertStore} to build a
+<i>45</i>&nbsp; * PKIX-compliant certification path.
+<i>46</i>&nbsp; * &lt;p&gt;
+<i>47</i>&nbsp; * When first constructed, an {@code X509CertSelector} has no criteria
+<i>48</i>&nbsp; * enabled and each of the {@code get} methods return a default value
+<i>49</i>&nbsp; * ({@code null}, or {@code -1} for the {@link #getBasicConstraints
+<i>50</i>&nbsp; * getBasicConstraints} method). Therefore, the {@link #match match}
+<i>51</i>&nbsp; * method would return {@code true} for any {@code X509Certificate}.
+<i>52</i>&nbsp; * Typically, several criteria are enabled (by calling
+<i>53</i>&nbsp; * {@link #setIssuer setIssuer} or
+<i>54</i>&nbsp; * {@link #setKeyUsage setKeyUsage}, for instance) and then the
+<i>55</i>&nbsp; * {@code X509CertSelector} is passed to
+<i>56</i>&nbsp; * {@link CertStore#getCertificates CertStore.getCertificates} or some similar
+<i>57</i>&nbsp; * method.
+<i>58</i>&nbsp; * &lt;p&gt;
+<i>59</i>&nbsp; * Several criteria can be enabled (by calling {@link #setIssuer setIssuer}
+<i>60</i>&nbsp; * and {@link #setSerialNumber setSerialNumber},
+<i>61</i>&nbsp; * for example) such that the {@code match} method
+<i>62</i>&nbsp; * usually uniquely matches a single {@code X509Certificate}. We say
+<i>63</i>&nbsp; * usually, since it is possible for two issuing CAs to have the same
+<i>64</i>&nbsp; * distinguished name and each issue a certificate with the same serial
+<i>65</i>&nbsp; * number. Other unique combinations include the issuer, subject,
+<i>66</i>&nbsp; * subjectKeyIdentifier and/or the subjectPublicKey criteria.
+<i>67</i>&nbsp; * &lt;p&gt;
+<i>68</i>&nbsp; * Please refer to &lt;a href=&quot;http://tools.ietf.org/html/rfc5280&quot;&gt;RFC 5280:
+<i>69</i>&nbsp; * Internet X.509 Public Key Infrastructure Certificate and CRL Profile&lt;/a&gt; for
+<i>70</i>&nbsp; * definitions of the X.509 certificate extensions mentioned below.
+<i>71</i>&nbsp; * &lt;p&gt;
+<i>72</i>&nbsp; * &lt;b&gt;Concurrent Access&lt;/b&gt;
+<i>73</i>&nbsp; * &lt;p&gt;
+<i>74</i>&nbsp; * Unless otherwise specified, the methods defined in this class are not
+<i>75</i>&nbsp; * thread-safe. Multiple threads that need to access a single
+<i>76</i>&nbsp; * object concurrently should synchronize amongst themselves and
+<i>77</i>&nbsp; * provide the necessary locking. Multiple threads each manipulating
+<i>78</i>&nbsp; * separate objects need not synchronize.
+<i>79</i>&nbsp; *
+<i>80</i>&nbsp; * @see CertSelector
+<i>81</i>&nbsp; * @see X509Certificate
+<i>82</i>&nbsp; *
+<i>83</i>&nbsp; * @since       1.4
+<i>84</i>&nbsp; * @author      Steve Hanna
+<i>85</i>&nbsp; */
+<i>86</i>&nbsp;public class X509CertSelector implements CertSelector {
+<i>87</i>&nbsp;
+<b class="nc"><i>88</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;certpath&quot;);</b>
+<i>89</i>&nbsp;
+<b class="nc"><i>90</i>&nbsp;    private static final ObjectIdentifier ANY_EXTENDED_KEY_USAGE =</b>
+<b class="nc"><i>91</i>&nbsp;        ObjectIdentifier.newInternal(new int[] {2, 5, 29, 37, 0});</b>
+<i>92</i>&nbsp;
+<i>93</i>&nbsp;    static {
+<b class="nc"><i>94</i>&nbsp;        CertPathHelperImpl.initialize();</b>
+<i>95</i>&nbsp;    }
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    private BigInteger serialNumber;
+<i>98</i>&nbsp;    private X500Principal issuer;
+<i>99</i>&nbsp;    private X500Principal subject;
+<i>100</i>&nbsp;    private byte[] subjectKeyID;
+<i>101</i>&nbsp;    private byte[] authorityKeyID;
+<i>102</i>&nbsp;    private Date certificateValid;
+<i>103</i>&nbsp;    private Date privateKeyValid;
+<i>104</i>&nbsp;    private ObjectIdentifier subjectPublicKeyAlgID;
+<i>105</i>&nbsp;    private PublicKey subjectPublicKey;
+<i>106</i>&nbsp;    private byte[] subjectPublicKeyBytes;
+<i>107</i>&nbsp;    private boolean[] keyUsage;
+<i>108</i>&nbsp;    private Set&lt;String&gt; keyPurposeSet;
+<i>109</i>&nbsp;    private Set&lt;ObjectIdentifier&gt; keyPurposeOIDSet;
+<i>110</i>&nbsp;    private Set&lt;List&lt;?&gt;&gt; subjectAlternativeNames;
+<i>111</i>&nbsp;    private Set&lt;GeneralNameInterface&gt; subjectAlternativeGeneralNames;
+<i>112</i>&nbsp;    private CertificatePolicySet policy;
+<i>113</i>&nbsp;    private Set&lt;String&gt; policySet;
+<i>114</i>&nbsp;    private Set&lt;List&lt;?&gt;&gt; pathToNames;
+<i>115</i>&nbsp;    private Set&lt;GeneralNameInterface&gt; pathToGeneralNames;
+<i>116</i>&nbsp;    private NameConstraintsExtension nc;
+<i>117</i>&nbsp;    private byte[] ncBytes;
+<b class="nc"><i>118</i>&nbsp;    private int basicConstraints = -1;</b>
+<i>119</i>&nbsp;    private X509Certificate x509Cert;
+<b class="nc"><i>120</i>&nbsp;    private boolean matchAllSubjectAltNames = true;</b>
+<i>121</i>&nbsp;
+<b class="nc"><i>122</i>&nbsp;    private static final Boolean FALSE = Boolean.FALSE;</b>
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    private static final int PRIVATE_KEY_USAGE_ID = 0;
+<i>125</i>&nbsp;    private static final int SUBJECT_ALT_NAME_ID = 1;
+<i>126</i>&nbsp;    private static final int NAME_CONSTRAINTS_ID = 2;
+<i>127</i>&nbsp;    private static final int CERT_POLICIES_ID = 3;
+<i>128</i>&nbsp;    private static final int EXTENDED_KEY_USAGE_ID = 4;
+<i>129</i>&nbsp;    private static final int NUM_OF_EXTENSIONS = 5;
+<b class="nc"><i>130</i>&nbsp;    private static final String[] EXTENSION_OIDS = new String[NUM_OF_EXTENSIONS];</b>
+<i>131</i>&nbsp;
+<i>132</i>&nbsp;    static {
+<b class="nc"><i>133</i>&nbsp;        EXTENSION_OIDS[PRIVATE_KEY_USAGE_ID]  = &quot;2.5.29.16&quot;;</b>
+<b class="nc"><i>134</i>&nbsp;        EXTENSION_OIDS[SUBJECT_ALT_NAME_ID]   = &quot;2.5.29.17&quot;;</b>
+<b class="nc"><i>135</i>&nbsp;        EXTENSION_OIDS[NAME_CONSTRAINTS_ID]   = &quot;2.5.29.30&quot;;</b>
+<b class="nc"><i>136</i>&nbsp;        EXTENSION_OIDS[CERT_POLICIES_ID]      = &quot;2.5.29.32&quot;;</b>
+<b class="nc"><i>137</i>&nbsp;        EXTENSION_OIDS[EXTENDED_KEY_USAGE_ID] = &quot;2.5.29.37&quot;;</b>
+<i>138</i>&nbsp;    };
+<i>139</i>&nbsp;
+<i>140</i>&nbsp;    /* Constants representing the GeneralName types */
+<i>141</i>&nbsp;    static final int NAME_ANY = 0;
+<i>142</i>&nbsp;    static final int NAME_RFC822 = 1;
+<i>143</i>&nbsp;    static final int NAME_DNS = 2;
+<i>144</i>&nbsp;    static final int NAME_X400 = 3;
+<i>145</i>&nbsp;    static final int NAME_DIRECTORY = 4;
+<i>146</i>&nbsp;    static final int NAME_EDI = 5;
+<i>147</i>&nbsp;    static final int NAME_URI = 6;
+<i>148</i>&nbsp;    static final int NAME_IP = 7;
+<i>149</i>&nbsp;    static final int NAME_OID = 8;
+<i>150</i>&nbsp;
+<i>151</i>&nbsp;    /**
+<i>152</i>&nbsp;     * Creates an {@code X509CertSelector}. Initially, no criteria are set
+<i>153</i>&nbsp;     * so any {@code X509Certificate} will match.
+<i>154</i>&nbsp;     */
+<b class="nc"><i>155</i>&nbsp;    public X509CertSelector() {</b>
+<i>156</i>&nbsp;        // empty
+<i>157</i>&nbsp;    }
+<i>158</i>&nbsp;
+<i>159</i>&nbsp;    /**
+<i>160</i>&nbsp;     * Sets the certificateEquals criterion. The specified
+<i>161</i>&nbsp;     * {@code X509Certificate} must be equal to the
+<i>162</i>&nbsp;     * {@code X509Certificate} passed to the {@code match} method.
+<i>163</i>&nbsp;     * If {@code null}, then this check is not applied.
+<i>164</i>&nbsp;     *
+<i>165</i>&nbsp;     * &lt;p&gt;This method is particularly useful when it is necessary to
+<i>166</i>&nbsp;     * match a single certificate. Although other criteria can be specified
+<i>167</i>&nbsp;     * in conjunction with the certificateEquals criterion, it is usually not
+<i>168</i>&nbsp;     * practical or necessary.
+<i>169</i>&nbsp;     *
+<i>170</i>&nbsp;     * @param cert the {@code X509Certificate} to match (or
+<i>171</i>&nbsp;     * {@code null})
+<i>172</i>&nbsp;     * @see #getCertificate
+<i>173</i>&nbsp;     */
+<i>174</i>&nbsp;    public void setCertificate(X509Certificate cert) {
+<b class="nc"><i>175</i>&nbsp;        x509Cert = cert;</b>
+<i>176</i>&nbsp;    }
+<i>177</i>&nbsp;
+<i>178</i>&nbsp;    /**
+<i>179</i>&nbsp;     * Sets the serialNumber criterion. The specified serial number
+<i>180</i>&nbsp;     * must match the certificate serial number in the
+<i>181</i>&nbsp;     * {@code X509Certificate}. If {@code null}, any certificate
+<i>182</i>&nbsp;     * serial number will do.
+<i>183</i>&nbsp;     *
+<i>184</i>&nbsp;     * @param serial the certificate serial number to match
+<i>185</i>&nbsp;     *        (or {@code null})
+<i>186</i>&nbsp;     * @see #getSerialNumber
+<i>187</i>&nbsp;     */
+<i>188</i>&nbsp;    public void setSerialNumber(BigInteger serial) {
+<b class="nc"><i>189</i>&nbsp;        serialNumber = serial;</b>
+<i>190</i>&nbsp;    }
+<i>191</i>&nbsp;
+<i>192</i>&nbsp;    /**
+<i>193</i>&nbsp;     * Sets the issuer criterion. The specified distinguished name
+<i>194</i>&nbsp;     * must match the issuer distinguished name in the
+<i>195</i>&nbsp;     * {@code X509Certificate}. If {@code null}, any issuer
+<i>196</i>&nbsp;     * distinguished name will do.
+<i>197</i>&nbsp;     *
+<i>198</i>&nbsp;     * @param issuer a distinguished name as X500Principal
+<i>199</i>&nbsp;     *                 (or {@code null})
+<i>200</i>&nbsp;     * @since 1.5
+<i>201</i>&nbsp;     */
+<i>202</i>&nbsp;    public void setIssuer(X500Principal issuer) {
+<b class="nc"><i>203</i>&nbsp;        this.issuer = issuer;</b>
+<i>204</i>&nbsp;    }
+<i>205</i>&nbsp;
+<i>206</i>&nbsp;    /**
+<i>207</i>&nbsp;     * &lt;strong&gt;Denigrated&lt;/strong&gt;, use {@linkplain #setIssuer(X500Principal)}
+<i>208</i>&nbsp;     * or {@linkplain #setIssuer(byte[])} instead. This method should not be
+<i>209</i>&nbsp;     * relied on as it can fail to match some certificates because of a loss of
+<i>210</i>&nbsp;     * encoding information in the
+<i>211</i>&nbsp;     * &lt;a href=&quot;http://www.ietf.org/rfc/rfc2253.txt&quot;&gt;RFC 2253&lt;/a&gt; String form
+<i>212</i>&nbsp;     * of some distinguished names.
+<i>213</i>&nbsp;     * &lt;p&gt;
+<i>214</i>&nbsp;     * Sets the issuer criterion. The specified distinguished name
+<i>215</i>&nbsp;     * must match the issuer distinguished name in the
+<i>216</i>&nbsp;     * {@code X509Certificate}. If {@code null}, any issuer
+<i>217</i>&nbsp;     * distinguished name will do.
+<i>218</i>&nbsp;     * &lt;p&gt;
+<i>219</i>&nbsp;     * If {@code issuerDN} is not {@code null}, it should contain a
+<i>220</i>&nbsp;     * distinguished name, in RFC 2253 format.
+<i>221</i>&nbsp;     *
+<i>222</i>&nbsp;     * @param issuerDN a distinguished name in RFC 2253 format
+<i>223</i>&nbsp;     *                 (or {@code null})
+<i>224</i>&nbsp;     * @throws IOException if a parsing error occurs (incorrect form for DN)
+<i>225</i>&nbsp;     */
+<i>226</i>&nbsp;    public void setIssuer(String issuerDN) throws IOException {
+<b class="nc"><i>227</i>&nbsp;        if (issuerDN == null) {</b>
+<b class="nc"><i>228</i>&nbsp;            issuer = null;</b>
+<i>229</i>&nbsp;        } else {
+<b class="nc"><i>230</i>&nbsp;            issuer = new X500Name(issuerDN).asX500Principal();</b>
+<i>231</i>&nbsp;        }
+<i>232</i>&nbsp;    }
+<i>233</i>&nbsp;
+<i>234</i>&nbsp;    /**
+<i>235</i>&nbsp;     * Sets the issuer criterion. The specified distinguished name
+<i>236</i>&nbsp;     * must match the issuer distinguished name in the
+<i>237</i>&nbsp;     * {@code X509Certificate}. If {@code null} is specified,
+<i>238</i>&nbsp;     * the issuer criterion is disabled and any issuer distinguished name will
+<i>239</i>&nbsp;     * do.
+<i>240</i>&nbsp;     * &lt;p&gt;
+<i>241</i>&nbsp;     * If {@code issuerDN} is not {@code null}, it should contain a
+<i>242</i>&nbsp;     * single DER encoded distinguished name, as defined in X.501. The ASN.1
+<i>243</i>&nbsp;     * notation for this structure is as follows.
+<i>244</i>&nbsp;     * &lt;pre&gt;{@code
+<i>245</i>&nbsp;     * Name ::= CHOICE {
+<i>246</i>&nbsp;     *   RDNSequence }
+<i>247</i>&nbsp;     *
+<i>248</i>&nbsp;     * RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
+<i>249</i>&nbsp;     *
+<i>250</i>&nbsp;     * RelativeDistinguishedName ::=
+<i>251</i>&nbsp;     *   SET SIZE (1 .. MAX) OF AttributeTypeAndValue
+<i>252</i>&nbsp;     *
+<i>253</i>&nbsp;     * AttributeTypeAndValue ::= SEQUENCE {
+<i>254</i>&nbsp;     *   type     AttributeType,
+<i>255</i>&nbsp;     *   value    AttributeValue }
+<i>256</i>&nbsp;     *
+<i>257</i>&nbsp;     * AttributeType ::= OBJECT IDENTIFIER
+<i>258</i>&nbsp;     *
+<i>259</i>&nbsp;     * AttributeValue ::= ANY DEFINED BY AttributeType
+<i>260</i>&nbsp;     * ....
+<i>261</i>&nbsp;     * DirectoryString ::= CHOICE {
+<i>262</i>&nbsp;     *       teletexString           TeletexString (SIZE (1..MAX)),
+<i>263</i>&nbsp;     *       printableString         PrintableString (SIZE (1..MAX)),
+<i>264</i>&nbsp;     *       universalString         UniversalString (SIZE (1..MAX)),
+<i>265</i>&nbsp;     *       utf8String              UTF8String (SIZE (1.. MAX)),
+<i>266</i>&nbsp;     *       bmpString               BMPString (SIZE (1..MAX)) }
+<i>267</i>&nbsp;     * }&lt;/pre&gt;
+<i>268</i>&nbsp;     * &lt;p&gt;
+<i>269</i>&nbsp;     * Note that the byte array specified here is cloned to protect against
+<i>270</i>&nbsp;     * subsequent modifications.
+<i>271</i>&nbsp;     *
+<i>272</i>&nbsp;     * @param issuerDN a byte array containing the distinguished name
+<i>273</i>&nbsp;     *                 in ASN.1 DER encoded form (or {@code null})
+<i>274</i>&nbsp;     * @throws IOException if an encoding error occurs (incorrect form for DN)
+<i>275</i>&nbsp;     */
+<i>276</i>&nbsp;    public void setIssuer(byte[] issuerDN) throws IOException {
+<i>277</i>&nbsp;        try {
+<b class="nc"><i>278</i>&nbsp;            issuer = (issuerDN == null ? null : new X500Principal(issuerDN));</b>
+<b class="nc"><i>279</i>&nbsp;        } catch (IllegalArgumentException e) {</b>
+<b class="nc"><i>280</i>&nbsp;            throw new IOException(&quot;Invalid name&quot;, e);</b>
+<b class="nc"><i>281</i>&nbsp;        }</b>
+<i>282</i>&nbsp;    }
+<i>283</i>&nbsp;
+<i>284</i>&nbsp;    /**
+<i>285</i>&nbsp;     * Sets the subject criterion. The specified distinguished name
+<i>286</i>&nbsp;     * must match the subject distinguished name in the
+<i>287</i>&nbsp;     * {@code X509Certificate}. If {@code null}, any subject
+<i>288</i>&nbsp;     * distinguished name will do.
+<i>289</i>&nbsp;     *
+<i>290</i>&nbsp;     * @param subject a distinguished name as X500Principal
+<i>291</i>&nbsp;     *                  (or {@code null})
+<i>292</i>&nbsp;     * @since 1.5
+<i>293</i>&nbsp;     */
+<i>294</i>&nbsp;    public void setSubject(X500Principal subject) {
+<b class="nc"><i>295</i>&nbsp;        this.subject = subject;</b>
+<i>296</i>&nbsp;    }
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;    /**
+<i>299</i>&nbsp;     * &lt;strong&gt;Denigrated&lt;/strong&gt;, use {@linkplain #setSubject(X500Principal)}
+<i>300</i>&nbsp;     * or {@linkplain #setSubject(byte[])} instead. This method should not be
+<i>301</i>&nbsp;     * relied on as it can fail to match some certificates because of a loss of
+<i>302</i>&nbsp;     * encoding information in the RFC 2253 String form of some distinguished
+<i>303</i>&nbsp;     * names.
+<i>304</i>&nbsp;     * &lt;p&gt;
+<i>305</i>&nbsp;     * Sets the subject criterion. The specified distinguished name
+<i>306</i>&nbsp;     * must match the subject distinguished name in the
+<i>307</i>&nbsp;     * {@code X509Certificate}. If {@code null}, any subject
+<i>308</i>&nbsp;     * distinguished name will do.
+<i>309</i>&nbsp;     * &lt;p&gt;
+<i>310</i>&nbsp;     * If {@code subjectDN} is not {@code null}, it should contain a
+<i>311</i>&nbsp;     * distinguished name, in RFC 2253 format.
+<i>312</i>&nbsp;     *
+<i>313</i>&nbsp;     * @param subjectDN a distinguished name in RFC 2253 format
+<i>314</i>&nbsp;     *                  (or {@code null})
+<i>315</i>&nbsp;     * @throws IOException if a parsing error occurs (incorrect form for DN)
+<i>316</i>&nbsp;     */
+<i>317</i>&nbsp;    public void setSubject(String subjectDN) throws IOException {
+<b class="nc"><i>318</i>&nbsp;        if (subjectDN == null) {</b>
+<b class="nc"><i>319</i>&nbsp;            subject = null;</b>
+<i>320</i>&nbsp;        } else {
+<b class="nc"><i>321</i>&nbsp;            subject = new X500Name(subjectDN).asX500Principal();</b>
+<i>322</i>&nbsp;        }
+<i>323</i>&nbsp;    }
+<i>324</i>&nbsp;
+<i>325</i>&nbsp;    /**
+<i>326</i>&nbsp;     * Sets the subject criterion. The specified distinguished name
+<i>327</i>&nbsp;     * must match the subject distinguished name in the
+<i>328</i>&nbsp;     * {@code X509Certificate}. If {@code null}, any subject
+<i>329</i>&nbsp;     * distinguished name will do.
+<i>330</i>&nbsp;     * &lt;p&gt;
+<i>331</i>&nbsp;     * If {@code subjectDN} is not {@code null}, it should contain a
+<i>332</i>&nbsp;     * single DER encoded distinguished name, as defined in X.501. For the ASN.1
+<i>333</i>&nbsp;     * notation for this structure, see
+<i>334</i>&nbsp;     * {@link #setIssuer(byte [] issuerDN) setIssuer(byte [] issuerDN)}.
+<i>335</i>&nbsp;     *
+<i>336</i>&nbsp;     * @param subjectDN a byte array containing the distinguished name in
+<i>337</i>&nbsp;     *                  ASN.1 DER format (or {@code null})
+<i>338</i>&nbsp;     * @throws IOException if an encoding error occurs (incorrect form for DN)
+<i>339</i>&nbsp;     */
+<i>340</i>&nbsp;    public void setSubject(byte[] subjectDN) throws IOException {
+<i>341</i>&nbsp;        try {
+<b class="nc"><i>342</i>&nbsp;            subject = (subjectDN == null ? null : new X500Principal(subjectDN));</b>
+<b class="nc"><i>343</i>&nbsp;        } catch (IllegalArgumentException e) {</b>
+<b class="nc"><i>344</i>&nbsp;            throw new IOException(&quot;Invalid name&quot;, e);</b>
+<b class="nc"><i>345</i>&nbsp;        }</b>
+<i>346</i>&nbsp;    }
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;    /**
+<i>349</i>&nbsp;     * Sets the subjectKeyIdentifier criterion. The
+<i>350</i>&nbsp;     * {@code X509Certificate} must contain a SubjectKeyIdentifier
+<i>351</i>&nbsp;     * extension for which the contents of the extension
+<i>352</i>&nbsp;     * matches the specified criterion value.
+<i>353</i>&nbsp;     * If the criterion value is {@code null}, no
+<i>354</i>&nbsp;     * subjectKeyIdentifier check will be done.
+<i>355</i>&nbsp;     * &lt;p&gt;
+<i>356</i>&nbsp;     * If {@code subjectKeyID} is not {@code null}, it
+<i>357</i>&nbsp;     * should contain a single DER encoded value corresponding to the contents
+<i>358</i>&nbsp;     * of the extension value (not including the object identifier,
+<i>359</i>&nbsp;     * criticality setting, and encapsulating OCTET STRING)
+<i>360</i>&nbsp;     * for a SubjectKeyIdentifier extension.
+<i>361</i>&nbsp;     * The ASN.1 notation for this structure follows.
+<i>362</i>&nbsp;     *
+<i>363</i>&nbsp;     * &lt;pre&gt;{@code
+<i>364</i>&nbsp;     * SubjectKeyIdentifier ::= KeyIdentifier
+<i>365</i>&nbsp;     *
+<i>366</i>&nbsp;     * KeyIdentifier ::= OCTET STRING
+<i>367</i>&nbsp;     * }&lt;/pre&gt;
+<i>368</i>&nbsp;     * &lt;p&gt;
+<i>369</i>&nbsp;     * Since the format of subject key identifiers is not mandated by
+<i>370</i>&nbsp;     * any standard, subject key identifiers are not parsed by the
+<i>371</i>&nbsp;     * {@code X509CertSelector}. Instead, the values are compared using
+<i>372</i>&nbsp;     * a byte-by-byte comparison.
+<i>373</i>&nbsp;     * &lt;p&gt;
+<i>374</i>&nbsp;     * Note that the byte array supplied here is cloned to protect against
+<i>375</i>&nbsp;     * subsequent modifications.
+<i>376</i>&nbsp;     *
+<i>377</i>&nbsp;     * @param subjectKeyID the subject key identifier (or {@code null})
+<i>378</i>&nbsp;     * @see #getSubjectKeyIdentifier
+<i>379</i>&nbsp;     */
+<i>380</i>&nbsp;    public void setSubjectKeyIdentifier(byte[] subjectKeyID) {
+<b class="nc"><i>381</i>&nbsp;        if (subjectKeyID == null) {</b>
+<b class="nc"><i>382</i>&nbsp;            this.subjectKeyID = null;</b>
+<i>383</i>&nbsp;        } else {
+<b class="nc"><i>384</i>&nbsp;            this.subjectKeyID = subjectKeyID.clone();</b>
+<i>385</i>&nbsp;        }
+<i>386</i>&nbsp;    }
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;    /**
+<i>389</i>&nbsp;     * Sets the authorityKeyIdentifier criterion. The
+<i>390</i>&nbsp;     * {@code X509Certificate} must contain an
+<i>391</i>&nbsp;     * AuthorityKeyIdentifier extension for which the contents of the
+<i>392</i>&nbsp;     * extension value matches the specified criterion value.
+<i>393</i>&nbsp;     * If the criterion value is {@code null}, no
+<i>394</i>&nbsp;     * authorityKeyIdentifier check will be done.
+<i>395</i>&nbsp;     * &lt;p&gt;
+<i>396</i>&nbsp;     * If {@code authorityKeyID} is not {@code null}, it
+<i>397</i>&nbsp;     * should contain a single DER encoded value corresponding to the contents
+<i>398</i>&nbsp;     * of the extension value (not including the object identifier,
+<i>399</i>&nbsp;     * criticality setting, and encapsulating OCTET STRING)
+<i>400</i>&nbsp;     * for an AuthorityKeyIdentifier extension.
+<i>401</i>&nbsp;     * The ASN.1 notation for this structure follows.
+<i>402</i>&nbsp;     *
+<i>403</i>&nbsp;     * &lt;pre&gt;{@code
+<i>404</i>&nbsp;     * AuthorityKeyIdentifier ::= SEQUENCE {
+<i>405</i>&nbsp;     *    keyIdentifier             [0] KeyIdentifier           OPTIONAL,
+<i>406</i>&nbsp;     *    authorityCertIssuer       [1] GeneralNames            OPTIONAL,
+<i>407</i>&nbsp;     *    authorityCertSerialNumber [2] CertificateSerialNumber OPTIONAL  }
+<i>408</i>&nbsp;     *
+<i>409</i>&nbsp;     * KeyIdentifier ::= OCTET STRING
+<i>410</i>&nbsp;     * }&lt;/pre&gt;
+<i>411</i>&nbsp;     * &lt;p&gt;
+<i>412</i>&nbsp;     * Authority key identifiers are not parsed by the
+<i>413</i>&nbsp;     * {@code X509CertSelector}.  Instead, the values are
+<i>414</i>&nbsp;     * compared using a byte-by-byte comparison.
+<i>415</i>&nbsp;     * &lt;p&gt;
+<i>416</i>&nbsp;     * When the {@code keyIdentifier} field of
+<i>417</i>&nbsp;     * {@code AuthorityKeyIdentifier} is populated, the value is
+<i>418</i>&nbsp;     * usually taken from the {@code SubjectKeyIdentifier} extension
+<i>419</i>&nbsp;     * in the issuer&#39;s certificate.  Note, however, that the result of
+<i>420</i>&nbsp;     * {@code X509Certificate.getExtensionValue(&lt;SubjectKeyIdentifier Object
+<i>421</i>&nbsp;     * Identifier&gt;)} on the issuer&#39;s certificate may NOT be used
+<i>422</i>&nbsp;     * directly as the input to {@code setAuthorityKeyIdentifier}.
+<i>423</i>&nbsp;     * This is because the SubjectKeyIdentifier contains
+<i>424</i>&nbsp;     * only a KeyIdentifier OCTET STRING, and not a SEQUENCE of
+<i>425</i>&nbsp;     * KeyIdentifier, GeneralNames, and CertificateSerialNumber.
+<i>426</i>&nbsp;     * In order to use the extension value of the issuer certificate&#39;s
+<i>427</i>&nbsp;     * {@code SubjectKeyIdentifier}
+<i>428</i>&nbsp;     * extension, it will be necessary to extract the value of the embedded
+<i>429</i>&nbsp;     * {@code KeyIdentifier} OCTET STRING, then DER encode this OCTET
+<i>430</i>&nbsp;     * STRING inside a SEQUENCE.
+<i>431</i>&nbsp;     * For more details on SubjectKeyIdentifier, see
+<i>432</i>&nbsp;     * {@link #setSubjectKeyIdentifier(byte[] subjectKeyID)}.
+<i>433</i>&nbsp;     * &lt;p&gt;
+<i>434</i>&nbsp;     * Note also that the byte array supplied here is cloned to protect against
+<i>435</i>&nbsp;     * subsequent modifications.
+<i>436</i>&nbsp;     *
+<i>437</i>&nbsp;     * @param authorityKeyID the authority key identifier
+<i>438</i>&nbsp;     *        (or {@code null})
+<i>439</i>&nbsp;     * @see #getAuthorityKeyIdentifier
+<i>440</i>&nbsp;     */
+<i>441</i>&nbsp;    public void setAuthorityKeyIdentifier(byte[] authorityKeyID) {
+<b class="nc"><i>442</i>&nbsp;        if (authorityKeyID == null) {</b>
+<b class="nc"><i>443</i>&nbsp;            this.authorityKeyID = null;</b>
+<i>444</i>&nbsp;        } else {
+<b class="nc"><i>445</i>&nbsp;            this.authorityKeyID = authorityKeyID.clone();</b>
+<i>446</i>&nbsp;        }
+<i>447</i>&nbsp;    }
+<i>448</i>&nbsp;
+<i>449</i>&nbsp;    /**
+<i>450</i>&nbsp;     * Sets the certificateValid criterion. The specified date must fall
+<i>451</i>&nbsp;     * within the certificate validity period for the
+<i>452</i>&nbsp;     * {@code X509Certificate}. If {@code null}, no certificateValid
+<i>453</i>&nbsp;     * check will be done.
+<i>454</i>&nbsp;     * &lt;p&gt;
+<i>455</i>&nbsp;     * Note that the {@code Date} supplied here is cloned to protect
+<i>456</i>&nbsp;     * against subsequent modifications.
+<i>457</i>&nbsp;     *
+<i>458</i>&nbsp;     * @param certValid the {@code Date} to check (or {@code null})
+<i>459</i>&nbsp;     * @see #getCertificateValid
+<i>460</i>&nbsp;     */
+<i>461</i>&nbsp;    public void setCertificateValid(Date certValid) {
+<b class="nc"><i>462</i>&nbsp;        if (certValid == null) {</b>
+<b class="nc"><i>463</i>&nbsp;            certificateValid = null;</b>
+<i>464</i>&nbsp;        } else {
+<b class="nc"><i>465</i>&nbsp;            certificateValid = (Date)certValid.clone();</b>
+<i>466</i>&nbsp;        }
+<i>467</i>&nbsp;    }
+<i>468</i>&nbsp;
+<i>469</i>&nbsp;    /**
+<i>470</i>&nbsp;     * Sets the privateKeyValid criterion. The specified date must fall
+<i>471</i>&nbsp;     * within the private key validity period for the
+<i>472</i>&nbsp;     * {@code X509Certificate}. If {@code null}, no privateKeyValid
+<i>473</i>&nbsp;     * check will be done.
+<i>474</i>&nbsp;     * &lt;p&gt;
+<i>475</i>&nbsp;     * Note that the {@code Date} supplied here is cloned to protect
+<i>476</i>&nbsp;     * against subsequent modifications.
+<i>477</i>&nbsp;     *
+<i>478</i>&nbsp;     * @param privateKeyValid the {@code Date} to check (or
+<i>479</i>&nbsp;     *                        {@code null})
+<i>480</i>&nbsp;     * @see #getPrivateKeyValid
+<i>481</i>&nbsp;     */
+<i>482</i>&nbsp;    public void setPrivateKeyValid(Date privateKeyValid) {
+<b class="nc"><i>483</i>&nbsp;        if (privateKeyValid == null) {</b>
+<b class="nc"><i>484</i>&nbsp;            this.privateKeyValid = null;</b>
+<i>485</i>&nbsp;        } else {
+<b class="nc"><i>486</i>&nbsp;            this.privateKeyValid = (Date)privateKeyValid.clone();</b>
+<i>487</i>&nbsp;        }
+<i>488</i>&nbsp;    }
+<i>489</i>&nbsp;
+<i>490</i>&nbsp;    /**
+<i>491</i>&nbsp;     * Sets the subjectPublicKeyAlgID criterion. The
+<i>492</i>&nbsp;     * {@code X509Certificate} must contain a subject public key
+<i>493</i>&nbsp;     * with the specified algorithm. If {@code null}, no
+<i>494</i>&nbsp;     * subjectPublicKeyAlgID check will be done.
+<i>495</i>&nbsp;     *
+<i>496</i>&nbsp;     * @param oid The object identifier (OID) of the algorithm to check
+<i>497</i>&nbsp;     *            for (or {@code null}). An OID is represented by a
+<i>498</i>&nbsp;     *            set of nonnegative integers separated by periods.
+<i>499</i>&nbsp;     * @throws IOException if the OID is invalid, such as
+<i>500</i>&nbsp;     * the first component being not 0, 1 or 2 or the second component
+<i>501</i>&nbsp;     * being greater than 39.
+<i>502</i>&nbsp;     *
+<i>503</i>&nbsp;     * @see #getSubjectPublicKeyAlgID
+<i>504</i>&nbsp;     */
+<i>505</i>&nbsp;    public void setSubjectPublicKeyAlgID(String oid) throws IOException {
+<b class="nc"><i>506</i>&nbsp;        if (oid == null) {</b>
+<b class="nc"><i>507</i>&nbsp;            subjectPublicKeyAlgID = null;</b>
+<i>508</i>&nbsp;        } else {
+<b class="nc"><i>509</i>&nbsp;            subjectPublicKeyAlgID = new ObjectIdentifier(oid);</b>
+<i>510</i>&nbsp;        }
+<i>511</i>&nbsp;    }
+<i>512</i>&nbsp;
+<i>513</i>&nbsp;    /**
+<i>514</i>&nbsp;     * Sets the subjectPublicKey criterion. The
+<i>515</i>&nbsp;     * {@code X509Certificate} must contain the specified subject public
+<i>516</i>&nbsp;     * key. If {@code null}, no subjectPublicKey check will be done.
+<i>517</i>&nbsp;     *
+<i>518</i>&nbsp;     * @param key the subject public key to check for (or {@code null})
+<i>519</i>&nbsp;     * @see #getSubjectPublicKey
+<i>520</i>&nbsp;     */
+<i>521</i>&nbsp;    public void setSubjectPublicKey(PublicKey key) {
+<b class="nc"><i>522</i>&nbsp;        if (key == null) {</b>
+<b class="nc"><i>523</i>&nbsp;            subjectPublicKey = null;</b>
+<b class="nc"><i>524</i>&nbsp;            subjectPublicKeyBytes = null;</b>
+<i>525</i>&nbsp;        } else {
+<b class="nc"><i>526</i>&nbsp;            subjectPublicKey = key;</b>
+<b class="nc"><i>527</i>&nbsp;            subjectPublicKeyBytes = key.getEncoded();</b>
+<i>528</i>&nbsp;        }
+<i>529</i>&nbsp;    }
+<i>530</i>&nbsp;
+<i>531</i>&nbsp;    /**
+<i>532</i>&nbsp;     * Sets the subjectPublicKey criterion. The {@code X509Certificate}
+<i>533</i>&nbsp;     * must contain the specified subject public key. If {@code null},
+<i>534</i>&nbsp;     * no subjectPublicKey check will be done.
+<i>535</i>&nbsp;     * &lt;p&gt;
+<i>536</i>&nbsp;     * Because this method allows the public key to be specified as a byte
+<i>537</i>&nbsp;     * array, it may be used for unknown key types.
+<i>538</i>&nbsp;     * &lt;p&gt;
+<i>539</i>&nbsp;     * If {@code key} is not {@code null}, it should contain a
+<i>540</i>&nbsp;     * single DER encoded SubjectPublicKeyInfo structure, as defined in X.509.
+<i>541</i>&nbsp;     * The ASN.1 notation for this structure is as follows.
+<i>542</i>&nbsp;     * &lt;pre&gt;{@code
+<i>543</i>&nbsp;     * SubjectPublicKeyInfo  ::=  SEQUENCE  {
+<i>544</i>&nbsp;     *   algorithm            AlgorithmIdentifier,
+<i>545</i>&nbsp;     *   subjectPublicKey     BIT STRING  }
+<i>546</i>&nbsp;     *
+<i>547</i>&nbsp;     * AlgorithmIdentifier  ::=  SEQUENCE  {
+<i>548</i>&nbsp;     *   algorithm               OBJECT IDENTIFIER,
+<i>549</i>&nbsp;     *   parameters              ANY DEFINED BY algorithm OPTIONAL  }
+<i>550</i>&nbsp;     *                              -- contains a value of the type
+<i>551</i>&nbsp;     *                              -- registered for use with the
+<i>552</i>&nbsp;     *                              -- algorithm object identifier value
+<i>553</i>&nbsp;     * }&lt;/pre&gt;
+<i>554</i>&nbsp;     * &lt;p&gt;
+<i>555</i>&nbsp;     * Note that the byte array supplied here is cloned to protect against
+<i>556</i>&nbsp;     * subsequent modifications.
+<i>557</i>&nbsp;     *
+<i>558</i>&nbsp;     * @param key a byte array containing the subject public key in ASN.1 DER
+<i>559</i>&nbsp;     *            form (or {@code null})
+<i>560</i>&nbsp;     * @throws IOException if an encoding error occurs (incorrect form for
+<i>561</i>&nbsp;     * subject public key)
+<i>562</i>&nbsp;     * @see #getSubjectPublicKey
+<i>563</i>&nbsp;     */
+<i>564</i>&nbsp;    public void setSubjectPublicKey(byte[] key) throws IOException {
+<b class="nc"><i>565</i>&nbsp;        if (key == null) {</b>
+<b class="nc"><i>566</i>&nbsp;            subjectPublicKey = null;</b>
+<b class="nc"><i>567</i>&nbsp;            subjectPublicKeyBytes = null;</b>
+<i>568</i>&nbsp;        } else {
+<b class="nc"><i>569</i>&nbsp;            subjectPublicKeyBytes = key.clone();</b>
+<b class="nc"><i>570</i>&nbsp;            subjectPublicKey = X509Key.parse(new DerValue(subjectPublicKeyBytes));</b>
+<i>571</i>&nbsp;        }
+<i>572</i>&nbsp;    }
+<i>573</i>&nbsp;
+<i>574</i>&nbsp;    /**
+<i>575</i>&nbsp;     * Sets the keyUsage criterion. The {@code X509Certificate}
+<i>576</i>&nbsp;     * must allow the specified keyUsage values. If {@code null}, no
+<i>577</i>&nbsp;     * keyUsage check will be done. Note that an {@code X509Certificate}
+<i>578</i>&nbsp;     * that has no keyUsage extension implicitly allows all keyUsage values.
+<i>579</i>&nbsp;     * &lt;p&gt;
+<i>580</i>&nbsp;     * Note that the boolean array supplied here is cloned to protect against
+<i>581</i>&nbsp;     * subsequent modifications.
+<i>582</i>&nbsp;     *
+<i>583</i>&nbsp;     * @param keyUsage a boolean array in the same format as the boolean
+<i>584</i>&nbsp;     *                 array returned by
+<i>585</i>&nbsp;     * {@link X509Certificate#getKeyUsage() X509Certificate.getKeyUsage()}.
+<i>586</i>&nbsp;     *                 Or {@code null}.
+<i>587</i>&nbsp;     * @see #getKeyUsage
+<i>588</i>&nbsp;     */
+<i>589</i>&nbsp;    public void setKeyUsage(boolean[] keyUsage) {
+<b class="nc"><i>590</i>&nbsp;        if (keyUsage == null) {</b>
+<b class="nc"><i>591</i>&nbsp;            this.keyUsage = null;</b>
+<i>592</i>&nbsp;        } else {
+<b class="nc"><i>593</i>&nbsp;            this.keyUsage = keyUsage.clone();</b>
+<i>594</i>&nbsp;        }
+<i>595</i>&nbsp;    }
+<i>596</i>&nbsp;
+<i>597</i>&nbsp;    /**
+<i>598</i>&nbsp;     * Sets the extendedKeyUsage criterion. The {@code X509Certificate}
+<i>599</i>&nbsp;     * must allow the specified key purposes in its extended key usage
+<i>600</i>&nbsp;     * extension. If {@code keyPurposeSet} is empty or {@code null},
+<i>601</i>&nbsp;     * no extendedKeyUsage check will be done. Note that an
+<i>602</i>&nbsp;     * {@code X509Certificate} that has no extendedKeyUsage extension
+<i>603</i>&nbsp;     * implicitly allows all key purposes.
+<i>604</i>&nbsp;     * &lt;p&gt;
+<i>605</i>&nbsp;     * Note that the {@code Set} is cloned to protect against
+<i>606</i>&nbsp;     * subsequent modifications.
+<i>607</i>&nbsp;     *
+<i>608</i>&nbsp;     * @param keyPurposeSet a {@code Set} of key purpose OIDs in string
+<i>609</i>&nbsp;     * format (or {@code null}). Each OID is represented by a set of
+<i>610</i>&nbsp;     * nonnegative integers separated by periods.
+<i>611</i>&nbsp;     * @throws IOException if the OID is invalid, such as
+<i>612</i>&nbsp;     * the first component being not 0, 1 or 2 or the second component
+<i>613</i>&nbsp;     * being greater than 39.
+<i>614</i>&nbsp;     * @see #getExtendedKeyUsage
+<i>615</i>&nbsp;     */
+<i>616</i>&nbsp;    public void setExtendedKeyUsage(Set&lt;String&gt; keyPurposeSet) throws IOException {
+<b class="nc"><i>617</i>&nbsp;        if ((keyPurposeSet == null) || keyPurposeSet.isEmpty()) {</b>
+<b class="nc"><i>618</i>&nbsp;            this.keyPurposeSet = null;</b>
+<b class="nc"><i>619</i>&nbsp;            keyPurposeOIDSet = null;</b>
+<i>620</i>&nbsp;        } else {
+<b class="nc"><i>621</i>&nbsp;            this.keyPurposeSet =</b>
+<b class="nc"><i>622</i>&nbsp;                Collections.unmodifiableSet(new HashSet&lt;&gt;(keyPurposeSet));</b>
+<b class="nc"><i>623</i>&nbsp;            keyPurposeOIDSet = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>624</i>&nbsp;            for (String s : this.keyPurposeSet) {</b>
+<b class="nc"><i>625</i>&nbsp;                keyPurposeOIDSet.add(new ObjectIdentifier(s));</b>
+<b class="nc"><i>626</i>&nbsp;            }</b>
+<i>627</i>&nbsp;        }
+<i>628</i>&nbsp;    }
+<i>629</i>&nbsp;
+<i>630</i>&nbsp;    /**
+<i>631</i>&nbsp;     * Enables/disables matching all of the subjectAlternativeNames
+<i>632</i>&nbsp;     * specified in the {@link #setSubjectAlternativeNames
+<i>633</i>&nbsp;     * setSubjectAlternativeNames} or {@link #addSubjectAlternativeName
+<i>634</i>&nbsp;     * addSubjectAlternativeName} methods. If enabled,
+<i>635</i>&nbsp;     * the {@code X509Certificate} must contain all of the
+<i>636</i>&nbsp;     * specified subject alternative names. If disabled, the
+<i>637</i>&nbsp;     * {@code X509Certificate} must contain at least one of the
+<i>638</i>&nbsp;     * specified subject alternative names.
+<i>639</i>&nbsp;     *
+<i>640</i>&nbsp;     * &lt;p&gt;The matchAllNames flag is {@code true} by default.
+<i>641</i>&nbsp;     *
+<i>642</i>&nbsp;     * @param matchAllNames if {@code true}, the flag is enabled;
+<i>643</i>&nbsp;     * if {@code false}, the flag is disabled.
+<i>644</i>&nbsp;     * @see #getMatchAllSubjectAltNames
+<i>645</i>&nbsp;     */
+<i>646</i>&nbsp;    public void setMatchAllSubjectAltNames(boolean matchAllNames) {
+<b class="nc"><i>647</i>&nbsp;        this.matchAllSubjectAltNames = matchAllNames;</b>
+<i>648</i>&nbsp;    }
+<i>649</i>&nbsp;
+<i>650</i>&nbsp;    /**
+<i>651</i>&nbsp;     * Sets the subjectAlternativeNames criterion. The
+<i>652</i>&nbsp;     * {@code X509Certificate} must contain all or at least one of the
+<i>653</i>&nbsp;     * specified subjectAlternativeNames, depending on the value of
+<i>654</i>&nbsp;     * the matchAllNames flag (see {@link #setMatchAllSubjectAltNames
+<i>655</i>&nbsp;     * setMatchAllSubjectAltNames}).
+<i>656</i>&nbsp;     * &lt;p&gt;
+<i>657</i>&nbsp;     * This method allows the caller to specify, with a single method call,
+<i>658</i>&nbsp;     * the complete set of subject alternative names for the
+<i>659</i>&nbsp;     * subjectAlternativeNames criterion. The specified value replaces
+<i>660</i>&nbsp;     * the previous value for the subjectAlternativeNames criterion.
+<i>661</i>&nbsp;     * &lt;p&gt;
+<i>662</i>&nbsp;     * The {@code names} parameter (if not {@code null}) is a
+<i>663</i>&nbsp;     * {@code Collection} with one
+<i>664</i>&nbsp;     * entry for each name to be included in the subject alternative name
+<i>665</i>&nbsp;     * criterion. Each entry is a {@code List} whose first entry is an
+<i>666</i>&nbsp;     * {@code Integer} (the name type, 0-8) and whose second
+<i>667</i>&nbsp;     * entry is a {@code String} or a byte array (the name, in
+<i>668</i>&nbsp;     * string or ASN.1 DER encoded form, respectively).
+<i>669</i>&nbsp;     * There can be multiple names of the same type. If {@code null}
+<i>670</i>&nbsp;     * is supplied as the value for this argument, no
+<i>671</i>&nbsp;     * subjectAlternativeNames check will be performed.
+<i>672</i>&nbsp;     * &lt;p&gt;
+<i>673</i>&nbsp;     * Each subject alternative name in the {@code Collection}
+<i>674</i>&nbsp;     * may be specified either as a {@code String} or as an ASN.1 encoded
+<i>675</i>&nbsp;     * byte array. For more details about the formats used, see
+<i>676</i>&nbsp;     * {@link #addSubjectAlternativeName(int type, String name)
+<i>677</i>&nbsp;     * addSubjectAlternativeName(int type, String name)} and
+<i>678</i>&nbsp;     * {@link #addSubjectAlternativeName(int type, byte [] name)
+<i>679</i>&nbsp;     * addSubjectAlternativeName(int type, byte [] name)}.
+<i>680</i>&nbsp;     * &lt;p&gt;
+<i>681</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; for distinguished names, specify the byte
+<i>682</i>&nbsp;     * array form instead of the String form. See the note in
+<i>683</i>&nbsp;     * {@link #addSubjectAlternativeName(int, String)} for more information.
+<i>684</i>&nbsp;     * &lt;p&gt;
+<i>685</i>&nbsp;     * Note that the {@code names} parameter can contain duplicate
+<i>686</i>&nbsp;     * names (same name and name type), but they may be removed from the
+<i>687</i>&nbsp;     * {@code Collection} of names returned by the
+<i>688</i>&nbsp;     * {@link #getSubjectAlternativeNames getSubjectAlternativeNames} method.
+<i>689</i>&nbsp;     * &lt;p&gt;
+<i>690</i>&nbsp;     * Note that a deep copy is performed on the {@code Collection} to
+<i>691</i>&nbsp;     * protect against subsequent modifications.
+<i>692</i>&nbsp;     *
+<i>693</i>&nbsp;     * @param names a {@code Collection} of names (or {@code null})
+<i>694</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>695</i>&nbsp;     * @see #getSubjectAlternativeNames
+<i>696</i>&nbsp;     */
+<i>697</i>&nbsp;    public void setSubjectAlternativeNames(Collection&lt;List&lt;?&gt;&gt; names)
+<i>698</i>&nbsp;            throws IOException {
+<b class="nc"><i>699</i>&nbsp;        if (names == null) {</b>
+<b class="nc"><i>700</i>&nbsp;            subjectAlternativeNames = null;</b>
+<b class="nc"><i>701</i>&nbsp;            subjectAlternativeGeneralNames = null;</b>
+<i>702</i>&nbsp;        } else {
+<b class="nc"><i>703</i>&nbsp;            if (names.isEmpty()) {</b>
+<b class="nc"><i>704</i>&nbsp;                subjectAlternativeNames = null;</b>
+<b class="nc"><i>705</i>&nbsp;                subjectAlternativeGeneralNames = null;</b>
+<i>706</i>&nbsp;                return;
+<i>707</i>&nbsp;            }
+<b class="nc"><i>708</i>&nbsp;            Set&lt;List&lt;?&gt;&gt; tempNames = cloneAndCheckNames(names);</b>
+<i>709</i>&nbsp;            // Ensure that we either set both of these or neither
+<b class="nc"><i>710</i>&nbsp;            subjectAlternativeGeneralNames = parseNames(tempNames);</b>
+<b class="nc"><i>711</i>&nbsp;            subjectAlternativeNames = tempNames;</b>
+<i>712</i>&nbsp;        }
+<i>713</i>&nbsp;    }
+<i>714</i>&nbsp;
+<i>715</i>&nbsp;    /**
+<i>716</i>&nbsp;     * Adds a name to the subjectAlternativeNames criterion. The
+<i>717</i>&nbsp;     * {@code X509Certificate} must contain all or at least one
+<i>718</i>&nbsp;     * of the specified subjectAlternativeNames, depending on the value of
+<i>719</i>&nbsp;     * the matchAllNames flag (see {@link #setMatchAllSubjectAltNames
+<i>720</i>&nbsp;     * setMatchAllSubjectAltNames}).
+<i>721</i>&nbsp;     * &lt;p&gt;
+<i>722</i>&nbsp;     * This method allows the caller to add a name to the set of subject
+<i>723</i>&nbsp;     * alternative names.
+<i>724</i>&nbsp;     * The specified name is added to any previous value for the
+<i>725</i>&nbsp;     * subjectAlternativeNames criterion. If the specified name is a
+<i>726</i>&nbsp;     * duplicate, it may be ignored.
+<i>727</i>&nbsp;     * &lt;p&gt;
+<i>728</i>&nbsp;     * The name is provided in string format.
+<i>729</i>&nbsp;     * &lt;a href=&quot;http://www.ietf.org/rfc/rfc822.txt&quot;&gt;RFC 822&lt;/a&gt;, DNS, and URI
+<i>730</i>&nbsp;     * names use the well-established string formats for those types (subject to
+<i>731</i>&nbsp;     * the restrictions included in RFC 5280). IPv4 address names are
+<i>732</i>&nbsp;     * supplied using dotted quad notation. OID address names are represented
+<i>733</i>&nbsp;     * as a series of nonnegative integers separated by periods. And
+<i>734</i>&nbsp;     * directory names (distinguished names) are supplied in RFC 2253 format.
+<i>735</i>&nbsp;     * No standard string format is defined for otherNames, X.400 names,
+<i>736</i>&nbsp;     * EDI party names, IPv6 address names, or any other type of names. They
+<i>737</i>&nbsp;     * should be specified using the
+<i>738</i>&nbsp;     * {@link #addSubjectAlternativeName(int type, byte [] name)
+<i>739</i>&nbsp;     * addSubjectAlternativeName(int type, byte [] name)}
+<i>740</i>&nbsp;     * method.
+<i>741</i>&nbsp;     * &lt;p&gt;
+<i>742</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; for distinguished names, use
+<i>743</i>&nbsp;     * {@linkplain #addSubjectAlternativeName(int, byte[])} instead.
+<i>744</i>&nbsp;     * This method should not be relied on as it can fail to match some
+<i>745</i>&nbsp;     * certificates because of a loss of encoding information in the RFC 2253
+<i>746</i>&nbsp;     * String form of some distinguished names.
+<i>747</i>&nbsp;     *
+<i>748</i>&nbsp;     * @param type the name type (0-8, as specified in
+<i>749</i>&nbsp;     *             RFC 5280, section 4.2.1.6)
+<i>750</i>&nbsp;     * @param name the name in string form (not {@code null})
+<i>751</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>752</i>&nbsp;     */
+<i>753</i>&nbsp;    public void addSubjectAlternativeName(int type, String name)
+<i>754</i>&nbsp;            throws IOException {
+<b class="nc"><i>755</i>&nbsp;        addSubjectAlternativeNameInternal(type, name);</b>
+<i>756</i>&nbsp;    }
+<i>757</i>&nbsp;
+<i>758</i>&nbsp;    /**
+<i>759</i>&nbsp;     * Adds a name to the subjectAlternativeNames criterion. The
+<i>760</i>&nbsp;     * {@code X509Certificate} must contain all or at least one
+<i>761</i>&nbsp;     * of the specified subjectAlternativeNames, depending on the value of
+<i>762</i>&nbsp;     * the matchAllNames flag (see {@link #setMatchAllSubjectAltNames
+<i>763</i>&nbsp;     * setMatchAllSubjectAltNames}).
+<i>764</i>&nbsp;     * &lt;p&gt;
+<i>765</i>&nbsp;     * This method allows the caller to add a name to the set of subject
+<i>766</i>&nbsp;     * alternative names.
+<i>767</i>&nbsp;     * The specified name is added to any previous value for the
+<i>768</i>&nbsp;     * subjectAlternativeNames criterion. If the specified name is a
+<i>769</i>&nbsp;     * duplicate, it may be ignored.
+<i>770</i>&nbsp;     * &lt;p&gt;
+<i>771</i>&nbsp;     * The name is provided as a byte array. This byte array should contain
+<i>772</i>&nbsp;     * the DER encoded name, as it would appear in the GeneralName structure
+<i>773</i>&nbsp;     * defined in RFC 5280 and X.509. The encoded byte array should only contain
+<i>774</i>&nbsp;     * the encoded value of the name, and should not include the tag associated
+<i>775</i>&nbsp;     * with the name in the GeneralName structure. The ASN.1 definition of this
+<i>776</i>&nbsp;     * structure appears below.
+<i>777</i>&nbsp;     * &lt;pre&gt;{@code
+<i>778</i>&nbsp;     *  GeneralName ::= CHOICE {
+<i>779</i>&nbsp;     *       otherName                       [0]     OtherName,
+<i>780</i>&nbsp;     *       rfc822Name                      [1]     IA5String,
+<i>781</i>&nbsp;     *       dNSName                         [2]     IA5String,
+<i>782</i>&nbsp;     *       x400Address                     [3]     ORAddress,
+<i>783</i>&nbsp;     *       directoryName                   [4]     Name,
+<i>784</i>&nbsp;     *       ediPartyName                    [5]     EDIPartyName,
+<i>785</i>&nbsp;     *       uniformResourceIdentifier       [6]     IA5String,
+<i>786</i>&nbsp;     *       iPAddress                       [7]     OCTET STRING,
+<i>787</i>&nbsp;     *       registeredID                    [8]     OBJECT IDENTIFIER}
+<i>788</i>&nbsp;     * }&lt;/pre&gt;
+<i>789</i>&nbsp;     * &lt;p&gt;
+<i>790</i>&nbsp;     * Note that the byte array supplied here is cloned to protect against
+<i>791</i>&nbsp;     * subsequent modifications.
+<i>792</i>&nbsp;     *
+<i>793</i>&nbsp;     * @param type the name type (0-8, as listed above)
+<i>794</i>&nbsp;     * @param name a byte array containing the name in ASN.1 DER encoded form
+<i>795</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>796</i>&nbsp;     */
+<i>797</i>&nbsp;    public void addSubjectAlternativeName(int type, byte[] name)
+<i>798</i>&nbsp;            throws IOException {
+<i>799</i>&nbsp;        // clone because byte arrays are modifiable
+<b class="nc"><i>800</i>&nbsp;        addSubjectAlternativeNameInternal(type, name.clone());</b>
+<i>801</i>&nbsp;    }
+<i>802</i>&nbsp;
+<i>803</i>&nbsp;    /**
+<i>804</i>&nbsp;     * A private method that adds a name (String or byte array) to the
+<i>805</i>&nbsp;     * subjectAlternativeNames criterion. The {@code X509Certificate}
+<i>806</i>&nbsp;     * must contain the specified subjectAlternativeName.
+<i>807</i>&nbsp;     *
+<i>808</i>&nbsp;     * @param type the name type (0-8, as specified in
+<i>809</i>&nbsp;     *             RFC 5280, section 4.2.1.6)
+<i>810</i>&nbsp;     * @param name the name in string or byte array form
+<i>811</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>812</i>&nbsp;     */
+<i>813</i>&nbsp;    private void addSubjectAlternativeNameInternal(int type, Object name)
+<i>814</i>&nbsp;            throws IOException {
+<i>815</i>&nbsp;        // First, ensure that the name parses
+<b class="nc"><i>816</i>&nbsp;        GeneralNameInterface tempName = makeGeneralNameInterface(type, name);</b>
+<b class="nc"><i>817</i>&nbsp;        if (subjectAlternativeNames == null) {</b>
+<b class="nc"><i>818</i>&nbsp;            subjectAlternativeNames = new HashSet&lt;&gt;();</b>
+<i>819</i>&nbsp;        }
+<b class="nc"><i>820</i>&nbsp;        if (subjectAlternativeGeneralNames == null) {</b>
+<b class="nc"><i>821</i>&nbsp;            subjectAlternativeGeneralNames = new HashSet&lt;&gt;();</b>
+<i>822</i>&nbsp;        }
+<b class="nc"><i>823</i>&nbsp;        List&lt;Object&gt; list = new ArrayList&lt;&gt;(2);</b>
+<b class="nc"><i>824</i>&nbsp;        list.add(Integer.valueOf(type));</b>
+<b class="nc"><i>825</i>&nbsp;        list.add(name);</b>
+<b class="nc"><i>826</i>&nbsp;        subjectAlternativeNames.add(list);</b>
+<b class="nc"><i>827</i>&nbsp;        subjectAlternativeGeneralNames.add(tempName);</b>
+<i>828</i>&nbsp;    }
+<i>829</i>&nbsp;
+<i>830</i>&nbsp;    /**
+<i>831</i>&nbsp;     * Parse an argument of the form passed to setSubjectAlternativeNames,
+<i>832</i>&nbsp;     * returning a {@code Collection} of
+<i>833</i>&nbsp;     * {@code GeneralNameInterface}s.
+<i>834</i>&nbsp;     * Throw an IllegalArgumentException or a ClassCastException
+<i>835</i>&nbsp;     * if the argument is malformed.
+<i>836</i>&nbsp;     *
+<i>837</i>&nbsp;     * @param names a Collection with one entry per name.
+<i>838</i>&nbsp;     *              Each entry is a {@code List} whose first entry
+<i>839</i>&nbsp;     *              is an Integer (the name type, 0-8) and whose second
+<i>840</i>&nbsp;     *              entry is a String or a byte array (the name, in
+<i>841</i>&nbsp;     *              string or ASN.1 DER encoded form, respectively).
+<i>842</i>&nbsp;     *              There can be multiple names of the same type. Null is
+<i>843</i>&nbsp;     *              not an acceptable value.
+<i>844</i>&nbsp;     * @return a Set of {@code GeneralNameInterface}s
+<i>845</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>846</i>&nbsp;     */
+<i>847</i>&nbsp;    private static Set&lt;GeneralNameInterface&gt; parseNames(Collection&lt;List&lt;?&gt;&gt; names) throws IOException {
+<b class="nc"><i>848</i>&nbsp;        Set&lt;GeneralNameInterface&gt; genNames = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>849</i>&nbsp;        for (List&lt;?&gt; nameList : names) {</b>
+<b class="nc"><i>850</i>&nbsp;            if (nameList.size() != 2) {</b>
+<b class="nc"><i>851</i>&nbsp;                throw new IOException(&quot;name list size not 2&quot;);</b>
+<i>852</i>&nbsp;            }
+<b class="nc"><i>853</i>&nbsp;            Object o =  nameList.get(0);</b>
+<b class="nc"><i>854</i>&nbsp;            if (!(o instanceof Integer)) {</b>
+<b class="nc"><i>855</i>&nbsp;                throw new IOException(&quot;expected an Integer&quot;);</b>
+<i>856</i>&nbsp;            }
+<b class="nc"><i>857</i>&nbsp;            int nameType = ((Integer)o).intValue();</b>
+<b class="nc"><i>858</i>&nbsp;            o = nameList.get(1);</b>
+<b class="nc"><i>859</i>&nbsp;            genNames.add(makeGeneralNameInterface(nameType, o));</b>
+<b class="nc"><i>860</i>&nbsp;        }</b>
+<i>861</i>&nbsp;
+<b class="nc"><i>862</i>&nbsp;        return genNames;</b>
+<i>863</i>&nbsp;    }
+<i>864</i>&nbsp;
+<i>865</i>&nbsp;    /**
+<i>866</i>&nbsp;     * Compare for equality two objects of the form passed to
+<i>867</i>&nbsp;     * setSubjectAlternativeNames (or X509CRLSelector.setIssuerNames).
+<i>868</i>&nbsp;     * Throw an {@code IllegalArgumentException} or a
+<i>869</i>&nbsp;     * {@code ClassCastException} if one of the objects is malformed.
+<i>870</i>&nbsp;     *
+<i>871</i>&nbsp;     * @param object1 a Collection containing the first object to compare
+<i>872</i>&nbsp;     * @param object2 a Collection containing the second object to compare
+<i>873</i>&nbsp;     * @return true if the objects are equal, false otherwise
+<i>874</i>&nbsp;     */
+<i>875</i>&nbsp;    static boolean equalNames(Collection&lt;?&gt; object1, Collection&lt;?&gt; object2) {
+<b class="nc"><i>876</i>&nbsp;        if ((object1 == null) || (object2 == null)) {</b>
+<b class="nc"><i>877</i>&nbsp;            return object1 == object2;</b>
+<i>878</i>&nbsp;        }
+<b class="nc"><i>879</i>&nbsp;        return object1.equals(object2);</b>
+<i>880</i>&nbsp;    }
+<i>881</i>&nbsp;
+<i>882</i>&nbsp;    /**
+<i>883</i>&nbsp;     * Make a {@code GeneralNameInterface} out of a name type (0-8) and an
+<i>884</i>&nbsp;     * Object that may be a byte array holding the ASN.1 DER encoded
+<i>885</i>&nbsp;     * name or a String form of the name.  Except for X.509
+<i>886</i>&nbsp;     * Distinguished Names, the String form of the name must not be the
+<i>887</i>&nbsp;     * result from calling toString on an existing GeneralNameInterface
+<i>888</i>&nbsp;     * implementing class.  The output of toString is not compatible
+<i>889</i>&nbsp;     * with the String constructors for names other than Distinguished
+<i>890</i>&nbsp;     * Names.
+<i>891</i>&nbsp;     *
+<i>892</i>&nbsp;     * @param type name type (0-8)
+<i>893</i>&nbsp;     * @param name name as ASN.1 Der-encoded byte array or String
+<i>894</i>&nbsp;     * @return a GeneralNameInterface name
+<i>895</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>896</i>&nbsp;     */
+<i>897</i>&nbsp;    static GeneralNameInterface makeGeneralNameInterface(int type, Object name)
+<i>898</i>&nbsp;            throws IOException {
+<i>899</i>&nbsp;        GeneralNameInterface result;
+<b class="nc"><i>900</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>901</i>&nbsp;            debug.println(&quot;X509CertSelector.makeGeneralNameInterface(&quot;</b>
+<i>902</i>&nbsp;                + type + &quot;)...&quot;);
+<i>903</i>&nbsp;        }
+<i>904</i>&nbsp;
+<b class="nc"><i>905</i>&nbsp;        if (name instanceof String) {</b>
+<b class="nc"><i>906</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>907</i>&nbsp;                debug.println(&quot;X509CertSelector.makeGeneralNameInterface() &quot;</b>
+<i>908</i>&nbsp;                    + &quot;name is String: &quot; + name);
+<i>909</i>&nbsp;            }
+<b class="nc"><i>910</i>&nbsp;            switch (type) {</b>
+<i>911</i>&nbsp;            case NAME_RFC822:
+<b class="nc"><i>912</i>&nbsp;                result = new RFC822Name((String)name);</b>
+<b class="nc"><i>913</i>&nbsp;                break;</b>
+<i>914</i>&nbsp;            case NAME_DNS:
+<b class="nc"><i>915</i>&nbsp;                result = new DNSName((String)name);</b>
+<b class="nc"><i>916</i>&nbsp;                break;</b>
+<i>917</i>&nbsp;            case NAME_DIRECTORY:
+<b class="nc"><i>918</i>&nbsp;                result = new X500Name((String)name);</b>
+<b class="nc"><i>919</i>&nbsp;                break;</b>
+<i>920</i>&nbsp;            case NAME_URI:
+<b class="nc"><i>921</i>&nbsp;                result = new URIName((String)name);</b>
+<b class="nc"><i>922</i>&nbsp;                break;</b>
+<i>923</i>&nbsp;            case NAME_IP:
+<b class="nc"><i>924</i>&nbsp;                result = new IPAddressName((String)name);</b>
+<b class="nc"><i>925</i>&nbsp;                break;</b>
+<i>926</i>&nbsp;            case NAME_OID:
+<b class="nc"><i>927</i>&nbsp;                result = new OIDName((String)name);</b>
+<b class="nc"><i>928</i>&nbsp;                break;</b>
+<i>929</i>&nbsp;            default:
+<b class="nc"><i>930</i>&nbsp;                throw new IOException(&quot;unable to parse String names of type &quot;</b>
+<i>931</i>&nbsp;                                      + type);
+<i>932</i>&nbsp;            }
+<b class="nc"><i>933</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>934</i>&nbsp;                debug.println(&quot;X509CertSelector.makeGeneralNameInterface() &quot;</b>
+<b class="nc"><i>935</i>&nbsp;                    + &quot;result: &quot; + result.toString());</b>
+<i>936</i>&nbsp;            }
+<b class="nc"><i>937</i>&nbsp;        } else if (name instanceof byte[]) {</b>
+<b class="nc"><i>938</i>&nbsp;            DerValue val = new DerValue((byte[]) name);</b>
+<b class="nc"><i>939</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>940</i>&nbsp;                debug.println</b>
+<b class="nc"><i>941</i>&nbsp;                    (&quot;X509CertSelector.makeGeneralNameInterface() is byte[]&quot;);</b>
+<i>942</i>&nbsp;            }
+<i>943</i>&nbsp;
+<b class="nc"><i>944</i>&nbsp;            switch (type) {</b>
+<i>945</i>&nbsp;            case NAME_ANY:
+<b class="nc"><i>946</i>&nbsp;                result = new OtherName(val);</b>
+<b class="nc"><i>947</i>&nbsp;                break;</b>
+<i>948</i>&nbsp;            case NAME_RFC822:
+<b class="nc"><i>949</i>&nbsp;                result = new RFC822Name(val);</b>
+<b class="nc"><i>950</i>&nbsp;                break;</b>
+<i>951</i>&nbsp;            case NAME_DNS:
+<b class="nc"><i>952</i>&nbsp;                result = new DNSName(val);</b>
+<b class="nc"><i>953</i>&nbsp;                break;</b>
+<i>954</i>&nbsp;            case NAME_X400:
+<b class="nc"><i>955</i>&nbsp;                result = new X400Address(val);</b>
+<b class="nc"><i>956</i>&nbsp;                break;</b>
+<i>957</i>&nbsp;            case NAME_DIRECTORY:
+<b class="nc"><i>958</i>&nbsp;                result = new X500Name(val);</b>
+<b class="nc"><i>959</i>&nbsp;                break;</b>
+<i>960</i>&nbsp;            case NAME_EDI:
+<b class="nc"><i>961</i>&nbsp;                result = new EDIPartyName(val);</b>
+<b class="nc"><i>962</i>&nbsp;                break;</b>
+<i>963</i>&nbsp;            case NAME_URI:
+<b class="nc"><i>964</i>&nbsp;                result = new URIName(val);</b>
+<b class="nc"><i>965</i>&nbsp;                break;</b>
+<i>966</i>&nbsp;            case NAME_IP:
+<b class="nc"><i>967</i>&nbsp;                result = new IPAddressName(val);</b>
+<b class="nc"><i>968</i>&nbsp;                break;</b>
+<i>969</i>&nbsp;            case NAME_OID:
+<b class="nc"><i>970</i>&nbsp;                result = new OIDName(val);</b>
+<b class="nc"><i>971</i>&nbsp;                break;</b>
+<i>972</i>&nbsp;            default:
+<b class="nc"><i>973</i>&nbsp;                throw new IOException(&quot;unable to parse byte array names of &quot;</b>
+<i>974</i>&nbsp;                    + &quot;type &quot; + type);
+<i>975</i>&nbsp;            }
+<b class="nc"><i>976</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>977</i>&nbsp;                debug.println(&quot;X509CertSelector.makeGeneralNameInterface() result: &quot;</b>
+<b class="nc"><i>978</i>&nbsp;                    + result.toString());</b>
+<i>979</i>&nbsp;            }
+<b class="nc"><i>980</i>&nbsp;        } else {</b>
+<b class="nc"><i>981</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>982</i>&nbsp;                debug.println(&quot;X509CertSelector.makeGeneralName() input name &quot;</b>
+<i>983</i>&nbsp;                    + &quot;not String or byte array&quot;);
+<i>984</i>&nbsp;            }
+<b class="nc"><i>985</i>&nbsp;            throw new IOException(&quot;name not String or byte array&quot;);</b>
+<i>986</i>&nbsp;        }
+<b class="nc"><i>987</i>&nbsp;        return result;</b>
+<i>988</i>&nbsp;    }
+<i>989</i>&nbsp;
+<i>990</i>&nbsp;
+<i>991</i>&nbsp;    /**
+<i>992</i>&nbsp;     * Sets the name constraints criterion. The {@code X509Certificate}
+<i>993</i>&nbsp;     * must have subject and subject alternative names that
+<i>994</i>&nbsp;     * meet the specified name constraints.
+<i>995</i>&nbsp;     * &lt;p&gt;
+<i>996</i>&nbsp;     * The name constraints are specified as a byte array. This byte array
+<i>997</i>&nbsp;     * should contain the DER encoded form of the name constraints, as they
+<i>998</i>&nbsp;     * would appear in the NameConstraints structure defined in RFC 5280
+<i>999</i>&nbsp;     * and X.509. The ASN.1 definition of this structure appears below.
+<i>1000</i>&nbsp;     *
+<i>1001</i>&nbsp;     * &lt;pre&gt;{@code
+<i>1002</i>&nbsp;     *  NameConstraints ::= SEQUENCE {
+<i>1003</i>&nbsp;     *       permittedSubtrees       [0]     GeneralSubtrees OPTIONAL,
+<i>1004</i>&nbsp;     *       excludedSubtrees        [1]     GeneralSubtrees OPTIONAL }
+<i>1005</i>&nbsp;     *
+<i>1006</i>&nbsp;     *  GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
+<i>1007</i>&nbsp;     *
+<i>1008</i>&nbsp;     *  GeneralSubtree ::= SEQUENCE {
+<i>1009</i>&nbsp;     *       base                    GeneralName,
+<i>1010</i>&nbsp;     *       minimum         [0]     BaseDistance DEFAULT 0,
+<i>1011</i>&nbsp;     *       maximum         [1]     BaseDistance OPTIONAL }
+<i>1012</i>&nbsp;     *
+<i>1013</i>&nbsp;     *  BaseDistance ::= INTEGER (0..MAX)
+<i>1014</i>&nbsp;     *
+<i>1015</i>&nbsp;     *  GeneralName ::= CHOICE {
+<i>1016</i>&nbsp;     *       otherName                       [0]     OtherName,
+<i>1017</i>&nbsp;     *       rfc822Name                      [1]     IA5String,
+<i>1018</i>&nbsp;     *       dNSName                         [2]     IA5String,
+<i>1019</i>&nbsp;     *       x400Address                     [3]     ORAddress,
+<i>1020</i>&nbsp;     *       directoryName                   [4]     Name,
+<i>1021</i>&nbsp;     *       ediPartyName                    [5]     EDIPartyName,
+<i>1022</i>&nbsp;     *       uniformResourceIdentifier       [6]     IA5String,
+<i>1023</i>&nbsp;     *       iPAddress                       [7]     OCTET STRING,
+<i>1024</i>&nbsp;     *       registeredID                    [8]     OBJECT IDENTIFIER}
+<i>1025</i>&nbsp;     * }&lt;/pre&gt;
+<i>1026</i>&nbsp;     * &lt;p&gt;
+<i>1027</i>&nbsp;     * Note that the byte array supplied here is cloned to protect against
+<i>1028</i>&nbsp;     * subsequent modifications.
+<i>1029</i>&nbsp;     *
+<i>1030</i>&nbsp;     * @param bytes a byte array containing the ASN.1 DER encoding of
+<i>1031</i>&nbsp;     *              a NameConstraints extension to be used for checking
+<i>1032</i>&nbsp;     *              name constraints. Only the value of the extension is
+<i>1033</i>&nbsp;     *              included, not the OID or criticality flag. Can be
+<i>1034</i>&nbsp;     *              {@code null},
+<i>1035</i>&nbsp;     *              in which case no name constraints check will be performed.
+<i>1036</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>1037</i>&nbsp;     * @see #getNameConstraints
+<i>1038</i>&nbsp;     */
+<i>1039</i>&nbsp;    public void setNameConstraints(byte[] bytes) throws IOException {
+<b class="nc"><i>1040</i>&nbsp;        if (bytes == null) {</b>
+<b class="nc"><i>1041</i>&nbsp;            ncBytes = null;</b>
+<b class="nc"><i>1042</i>&nbsp;            nc = null;</b>
+<i>1043</i>&nbsp;        } else {
+<b class="nc"><i>1044</i>&nbsp;            ncBytes = bytes.clone();</b>
+<b class="nc"><i>1045</i>&nbsp;            nc = new NameConstraintsExtension(FALSE, bytes);</b>
+<i>1046</i>&nbsp;        }
+<i>1047</i>&nbsp;    }
+<i>1048</i>&nbsp;
+<i>1049</i>&nbsp;    /**
+<i>1050</i>&nbsp;     * Sets the basic constraints constraint. If the value is greater than or
+<i>1051</i>&nbsp;     * equal to zero, {@code X509Certificates} must include a
+<i>1052</i>&nbsp;     * basicConstraints extension with
+<i>1053</i>&nbsp;     * a pathLen of at least this value. If the value is -2, only end-entity
+<i>1054</i>&nbsp;     * certificates are accepted. If the value is -1, no check is done.
+<i>1055</i>&nbsp;     * &lt;p&gt;
+<i>1056</i>&nbsp;     * This constraint is useful when building a certification path forward
+<i>1057</i>&nbsp;     * (from the target toward the trust anchor. If a partial path has been
+<i>1058</i>&nbsp;     * built, any candidate certificate must have a maxPathLen value greater
+<i>1059</i>&nbsp;     * than or equal to the number of certificates in the partial path.
+<i>1060</i>&nbsp;     *
+<i>1061</i>&nbsp;     * @param minMaxPathLen the value for the basic constraints constraint
+<i>1062</i>&nbsp;     * @throws IllegalArgumentException if the value is less than -2
+<i>1063</i>&nbsp;     * @see #getBasicConstraints
+<i>1064</i>&nbsp;     */
+<i>1065</i>&nbsp;    public void setBasicConstraints(int minMaxPathLen) {
+<b class="nc"><i>1066</i>&nbsp;        if (minMaxPathLen &lt; -2) {</b>
+<b class="nc"><i>1067</i>&nbsp;            throw new IllegalArgumentException(&quot;basic constraints less than -2&quot;);</b>
+<i>1068</i>&nbsp;        }
+<b class="nc"><i>1069</i>&nbsp;        basicConstraints = minMaxPathLen;</b>
+<i>1070</i>&nbsp;    }
+<i>1071</i>&nbsp;
+<i>1072</i>&nbsp;    /**
+<i>1073</i>&nbsp;     * Sets the policy constraint. The {@code X509Certificate} must
+<i>1074</i>&nbsp;     * include at least one of the specified policies in its certificate
+<i>1075</i>&nbsp;     * policies extension. If {@code certPolicySet} is empty, then the
+<i>1076</i>&nbsp;     * {@code X509Certificate} must include at least some specified policy
+<i>1077</i>&nbsp;     * in its certificate policies extension. If {@code certPolicySet} is
+<i>1078</i>&nbsp;     * {@code null}, no policy check will be performed.
+<i>1079</i>&nbsp;     * &lt;p&gt;
+<i>1080</i>&nbsp;     * Note that the {@code Set} is cloned to protect against
+<i>1081</i>&nbsp;     * subsequent modifications.
+<i>1082</i>&nbsp;     *
+<i>1083</i>&nbsp;     * @param certPolicySet a {@code Set} of certificate policy OIDs in
+<i>1084</i>&nbsp;     *                      string format (or {@code null}). Each OID is
+<i>1085</i>&nbsp;     *                      represented by a set of nonnegative integers
+<i>1086</i>&nbsp;     *                    separated by periods.
+<i>1087</i>&nbsp;     * @throws IOException if a parsing error occurs on the OID such as
+<i>1088</i>&nbsp;     * the first component is not 0, 1 or 2 or the second component is
+<i>1089</i>&nbsp;     * greater than 39.
+<i>1090</i>&nbsp;     * @see #getPolicy
+<i>1091</i>&nbsp;     */
+<i>1092</i>&nbsp;    public void setPolicy(Set&lt;String&gt; certPolicySet) throws IOException {
+<b class="nc"><i>1093</i>&nbsp;        if (certPolicySet == null) {</b>
+<b class="nc"><i>1094</i>&nbsp;            policySet = null;</b>
+<b class="nc"><i>1095</i>&nbsp;            policy = null;</b>
+<i>1096</i>&nbsp;        } else {
+<i>1097</i>&nbsp;            // Snapshot set and parse it
+<b class="nc"><i>1098</i>&nbsp;            Set&lt;String&gt; tempSet = Collections.unmodifiableSet</b>
+<b class="nc"><i>1099</i>&nbsp;                                        (new HashSet&lt;&gt;(certPolicySet));</b>
+<i>1100</i>&nbsp;            /* Convert to Vector of ObjectIdentifiers */
+<b class="nc"><i>1101</i>&nbsp;            Iterator&lt;String&gt; i = tempSet.iterator();</b>
+<b class="nc"><i>1102</i>&nbsp;            Vector&lt;CertificatePolicyId&gt; polIdVector = new Vector&lt;&gt;();</b>
+<b class="nc"><i>1103</i>&nbsp;            while (i.hasNext()) {</b>
+<b class="nc"><i>1104</i>&nbsp;                Object o = i.next();</b>
+<b class="nc"><i>1105</i>&nbsp;                if (!(o instanceof String)) {</b>
+<b class="nc"><i>1106</i>&nbsp;                    throw new IOException(&quot;non String in certPolicySet&quot;);</b>
+<i>1107</i>&nbsp;                }
+<b class="nc"><i>1108</i>&nbsp;                polIdVector.add(new CertificatePolicyId(new ObjectIdentifier(</b>
+<i>1109</i>&nbsp;                  (String)o)));
+<b class="nc"><i>1110</i>&nbsp;            }</b>
+<i>1111</i>&nbsp;            // If everything went OK, make the changes
+<b class="nc"><i>1112</i>&nbsp;            policySet = tempSet;</b>
+<b class="nc"><i>1113</i>&nbsp;            policy = new CertificatePolicySet(polIdVector);</b>
+<i>1114</i>&nbsp;        }
+<i>1115</i>&nbsp;    }
+<i>1116</i>&nbsp;
+<i>1117</i>&nbsp;    /**
+<i>1118</i>&nbsp;     * Sets the pathToNames criterion. The {@code X509Certificate} must
+<i>1119</i>&nbsp;     * not include name constraints that would prohibit building a
+<i>1120</i>&nbsp;     * path to the specified names.
+<i>1121</i>&nbsp;     * &lt;p&gt;
+<i>1122</i>&nbsp;     * This method allows the caller to specify, with a single method call,
+<i>1123</i>&nbsp;     * the complete set of names which the {@code X509Certificates}&#39;s
+<i>1124</i>&nbsp;     * name constraints must permit. The specified value replaces
+<i>1125</i>&nbsp;     * the previous value for the pathToNames criterion.
+<i>1126</i>&nbsp;     * &lt;p&gt;
+<i>1127</i>&nbsp;     * This constraint is useful when building a certification path forward
+<i>1128</i>&nbsp;     * (from the target toward the trust anchor. If a partial path has been
+<i>1129</i>&nbsp;     * built, any candidate certificate must not include name constraints that
+<i>1130</i>&nbsp;     * would prohibit building a path to any of the names in the partial path.
+<i>1131</i>&nbsp;     * &lt;p&gt;
+<i>1132</i>&nbsp;     * The {@code names} parameter (if not {@code null}) is a
+<i>1133</i>&nbsp;     * {@code Collection} with one
+<i>1134</i>&nbsp;     * entry for each name to be included in the pathToNames
+<i>1135</i>&nbsp;     * criterion. Each entry is a {@code List} whose first entry is an
+<i>1136</i>&nbsp;     * {@code Integer} (the name type, 0-8) and whose second
+<i>1137</i>&nbsp;     * entry is a {@code String} or a byte array (the name, in
+<i>1138</i>&nbsp;     * string or ASN.1 DER encoded form, respectively).
+<i>1139</i>&nbsp;     * There can be multiple names of the same type. If {@code null}
+<i>1140</i>&nbsp;     * is supplied as the value for this argument, no
+<i>1141</i>&nbsp;     * pathToNames check will be performed.
+<i>1142</i>&nbsp;     * &lt;p&gt;
+<i>1143</i>&nbsp;     * Each name in the {@code Collection}
+<i>1144</i>&nbsp;     * may be specified either as a {@code String} or as an ASN.1 encoded
+<i>1145</i>&nbsp;     * byte array. For more details about the formats used, see
+<i>1146</i>&nbsp;     * {@link #addPathToName(int type, String name)
+<i>1147</i>&nbsp;     * addPathToName(int type, String name)} and
+<i>1148</i>&nbsp;     * {@link #addPathToName(int type, byte [] name)
+<i>1149</i>&nbsp;     * addPathToName(int type, byte [] name)}.
+<i>1150</i>&nbsp;     * &lt;p&gt;
+<i>1151</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; for distinguished names, specify the byte
+<i>1152</i>&nbsp;     * array form instead of the String form. See the note in
+<i>1153</i>&nbsp;     * {@link #addPathToName(int, String)} for more information.
+<i>1154</i>&nbsp;     * &lt;p&gt;
+<i>1155</i>&nbsp;     * Note that the {@code names} parameter can contain duplicate
+<i>1156</i>&nbsp;     * names (same name and name type), but they may be removed from the
+<i>1157</i>&nbsp;     * {@code Collection} of names returned by the
+<i>1158</i>&nbsp;     * {@link #getPathToNames getPathToNames} method.
+<i>1159</i>&nbsp;     * &lt;p&gt;
+<i>1160</i>&nbsp;     * Note that a deep copy is performed on the {@code Collection} to
+<i>1161</i>&nbsp;     * protect against subsequent modifications.
+<i>1162</i>&nbsp;     *
+<i>1163</i>&nbsp;     * @param names a {@code Collection} with one entry per name
+<i>1164</i>&nbsp;     *              (or {@code null})
+<i>1165</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>1166</i>&nbsp;     * @see #getPathToNames
+<i>1167</i>&nbsp;     */
+<i>1168</i>&nbsp;    public void setPathToNames(Collection&lt;List&lt;?&gt;&gt; names) throws IOException {
+<b class="nc"><i>1169</i>&nbsp;        if ((names == null) || names.isEmpty()) {</b>
+<b class="nc"><i>1170</i>&nbsp;            pathToNames = null;</b>
+<b class="nc"><i>1171</i>&nbsp;            pathToGeneralNames = null;</b>
+<i>1172</i>&nbsp;        } else {
+<b class="nc"><i>1173</i>&nbsp;            Set&lt;List&lt;?&gt;&gt; tempNames = cloneAndCheckNames(names);</b>
+<b class="nc"><i>1174</i>&nbsp;            pathToGeneralNames = parseNames(tempNames);</b>
+<i>1175</i>&nbsp;            // Ensure that we either set both of these or neither
+<b class="nc"><i>1176</i>&nbsp;            pathToNames = tempNames;</b>
+<i>1177</i>&nbsp;        }
+<i>1178</i>&nbsp;    }
+<i>1179</i>&nbsp;
+<i>1180</i>&nbsp;    // called from CertPathHelper
+<i>1181</i>&nbsp;    void setPathToNamesInternal(Set&lt;GeneralNameInterface&gt; names) {
+<i>1182</i>&nbsp;        // set names to non-null dummy value
+<i>1183</i>&nbsp;        // this breaks getPathToNames()
+<b class="nc"><i>1184</i>&nbsp;        pathToNames = Collections.&lt;List&lt;?&gt;&gt;emptySet();</b>
+<b class="nc"><i>1185</i>&nbsp;        pathToGeneralNames = names;</b>
+<i>1186</i>&nbsp;    }
+<i>1187</i>&nbsp;
+<i>1188</i>&nbsp;    /**
+<i>1189</i>&nbsp;     * Adds a name to the pathToNames criterion. The {@code X509Certificate}
+<i>1190</i>&nbsp;     * must not include name constraints that would prohibit building a
+<i>1191</i>&nbsp;     * path to the specified name.
+<i>1192</i>&nbsp;     * &lt;p&gt;
+<i>1193</i>&nbsp;     * This method allows the caller to add a name to the set of names which
+<i>1194</i>&nbsp;     * the {@code X509Certificates}&#39;s name constraints must permit.
+<i>1195</i>&nbsp;     * The specified name is added to any previous value for the
+<i>1196</i>&nbsp;     * pathToNames criterion.  If the name is a duplicate, it may be ignored.
+<i>1197</i>&nbsp;     * &lt;p&gt;
+<i>1198</i>&nbsp;     * The name is provided in string format. RFC 822, DNS, and URI names
+<i>1199</i>&nbsp;     * use the well-established string formats for those types (subject to
+<i>1200</i>&nbsp;     * the restrictions included in RFC 5280). IPv4 address names are
+<i>1201</i>&nbsp;     * supplied using dotted quad notation. OID address names are represented
+<i>1202</i>&nbsp;     * as a series of nonnegative integers separated by periods. And
+<i>1203</i>&nbsp;     * directory names (distinguished names) are supplied in RFC 2253 format.
+<i>1204</i>&nbsp;     * No standard string format is defined for otherNames, X.400 names,
+<i>1205</i>&nbsp;     * EDI party names, IPv6 address names, or any other type of names. They
+<i>1206</i>&nbsp;     * should be specified using the
+<i>1207</i>&nbsp;     * {@link #addPathToName(int type, byte [] name)
+<i>1208</i>&nbsp;     * addPathToName(int type, byte [] name)} method.
+<i>1209</i>&nbsp;     * &lt;p&gt;
+<i>1210</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; for distinguished names, use
+<i>1211</i>&nbsp;     * {@linkplain #addPathToName(int, byte[])} instead.
+<i>1212</i>&nbsp;     * This method should not be relied on as it can fail to match some
+<i>1213</i>&nbsp;     * certificates because of a loss of encoding information in the RFC 2253
+<i>1214</i>&nbsp;     * String form of some distinguished names.
+<i>1215</i>&nbsp;     *
+<i>1216</i>&nbsp;     * @param type the name type (0-8, as specified in
+<i>1217</i>&nbsp;     *             RFC 5280, section 4.2.1.6)
+<i>1218</i>&nbsp;     * @param name the name in string form
+<i>1219</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>1220</i>&nbsp;     */
+<i>1221</i>&nbsp;    public void addPathToName(int type, String name) throws IOException {
+<b class="nc"><i>1222</i>&nbsp;        addPathToNameInternal(type, name);</b>
+<i>1223</i>&nbsp;    }
+<i>1224</i>&nbsp;
+<i>1225</i>&nbsp;    /**
+<i>1226</i>&nbsp;     * Adds a name to the pathToNames criterion. The {@code X509Certificate}
+<i>1227</i>&nbsp;     * must not include name constraints that would prohibit building a
+<i>1228</i>&nbsp;     * path to the specified name.
+<i>1229</i>&nbsp;     * &lt;p&gt;
+<i>1230</i>&nbsp;     * This method allows the caller to add a name to the set of names which
+<i>1231</i>&nbsp;     * the {@code X509Certificates}&#39;s name constraints must permit.
+<i>1232</i>&nbsp;     * The specified name is added to any previous value for the
+<i>1233</i>&nbsp;     * pathToNames criterion. If the name is a duplicate, it may be ignored.
+<i>1234</i>&nbsp;     * &lt;p&gt;
+<i>1235</i>&nbsp;     * The name is provided as a byte array. This byte array should contain
+<i>1236</i>&nbsp;     * the DER encoded name, as it would appear in the GeneralName structure
+<i>1237</i>&nbsp;     * defined in RFC 5280 and X.509. The ASN.1 definition of this structure
+<i>1238</i>&nbsp;     * appears in the documentation for
+<i>1239</i>&nbsp;     * {@link #addSubjectAlternativeName(int type, byte [] name)
+<i>1240</i>&nbsp;     * addSubjectAlternativeName(int type, byte [] name)}.
+<i>1241</i>&nbsp;     * &lt;p&gt;
+<i>1242</i>&nbsp;     * Note that the byte array supplied here is cloned to protect against
+<i>1243</i>&nbsp;     * subsequent modifications.
+<i>1244</i>&nbsp;     *
+<i>1245</i>&nbsp;     * @param type the name type (0-8, as specified in
+<i>1246</i>&nbsp;     *             RFC 5280, section 4.2.1.6)
+<i>1247</i>&nbsp;     * @param name a byte array containing the name in ASN.1 DER encoded form
+<i>1248</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>1249</i>&nbsp;     */
+<i>1250</i>&nbsp;    public void addPathToName(int type, byte [] name) throws IOException {
+<i>1251</i>&nbsp;        // clone because byte arrays are modifiable
+<b class="nc"><i>1252</i>&nbsp;        addPathToNameInternal(type, name.clone());</b>
+<i>1253</i>&nbsp;    }
+<i>1254</i>&nbsp;
+<i>1255</i>&nbsp;    /**
+<i>1256</i>&nbsp;     * A private method that adds a name (String or byte array) to the
+<i>1257</i>&nbsp;     * pathToNames criterion. The {@code X509Certificate} must contain
+<i>1258</i>&nbsp;     * the specified pathToName.
+<i>1259</i>&nbsp;     *
+<i>1260</i>&nbsp;     * @param type the name type (0-8, as specified in
+<i>1261</i>&nbsp;     *             RFC 5280, section 4.2.1.6)
+<i>1262</i>&nbsp;     * @param name the name in string or byte array form
+<i>1263</i>&nbsp;     * @throws IOException if an encoding error occurs (incorrect form for DN)
+<i>1264</i>&nbsp;     */
+<i>1265</i>&nbsp;    private void addPathToNameInternal(int type, Object name)
+<i>1266</i>&nbsp;            throws IOException {
+<i>1267</i>&nbsp;        // First, ensure that the name parses
+<b class="nc"><i>1268</i>&nbsp;        GeneralNameInterface tempName = makeGeneralNameInterface(type, name);</b>
+<b class="nc"><i>1269</i>&nbsp;        if (pathToGeneralNames == null) {</b>
+<b class="nc"><i>1270</i>&nbsp;            pathToNames = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>1271</i>&nbsp;            pathToGeneralNames = new HashSet&lt;&gt;();</b>
+<i>1272</i>&nbsp;        }
+<b class="nc"><i>1273</i>&nbsp;        List&lt;Object&gt; list = new ArrayList&lt;&gt;(2);</b>
+<b class="nc"><i>1274</i>&nbsp;        list.add(Integer.valueOf(type));</b>
+<b class="nc"><i>1275</i>&nbsp;        list.add(name);</b>
+<b class="nc"><i>1276</i>&nbsp;        pathToNames.add(list);</b>
+<b class="nc"><i>1277</i>&nbsp;        pathToGeneralNames.add(tempName);</b>
+<i>1278</i>&nbsp;    }
+<i>1279</i>&nbsp;
+<i>1280</i>&nbsp;    /**
+<i>1281</i>&nbsp;     * Returns the certificateEquals criterion. The specified
+<i>1282</i>&nbsp;     * {@code X509Certificate} must be equal to the
+<i>1283</i>&nbsp;     * {@code X509Certificate} passed to the {@code match} method.
+<i>1284</i>&nbsp;     * If {@code null}, this check is not applied.
+<i>1285</i>&nbsp;     *
+<i>1286</i>&nbsp;     * @return the {@code X509Certificate} to match (or {@code null})
+<i>1287</i>&nbsp;     * @see #setCertificate
+<i>1288</i>&nbsp;     */
+<i>1289</i>&nbsp;    public X509Certificate getCertificate() {
+<b class="nc"><i>1290</i>&nbsp;        return x509Cert;</b>
+<i>1291</i>&nbsp;    }
+<i>1292</i>&nbsp;
+<i>1293</i>&nbsp;    /**
+<i>1294</i>&nbsp;     * Returns the serialNumber criterion. The specified serial number
+<i>1295</i>&nbsp;     * must match the certificate serial number in the
+<i>1296</i>&nbsp;     * {@code X509Certificate}. If {@code null}, any certificate
+<i>1297</i>&nbsp;     * serial number will do.
+<i>1298</i>&nbsp;     *
+<i>1299</i>&nbsp;     * @return the certificate serial number to match
+<i>1300</i>&nbsp;     *                (or {@code null})
+<i>1301</i>&nbsp;     * @see #setSerialNumber
+<i>1302</i>&nbsp;     */
+<i>1303</i>&nbsp;    public BigInteger getSerialNumber() {
+<b class="nc"><i>1304</i>&nbsp;        return serialNumber;</b>
+<i>1305</i>&nbsp;    }
+<i>1306</i>&nbsp;
+<i>1307</i>&nbsp;    /**
+<i>1308</i>&nbsp;     * Returns the issuer criterion as an {@code X500Principal}. This
+<i>1309</i>&nbsp;     * distinguished name must match the issuer distinguished name in the
+<i>1310</i>&nbsp;     * {@code X509Certificate}. If {@code null}, the issuer criterion
+<i>1311</i>&nbsp;     * is disabled and any issuer distinguished name will do.
+<i>1312</i>&nbsp;     *
+<i>1313</i>&nbsp;     * @return the required issuer distinguished name as X500Principal
+<i>1314</i>&nbsp;     *         (or {@code null})
+<i>1315</i>&nbsp;     * @since 1.5
+<i>1316</i>&nbsp;     */
+<i>1317</i>&nbsp;    public X500Principal getIssuer() {
+<b class="nc"><i>1318</i>&nbsp;        return issuer;</b>
+<i>1319</i>&nbsp;    }
+<i>1320</i>&nbsp;
+<i>1321</i>&nbsp;    /**
+<i>1322</i>&nbsp;     * &lt;strong&gt;Denigrated&lt;/strong&gt;, use {@linkplain #getIssuer()} or
+<i>1323</i>&nbsp;     * {@linkplain #getIssuerAsBytes()} instead. This method should not be
+<i>1324</i>&nbsp;     * relied on as it can fail to match some certificates because of a loss of
+<i>1325</i>&nbsp;     * encoding information in the RFC 2253 String form of some distinguished
+<i>1326</i>&nbsp;     * names.
+<i>1327</i>&nbsp;     * &lt;p&gt;
+<i>1328</i>&nbsp;     * Returns the issuer criterion as a {@code String}. This
+<i>1329</i>&nbsp;     * distinguished name must match the issuer distinguished name in the
+<i>1330</i>&nbsp;     * {@code X509Certificate}. If {@code null}, the issuer criterion
+<i>1331</i>&nbsp;     * is disabled and any issuer distinguished name will do.
+<i>1332</i>&nbsp;     * &lt;p&gt;
+<i>1333</i>&nbsp;     * If the value returned is not {@code null}, it is a
+<i>1334</i>&nbsp;     * distinguished name, in RFC 2253 format.
+<i>1335</i>&nbsp;     *
+<i>1336</i>&nbsp;     * @return the required issuer distinguished name in RFC 2253 format
+<i>1337</i>&nbsp;     *         (or {@code null})
+<i>1338</i>&nbsp;     */
+<i>1339</i>&nbsp;    public String getIssuerAsString() {
+<b class="nc"><i>1340</i>&nbsp;        return (issuer == null ? null : issuer.getName());</b>
+<i>1341</i>&nbsp;    }
+<i>1342</i>&nbsp;
+<i>1343</i>&nbsp;    /**
+<i>1344</i>&nbsp;     * Returns the issuer criterion as a byte array. This distinguished name
+<i>1345</i>&nbsp;     * must match the issuer distinguished name in the
+<i>1346</i>&nbsp;     * {@code X509Certificate}. If {@code null}, the issuer criterion
+<i>1347</i>&nbsp;     * is disabled and any issuer distinguished name will do.
+<i>1348</i>&nbsp;     * &lt;p&gt;
+<i>1349</i>&nbsp;     * If the value returned is not {@code null}, it is a byte
+<i>1350</i>&nbsp;     * array containing a single DER encoded distinguished name, as defined in
+<i>1351</i>&nbsp;     * X.501. The ASN.1 notation for this structure is supplied in the
+<i>1352</i>&nbsp;     * documentation for
+<i>1353</i>&nbsp;     * {@link #setIssuer(byte [] issuerDN) setIssuer(byte [] issuerDN)}.
+<i>1354</i>&nbsp;     * &lt;p&gt;
+<i>1355</i>&nbsp;     * Note that the byte array returned is cloned to protect against
+<i>1356</i>&nbsp;     * subsequent modifications.
+<i>1357</i>&nbsp;     *
+<i>1358</i>&nbsp;     * @return a byte array containing the required issuer distinguished name
+<i>1359</i>&nbsp;     *         in ASN.1 DER format (or {@code null})
+<i>1360</i>&nbsp;     * @throws IOException if an encoding error occurs
+<i>1361</i>&nbsp;     */
+<i>1362</i>&nbsp;    public byte[] getIssuerAsBytes() throws IOException {
+<b class="nc"><i>1363</i>&nbsp;        return (issuer == null ? null: issuer.getEncoded());</b>
+<i>1364</i>&nbsp;    }
+<i>1365</i>&nbsp;
+<i>1366</i>&nbsp;    /**
+<i>1367</i>&nbsp;     * Returns the subject criterion as an {@code X500Principal}. This
+<i>1368</i>&nbsp;     * distinguished name must match the subject distinguished name in the
+<i>1369</i>&nbsp;     * {@code X509Certificate}. If {@code null}, the subject criterion
+<i>1370</i>&nbsp;     * is disabled and any subject distinguished name will do.
+<i>1371</i>&nbsp;     *
+<i>1372</i>&nbsp;     * @return the required subject distinguished name as X500Principal
+<i>1373</i>&nbsp;     *         (or {@code null})
+<i>1374</i>&nbsp;     * @since 1.5
+<i>1375</i>&nbsp;     */
+<i>1376</i>&nbsp;    public X500Principal getSubject() {
+<b class="nc"><i>1377</i>&nbsp;        return subject;</b>
+<i>1378</i>&nbsp;    }
+<i>1379</i>&nbsp;
+<i>1380</i>&nbsp;    /**
+<i>1381</i>&nbsp;     * &lt;strong&gt;Denigrated&lt;/strong&gt;, use {@linkplain #getSubject()} or
+<i>1382</i>&nbsp;     * {@linkplain #getSubjectAsBytes()} instead. This method should not be
+<i>1383</i>&nbsp;     * relied on as it can fail to match some certificates because of a loss of
+<i>1384</i>&nbsp;     * encoding information in the RFC 2253 String form of some distinguished
+<i>1385</i>&nbsp;     * names.
+<i>1386</i>&nbsp;     * &lt;p&gt;
+<i>1387</i>&nbsp;     * Returns the subject criterion as a {@code String}. This
+<i>1388</i>&nbsp;     * distinguished name must match the subject distinguished name in the
+<i>1389</i>&nbsp;     * {@code X509Certificate}. If {@code null}, the subject criterion
+<i>1390</i>&nbsp;     * is disabled and any subject distinguished name will do.
+<i>1391</i>&nbsp;     * &lt;p&gt;
+<i>1392</i>&nbsp;     * If the value returned is not {@code null}, it is a
+<i>1393</i>&nbsp;     * distinguished name, in RFC 2253 format.
+<i>1394</i>&nbsp;     *
+<i>1395</i>&nbsp;     * @return the required subject distinguished name in RFC 2253 format
+<i>1396</i>&nbsp;     *         (or {@code null})
+<i>1397</i>&nbsp;     */
+<i>1398</i>&nbsp;    public String getSubjectAsString() {
+<b class="nc"><i>1399</i>&nbsp;        return (subject == null ? null : subject.getName());</b>
+<i>1400</i>&nbsp;    }
+<i>1401</i>&nbsp;
+<i>1402</i>&nbsp;    /**
+<i>1403</i>&nbsp;     * Returns the subject criterion as a byte array. This distinguished name
+<i>1404</i>&nbsp;     * must match the subject distinguished name in the
+<i>1405</i>&nbsp;     * {@code X509Certificate}. If {@code null}, the subject criterion
+<i>1406</i>&nbsp;     * is disabled and any subject distinguished name will do.
+<i>1407</i>&nbsp;     * &lt;p&gt;
+<i>1408</i>&nbsp;     * If the value returned is not {@code null}, it is a byte
+<i>1409</i>&nbsp;     * array containing a single DER encoded distinguished name, as defined in
+<i>1410</i>&nbsp;     * X.501. The ASN.1 notation for this structure is supplied in the
+<i>1411</i>&nbsp;     * documentation for
+<i>1412</i>&nbsp;     * {@link #setSubject(byte [] subjectDN) setSubject(byte [] subjectDN)}.
+<i>1413</i>&nbsp;     * &lt;p&gt;
+<i>1414</i>&nbsp;     * Note that the byte array returned is cloned to protect against
+<i>1415</i>&nbsp;     * subsequent modifications.
+<i>1416</i>&nbsp;     *
+<i>1417</i>&nbsp;     * @return a byte array containing the required subject distinguished name
+<i>1418</i>&nbsp;     *         in ASN.1 DER format (or {@code null})
+<i>1419</i>&nbsp;     * @throws IOException if an encoding error occurs
+<i>1420</i>&nbsp;     */
+<i>1421</i>&nbsp;    public byte[] getSubjectAsBytes() throws IOException {
+<b class="nc"><i>1422</i>&nbsp;        return (subject == null ? null : subject.getEncoded());</b>
+<i>1423</i>&nbsp;    }
+<i>1424</i>&nbsp;
+<i>1425</i>&nbsp;    /**
+<i>1426</i>&nbsp;     * Returns the subjectKeyIdentifier criterion. The
+<i>1427</i>&nbsp;     * {@code X509Certificate} must contain a SubjectKeyIdentifier
+<i>1428</i>&nbsp;     * extension with the specified value. If {@code null}, no
+<i>1429</i>&nbsp;     * subjectKeyIdentifier check will be done.
+<i>1430</i>&nbsp;     * &lt;p&gt;
+<i>1431</i>&nbsp;     * Note that the byte array returned is cloned to protect against
+<i>1432</i>&nbsp;     * subsequent modifications.
+<i>1433</i>&nbsp;     *
+<i>1434</i>&nbsp;     * @return the key identifier (or {@code null})
+<i>1435</i>&nbsp;     * @see #setSubjectKeyIdentifier
+<i>1436</i>&nbsp;     */
+<i>1437</i>&nbsp;    public byte[] getSubjectKeyIdentifier() {
+<b class="nc"><i>1438</i>&nbsp;        if (subjectKeyID == null) {</b>
+<b class="nc"><i>1439</i>&nbsp;            return null;</b>
+<i>1440</i>&nbsp;        }
+<b class="nc"><i>1441</i>&nbsp;        return subjectKeyID.clone();</b>
+<i>1442</i>&nbsp;    }
+<i>1443</i>&nbsp;
+<i>1444</i>&nbsp;    /**
+<i>1445</i>&nbsp;     * Returns the authorityKeyIdentifier criterion. The
+<i>1446</i>&nbsp;     * {@code X509Certificate} must contain a AuthorityKeyIdentifier
+<i>1447</i>&nbsp;     * extension with the specified value. If {@code null}, no
+<i>1448</i>&nbsp;     * authorityKeyIdentifier check will be done.
+<i>1449</i>&nbsp;     * &lt;p&gt;
+<i>1450</i>&nbsp;     * Note that the byte array returned is cloned to protect against
+<i>1451</i>&nbsp;     * subsequent modifications.
+<i>1452</i>&nbsp;     *
+<i>1453</i>&nbsp;     * @return the key identifier (or {@code null})
+<i>1454</i>&nbsp;     * @see #setAuthorityKeyIdentifier
+<i>1455</i>&nbsp;     */
+<i>1456</i>&nbsp;    public byte[] getAuthorityKeyIdentifier() {
+<b class="nc"><i>1457</i>&nbsp;        if (authorityKeyID == null) {</b>
+<b class="nc"><i>1458</i>&nbsp;          return null;</b>
+<i>1459</i>&nbsp;        }
+<b class="nc"><i>1460</i>&nbsp;        return authorityKeyID.clone();</b>
+<i>1461</i>&nbsp;    }
+<i>1462</i>&nbsp;
+<i>1463</i>&nbsp;    /**
+<i>1464</i>&nbsp;     * Returns the certificateValid criterion. The specified date must fall
+<i>1465</i>&nbsp;     * within the certificate validity period for the
+<i>1466</i>&nbsp;     * {@code X509Certificate}. If {@code null}, no certificateValid
+<i>1467</i>&nbsp;     * check will be done.
+<i>1468</i>&nbsp;     * &lt;p&gt;
+<i>1469</i>&nbsp;     * Note that the {@code Date} returned is cloned to protect against
+<i>1470</i>&nbsp;     * subsequent modifications.
+<i>1471</i>&nbsp;     *
+<i>1472</i>&nbsp;     * @return the {@code Date} to check (or {@code null})
+<i>1473</i>&nbsp;     * @see #setCertificateValid
+<i>1474</i>&nbsp;     */
+<i>1475</i>&nbsp;    public Date getCertificateValid() {
+<b class="nc"><i>1476</i>&nbsp;        if (certificateValid == null) {</b>
+<b class="nc"><i>1477</i>&nbsp;            return null;</b>
+<i>1478</i>&nbsp;        }
+<b class="nc"><i>1479</i>&nbsp;        return (Date)certificateValid.clone();</b>
+<i>1480</i>&nbsp;    }
+<i>1481</i>&nbsp;
+<i>1482</i>&nbsp;    /**
+<i>1483</i>&nbsp;     * Returns the privateKeyValid criterion. The specified date must fall
+<i>1484</i>&nbsp;     * within the private key validity period for the
+<i>1485</i>&nbsp;     * {@code X509Certificate}. If {@code null}, no privateKeyValid
+<i>1486</i>&nbsp;     * check will be done.
+<i>1487</i>&nbsp;     * &lt;p&gt;
+<i>1488</i>&nbsp;     * Note that the {@code Date} returned is cloned to protect against
+<i>1489</i>&nbsp;     * subsequent modifications.
+<i>1490</i>&nbsp;     *
+<i>1491</i>&nbsp;     * @return the {@code Date} to check (or {@code null})
+<i>1492</i>&nbsp;     * @see #setPrivateKeyValid
+<i>1493</i>&nbsp;     */
+<i>1494</i>&nbsp;    public Date getPrivateKeyValid() {
+<b class="nc"><i>1495</i>&nbsp;        if (privateKeyValid == null) {</b>
+<b class="nc"><i>1496</i>&nbsp;            return null;</b>
+<i>1497</i>&nbsp;        }
+<b class="nc"><i>1498</i>&nbsp;        return (Date)privateKeyValid.clone();</b>
+<i>1499</i>&nbsp;    }
+<i>1500</i>&nbsp;
+<i>1501</i>&nbsp;    /**
+<i>1502</i>&nbsp;     * Returns the subjectPublicKeyAlgID criterion. The
+<i>1503</i>&nbsp;     * {@code X509Certificate} must contain a subject public key
+<i>1504</i>&nbsp;     * with the specified algorithm. If {@code null}, no
+<i>1505</i>&nbsp;     * subjectPublicKeyAlgID check will be done.
+<i>1506</i>&nbsp;     *
+<i>1507</i>&nbsp;     * @return the object identifier (OID) of the signature algorithm to check
+<i>1508</i>&nbsp;     *         for (or {@code null}). An OID is represented by a set of
+<i>1509</i>&nbsp;     *         nonnegative integers separated by periods.
+<i>1510</i>&nbsp;     * @see #setSubjectPublicKeyAlgID
+<i>1511</i>&nbsp;     */
+<i>1512</i>&nbsp;    public String getSubjectPublicKeyAlgID() {
+<b class="nc"><i>1513</i>&nbsp;        if (subjectPublicKeyAlgID == null) {</b>
+<b class="nc"><i>1514</i>&nbsp;            return null;</b>
+<i>1515</i>&nbsp;        }
+<b class="nc"><i>1516</i>&nbsp;        return subjectPublicKeyAlgID.toString();</b>
+<i>1517</i>&nbsp;    }
+<i>1518</i>&nbsp;
+<i>1519</i>&nbsp;    /**
+<i>1520</i>&nbsp;     * Returns the subjectPublicKey criterion. The
+<i>1521</i>&nbsp;     * {@code X509Certificate} must contain the specified subject
+<i>1522</i>&nbsp;     * public key. If {@code null}, no subjectPublicKey check will be done.
+<i>1523</i>&nbsp;     *
+<i>1524</i>&nbsp;     * @return the subject public key to check for (or {@code null})
+<i>1525</i>&nbsp;     * @see #setSubjectPublicKey
+<i>1526</i>&nbsp;     */
+<i>1527</i>&nbsp;    public PublicKey getSubjectPublicKey() {
+<b class="nc"><i>1528</i>&nbsp;        return subjectPublicKey;</b>
+<i>1529</i>&nbsp;    }
+<i>1530</i>&nbsp;
+<i>1531</i>&nbsp;    /**
+<i>1532</i>&nbsp;     * Returns the keyUsage criterion. The {@code X509Certificate}
+<i>1533</i>&nbsp;     * must allow the specified keyUsage values. If null, no keyUsage
+<i>1534</i>&nbsp;     * check will be done.
+<i>1535</i>&nbsp;     * &lt;p&gt;
+<i>1536</i>&nbsp;     * Note that the boolean array returned is cloned to protect against
+<i>1537</i>&nbsp;     * subsequent modifications.
+<i>1538</i>&nbsp;     *
+<i>1539</i>&nbsp;     * @return a boolean array in the same format as the boolean
+<i>1540</i>&nbsp;     *                 array returned by
+<i>1541</i>&nbsp;     * {@link X509Certificate#getKeyUsage() X509Certificate.getKeyUsage()}.
+<i>1542</i>&nbsp;     *                 Or {@code null}.
+<i>1543</i>&nbsp;     * @see #setKeyUsage
+<i>1544</i>&nbsp;     */
+<i>1545</i>&nbsp;    public boolean[] getKeyUsage() {
+<b class="nc"><i>1546</i>&nbsp;        if (keyUsage == null) {</b>
+<b class="nc"><i>1547</i>&nbsp;            return null;</b>
+<i>1548</i>&nbsp;        }
+<b class="nc"><i>1549</i>&nbsp;        return keyUsage.clone();</b>
+<i>1550</i>&nbsp;    }
+<i>1551</i>&nbsp;
+<i>1552</i>&nbsp;    /**
+<i>1553</i>&nbsp;     * Returns the extendedKeyUsage criterion. The {@code X509Certificate}
+<i>1554</i>&nbsp;     * must allow the specified key purposes in its extended key usage
+<i>1555</i>&nbsp;     * extension. If the {@code keyPurposeSet} returned is empty or
+<i>1556</i>&nbsp;     * {@code null}, no extendedKeyUsage check will be done. Note that an
+<i>1557</i>&nbsp;     * {@code X509Certificate} that has no extendedKeyUsage extension
+<i>1558</i>&nbsp;     * implicitly allows all key purposes.
+<i>1559</i>&nbsp;     *
+<i>1560</i>&nbsp;     * @return an immutable {@code Set} of key purpose OIDs in string
+<i>1561</i>&nbsp;     * format (or {@code null})
+<i>1562</i>&nbsp;     * @see #setExtendedKeyUsage
+<i>1563</i>&nbsp;     */
+<i>1564</i>&nbsp;    public Set&lt;String&gt; getExtendedKeyUsage() {
+<b class="nc"><i>1565</i>&nbsp;        return keyPurposeSet;</b>
+<i>1566</i>&nbsp;    }
+<i>1567</i>&nbsp;
+<i>1568</i>&nbsp;    /**
+<i>1569</i>&nbsp;     * Indicates if the {@code X509Certificate} must contain all
+<i>1570</i>&nbsp;     * or at least one of the subjectAlternativeNames
+<i>1571</i>&nbsp;     * specified in the {@link #setSubjectAlternativeNames
+<i>1572</i>&nbsp;     * setSubjectAlternativeNames} or {@link #addSubjectAlternativeName
+<i>1573</i>&nbsp;     * addSubjectAlternativeName} methods. If {@code true},
+<i>1574</i>&nbsp;     * the {@code X509Certificate} must contain all of the
+<i>1575</i>&nbsp;     * specified subject alternative names. If {@code false}, the
+<i>1576</i>&nbsp;     * {@code X509Certificate} must contain at least one of the
+<i>1577</i>&nbsp;     * specified subject alternative names.
+<i>1578</i>&nbsp;     *
+<i>1579</i>&nbsp;     * @return {@code true} if the flag is enabled;
+<i>1580</i>&nbsp;     * {@code false} if the flag is disabled. The flag is
+<i>1581</i>&nbsp;     * {@code true} by default.
+<i>1582</i>&nbsp;     * @see #setMatchAllSubjectAltNames
+<i>1583</i>&nbsp;     */
+<i>1584</i>&nbsp;    public boolean getMatchAllSubjectAltNames() {
+<b class="nc"><i>1585</i>&nbsp;        return matchAllSubjectAltNames;</b>
+<i>1586</i>&nbsp;    }
+<i>1587</i>&nbsp;
+<i>1588</i>&nbsp;    /**
+<i>1589</i>&nbsp;     * Returns a copy of the subjectAlternativeNames criterion.
+<i>1590</i>&nbsp;     * The {@code X509Certificate} must contain all or at least one
+<i>1591</i>&nbsp;     * of the specified subjectAlternativeNames, depending on the value
+<i>1592</i>&nbsp;     * of the matchAllNames flag (see {@link #getMatchAllSubjectAltNames
+<i>1593</i>&nbsp;     * getMatchAllSubjectAltNames}). If the value returned is
+<i>1594</i>&nbsp;     * {@code null}, no subjectAlternativeNames check will be performed.
+<i>1595</i>&nbsp;     * &lt;p&gt;
+<i>1596</i>&nbsp;     * If the value returned is not {@code null}, it is a
+<i>1597</i>&nbsp;     * {@code Collection} with
+<i>1598</i>&nbsp;     * one entry for each name to be included in the subject alternative name
+<i>1599</i>&nbsp;     * criterion. Each entry is a {@code List} whose first entry is an
+<i>1600</i>&nbsp;     * {@code Integer} (the name type, 0-8) and whose second
+<i>1601</i>&nbsp;     * entry is a {@code String} or a byte array (the name, in
+<i>1602</i>&nbsp;     * string or ASN.1 DER encoded form, respectively).
+<i>1603</i>&nbsp;     * There can be multiple names of the same type.  Note that the
+<i>1604</i>&nbsp;     * {@code Collection} returned may contain duplicate names (same name
+<i>1605</i>&nbsp;     * and name type).
+<i>1606</i>&nbsp;     * &lt;p&gt;
+<i>1607</i>&nbsp;     * Each subject alternative name in the {@code Collection}
+<i>1608</i>&nbsp;     * may be specified either as a {@code String} or as an ASN.1 encoded
+<i>1609</i>&nbsp;     * byte array. For more details about the formats used, see
+<i>1610</i>&nbsp;     * {@link #addSubjectAlternativeName(int type, String name)
+<i>1611</i>&nbsp;     * addSubjectAlternativeName(int type, String name)} and
+<i>1612</i>&nbsp;     * {@link #addSubjectAlternativeName(int type, byte [] name)
+<i>1613</i>&nbsp;     * addSubjectAlternativeName(int type, byte [] name)}.
+<i>1614</i>&nbsp;     * &lt;p&gt;
+<i>1615</i>&nbsp;     * Note that a deep copy is performed on the {@code Collection} to
+<i>1616</i>&nbsp;     * protect against subsequent modifications.
+<i>1617</i>&nbsp;     *
+<i>1618</i>&nbsp;     * @return a {@code Collection} of names (or {@code null})
+<i>1619</i>&nbsp;     * @see #setSubjectAlternativeNames
+<i>1620</i>&nbsp;     */
+<i>1621</i>&nbsp;    public Collection&lt;List&lt;?&gt;&gt; getSubjectAlternativeNames() {
+<b class="nc"><i>1622</i>&nbsp;        if (subjectAlternativeNames == null) {</b>
+<b class="nc"><i>1623</i>&nbsp;            return null;</b>
+<i>1624</i>&nbsp;        }
+<b class="nc"><i>1625</i>&nbsp;        return cloneNames(subjectAlternativeNames);</b>
+<i>1626</i>&nbsp;    }
+<i>1627</i>&nbsp;
+<i>1628</i>&nbsp;    /**
+<i>1629</i>&nbsp;     * Clone an object of the form passed to
+<i>1630</i>&nbsp;     * setSubjectAlternativeNames and setPathToNames.
+<i>1631</i>&nbsp;     * Throw a {@code RuntimeException} if the argument is malformed.
+<i>1632</i>&nbsp;     * &lt;p&gt;
+<i>1633</i>&nbsp;     * This method wraps cloneAndCheckNames, changing any
+<i>1634</i>&nbsp;     * {@code IOException} into a {@code RuntimeException}. This
+<i>1635</i>&nbsp;     * method should be used when the object being
+<i>1636</i>&nbsp;     * cloned has already been checked, so there should never be any exceptions.
+<i>1637</i>&nbsp;     *
+<i>1638</i>&nbsp;     * @param names a {@code Collection} with one entry per name.
+<i>1639</i>&nbsp;     *              Each entry is a {@code List} whose first entry
+<i>1640</i>&nbsp;     *              is an Integer (the name type, 0-8) and whose second
+<i>1641</i>&nbsp;     *              entry is a String or a byte array (the name, in
+<i>1642</i>&nbsp;     *              string or ASN.1 DER encoded form, respectively).
+<i>1643</i>&nbsp;     *              There can be multiple names of the same type. Null
+<i>1644</i>&nbsp;     *              is not an acceptable value.
+<i>1645</i>&nbsp;     * @return a deep copy of the specified {@code Collection}
+<i>1646</i>&nbsp;     * @throws RuntimeException if a parsing error occurs
+<i>1647</i>&nbsp;     */
+<i>1648</i>&nbsp;    private static Set&lt;List&lt;?&gt;&gt; cloneNames(Collection&lt;List&lt;?&gt;&gt; names) {
+<i>1649</i>&nbsp;        try {
+<b class="nc"><i>1650</i>&nbsp;            return cloneAndCheckNames(names);</b>
+<b class="nc"><i>1651</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>1652</i>&nbsp;            throw new RuntimeException(&quot;cloneNames encountered IOException: &quot; +</b>
+<b class="nc"><i>1653</i>&nbsp;                                       e.getMessage());</b>
+<i>1654</i>&nbsp;        }
+<i>1655</i>&nbsp;    }
+<i>1656</i>&nbsp;
+<i>1657</i>&nbsp;    /**
+<i>1658</i>&nbsp;     * Clone and check an argument of the form passed to
+<i>1659</i>&nbsp;     * setSubjectAlternativeNames and setPathToNames.
+<i>1660</i>&nbsp;     * Throw an {@code IOException} if the argument is malformed.
+<i>1661</i>&nbsp;     *
+<i>1662</i>&nbsp;     * @param names a {@code Collection} with one entry per name.
+<i>1663</i>&nbsp;     *              Each entry is a {@code List} whose first entry
+<i>1664</i>&nbsp;     *              is an Integer (the name type, 0-8) and whose second
+<i>1665</i>&nbsp;     *              entry is a String or a byte array (the name, in
+<i>1666</i>&nbsp;     *              string or ASN.1 DER encoded form, respectively).
+<i>1667</i>&nbsp;     *              There can be multiple names of the same type.
+<i>1668</i>&nbsp;     *              {@code null} is not an acceptable value.
+<i>1669</i>&nbsp;     * @return a deep copy of the specified {@code Collection}
+<i>1670</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>1671</i>&nbsp;     */
+<i>1672</i>&nbsp;    private static Set&lt;List&lt;?&gt;&gt; cloneAndCheckNames(Collection&lt;List&lt;?&gt;&gt; names) throws IOException {
+<i>1673</i>&nbsp;        // Copy the Lists and Collection
+<b class="nc"><i>1674</i>&nbsp;        Set&lt;List&lt;?&gt;&gt; namesCopy = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>1675</i>&nbsp;        for (List&lt;?&gt; o : names)</b>
+<i>1676</i>&nbsp;        {
+<b class="nc"><i>1677</i>&nbsp;            namesCopy.add(new ArrayList&lt;&gt;(o));</b>
+<b class="nc"><i>1678</i>&nbsp;        }</b>
+<i>1679</i>&nbsp;
+<i>1680</i>&nbsp;        // Check the contents of the Lists and clone any byte arrays
+<b class="nc"><i>1681</i>&nbsp;        for (List&lt;?&gt; list : namesCopy) {</b>
+<i>1682</i>&nbsp;            @SuppressWarnings(&quot;unchecked&quot;) // See javadoc for parameter &quot;names&quot;.
+<b class="nc"><i>1683</i>&nbsp;            List&lt;Object&gt; nameList = (List&lt;Object&gt;)list;</b>
+<b class="nc"><i>1684</i>&nbsp;            if (nameList.size() != 2) {</b>
+<b class="nc"><i>1685</i>&nbsp;                throw new IOException(&quot;name list size not 2&quot;);</b>
+<i>1686</i>&nbsp;            }
+<b class="nc"><i>1687</i>&nbsp;            Object o = nameList.get(0);</b>
+<b class="nc"><i>1688</i>&nbsp;            if (!(o instanceof Integer)) {</b>
+<b class="nc"><i>1689</i>&nbsp;                throw new IOException(&quot;expected an Integer&quot;);</b>
+<i>1690</i>&nbsp;            }
+<b class="nc"><i>1691</i>&nbsp;            int nameType = ((Integer)o).intValue();</b>
+<b class="nc"><i>1692</i>&nbsp;            if ((nameType &lt; 0) || (nameType &gt; 8)) {</b>
+<b class="nc"><i>1693</i>&nbsp;                throw new IOException(&quot;name type not 0-8&quot;);</b>
+<i>1694</i>&nbsp;            }
+<b class="nc"><i>1695</i>&nbsp;            Object nameObject = nameList.get(1);</b>
+<b class="nc"><i>1696</i>&nbsp;            if (!(nameObject instanceof byte[]) &amp;&amp;</b>
+<i>1697</i>&nbsp;                !(nameObject instanceof String)) {
+<b class="nc"><i>1698</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>1699</i>&nbsp;                    debug.println(&quot;X509CertSelector.cloneAndCheckNames() &quot;</b>
+<i>1700</i>&nbsp;                        + &quot;name not byte array&quot;);
+<i>1701</i>&nbsp;                }
+<b class="nc"><i>1702</i>&nbsp;                throw new IOException(&quot;name not byte array or String&quot;);</b>
+<i>1703</i>&nbsp;            }
+<b class="nc"><i>1704</i>&nbsp;            if (nameObject instanceof byte[]) {</b>
+<b class="nc"><i>1705</i>&nbsp;                nameList.set(1, ((byte[]) nameObject).clone());</b>
+<i>1706</i>&nbsp;            }
+<b class="nc"><i>1707</i>&nbsp;        }</b>
+<b class="nc"><i>1708</i>&nbsp;        return namesCopy;</b>
+<i>1709</i>&nbsp;    }
+<i>1710</i>&nbsp;
+<i>1711</i>&nbsp;    /**
+<i>1712</i>&nbsp;     * Returns the name constraints criterion. The {@code X509Certificate}
+<i>1713</i>&nbsp;     * must have subject and subject alternative names that
+<i>1714</i>&nbsp;     * meet the specified name constraints.
+<i>1715</i>&nbsp;     * &lt;p&gt;
+<i>1716</i>&nbsp;     * The name constraints are returned as a byte array. This byte array
+<i>1717</i>&nbsp;     * contains the DER encoded form of the name constraints, as they
+<i>1718</i>&nbsp;     * would appear in the NameConstraints structure defined in RFC 5280
+<i>1719</i>&nbsp;     * and X.509. The ASN.1 notation for this structure is supplied in the
+<i>1720</i>&nbsp;     * documentation for
+<i>1721</i>&nbsp;     * {@link #setNameConstraints(byte [] bytes) setNameConstraints(byte [] bytes)}.
+<i>1722</i>&nbsp;     * &lt;p&gt;
+<i>1723</i>&nbsp;     * Note that the byte array returned is cloned to protect against
+<i>1724</i>&nbsp;     * subsequent modifications.
+<i>1725</i>&nbsp;     *
+<i>1726</i>&nbsp;     * @return a byte array containing the ASN.1 DER encoding of
+<i>1727</i>&nbsp;     *         a NameConstraints extension used for checking name constraints.
+<i>1728</i>&nbsp;     *         {@code null} if no name constraints check will be performed.
+<i>1729</i>&nbsp;     * @see #setNameConstraints
+<i>1730</i>&nbsp;     */
+<i>1731</i>&nbsp;    public byte[] getNameConstraints() {
+<b class="nc"><i>1732</i>&nbsp;        if (ncBytes == null) {</b>
+<b class="nc"><i>1733</i>&nbsp;            return null;</b>
+<i>1734</i>&nbsp;        } else {
+<b class="nc"><i>1735</i>&nbsp;            return ncBytes.clone();</b>
+<i>1736</i>&nbsp;        }
+<i>1737</i>&nbsp;    }
+<i>1738</i>&nbsp;
+<i>1739</i>&nbsp;    /**
+<i>1740</i>&nbsp;     * Returns the basic constraints constraint. If the value is greater than
+<i>1741</i>&nbsp;     * or equal to zero, the {@code X509Certificates} must include a
+<i>1742</i>&nbsp;     * basicConstraints extension with a pathLen of at least this value.
+<i>1743</i>&nbsp;     * If the value is -2, only end-entity certificates are accepted. If
+<i>1744</i>&nbsp;     * the value is -1, no basicConstraints check is done.
+<i>1745</i>&nbsp;     *
+<i>1746</i>&nbsp;     * @return the value for the basic constraints constraint
+<i>1747</i>&nbsp;     * @see #setBasicConstraints
+<i>1748</i>&nbsp;     */
+<i>1749</i>&nbsp;    public int getBasicConstraints() {
+<b class="nc"><i>1750</i>&nbsp;        return basicConstraints;</b>
+<i>1751</i>&nbsp;    }
+<i>1752</i>&nbsp;
+<i>1753</i>&nbsp;    /**
+<i>1754</i>&nbsp;     * Returns the policy criterion. The {@code X509Certificate} must
+<i>1755</i>&nbsp;     * include at least one of the specified policies in its certificate policies
+<i>1756</i>&nbsp;     * extension. If the {@code Set} returned is empty, then the
+<i>1757</i>&nbsp;     * {@code X509Certificate} must include at least some specified policy
+<i>1758</i>&nbsp;     * in its certificate policies extension. If the {@code Set} returned is
+<i>1759</i>&nbsp;     * {@code null}, no policy check will be performed.
+<i>1760</i>&nbsp;     *
+<i>1761</i>&nbsp;     * @return an immutable {@code Set} of certificate policy OIDs in
+<i>1762</i>&nbsp;     *         string format (or {@code null})
+<i>1763</i>&nbsp;     * @see #setPolicy
+<i>1764</i>&nbsp;     */
+<i>1765</i>&nbsp;    public Set&lt;String&gt; getPolicy() {
+<b class="nc"><i>1766</i>&nbsp;        return policySet;</b>
+<i>1767</i>&nbsp;    }
+<i>1768</i>&nbsp;
+<i>1769</i>&nbsp;    /**
+<i>1770</i>&nbsp;     * Returns a copy of the pathToNames criterion. The
+<i>1771</i>&nbsp;     * {@code X509Certificate} must not include name constraints that would
+<i>1772</i>&nbsp;     * prohibit building a path to the specified names. If the value
+<i>1773</i>&nbsp;     * returned is {@code null}, no pathToNames check will be performed.
+<i>1774</i>&nbsp;     * &lt;p&gt;
+<i>1775</i>&nbsp;     * If the value returned is not {@code null}, it is a
+<i>1776</i>&nbsp;     * {@code Collection} with one
+<i>1777</i>&nbsp;     * entry for each name to be included in the pathToNames
+<i>1778</i>&nbsp;     * criterion. Each entry is a {@code List} whose first entry is an
+<i>1779</i>&nbsp;     * {@code Integer} (the name type, 0-8) and whose second
+<i>1780</i>&nbsp;     * entry is a {@code String} or a byte array (the name, in
+<i>1781</i>&nbsp;     * string or ASN.1 DER encoded form, respectively).
+<i>1782</i>&nbsp;     * There can be multiple names of the same type. Note that the
+<i>1783</i>&nbsp;     * {@code Collection} returned may contain duplicate names (same
+<i>1784</i>&nbsp;     * name and name type).
+<i>1785</i>&nbsp;     * &lt;p&gt;
+<i>1786</i>&nbsp;     * Each name in the {@code Collection}
+<i>1787</i>&nbsp;     * may be specified either as a {@code String} or as an ASN.1 encoded
+<i>1788</i>&nbsp;     * byte array. For more details about the formats used, see
+<i>1789</i>&nbsp;     * {@link #addPathToName(int type, String name)
+<i>1790</i>&nbsp;     * addPathToName(int type, String name)} and
+<i>1791</i>&nbsp;     * {@link #addPathToName(int type, byte [] name)
+<i>1792</i>&nbsp;     * addPathToName(int type, byte [] name)}.
+<i>1793</i>&nbsp;     * &lt;p&gt;
+<i>1794</i>&nbsp;     * Note that a deep copy is performed on the {@code Collection} to
+<i>1795</i>&nbsp;     * protect against subsequent modifications.
+<i>1796</i>&nbsp;     *
+<i>1797</i>&nbsp;     * @return a {@code Collection} of names (or {@code null})
+<i>1798</i>&nbsp;     * @see #setPathToNames
+<i>1799</i>&nbsp;     */
+<i>1800</i>&nbsp;    public Collection&lt;List&lt;?&gt;&gt; getPathToNames() {
+<b class="nc"><i>1801</i>&nbsp;        if (pathToNames == null) {</b>
+<b class="nc"><i>1802</i>&nbsp;            return null;</b>
+<i>1803</i>&nbsp;        }
+<b class="nc"><i>1804</i>&nbsp;        return cloneNames(pathToNames);</b>
+<i>1805</i>&nbsp;    }
+<i>1806</i>&nbsp;
+<i>1807</i>&nbsp;    /**
+<i>1808</i>&nbsp;     * Return a printable representation of the {@code CertSelector}.
+<i>1809</i>&nbsp;     *
+<i>1810</i>&nbsp;     * @return a {@code String} describing the contents of the
+<i>1811</i>&nbsp;     *         {@code CertSelector}
+<i>1812</i>&nbsp;     */
+<i>1813</i>&nbsp;    public String toString() {
+<b class="nc"><i>1814</i>&nbsp;        StringBuilder sb = new StringBuilder();</b>
+<b class="nc"><i>1815</i>&nbsp;        sb.append(&quot;X509CertSelector: [\n&quot;);</b>
+<b class="nc"><i>1816</i>&nbsp;        if (x509Cert != null) {</b>
+<b class="nc"><i>1817</i>&nbsp;            sb.append(&quot;  Certificate: &quot; + x509Cert.toString() + &quot;\n&quot;);</b>
+<i>1818</i>&nbsp;        }
+<b class="nc"><i>1819</i>&nbsp;        if (serialNumber != null) {</b>
+<b class="nc"><i>1820</i>&nbsp;            sb.append(&quot;  Serial Number: &quot; + serialNumber.toString() + &quot;\n&quot;);</b>
+<i>1821</i>&nbsp;        }
+<b class="nc"><i>1822</i>&nbsp;        if (issuer != null) {</b>
+<b class="nc"><i>1823</i>&nbsp;            sb.append(&quot;  Issuer: &quot; + getIssuerAsString() + &quot;\n&quot;);</b>
+<i>1824</i>&nbsp;        }
+<b class="nc"><i>1825</i>&nbsp;        if (subject != null) {</b>
+<b class="nc"><i>1826</i>&nbsp;            sb.append(&quot;  Subject: &quot; + getSubjectAsString() + &quot;\n&quot;);</b>
+<i>1827</i>&nbsp;        }
+<b class="nc"><i>1828</i>&nbsp;        sb.append(&quot;  matchAllSubjectAltNames flag: &quot;</b>
+<b class="nc"><i>1829</i>&nbsp;                  + String.valueOf(matchAllSubjectAltNames) + &quot;\n&quot;);</b>
+<b class="nc"><i>1830</i>&nbsp;        if (subjectAlternativeNames != null) {</b>
+<b class="nc"><i>1831</i>&nbsp;            sb.append(&quot;  SubjectAlternativeNames:\n&quot;);</b>
+<b class="nc"><i>1832</i>&nbsp;            Iterator&lt;List&lt;?&gt;&gt; i = subjectAlternativeNames.iterator();</b>
+<b class="nc"><i>1833</i>&nbsp;            while (i.hasNext()) {</b>
+<b class="nc"><i>1834</i>&nbsp;                List&lt;?&gt; list = i.next();</b>
+<b class="nc"><i>1835</i>&nbsp;                sb.append(&quot;    type &quot; + list.get(0) +</b>
+<b class="nc"><i>1836</i>&nbsp;                          &quot;, name &quot; + list.get(1) + &quot;\n&quot;);</b>
+<b class="nc"><i>1837</i>&nbsp;            }</b>
+<i>1838</i>&nbsp;        }
+<b class="nc"><i>1839</i>&nbsp;        if (subjectKeyID != null) {</b>
+<b class="nc"><i>1840</i>&nbsp;            HexDumpEncoder enc = new HexDumpEncoder();</b>
+<b class="nc"><i>1841</i>&nbsp;            sb.append(&quot;  Subject Key Identifier: &quot; +</b>
+<b class="nc"><i>1842</i>&nbsp;                      enc.encodeBuffer(subjectKeyID) + &quot;\n&quot;);</b>
+<i>1843</i>&nbsp;        }
+<b class="nc"><i>1844</i>&nbsp;        if (authorityKeyID != null) {</b>
+<b class="nc"><i>1845</i>&nbsp;            HexDumpEncoder enc = new HexDumpEncoder();</b>
+<b class="nc"><i>1846</i>&nbsp;            sb.append(&quot;  Authority Key Identifier: &quot; +</b>
+<b class="nc"><i>1847</i>&nbsp;                      enc.encodeBuffer(authorityKeyID) + &quot;\n&quot;);</b>
+<i>1848</i>&nbsp;        }
+<b class="nc"><i>1849</i>&nbsp;        if (certificateValid != null) {</b>
+<b class="nc"><i>1850</i>&nbsp;            sb.append(&quot;  Certificate Valid: &quot; +</b>
+<b class="nc"><i>1851</i>&nbsp;                      certificateValid.toString() + &quot;\n&quot;);</b>
+<i>1852</i>&nbsp;        }
+<b class="nc"><i>1853</i>&nbsp;        if (privateKeyValid != null) {</b>
+<b class="nc"><i>1854</i>&nbsp;            sb.append(&quot;  Private Key Valid: &quot; +</b>
+<b class="nc"><i>1855</i>&nbsp;                      privateKeyValid.toString() + &quot;\n&quot;);</b>
+<i>1856</i>&nbsp;        }
+<b class="nc"><i>1857</i>&nbsp;        if (subjectPublicKeyAlgID != null) {</b>
+<b class="nc"><i>1858</i>&nbsp;            sb.append(&quot;  Subject Public Key AlgID: &quot; +</b>
+<b class="nc"><i>1859</i>&nbsp;                      subjectPublicKeyAlgID.toString() + &quot;\n&quot;);</b>
+<i>1860</i>&nbsp;        }
+<b class="nc"><i>1861</i>&nbsp;        if (subjectPublicKey != null) {</b>
+<b class="nc"><i>1862</i>&nbsp;            sb.append(&quot;  Subject Public Key: &quot; +</b>
+<b class="nc"><i>1863</i>&nbsp;                      subjectPublicKey.toString() + &quot;\n&quot;);</b>
+<i>1864</i>&nbsp;        }
+<b class="nc"><i>1865</i>&nbsp;        if (keyUsage != null) {</b>
+<b class="nc"><i>1866</i>&nbsp;            sb.append(&quot;  Key Usage: &quot; + keyUsageToString(keyUsage) + &quot;\n&quot;);</b>
+<i>1867</i>&nbsp;        }
+<b class="nc"><i>1868</i>&nbsp;        if (keyPurposeSet != null) {</b>
+<b class="nc"><i>1869</i>&nbsp;            sb.append(&quot;  Extended Key Usage: &quot; +</b>
+<b class="nc"><i>1870</i>&nbsp;                      keyPurposeSet.toString() + &quot;\n&quot;);</b>
+<i>1871</i>&nbsp;        }
+<b class="nc"><i>1872</i>&nbsp;        if (policy != null) {</b>
+<b class="nc"><i>1873</i>&nbsp;            sb.append(&quot;  Policy: &quot; + policy.toString() + &quot;\n&quot;);</b>
+<i>1874</i>&nbsp;        }
+<b class="nc"><i>1875</i>&nbsp;        if (pathToGeneralNames != null) {</b>
+<b class="nc"><i>1876</i>&nbsp;            sb.append(&quot;  Path to names:\n&quot;);</b>
+<b class="nc"><i>1877</i>&nbsp;            Iterator&lt;GeneralNameInterface&gt; i = pathToGeneralNames.iterator();</b>
+<b class="nc"><i>1878</i>&nbsp;            while (i.hasNext()) {</b>
+<b class="nc"><i>1879</i>&nbsp;                sb.append(&quot;    &quot; + i.next() + &quot;\n&quot;);</b>
+<i>1880</i>&nbsp;            }
+<i>1881</i>&nbsp;        }
+<b class="nc"><i>1882</i>&nbsp;        sb.append(&quot;]&quot;);</b>
+<b class="nc"><i>1883</i>&nbsp;        return sb.toString();</b>
+<i>1884</i>&nbsp;    }
+<i>1885</i>&nbsp;
+<i>1886</i>&nbsp;    // Copied from sun.security.x509.KeyUsageExtension
+<i>1887</i>&nbsp;    // (without calling the superclass)
+<i>1888</i>&nbsp;    /**
+<i>1889</i>&nbsp;     * Returns a printable representation of the KeyUsage.
+<i>1890</i>&nbsp;     */
+<i>1891</i>&nbsp;    private static String keyUsageToString(boolean[] k) {
+<b class="nc"><i>1892</i>&nbsp;        String s = &quot;KeyUsage [\n&quot;;</b>
+<i>1893</i>&nbsp;        try {
+<b class="nc"><i>1894</i>&nbsp;            if (k[0]) {</b>
+<b class="nc"><i>1895</i>&nbsp;                s += &quot;  DigitalSignature\n&quot;;</b>
+<i>1896</i>&nbsp;            }
+<b class="nc"><i>1897</i>&nbsp;            if (k[1]) {</b>
+<b class="nc"><i>1898</i>&nbsp;                s += &quot;  Non_repudiation\n&quot;;</b>
+<i>1899</i>&nbsp;            }
+<b class="nc"><i>1900</i>&nbsp;            if (k[2]) {</b>
+<b class="nc"><i>1901</i>&nbsp;                s += &quot;  Key_Encipherment\n&quot;;</b>
+<i>1902</i>&nbsp;            }
+<b class="nc"><i>1903</i>&nbsp;            if (k[3]) {</b>
+<b class="nc"><i>1904</i>&nbsp;                s += &quot;  Data_Encipherment\n&quot;;</b>
+<i>1905</i>&nbsp;            }
+<b class="nc"><i>1906</i>&nbsp;            if (k[4]) {</b>
+<b class="nc"><i>1907</i>&nbsp;                s += &quot;  Key_Agreement\n&quot;;</b>
+<i>1908</i>&nbsp;            }
+<b class="nc"><i>1909</i>&nbsp;            if (k[5]) {</b>
+<b class="nc"><i>1910</i>&nbsp;                s += &quot;  Key_CertSign\n&quot;;</b>
+<i>1911</i>&nbsp;            }
+<b class="nc"><i>1912</i>&nbsp;            if (k[6]) {</b>
+<b class="nc"><i>1913</i>&nbsp;                s += &quot;  Crl_Sign\n&quot;;</b>
+<i>1914</i>&nbsp;            }
+<b class="nc"><i>1915</i>&nbsp;            if (k[7]) {</b>
+<b class="nc"><i>1916</i>&nbsp;                s += &quot;  Encipher_Only\n&quot;;</b>
+<i>1917</i>&nbsp;            }
+<b class="nc"><i>1918</i>&nbsp;            if (k[8]) {</b>
+<b class="nc"><i>1919</i>&nbsp;                s += &quot;  Decipher_Only\n&quot;;</b>
+<i>1920</i>&nbsp;            }
+<b class="nc"><i>1921</i>&nbsp;        } catch (ArrayIndexOutOfBoundsException ex) {}</b>
+<i>1922</i>&nbsp;
+<b class="nc"><i>1923</i>&nbsp;        s += &quot;]\n&quot;;</b>
+<i>1924</i>&nbsp;
+<b class="nc"><i>1925</i>&nbsp;        return (s);</b>
+<i>1926</i>&nbsp;    }
+<i>1927</i>&nbsp;
+<i>1928</i>&nbsp;    /**
+<i>1929</i>&nbsp;     * Returns an Extension object given any X509Certificate and extension oid.
+<i>1930</i>&nbsp;     * Throw an {@code IOException} if the extension byte value is
+<i>1931</i>&nbsp;     * malformed.
+<i>1932</i>&nbsp;     *
+<i>1933</i>&nbsp;     * @param cert a {@code X509Certificate}
+<i>1934</i>&nbsp;     * @param extId an {@code integer} which specifies the extension index.
+<i>1935</i>&nbsp;     * Currently, the supported extensions are as follows:
+<i>1936</i>&nbsp;     * index 0 - PrivateKeyUsageExtension
+<i>1937</i>&nbsp;     * index 1 - SubjectAlternativeNameExtension
+<i>1938</i>&nbsp;     * index 2 - NameConstraintsExtension
+<i>1939</i>&nbsp;     * index 3 - CertificatePoliciesExtension
+<i>1940</i>&nbsp;     * index 4 - ExtendedKeyUsageExtension
+<i>1941</i>&nbsp;     * @return an {@code Extension} object whose real type is as specified
+<i>1942</i>&nbsp;     * by the extension oid.
+<i>1943</i>&nbsp;     * @throws IOException if cannot construct the {@code Extension}
+<i>1944</i>&nbsp;     * object with the extension encoding retrieved from the passed in
+<i>1945</i>&nbsp;     * {@code X509Certificate}.
+<i>1946</i>&nbsp;     */
+<i>1947</i>&nbsp;    private static Extension getExtensionObject(X509Certificate cert, int extId)
+<i>1948</i>&nbsp;            throws IOException {
+<b class="nc"><i>1949</i>&nbsp;        if (cert instanceof X509CertImpl) {</b>
+<b class="nc"><i>1950</i>&nbsp;            X509CertImpl impl = (X509CertImpl)cert;</b>
+<b class="nc"><i>1951</i>&nbsp;            switch (extId) {</b>
+<i>1952</i>&nbsp;            case PRIVATE_KEY_USAGE_ID:
+<b class="nc"><i>1953</i>&nbsp;                return impl.getPrivateKeyUsageExtension();</b>
+<i>1954</i>&nbsp;            case SUBJECT_ALT_NAME_ID:
+<b class="nc"><i>1955</i>&nbsp;                return impl.getSubjectAlternativeNameExtension();</b>
+<i>1956</i>&nbsp;            case NAME_CONSTRAINTS_ID:
+<b class="nc"><i>1957</i>&nbsp;                return impl.getNameConstraintsExtension();</b>
+<i>1958</i>&nbsp;            case CERT_POLICIES_ID:
+<b class="nc"><i>1959</i>&nbsp;                return impl.getCertificatePoliciesExtension();</b>
+<i>1960</i>&nbsp;            case EXTENDED_KEY_USAGE_ID:
+<b class="nc"><i>1961</i>&nbsp;                return impl.getExtendedKeyUsageExtension();</b>
+<i>1962</i>&nbsp;            default:
+<b class="nc"><i>1963</i>&nbsp;                return null;</b>
+<i>1964</i>&nbsp;            }
+<i>1965</i>&nbsp;        }
+<b class="nc"><i>1966</i>&nbsp;        byte[] rawExtVal = cert.getExtensionValue(EXTENSION_OIDS[extId]);</b>
+<b class="nc"><i>1967</i>&nbsp;        if (rawExtVal == null) {</b>
+<b class="nc"><i>1968</i>&nbsp;            return null;</b>
+<i>1969</i>&nbsp;        }
+<b class="nc"><i>1970</i>&nbsp;        DerInputStream in = new DerInputStream(rawExtVal);</b>
+<b class="nc"><i>1971</i>&nbsp;        byte[] encoded = in.getOctetString();</b>
+<b class="nc"><i>1972</i>&nbsp;        switch (extId) {</b>
+<i>1973</i>&nbsp;        case PRIVATE_KEY_USAGE_ID:
+<i>1974</i>&nbsp;            try {
+<b class="nc"><i>1975</i>&nbsp;                return new PrivateKeyUsageExtension(FALSE, encoded);</b>
+<b class="nc"><i>1976</i>&nbsp;            } catch (CertificateException ex) {</b>
+<b class="nc"><i>1977</i>&nbsp;                throw new IOException(ex.getMessage());</b>
+<i>1978</i>&nbsp;            }
+<i>1979</i>&nbsp;        case SUBJECT_ALT_NAME_ID:
+<b class="nc"><i>1980</i>&nbsp;            return new SubjectAlternativeNameExtension(FALSE, encoded);</b>
+<i>1981</i>&nbsp;        case NAME_CONSTRAINTS_ID:
+<b class="nc"><i>1982</i>&nbsp;            return new NameConstraintsExtension(FALSE, encoded);</b>
+<i>1983</i>&nbsp;        case CERT_POLICIES_ID:
+<b class="nc"><i>1984</i>&nbsp;            return new CertificatePoliciesExtension(FALSE, encoded);</b>
+<i>1985</i>&nbsp;        case EXTENDED_KEY_USAGE_ID:
+<b class="nc"><i>1986</i>&nbsp;            return new ExtendedKeyUsageExtension(FALSE, encoded);</b>
+<i>1987</i>&nbsp;        default:
+<b class="nc"><i>1988</i>&nbsp;            return null;</b>
+<i>1989</i>&nbsp;        }
+<i>1990</i>&nbsp;    }
+<i>1991</i>&nbsp;
+<i>1992</i>&nbsp;    /**
+<i>1993</i>&nbsp;     * Decides whether a {@code Certificate} should be selected.
+<i>1994</i>&nbsp;     *
+<i>1995</i>&nbsp;     * @param cert the {@code Certificate} to be checked
+<i>1996</i>&nbsp;     * @return {@code true} if the {@code Certificate} should be
+<i>1997</i>&nbsp;     *         selected, {@code false} otherwise
+<i>1998</i>&nbsp;     */
+<i>1999</i>&nbsp;    public boolean match(Certificate cert) {
+<b class="nc"><i>2000</i>&nbsp;        if (!(cert instanceof X509Certificate)) {</b>
+<b class="nc"><i>2001</i>&nbsp;            return false;</b>
+<i>2002</i>&nbsp;        }
+<b class="nc"><i>2003</i>&nbsp;        X509Certificate xcert = (X509Certificate)cert;</b>
+<i>2004</i>&nbsp;
+<b class="nc"><i>2005</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>2006</i>&nbsp;            debug.println(&quot;X509CertSelector.match(SN: &quot;</b>
+<b class="nc"><i>2007</i>&nbsp;                + (xcert.getSerialNumber()).toString(16) + &quot;\n  Issuer: &quot;</b>
+<b class="nc"><i>2008</i>&nbsp;                + xcert.getIssuerDN() + &quot;\n  Subject: &quot; + xcert.getSubjectDN()</b>
+<i>2009</i>&nbsp;                + &quot;)&quot;);
+<i>2010</i>&nbsp;        }
+<i>2011</i>&nbsp;
+<i>2012</i>&nbsp;        /* match on X509Certificate */
+<b class="nc"><i>2013</i>&nbsp;        if (x509Cert != null) {</b>
+<b class="nc"><i>2014</i>&nbsp;            if (!x509Cert.equals(xcert)) {</b>
+<b class="nc"><i>2015</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2016</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2017</i>&nbsp;                        + &quot;certs don&#39;t match&quot;);
+<i>2018</i>&nbsp;                }
+<b class="nc"><i>2019</i>&nbsp;                return false;</b>
+<i>2020</i>&nbsp;            }
+<i>2021</i>&nbsp;        }
+<i>2022</i>&nbsp;
+<i>2023</i>&nbsp;        /* match on serial number */
+<b class="nc"><i>2024</i>&nbsp;        if (serialNumber != null) {</b>
+<b class="nc"><i>2025</i>&nbsp;            if (!serialNumber.equals(xcert.getSerialNumber())) {</b>
+<b class="nc"><i>2026</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2027</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2028</i>&nbsp;                        + &quot;serial numbers don&#39;t match&quot;);
+<i>2029</i>&nbsp;                }
+<b class="nc"><i>2030</i>&nbsp;                return false;</b>
+<i>2031</i>&nbsp;            }
+<i>2032</i>&nbsp;        }
+<i>2033</i>&nbsp;
+<i>2034</i>&nbsp;        /* match on issuer name */
+<b class="nc"><i>2035</i>&nbsp;        if (issuer != null) {</b>
+<b class="nc"><i>2036</i>&nbsp;            if (!issuer.equals(xcert.getIssuerX500Principal())) {</b>
+<b class="nc"><i>2037</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2038</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2039</i>&nbsp;                        + &quot;issuer DNs don&#39;t match&quot;);
+<i>2040</i>&nbsp;                }
+<b class="nc"><i>2041</i>&nbsp;                return false;</b>
+<i>2042</i>&nbsp;            }
+<i>2043</i>&nbsp;        }
+<i>2044</i>&nbsp;
+<i>2045</i>&nbsp;        /* match on subject name */
+<b class="nc"><i>2046</i>&nbsp;        if (subject != null) {</b>
+<b class="nc"><i>2047</i>&nbsp;            if (!subject.equals(xcert.getSubjectX500Principal())) {</b>
+<b class="nc"><i>2048</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2049</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2050</i>&nbsp;                        + &quot;subject DNs don&#39;t match&quot;);
+<i>2051</i>&nbsp;                }
+<b class="nc"><i>2052</i>&nbsp;                return false;</b>
+<i>2053</i>&nbsp;            }
+<i>2054</i>&nbsp;        }
+<i>2055</i>&nbsp;
+<i>2056</i>&nbsp;        /* match on certificate validity range */
+<b class="nc"><i>2057</i>&nbsp;        if (certificateValid != null) {</b>
+<i>2058</i>&nbsp;            try {
+<b class="nc"><i>2059</i>&nbsp;                xcert.checkValidity(certificateValid);</b>
+<b class="nc"><i>2060</i>&nbsp;            } catch (CertificateException e) {</b>
+<b class="nc"><i>2061</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2062</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2063</i>&nbsp;                        + &quot;certificate not within validity period&quot;);
+<i>2064</i>&nbsp;                }
+<b class="nc"><i>2065</i>&nbsp;                return false;</b>
+<b class="nc"><i>2066</i>&nbsp;            }</b>
+<i>2067</i>&nbsp;        }
+<i>2068</i>&nbsp;
+<i>2069</i>&nbsp;        /* match on subject public key */
+<b class="nc"><i>2070</i>&nbsp;        if (subjectPublicKeyBytes != null) {</b>
+<b class="nc"><i>2071</i>&nbsp;            byte[] certKey = xcert.getPublicKey().getEncoded();</b>
+<b class="nc"><i>2072</i>&nbsp;            if (!Arrays.equals(subjectPublicKeyBytes, certKey)) {</b>
+<b class="nc"><i>2073</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2074</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2075</i>&nbsp;                        + &quot;subject public keys don&#39;t match&quot;);
+<i>2076</i>&nbsp;                }
+<b class="nc"><i>2077</i>&nbsp;                return false;</b>
+<i>2078</i>&nbsp;            }
+<i>2079</i>&nbsp;        }
+<i>2080</i>&nbsp;
+<b class="nc"><i>2081</i>&nbsp;        boolean result = matchBasicConstraints(xcert)</b>
+<b class="nc"><i>2082</i>&nbsp;                      &amp;&amp; matchKeyUsage(xcert)</b>
+<b class="nc"><i>2083</i>&nbsp;                      &amp;&amp; matchExtendedKeyUsage(xcert)</b>
+<b class="nc"><i>2084</i>&nbsp;                      &amp;&amp; matchSubjectKeyID(xcert)</b>
+<b class="nc"><i>2085</i>&nbsp;                      &amp;&amp; matchAuthorityKeyID(xcert)</b>
+<b class="nc"><i>2086</i>&nbsp;                      &amp;&amp; matchPrivateKeyValid(xcert)</b>
+<b class="nc"><i>2087</i>&nbsp;                      &amp;&amp; matchSubjectPublicKeyAlgID(xcert)</b>
+<b class="nc"><i>2088</i>&nbsp;                      &amp;&amp; matchPolicy(xcert)</b>
+<b class="nc"><i>2089</i>&nbsp;                      &amp;&amp; matchSubjectAlternativeNames(xcert)</b>
+<b class="nc"><i>2090</i>&nbsp;                      &amp;&amp; matchPathToNames(xcert)</b>
+<b class="nc"><i>2091</i>&nbsp;                      &amp;&amp; matchNameConstraints(xcert);</b>
+<i>2092</i>&nbsp;
+<b class="nc"><i>2093</i>&nbsp;        if (result &amp;&amp; (debug != null)) {</b>
+<b class="nc"><i>2094</i>&nbsp;            debug.println(&quot;X509CertSelector.match returning: true&quot;);</b>
+<i>2095</i>&nbsp;        }
+<b class="nc"><i>2096</i>&nbsp;        return result;</b>
+<i>2097</i>&nbsp;    }
+<i>2098</i>&nbsp;
+<i>2099</i>&nbsp;    /* match on subject key identifier extension value */
+<i>2100</i>&nbsp;    private boolean matchSubjectKeyID(X509Certificate xcert) {
+<b class="nc"><i>2101</i>&nbsp;        if (subjectKeyID == null) {</b>
+<b class="nc"><i>2102</i>&nbsp;            return true;</b>
+<i>2103</i>&nbsp;        }
+<i>2104</i>&nbsp;        try {
+<b class="nc"><i>2105</i>&nbsp;            byte[] extVal = xcert.getExtensionValue(&quot;2.5.29.14&quot;);</b>
+<b class="nc"><i>2106</i>&nbsp;            if (extVal == null) {</b>
+<b class="nc"><i>2107</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2108</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2109</i>&nbsp;                        + &quot;no subject key ID extension&quot;);
+<i>2110</i>&nbsp;                }
+<b class="nc"><i>2111</i>&nbsp;                return false;</b>
+<i>2112</i>&nbsp;            }
+<b class="nc"><i>2113</i>&nbsp;            DerInputStream in = new DerInputStream(extVal);</b>
+<b class="nc"><i>2114</i>&nbsp;            byte[] certSubjectKeyID = in.getOctetString();</b>
+<b class="nc"><i>2115</i>&nbsp;            if (certSubjectKeyID == null ||</b>
+<b class="nc"><i>2116</i>&nbsp;                    !Arrays.equals(subjectKeyID, certSubjectKeyID)) {</b>
+<b class="nc"><i>2117</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2118</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2119</i>&nbsp;                        + &quot;subject key IDs don&#39;t match&quot;);
+<i>2120</i>&nbsp;                }
+<b class="nc"><i>2121</i>&nbsp;                return false;</b>
+<i>2122</i>&nbsp;            }
+<b class="nc"><i>2123</i>&nbsp;        } catch (IOException ex) {</b>
+<b class="nc"><i>2124</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2125</i>&nbsp;                debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2126</i>&nbsp;                    + &quot;exception in subject key ID check&quot;);
+<i>2127</i>&nbsp;            }
+<b class="nc"><i>2128</i>&nbsp;            return false;</b>
+<b class="nc"><i>2129</i>&nbsp;        }</b>
+<b class="nc"><i>2130</i>&nbsp;        return true;</b>
+<i>2131</i>&nbsp;    }
+<i>2132</i>&nbsp;
+<i>2133</i>&nbsp;    /* match on authority key identifier extension value */
+<i>2134</i>&nbsp;    private boolean matchAuthorityKeyID(X509Certificate xcert) {
+<b class="nc"><i>2135</i>&nbsp;        if (authorityKeyID == null) {</b>
+<b class="nc"><i>2136</i>&nbsp;            return true;</b>
+<i>2137</i>&nbsp;        }
+<i>2138</i>&nbsp;        try {
+<b class="nc"><i>2139</i>&nbsp;            byte[] extVal = xcert.getExtensionValue(&quot;2.5.29.35&quot;);</b>
+<b class="nc"><i>2140</i>&nbsp;            if (extVal == null) {</b>
+<b class="nc"><i>2141</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2142</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2143</i>&nbsp;                        + &quot;no authority key ID extension&quot;);
+<i>2144</i>&nbsp;                }
+<b class="nc"><i>2145</i>&nbsp;                return false;</b>
+<i>2146</i>&nbsp;            }
+<b class="nc"><i>2147</i>&nbsp;            DerInputStream in = new DerInputStream(extVal);</b>
+<b class="nc"><i>2148</i>&nbsp;            byte[] certAuthKeyID = in.getOctetString();</b>
+<b class="nc"><i>2149</i>&nbsp;            if (certAuthKeyID == null ||</b>
+<b class="nc"><i>2150</i>&nbsp;                    !Arrays.equals(authorityKeyID, certAuthKeyID)) {</b>
+<b class="nc"><i>2151</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2152</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2153</i>&nbsp;                        + &quot;authority key IDs don&#39;t match&quot;);
+<i>2154</i>&nbsp;                }
+<b class="nc"><i>2155</i>&nbsp;                return false;</b>
+<i>2156</i>&nbsp;            }
+<b class="nc"><i>2157</i>&nbsp;        } catch (IOException ex) {</b>
+<b class="nc"><i>2158</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2159</i>&nbsp;                debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2160</i>&nbsp;                    + &quot;exception in authority key ID check&quot;);
+<i>2161</i>&nbsp;            }
+<b class="nc"><i>2162</i>&nbsp;            return false;</b>
+<b class="nc"><i>2163</i>&nbsp;        }</b>
+<b class="nc"><i>2164</i>&nbsp;        return true;</b>
+<i>2165</i>&nbsp;    }
+<i>2166</i>&nbsp;
+<i>2167</i>&nbsp;    /* match on private key usage range */
+<i>2168</i>&nbsp;    private boolean matchPrivateKeyValid(X509Certificate xcert) {
+<b class="nc"><i>2169</i>&nbsp;        if (privateKeyValid == null) {</b>
+<b class="nc"><i>2170</i>&nbsp;            return true;</b>
+<i>2171</i>&nbsp;        }
+<b class="nc"><i>2172</i>&nbsp;        PrivateKeyUsageExtension ext = null;</b>
+<i>2173</i>&nbsp;        try {
+<b class="nc"><i>2174</i>&nbsp;            ext = (PrivateKeyUsageExtension)</b>
+<b class="nc"><i>2175</i>&nbsp;                getExtensionObject(xcert, PRIVATE_KEY_USAGE_ID);</b>
+<b class="nc"><i>2176</i>&nbsp;            if (ext != null) {</b>
+<b class="nc"><i>2177</i>&nbsp;                ext.valid(privateKeyValid);</b>
+<i>2178</i>&nbsp;            }
+<b class="nc"><i>2179</i>&nbsp;        } catch (CertificateExpiredException e1) {</b>
+<b class="nc"><i>2180</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2181</i>&nbsp;                String time = &quot;n/a&quot;;</b>
+<i>2182</i>&nbsp;                try {
+<b class="nc"><i>2183</i>&nbsp;                    Date notAfter = ext.get(PrivateKeyUsageExtension.NOT_AFTER);</b>
+<b class="nc"><i>2184</i>&nbsp;                    time = notAfter.toString();</b>
+<b class="nc"><i>2185</i>&nbsp;                } catch (CertificateException ex) {</b>
+<i>2186</i>&nbsp;                    // not able to retrieve notAfter value
+<b class="nc"><i>2187</i>&nbsp;                }</b>
+<b class="nc"><i>2188</i>&nbsp;                debug.println(&quot;X509CertSelector.match: private key usage not &quot;</b>
+<i>2189</i>&nbsp;                    + &quot;within validity date; ext.NOT_After: &quot;
+<i>2190</i>&nbsp;                    + time + &quot;; X509CertSelector: &quot;
+<b class="nc"><i>2191</i>&nbsp;                    + this.toString());</b>
+<b class="nc"><i>2192</i>&nbsp;                e1.printStackTrace();</b>
+<i>2193</i>&nbsp;            }
+<b class="nc"><i>2194</i>&nbsp;            return false;</b>
+<b class="nc"><i>2195</i>&nbsp;        } catch (CertificateNotYetValidException e2) {</b>
+<b class="nc"><i>2196</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2197</i>&nbsp;                String time = &quot;n/a&quot;;</b>
+<i>2198</i>&nbsp;                try {
+<b class="nc"><i>2199</i>&nbsp;                    Date notBefore = ext.get(PrivateKeyUsageExtension.NOT_BEFORE);</b>
+<b class="nc"><i>2200</i>&nbsp;                    time = notBefore.toString();</b>
+<b class="nc"><i>2201</i>&nbsp;                } catch (CertificateException ex) {</b>
+<i>2202</i>&nbsp;                    // not able to retrieve notBefore value
+<b class="nc"><i>2203</i>&nbsp;                }</b>
+<b class="nc"><i>2204</i>&nbsp;                debug.println(&quot;X509CertSelector.match: private key usage not &quot;</b>
+<i>2205</i>&nbsp;                    + &quot;within validity date; ext.NOT_BEFORE: &quot;
+<i>2206</i>&nbsp;                    + time + &quot;; X509CertSelector: &quot;
+<b class="nc"><i>2207</i>&nbsp;                    + this.toString());</b>
+<b class="nc"><i>2208</i>&nbsp;                e2.printStackTrace();</b>
+<i>2209</i>&nbsp;            }
+<b class="nc"><i>2210</i>&nbsp;            return false;</b>
+<b class="nc"><i>2211</i>&nbsp;        } catch (IOException e4) {</b>
+<b class="nc"><i>2212</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2213</i>&nbsp;                debug.println(&quot;X509CertSelector.match: IOException in &quot;</b>
+<i>2214</i>&nbsp;                    + &quot;private key usage check; X509CertSelector: &quot;
+<b class="nc"><i>2215</i>&nbsp;                    + this.toString());</b>
+<b class="nc"><i>2216</i>&nbsp;                e4.printStackTrace();</b>
+<i>2217</i>&nbsp;            }
+<b class="nc"><i>2218</i>&nbsp;            return false;</b>
+<b class="nc"><i>2219</i>&nbsp;        }</b>
+<b class="nc"><i>2220</i>&nbsp;        return true;</b>
+<i>2221</i>&nbsp;    }
+<i>2222</i>&nbsp;
+<i>2223</i>&nbsp;    /* match on subject public key algorithm OID */
+<i>2224</i>&nbsp;    private boolean matchSubjectPublicKeyAlgID(X509Certificate xcert) {
+<b class="nc"><i>2225</i>&nbsp;        if (subjectPublicKeyAlgID == null) {</b>
+<b class="nc"><i>2226</i>&nbsp;            return true;</b>
+<i>2227</i>&nbsp;        }
+<i>2228</i>&nbsp;        try {
+<b class="nc"><i>2229</i>&nbsp;            byte[] encodedKey = xcert.getPublicKey().getEncoded();</b>
+<b class="nc"><i>2230</i>&nbsp;            DerValue val = new DerValue(encodedKey);</b>
+<b class="nc"><i>2231</i>&nbsp;            if (val.tag != DerValue.tag_Sequence) {</b>
+<b class="nc"><i>2232</i>&nbsp;                throw new IOException(&quot;invalid key format&quot;);</b>
+<i>2233</i>&nbsp;            }
+<i>2234</i>&nbsp;
+<b class="nc"><i>2235</i>&nbsp;            AlgorithmId algID = AlgorithmId.parse(val.data.getDerValue());</b>
+<b class="nc"><i>2236</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2237</i>&nbsp;                debug.println(&quot;X509CertSelector.match: subjectPublicKeyAlgID = &quot;</b>
+<i>2238</i>&nbsp;                    + subjectPublicKeyAlgID + &quot;, xcert subjectPublicKeyAlgID = &quot;
+<b class="nc"><i>2239</i>&nbsp;                    + algID.getOID());</b>
+<i>2240</i>&nbsp;            }
+<b class="nc"><i>2241</i>&nbsp;            if (!subjectPublicKeyAlgID.equals(algID.getOID())) {</b>
+<b class="nc"><i>2242</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2243</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2244</i>&nbsp;                        + &quot;subject public key alg IDs don&#39;t match&quot;);
+<i>2245</i>&nbsp;                }
+<b class="nc"><i>2246</i>&nbsp;                return false;</b>
+<i>2247</i>&nbsp;            }
+<b class="nc"><i>2248</i>&nbsp;        } catch (IOException e5) {</b>
+<b class="nc"><i>2249</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2250</i>&nbsp;                debug.println(&quot;X509CertSelector.match: IOException in subject &quot;</b>
+<i>2251</i>&nbsp;                    + &quot;public key algorithm OID check&quot;);
+<i>2252</i>&nbsp;            }
+<b class="nc"><i>2253</i>&nbsp;            return false;</b>
+<b class="nc"><i>2254</i>&nbsp;        }</b>
+<b class="nc"><i>2255</i>&nbsp;        return true;</b>
+<i>2256</i>&nbsp;    }
+<i>2257</i>&nbsp;
+<i>2258</i>&nbsp;    /* match on key usage extension value */
+<i>2259</i>&nbsp;    private boolean matchKeyUsage(X509Certificate xcert) {
+<b class="nc"><i>2260</i>&nbsp;        if (keyUsage == null) {</b>
+<b class="nc"><i>2261</i>&nbsp;            return true;</b>
+<i>2262</i>&nbsp;        }
+<b class="nc"><i>2263</i>&nbsp;        boolean[] certKeyUsage = xcert.getKeyUsage();</b>
+<b class="nc"><i>2264</i>&nbsp;        if (certKeyUsage != null) {</b>
+<b class="nc"><i>2265</i>&nbsp;            for (int keyBit = 0; keyBit &lt; keyUsage.length; keyBit++) {</b>
+<b class="nc"><i>2266</i>&nbsp;                if (keyUsage[keyBit] &amp;&amp;</b>
+<i>2267</i>&nbsp;                    ((keyBit &gt;= certKeyUsage.length) || !certKeyUsage[keyBit])) {
+<b class="nc"><i>2268</i>&nbsp;                    if (debug != null) {</b>
+<b class="nc"><i>2269</i>&nbsp;                        debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2270</i>&nbsp;                            + &quot;key usage bits don&#39;t match&quot;);
+<i>2271</i>&nbsp;                    }
+<b class="nc"><i>2272</i>&nbsp;                    return false;</b>
+<i>2273</i>&nbsp;                }
+<i>2274</i>&nbsp;            }
+<i>2275</i>&nbsp;        }
+<b class="nc"><i>2276</i>&nbsp;        return true;</b>
+<i>2277</i>&nbsp;    }
+<i>2278</i>&nbsp;
+<i>2279</i>&nbsp;    /* match on extended key usage purpose OIDs */
+<i>2280</i>&nbsp;    private boolean matchExtendedKeyUsage(X509Certificate xcert) {
+<b class="nc"><i>2281</i>&nbsp;        if ((keyPurposeSet == null) || keyPurposeSet.isEmpty()) {</b>
+<b class="nc"><i>2282</i>&nbsp;            return true;</b>
+<i>2283</i>&nbsp;        }
+<i>2284</i>&nbsp;        try {
+<b class="nc"><i>2285</i>&nbsp;            ExtendedKeyUsageExtension ext =</b>
+<b class="nc"><i>2286</i>&nbsp;                (ExtendedKeyUsageExtension)getExtensionObject(xcert,</b>
+<i>2287</i>&nbsp;                                                EXTENDED_KEY_USAGE_ID);
+<b class="nc"><i>2288</i>&nbsp;            if (ext != null) {</b>
+<b class="nc"><i>2289</i>&nbsp;                Vector&lt;ObjectIdentifier&gt; certKeyPurposeVector =</b>
+<b class="nc"><i>2290</i>&nbsp;                    ext.get(ExtendedKeyUsageExtension.USAGES);</b>
+<b class="nc"><i>2291</i>&nbsp;                if (!certKeyPurposeVector.contains(ANY_EXTENDED_KEY_USAGE)</b>
+<b class="nc"><i>2292</i>&nbsp;                        &amp;&amp; !certKeyPurposeVector.containsAll(keyPurposeOIDSet)) {</b>
+<b class="nc"><i>2293</i>&nbsp;                    if (debug != null) {</b>
+<b class="nc"><i>2294</i>&nbsp;                        debug.println(&quot;X509CertSelector.match: cert failed &quot;</b>
+<i>2295</i>&nbsp;                            + &quot;extendedKeyUsage criterion&quot;);
+<i>2296</i>&nbsp;                    }
+<b class="nc"><i>2297</i>&nbsp;                    return false;</b>
+<i>2298</i>&nbsp;                }
+<i>2299</i>&nbsp;            }
+<b class="nc"><i>2300</i>&nbsp;        } catch (IOException ex) {</b>
+<b class="nc"><i>2301</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2302</i>&nbsp;                debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2303</i>&nbsp;                    + &quot;IOException in extended key usage check&quot;);
+<i>2304</i>&nbsp;            }
+<b class="nc"><i>2305</i>&nbsp;            return false;</b>
+<b class="nc"><i>2306</i>&nbsp;        }</b>
+<b class="nc"><i>2307</i>&nbsp;        return true;</b>
+<i>2308</i>&nbsp;    }
+<i>2309</i>&nbsp;
+<i>2310</i>&nbsp;    /* match on subject alternative name extension names */
+<i>2311</i>&nbsp;    private boolean matchSubjectAlternativeNames(X509Certificate xcert) {
+<b class="nc"><i>2312</i>&nbsp;        if ((subjectAlternativeNames == null) || subjectAlternativeNames.isEmpty()) {</b>
+<b class="nc"><i>2313</i>&nbsp;            return true;</b>
+<i>2314</i>&nbsp;        }
+<i>2315</i>&nbsp;        try {
+<b class="nc"><i>2316</i>&nbsp;            SubjectAlternativeNameExtension sanExt =</b>
+<b class="nc"><i>2317</i>&nbsp;                (SubjectAlternativeNameExtension) getExtensionObject(xcert,</b>
+<i>2318</i>&nbsp;                                                      SUBJECT_ALT_NAME_ID);
+<b class="nc"><i>2319</i>&nbsp;            if (sanExt == null) {</b>
+<b class="nc"><i>2320</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2321</i>&nbsp;                  debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2322</i>&nbsp;                      + &quot;no subject alternative name extension&quot;);
+<i>2323</i>&nbsp;                }
+<b class="nc"><i>2324</i>&nbsp;                return false;</b>
+<i>2325</i>&nbsp;            }
+<b class="nc"><i>2326</i>&nbsp;            GeneralNames certNames =</b>
+<b class="nc"><i>2327</i>&nbsp;                    sanExt.get(SubjectAlternativeNameExtension.SUBJECT_NAME);</b>
+<b class="nc"><i>2328</i>&nbsp;            Iterator&lt;GeneralNameInterface&gt; i =</b>
+<b class="nc"><i>2329</i>&nbsp;                                subjectAlternativeGeneralNames.iterator();</b>
+<b class="nc"><i>2330</i>&nbsp;            while (i.hasNext()) {</b>
+<b class="nc"><i>2331</i>&nbsp;                GeneralNameInterface matchName = i.next();</b>
+<b class="nc"><i>2332</i>&nbsp;                boolean found = false;</b>
+<b class="nc"><i>2333</i>&nbsp;                for (Iterator&lt;GeneralName&gt; t = certNames.iterator();</b>
+<b class="nc"><i>2334</i>&nbsp;                                                t.hasNext() &amp;&amp; !found; ) {</b>
+<b class="nc"><i>2335</i>&nbsp;                    GeneralNameInterface certName = (t.next()).getName();</b>
+<b class="nc"><i>2336</i>&nbsp;                    found = certName.equals(matchName);</b>
+<b class="nc"><i>2337</i>&nbsp;                }</b>
+<b class="nc"><i>2338</i>&nbsp;                if (!found &amp;&amp; (matchAllSubjectAltNames || !i.hasNext())) {</b>
+<b class="nc"><i>2339</i>&nbsp;                    if (debug != null) {</b>
+<b class="nc"><i>2340</i>&nbsp;                      debug.println(&quot;X509CertSelector.match: subject alternative &quot;</b>
+<i>2341</i>&nbsp;                          + &quot;name &quot; + matchName + &quot; not found&quot;);
+<i>2342</i>&nbsp;                    }
+<b class="nc"><i>2343</i>&nbsp;                    return false;</b>
+<b class="nc"><i>2344</i>&nbsp;                } else if (found &amp;&amp; !matchAllSubjectAltNames) {</b>
+<b class="nc"><i>2345</i>&nbsp;                    break;</b>
+<i>2346</i>&nbsp;                }
+<b class="nc"><i>2347</i>&nbsp;            }</b>
+<b class="nc"><i>2348</i>&nbsp;        } catch (IOException ex) {</b>
+<b class="nc"><i>2349</i>&nbsp;            if (debug != null)</b>
+<b class="nc"><i>2350</i>&nbsp;                debug.println(&quot;X509CertSelector.match: IOException in subject &quot;</b>
+<i>2351</i>&nbsp;                    + &quot;alternative name check&quot;);
+<b class="nc"><i>2352</i>&nbsp;            return false;</b>
+<b class="nc"><i>2353</i>&nbsp;        }</b>
+<b class="nc"><i>2354</i>&nbsp;        return true;</b>
+<i>2355</i>&nbsp;    }
+<i>2356</i>&nbsp;
+<i>2357</i>&nbsp;    /* match on name constraints */
+<i>2358</i>&nbsp;    private boolean matchNameConstraints(X509Certificate xcert) {
+<b class="nc"><i>2359</i>&nbsp;        if (nc == null) {</b>
+<b class="nc"><i>2360</i>&nbsp;            return true;</b>
+<i>2361</i>&nbsp;        }
+<i>2362</i>&nbsp;        try {
+<b class="nc"><i>2363</i>&nbsp;            if (!nc.verify(xcert)) {</b>
+<b class="nc"><i>2364</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2365</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2366</i>&nbsp;                        + &quot;name constraints not satisfied&quot;);
+<i>2367</i>&nbsp;                }
+<b class="nc"><i>2368</i>&nbsp;                return false;</b>
+<i>2369</i>&nbsp;            }
+<b class="nc"><i>2370</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>2371</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2372</i>&nbsp;                debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2373</i>&nbsp;                    + &quot;IOException in name constraints check&quot;);
+<i>2374</i>&nbsp;            }
+<b class="nc"><i>2375</i>&nbsp;            return false;</b>
+<b class="nc"><i>2376</i>&nbsp;        }</b>
+<b class="nc"><i>2377</i>&nbsp;        return true;</b>
+<i>2378</i>&nbsp;    }
+<i>2379</i>&nbsp;
+<i>2380</i>&nbsp;    /* match on policy OIDs */
+<i>2381</i>&nbsp;    private boolean matchPolicy(X509Certificate xcert) {
+<b class="nc"><i>2382</i>&nbsp;        if (policy == null) {</b>
+<b class="nc"><i>2383</i>&nbsp;            return true;</b>
+<i>2384</i>&nbsp;        }
+<i>2385</i>&nbsp;        try {
+<b class="nc"><i>2386</i>&nbsp;            CertificatePoliciesExtension ext = (CertificatePoliciesExtension)</b>
+<b class="nc"><i>2387</i>&nbsp;                getExtensionObject(xcert, CERT_POLICIES_ID);</b>
+<b class="nc"><i>2388</i>&nbsp;            if (ext == null) {</b>
+<b class="nc"><i>2389</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2390</i>&nbsp;                  debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2391</i>&nbsp;                      + &quot;no certificate policy extension&quot;);
+<i>2392</i>&nbsp;                }
+<b class="nc"><i>2393</i>&nbsp;                return false;</b>
+<i>2394</i>&nbsp;            }
+<b class="nc"><i>2395</i>&nbsp;            List&lt;PolicyInformation&gt; policies = ext.get(CertificatePoliciesExtension.POLICIES);</b>
+<i>2396</i>&nbsp;            /*
+<i>2397</i>&nbsp;             * Convert the Vector of PolicyInformation to a Vector
+<i>2398</i>&nbsp;             * of CertificatePolicyIds for easier comparison.
+<i>2399</i>&nbsp;             */
+<b class="nc"><i>2400</i>&nbsp;            List&lt;CertificatePolicyId&gt; policyIDs = new ArrayList&lt;&gt;(policies.size());</b>
+<b class="nc"><i>2401</i>&nbsp;            for (PolicyInformation info : policies) {</b>
+<b class="nc"><i>2402</i>&nbsp;                policyIDs.add(info.getPolicyIdentifier());</b>
+<b class="nc"><i>2403</i>&nbsp;            }</b>
+<b class="nc"><i>2404</i>&nbsp;            if (policy != null) {</b>
+<b class="nc"><i>2405</i>&nbsp;                boolean foundOne = false;</b>
+<i>2406</i>&nbsp;                /*
+<i>2407</i>&nbsp;                 * if the user passes in an empty policy Set, then
+<i>2408</i>&nbsp;                 * we just want to make sure that the candidate certificate
+<i>2409</i>&nbsp;                 * has some policy OID in its CertPoliciesExtension
+<i>2410</i>&nbsp;                 */
+<b class="nc"><i>2411</i>&nbsp;                if (policy.getCertPolicyIds().isEmpty()) {</b>
+<b class="nc"><i>2412</i>&nbsp;                    if (policyIDs.isEmpty()) {</b>
+<b class="nc"><i>2413</i>&nbsp;                        if (debug != null) {</b>
+<b class="nc"><i>2414</i>&nbsp;                            debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2415</i>&nbsp;                                + &quot;cert failed policyAny criterion&quot;);
+<i>2416</i>&nbsp;                        }
+<b class="nc"><i>2417</i>&nbsp;                        return false;</b>
+<i>2418</i>&nbsp;                    }
+<i>2419</i>&nbsp;                } else {
+<b class="nc"><i>2420</i>&nbsp;                    for (CertificatePolicyId id : policy.getCertPolicyIds()) {</b>
+<b class="nc"><i>2421</i>&nbsp;                        if (policyIDs.contains(id)) {</b>
+<b class="nc"><i>2422</i>&nbsp;                            foundOne = true;</b>
+<b class="nc"><i>2423</i>&nbsp;                            break;</b>
+<i>2424</i>&nbsp;                        }
+<b class="nc"><i>2425</i>&nbsp;                    }</b>
+<b class="nc"><i>2426</i>&nbsp;                    if (!foundOne) {</b>
+<b class="nc"><i>2427</i>&nbsp;                        if (debug != null) {</b>
+<b class="nc"><i>2428</i>&nbsp;                            debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2429</i>&nbsp;                                + &quot;cert failed policyAny criterion&quot;);
+<i>2430</i>&nbsp;                        }
+<b class="nc"><i>2431</i>&nbsp;                        return false;</b>
+<i>2432</i>&nbsp;                    }
+<i>2433</i>&nbsp;                }
+<i>2434</i>&nbsp;            }
+<b class="nc"><i>2435</i>&nbsp;        } catch (IOException ex) {</b>
+<b class="nc"><i>2436</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2437</i>&nbsp;                debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2438</i>&nbsp;                    + &quot;IOException in certificate policy ID check&quot;);
+<i>2439</i>&nbsp;            }
+<b class="nc"><i>2440</i>&nbsp;            return false;</b>
+<b class="nc"><i>2441</i>&nbsp;        }</b>
+<b class="nc"><i>2442</i>&nbsp;        return true;</b>
+<i>2443</i>&nbsp;    }
+<i>2444</i>&nbsp;
+<i>2445</i>&nbsp;    /* match on pathToNames */
+<i>2446</i>&nbsp;    private boolean matchPathToNames(X509Certificate xcert) {
+<b class="nc"><i>2447</i>&nbsp;        if (pathToGeneralNames == null) {</b>
+<b class="nc"><i>2448</i>&nbsp;            return true;</b>
+<i>2449</i>&nbsp;        }
+<i>2450</i>&nbsp;        try {
+<b class="nc"><i>2451</i>&nbsp;            NameConstraintsExtension ext = (NameConstraintsExtension)</b>
+<b class="nc"><i>2452</i>&nbsp;                getExtensionObject(xcert, NAME_CONSTRAINTS_ID);</b>
+<b class="nc"><i>2453</i>&nbsp;            if (ext == null) {</b>
+<b class="nc"><i>2454</i>&nbsp;                return true;</b>
+<i>2455</i>&nbsp;            }
+<b class="nc"><i>2456</i>&nbsp;            if ((debug != null) &amp;&amp; Debug.isOn(&quot;certpath&quot;)) {</b>
+<b class="nc"><i>2457</i>&nbsp;                debug.println(&quot;X509CertSelector.match pathToNames:\n&quot;);</b>
+<b class="nc"><i>2458</i>&nbsp;                Iterator&lt;GeneralNameInterface&gt; i =</b>
+<b class="nc"><i>2459</i>&nbsp;                                        pathToGeneralNames.iterator();</b>
+<b class="nc"><i>2460</i>&nbsp;                while (i.hasNext()) {</b>
+<b class="nc"><i>2461</i>&nbsp;                    debug.println(&quot;    &quot; + i.next() + &quot;\n&quot;);</b>
+<i>2462</i>&nbsp;                }
+<i>2463</i>&nbsp;            }
+<i>2464</i>&nbsp;
+<b class="nc"><i>2465</i>&nbsp;            GeneralSubtrees permitted =</b>
+<b class="nc"><i>2466</i>&nbsp;                    ext.get(NameConstraintsExtension.PERMITTED_SUBTREES);</b>
+<b class="nc"><i>2467</i>&nbsp;            GeneralSubtrees excluded =</b>
+<b class="nc"><i>2468</i>&nbsp;                    ext.get(NameConstraintsExtension.EXCLUDED_SUBTREES);</b>
+<b class="nc"><i>2469</i>&nbsp;            if (excluded != null) {</b>
+<b class="nc"><i>2470</i>&nbsp;                if (matchExcluded(excluded) == false) {</b>
+<b class="nc"><i>2471</i>&nbsp;                    return false;</b>
+<i>2472</i>&nbsp;                }
+<i>2473</i>&nbsp;            }
+<b class="nc"><i>2474</i>&nbsp;            if (permitted != null) {</b>
+<b class="nc"><i>2475</i>&nbsp;                if (matchPermitted(permitted) == false) {</b>
+<b class="nc"><i>2476</i>&nbsp;                    return false;</b>
+<i>2477</i>&nbsp;                }
+<i>2478</i>&nbsp;            }
+<b class="nc"><i>2479</i>&nbsp;        } catch (IOException ex) {</b>
+<b class="nc"><i>2480</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>2481</i>&nbsp;                debug.println(&quot;X509CertSelector.match: &quot;</b>
+<i>2482</i>&nbsp;                    + &quot;IOException in name constraints check&quot;);
+<i>2483</i>&nbsp;            }
+<b class="nc"><i>2484</i>&nbsp;            return false;</b>
+<b class="nc"><i>2485</i>&nbsp;        }</b>
+<b class="nc"><i>2486</i>&nbsp;        return true;</b>
+<i>2487</i>&nbsp;    }
+<i>2488</i>&nbsp;
+<i>2489</i>&nbsp;    private boolean matchExcluded(GeneralSubtrees excluded) {
+<i>2490</i>&nbsp;        /*
+<i>2491</i>&nbsp;         * Enumerate through excluded and compare each entry
+<i>2492</i>&nbsp;         * to all pathToNames. If any pathToName is within any of the
+<i>2493</i>&nbsp;         * subtrees listed in excluded, return false.
+<i>2494</i>&nbsp;         */
+<b class="nc"><i>2495</i>&nbsp;        for (Iterator&lt;GeneralSubtree&gt; t = excluded.iterator(); t.hasNext(); ) {</b>
+<b class="nc"><i>2496</i>&nbsp;            GeneralSubtree tree = t.next();</b>
+<b class="nc"><i>2497</i>&nbsp;            GeneralNameInterface excludedName = tree.getName().getName();</b>
+<b class="nc"><i>2498</i>&nbsp;            Iterator&lt;GeneralNameInterface&gt; i = pathToGeneralNames.iterator();</b>
+<b class="nc"><i>2499</i>&nbsp;            while (i.hasNext()) {</b>
+<b class="nc"><i>2500</i>&nbsp;                GeneralNameInterface pathToName = i.next();</b>
+<b class="nc"><i>2501</i>&nbsp;                if (excludedName.getType() == pathToName.getType()) {</b>
+<b class="nc"><i>2502</i>&nbsp;                    switch (pathToName.constrains(excludedName)) {</b>
+<i>2503</i>&nbsp;                    case GeneralNameInterface.NAME_WIDENS:
+<i>2504</i>&nbsp;                    case GeneralNameInterface.NAME_MATCH:
+<b class="nc"><i>2505</i>&nbsp;                        if (debug != null) {</b>
+<b class="nc"><i>2506</i>&nbsp;                            debug.println(&quot;X509CertSelector.match: name constraints &quot;</b>
+<i>2507</i>&nbsp;                                + &quot;inhibit path to specified name&quot;);
+<b class="nc"><i>2508</i>&nbsp;                            debug.println(&quot;X509CertSelector.match: excluded name: &quot; +</b>
+<i>2509</i>&nbsp;                                pathToName);
+<i>2510</i>&nbsp;                        }
+<b class="nc"><i>2511</i>&nbsp;                        return false;</b>
+<i>2512</i>&nbsp;                    default:
+<i>2513</i>&nbsp;                    }
+<i>2514</i>&nbsp;                }
+<b class="nc"><i>2515</i>&nbsp;            }</b>
+<b class="nc"><i>2516</i>&nbsp;        }</b>
+<b class="nc"><i>2517</i>&nbsp;        return true;</b>
+<i>2518</i>&nbsp;    }
+<i>2519</i>&nbsp;
+<i>2520</i>&nbsp;    private boolean matchPermitted(GeneralSubtrees permitted) {
+<i>2521</i>&nbsp;        /*
+<i>2522</i>&nbsp;         * Enumerate through pathToNames, checking that each pathToName
+<i>2523</i>&nbsp;         * is in at least one of the subtrees listed in permitted.
+<i>2524</i>&nbsp;         * If not, return false. However, if no subtrees of a given type
+<i>2525</i>&nbsp;         * are listed, all names of that type are permitted.
+<i>2526</i>&nbsp;         */
+<b class="nc"><i>2527</i>&nbsp;        Iterator&lt;GeneralNameInterface&gt; i = pathToGeneralNames.iterator();</b>
+<b class="nc"><i>2528</i>&nbsp;        while (i.hasNext()) {</b>
+<b class="nc"><i>2529</i>&nbsp;            GeneralNameInterface pathToName = i.next();</b>
+<b class="nc"><i>2530</i>&nbsp;            Iterator&lt;GeneralSubtree&gt; t = permitted.iterator();</b>
+<b class="nc"><i>2531</i>&nbsp;            boolean permittedNameFound = false;</b>
+<b class="nc"><i>2532</i>&nbsp;            boolean nameTypeFound = false;</b>
+<b class="nc"><i>2533</i>&nbsp;            String names = &quot;&quot;;</b>
+<b class="nc"><i>2534</i>&nbsp;            while (t.hasNext() &amp;&amp; !permittedNameFound) {</b>
+<b class="nc"><i>2535</i>&nbsp;                GeneralSubtree tree = t.next();</b>
+<b class="nc"><i>2536</i>&nbsp;                GeneralNameInterface permittedName = tree.getName().getName();</b>
+<b class="nc"><i>2537</i>&nbsp;                if (permittedName.getType() == pathToName.getType()) {</b>
+<b class="nc"><i>2538</i>&nbsp;                    nameTypeFound = true;</b>
+<b class="nc"><i>2539</i>&nbsp;                    names = names + &quot;  &quot; + permittedName;</b>
+<b class="nc"><i>2540</i>&nbsp;                    switch (pathToName.constrains(permittedName)) {</b>
+<i>2541</i>&nbsp;                    case GeneralNameInterface.NAME_WIDENS:
+<i>2542</i>&nbsp;                    case GeneralNameInterface.NAME_MATCH:
+<b class="nc"><i>2543</i>&nbsp;                        permittedNameFound = true;</b>
+<b class="nc"><i>2544</i>&nbsp;                        break;</b>
+<i>2545</i>&nbsp;                    default:
+<i>2546</i>&nbsp;                    }
+<i>2547</i>&nbsp;                }
+<b class="nc"><i>2548</i>&nbsp;            }</b>
+<b class="nc"><i>2549</i>&nbsp;            if (!permittedNameFound &amp;&amp; nameTypeFound) {</b>
+<b class="nc"><i>2550</i>&nbsp;                if (debug != null)</b>
+<b class="nc"><i>2551</i>&nbsp;                  debug.println(&quot;X509CertSelector.match: &quot; +</b>
+<i>2552</i>&nbsp;                            &quot;name constraints inhibit path to specified name; &quot; +
+<b class="nc"><i>2553</i>&nbsp;                            &quot;permitted names of type &quot; + pathToName.getType() +</b>
+<i>2554</i>&nbsp;                            &quot;: &quot; + names);
+<b class="nc"><i>2555</i>&nbsp;                return false;</b>
+<i>2556</i>&nbsp;            }
+<b class="nc"><i>2557</i>&nbsp;        }</b>
+<b class="nc"><i>2558</i>&nbsp;        return true;</b>
+<i>2559</i>&nbsp;    }
+<i>2560</i>&nbsp;
+<i>2561</i>&nbsp;    /* match on basic constraints */
+<i>2562</i>&nbsp;    private boolean matchBasicConstraints(X509Certificate xcert) {
+<b class="nc"><i>2563</i>&nbsp;        if (basicConstraints == -1) {</b>
+<b class="nc"><i>2564</i>&nbsp;            return true;</b>
+<i>2565</i>&nbsp;        }
+<b class="nc"><i>2566</i>&nbsp;        int maxPathLen = xcert.getBasicConstraints();</b>
+<b class="nc"><i>2567</i>&nbsp;        if (basicConstraints == -2) {</b>
+<b class="nc"><i>2568</i>&nbsp;            if (maxPathLen != -1) {</b>
+<b class="nc"><i>2569</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2570</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: not an EE cert&quot;);</b>
+<i>2571</i>&nbsp;                }
+<b class="nc"><i>2572</i>&nbsp;                return false;</b>
+<i>2573</i>&nbsp;            }
+<i>2574</i>&nbsp;        } else {
+<b class="nc"><i>2575</i>&nbsp;            if (maxPathLen &lt; basicConstraints) {</b>
+<b class="nc"><i>2576</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>2577</i>&nbsp;                    debug.println(&quot;X509CertSelector.match: cert&#39;s maxPathLen &quot; +</b>
+<i>2578</i>&nbsp;                            &quot;is less than the min maxPathLen set by &quot; +
+<i>2579</i>&nbsp;                            &quot;basicConstraints. &quot; +
+<i>2580</i>&nbsp;                            &quot;(&quot; + maxPathLen + &quot; &lt; &quot; + basicConstraints + &quot;)&quot;);
+<i>2581</i>&nbsp;                }
+<b class="nc"><i>2582</i>&nbsp;                return false;</b>
+<i>2583</i>&nbsp;            }
+<i>2584</i>&nbsp;        }
+<b class="nc"><i>2585</i>&nbsp;        return true;</b>
+<i>2586</i>&nbsp;    }
+<i>2587</i>&nbsp;
+<i>2588</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;) // Safe casts assuming clone() works correctly
+<i>2589</i>&nbsp;    private static &lt;T&gt; Set&lt;T&gt; cloneSet(Set&lt;T&gt; set) {
+<b class="nc"><i>2590</i>&nbsp;        if (set instanceof HashSet) {</b>
+<b class="nc"><i>2591</i>&nbsp;            Object clone = ((HashSet&lt;T&gt;)set).clone();</b>
+<b class="nc"><i>2592</i>&nbsp;            return (Set&lt;T&gt;)clone;</b>
+<i>2593</i>&nbsp;        } else {
+<b class="nc"><i>2594</i>&nbsp;            return new HashSet&lt;T&gt;(set);</b>
+<i>2595</i>&nbsp;        }
+<i>2596</i>&nbsp;    }
+<i>2597</i>&nbsp;
+<i>2598</i>&nbsp;    /**
+<i>2599</i>&nbsp;     * Returns a copy of this object.
+<i>2600</i>&nbsp;     *
+<i>2601</i>&nbsp;     * @return the copy
+<i>2602</i>&nbsp;     */
+<i>2603</i>&nbsp;    public Object clone() {
+<i>2604</i>&nbsp;        try {
+<b class="nc"><i>2605</i>&nbsp;            X509CertSelector copy = (X509CertSelector)super.clone();</b>
+<i>2606</i>&nbsp;            // Must clone these because addPathToName et al. modify them
+<b class="nc"><i>2607</i>&nbsp;            if (subjectAlternativeNames != null) {</b>
+<b class="nc"><i>2608</i>&nbsp;                copy.subjectAlternativeNames =</b>
+<b class="nc"><i>2609</i>&nbsp;                        cloneSet(subjectAlternativeNames);</b>
+<b class="nc"><i>2610</i>&nbsp;                copy.subjectAlternativeGeneralNames =</b>
+<b class="nc"><i>2611</i>&nbsp;                        cloneSet(subjectAlternativeGeneralNames);</b>
+<i>2612</i>&nbsp;            }
+<b class="nc"><i>2613</i>&nbsp;            if (pathToGeneralNames != null) {</b>
+<b class="nc"><i>2614</i>&nbsp;                copy.pathToNames = cloneSet(pathToNames);</b>
+<b class="nc"><i>2615</i>&nbsp;                copy.pathToGeneralNames = cloneSet(pathToGeneralNames);</b>
+<i>2616</i>&nbsp;            }
+<b class="nc"><i>2617</i>&nbsp;            return copy;</b>
+<b class="nc"><i>2618</i>&nbsp;        } catch (CloneNotSupportedException e) {</b>
+<i>2619</i>&nbsp;            /* Cannot happen */
+<b class="nc"><i>2620</i>&nbsp;            throw new InternalError(e.toString(), e);</b>
+<i>2621</i>&nbsp;        }
+<i>2622</i>&nbsp;    }
+<i>2623</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,900 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: WindowsAsynchronousFileChannelImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.ch</a> ]
+</div>
+
+<h1>Coverage Summary for Class: WindowsAsynchronousFileChannelImpl (sun.nio.ch)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WindowsAsynchronousFileChannelImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 15)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 150)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">WindowsAsynchronousFileChannelImpl$DefaultIocpHolder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 5)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">WindowsAsynchronousFileChannelImpl$LockTask</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 31)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">WindowsAsynchronousFileChannelImpl$ReadTask</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 55)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">WindowsAsynchronousFileChannelImpl$WriteTask</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 46)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 34)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 287)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.ch;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.channels.*;
+<i>29</i>&nbsp;import java.util.concurrent.*;
+<i>30</i>&nbsp;import java.nio.ByteBuffer;
+<i>31</i>&nbsp;import java.nio.BufferOverflowException;
+<i>32</i>&nbsp;import java.io.IOException;
+<i>33</i>&nbsp;import java.io.FileDescriptor;
+<i>34</i>&nbsp;import jdk.internal.misc.SharedSecrets;
+<i>35</i>&nbsp;import jdk.internal.misc.JavaIOFileDescriptorAccess;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;/**
+<i>38</i>&nbsp; * Windows implementation of AsynchronousFileChannel using overlapped I/O.
+<i>39</i>&nbsp; */
+<i>40</i>&nbsp;
+<b class="nc"><i>41</i>&nbsp;public class WindowsAsynchronousFileChannelImpl</b>
+<i>42</i>&nbsp;    extends AsynchronousFileChannelImpl
+<i>43</i>&nbsp;    implements Iocp.OverlappedChannel, Groupable
+<i>44</i>&nbsp;{
+<i>45</i>&nbsp;    private static final JavaIOFileDescriptorAccess fdAccess =
+<b class="nc"><i>46</i>&nbsp;        SharedSecrets.getJavaIOFileDescriptorAccess();</b>
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;    // error when EOF is detected asynchronously.
+<i>49</i>&nbsp;    private static final int ERROR_HANDLE_EOF = 38;
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;    // Lazy initialization of default I/O completion port
+<b class="nc"><i>52</i>&nbsp;    private static class DefaultIocpHolder {</b>
+<b class="nc"><i>53</i>&nbsp;        static final Iocp defaultIocp = defaultIocp();</b>
+<i>54</i>&nbsp;        private static Iocp defaultIocp() {
+<i>55</i>&nbsp;            try {
+<b class="nc"><i>56</i>&nbsp;                return new Iocp(null, ThreadPool.createDefault()).start();</b>
+<b class="nc"><i>57</i>&nbsp;            } catch (IOException ioe) {</b>
+<b class="nc"><i>58</i>&nbsp;                throw new InternalError(ioe);</b>
+<i>59</i>&nbsp;            }
+<i>60</i>&nbsp;        }
+<i>61</i>&nbsp;    }
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    // Used for force/truncate/size methods
+<b class="nc"><i>64</i>&nbsp;    private static final FileDispatcher nd = new FileDispatcherImpl();</b>
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    // The handle is extracted for use in native methods invoked from this class.
+<i>67</i>&nbsp;    private final long handle;
+<i>68</i>&nbsp;
+<i>69</i>&nbsp;    // The key that identifies the channel&#39;s association with the I/O port
+<i>70</i>&nbsp;    private final int completionKey;
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    // I/O completion port (group)
+<i>73</i>&nbsp;    private final Iocp iocp;
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    private final boolean isDefaultIocp;
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    // Caches OVERLAPPED structure for each outstanding I/O operation
+<i>78</i>&nbsp;    private final PendingIoCache ioCache;
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    private WindowsAsynchronousFileChannelImpl(FileDescriptor fdObj,
+<i>82</i>&nbsp;                                               boolean reading,
+<i>83</i>&nbsp;                                               boolean writing,
+<i>84</i>&nbsp;                                               Iocp iocp,
+<i>85</i>&nbsp;                                               boolean isDefaultIocp)
+<i>86</i>&nbsp;        throws IOException
+<i>87</i>&nbsp;    {
+<b class="nc"><i>88</i>&nbsp;        super(fdObj, reading, writing, iocp.executor());</b>
+<b class="nc"><i>89</i>&nbsp;        this.handle = fdAccess.getHandle(fdObj);</b>
+<b class="nc"><i>90</i>&nbsp;        this.iocp = iocp;</b>
+<b class="nc"><i>91</i>&nbsp;        this.isDefaultIocp = isDefaultIocp;</b>
+<b class="nc"><i>92</i>&nbsp;        this.ioCache = new PendingIoCache();</b>
+<b class="nc"><i>93</i>&nbsp;        this.completionKey = iocp.associate(this, handle);</b>
+<i>94</i>&nbsp;    }
+<i>95</i>&nbsp;
+<i>96</i>&nbsp;    public static AsynchronousFileChannel open(FileDescriptor fdo,
+<i>97</i>&nbsp;                                               boolean reading,
+<i>98</i>&nbsp;                                               boolean writing,
+<i>99</i>&nbsp;                                               ThreadPool pool)
+<i>100</i>&nbsp;        throws IOException
+<i>101</i>&nbsp;    {
+<i>102</i>&nbsp;        Iocp iocp;
+<i>103</i>&nbsp;        boolean isDefaultIocp;
+<b class="nc"><i>104</i>&nbsp;        if (pool == null) {</b>
+<b class="nc"><i>105</i>&nbsp;            iocp = DefaultIocpHolder.defaultIocp;</b>
+<b class="nc"><i>106</i>&nbsp;            isDefaultIocp = true;</b>
+<i>107</i>&nbsp;        } else {
+<b class="nc"><i>108</i>&nbsp;            iocp = new Iocp(null, pool).start();</b>
+<b class="nc"><i>109</i>&nbsp;            isDefaultIocp = false;</b>
+<i>110</i>&nbsp;        }
+<i>111</i>&nbsp;        try {
+<b class="nc"><i>112</i>&nbsp;            return new</b>
+<i>113</i>&nbsp;                WindowsAsynchronousFileChannelImpl(fdo, reading, writing, iocp, isDefaultIocp);
+<b class="nc"><i>114</i>&nbsp;        } catch (IOException x) {</b>
+<i>115</i>&nbsp;            // error binding to port so need to close it (if created for this channel)
+<b class="nc"><i>116</i>&nbsp;            if (!isDefaultIocp)</b>
+<b class="nc"><i>117</i>&nbsp;                iocp.implClose();</b>
+<b class="nc"><i>118</i>&nbsp;            throw x;</b>
+<i>119</i>&nbsp;        }
+<i>120</i>&nbsp;    }
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;    @Override
+<i>123</i>&nbsp;    public &lt;V,A&gt; PendingFuture&lt;V,A&gt; getByOverlapped(long overlapped) {
+<b class="nc"><i>124</i>&nbsp;        return ioCache.remove(overlapped);</b>
+<i>125</i>&nbsp;    }
+<i>126</i>&nbsp;
+<i>127</i>&nbsp;    @Override
+<i>128</i>&nbsp;    public void close() throws IOException {
+<b class="nc"><i>129</i>&nbsp;        closeLock.writeLock().lock();</b>
+<i>130</i>&nbsp;        try {
+<b class="nc"><i>131</i>&nbsp;            if (closed)</b>
+<i>132</i>&nbsp;                return;     // already closed
+<b class="nc"><i>133</i>&nbsp;            closed = true;</b>
+<i>134</i>&nbsp;        } finally {
+<b class="nc"><i>135</i>&nbsp;            closeLock.writeLock().unlock();</b>
+<b class="nc"><i>136</i>&nbsp;        }</b>
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;        // invalidate all locks held for this channel
+<b class="nc"><i>139</i>&nbsp;        invalidateAllLocks();</b>
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;        // close the file
+<b class="nc"><i>142</i>&nbsp;        nd.close(fdObj);</b>
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;        // waits until all I/O operations have completed
+<b class="nc"><i>145</i>&nbsp;        ioCache.close();</b>
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;        // disassociate from port
+<b class="nc"><i>148</i>&nbsp;        iocp.disassociate(completionKey);</b>
+<i>149</i>&nbsp;
+<i>150</i>&nbsp;        // for the non-default group close the port
+<b class="nc"><i>151</i>&nbsp;        if (!isDefaultIocp)</b>
+<b class="nc"><i>152</i>&nbsp;            iocp.detachFromThreadPool();</b>
+<i>153</i>&nbsp;    }
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    @Override
+<i>156</i>&nbsp;    public AsynchronousChannelGroupImpl group() {
+<b class="nc"><i>157</i>&nbsp;        return iocp;</b>
+<i>158</i>&nbsp;    }
+<i>159</i>&nbsp;
+<i>160</i>&nbsp;    /**
+<i>161</i>&nbsp;     * Translates Throwable to IOException
+<i>162</i>&nbsp;     */
+<i>163</i>&nbsp;    private static IOException toIOException(Throwable x) {
+<b class="nc"><i>164</i>&nbsp;        if (x instanceof IOException) {</b>
+<b class="nc"><i>165</i>&nbsp;            if (x instanceof ClosedChannelException)</b>
+<b class="nc"><i>166</i>&nbsp;                x = new AsynchronousCloseException();</b>
+<b class="nc"><i>167</i>&nbsp;            return (IOException)x;</b>
+<i>168</i>&nbsp;        }
+<b class="nc"><i>169</i>&nbsp;        return new IOException(x);</b>
+<i>170</i>&nbsp;    }
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;    @Override
+<i>173</i>&nbsp;    public long size() throws IOException {
+<i>174</i>&nbsp;        try {
+<b class="nc"><i>175</i>&nbsp;            begin();</b>
+<b class="nc"><i>176</i>&nbsp;            return nd.size(fdObj);</b>
+<i>177</i>&nbsp;        } finally {
+<b class="nc"><i>178</i>&nbsp;            end();</b>
+<i>179</i>&nbsp;        }
+<i>180</i>&nbsp;    }
+<i>181</i>&nbsp;
+<i>182</i>&nbsp;    @Override
+<i>183</i>&nbsp;    public AsynchronousFileChannel truncate(long size) throws IOException {
+<b class="nc"><i>184</i>&nbsp;        if (size &lt; 0)</b>
+<b class="nc"><i>185</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative size&quot;);</b>
+<b class="nc"><i>186</i>&nbsp;        if (!writing)</b>
+<b class="nc"><i>187</i>&nbsp;            throw new NonWritableChannelException();</b>
+<i>188</i>&nbsp;        try {
+<b class="nc"><i>189</i>&nbsp;            begin();</b>
+<b class="nc"><i>190</i>&nbsp;            if (size &gt; nd.size(fdObj))</b>
+<b class="nc"><i>191</i>&nbsp;                return this;</b>
+<b class="nc"><i>192</i>&nbsp;            nd.truncate(fdObj, size);</b>
+<i>193</i>&nbsp;        } finally {
+<b class="nc"><i>194</i>&nbsp;            end();</b>
+<b class="nc"><i>195</i>&nbsp;        }</b>
+<b class="nc"><i>196</i>&nbsp;        return this;</b>
+<i>197</i>&nbsp;    }
+<i>198</i>&nbsp;
+<i>199</i>&nbsp;    @Override
+<i>200</i>&nbsp;    public void force(boolean metaData) throws IOException {
+<i>201</i>&nbsp;        try {
+<b class="nc"><i>202</i>&nbsp;            begin();</b>
+<b class="nc"><i>203</i>&nbsp;            nd.force(fdObj, metaData);</b>
+<i>204</i>&nbsp;        } finally {
+<b class="nc"><i>205</i>&nbsp;            end();</b>
+<b class="nc"><i>206</i>&nbsp;        }</b>
+<i>207</i>&nbsp;    }
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    // -- file locking --
+<i>210</i>&nbsp;
+<i>211</i>&nbsp;    /**
+<i>212</i>&nbsp;     * Task that initiates locking operation and handles completion result.
+<i>213</i>&nbsp;     */
+<i>214</i>&nbsp;    private class LockTask&lt;A&gt; implements Runnable, Iocp.ResultHandler {
+<i>215</i>&nbsp;        private final long position;
+<i>216</i>&nbsp;        private final FileLockImpl fli;
+<i>217</i>&nbsp;        private final PendingFuture&lt;FileLock,A&gt; result;
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;        LockTask(long position,
+<i>220</i>&nbsp;                 FileLockImpl fli,
+<i>221</i>&nbsp;                 PendingFuture&lt;FileLock,A&gt; result)
+<b class="nc"><i>222</i>&nbsp;        {</b>
+<b class="nc"><i>223</i>&nbsp;            this.position = position;</b>
+<b class="nc"><i>224</i>&nbsp;            this.fli = fli;</b>
+<b class="nc"><i>225</i>&nbsp;            this.result = result;</b>
+<i>226</i>&nbsp;        }
+<i>227</i>&nbsp;
+<i>228</i>&nbsp;        @Override
+<i>229</i>&nbsp;        public void run() {
+<b class="nc"><i>230</i>&nbsp;            long overlapped = 0L;</b>
+<b class="nc"><i>231</i>&nbsp;            boolean pending = false;</b>
+<i>232</i>&nbsp;            try {
+<b class="nc"><i>233</i>&nbsp;                begin();</b>
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;                // allocate OVERLAPPED structure
+<b class="nc"><i>236</i>&nbsp;                overlapped = ioCache.add(result);</b>
+<i>237</i>&nbsp;
+<i>238</i>&nbsp;                // synchronize on result to avoid race with handler thread
+<i>239</i>&nbsp;                // when lock is acquired immediately.
+<b class="nc"><i>240</i>&nbsp;                synchronized (result) {</b>
+<b class="nc"><i>241</i>&nbsp;                    int n = lockFile(handle, position, fli.size(), fli.isShared(),</b>
+<i>242</i>&nbsp;                                     overlapped);
+<b class="nc"><i>243</i>&nbsp;                    if (n == IOStatus.UNAVAILABLE) {</b>
+<i>244</i>&nbsp;                        // I/O is pending
+<b class="nc"><i>245</i>&nbsp;                        pending = true;</b>
+<i>246</i>&nbsp;                        return;
+<i>247</i>&nbsp;                    }
+<i>248</i>&nbsp;                    // acquired lock immediately
+<b class="nc"><i>249</i>&nbsp;                    result.setResult(fli);</b>
+<b class="nc"><i>250</i>&nbsp;                }</b>
+<i>251</i>&nbsp;
+<b class="nc"><i>252</i>&nbsp;            } catch (Throwable x) {</b>
+<i>253</i>&nbsp;                // lock failed or channel closed
+<b class="nc"><i>254</i>&nbsp;                removeFromFileLockTable(fli);</b>
+<b class="nc"><i>255</i>&nbsp;                result.setFailure(toIOException(x));</b>
+<i>256</i>&nbsp;            } finally {
+<b class="nc"><i>257</i>&nbsp;                if (!pending &amp;&amp; overlapped != 0L)</b>
+<b class="nc"><i>258</i>&nbsp;                    ioCache.remove(overlapped);</b>
+<b class="nc"><i>259</i>&nbsp;                end();</b>
+<b class="nc"><i>260</i>&nbsp;            }</b>
+<i>261</i>&nbsp;
+<i>262</i>&nbsp;            // invoke completion handler
+<b class="nc"><i>263</i>&nbsp;            Invoker.invoke(result);</b>
+<i>264</i>&nbsp;        }
+<i>265</i>&nbsp;
+<i>266</i>&nbsp;        @Override
+<i>267</i>&nbsp;        public void completed(int bytesTransferred, boolean canInvokeDirect) {
+<i>268</i>&nbsp;            // release waiters and invoke completion handler
+<b class="nc"><i>269</i>&nbsp;            result.setResult(fli);</b>
+<b class="nc"><i>270</i>&nbsp;            if (canInvokeDirect) {</b>
+<b class="nc"><i>271</i>&nbsp;                Invoker.invokeUnchecked(result);</b>
+<i>272</i>&nbsp;            } else {
+<b class="nc"><i>273</i>&nbsp;                Invoker.invoke(result);</b>
+<i>274</i>&nbsp;            }
+<i>275</i>&nbsp;        }
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;        @Override
+<i>278</i>&nbsp;        public void failed(int error, IOException x) {
+<i>279</i>&nbsp;            // lock not acquired so remove from lock table
+<b class="nc"><i>280</i>&nbsp;            removeFromFileLockTable(fli);</b>
+<i>281</i>&nbsp;
+<i>282</i>&nbsp;            // release waiters
+<b class="nc"><i>283</i>&nbsp;            if (isOpen()) {</b>
+<b class="nc"><i>284</i>&nbsp;                result.setFailure(x);</b>
+<i>285</i>&nbsp;            } else {
+<b class="nc"><i>286</i>&nbsp;                result.setFailure(new AsynchronousCloseException());</b>
+<i>287</i>&nbsp;            }
+<b class="nc"><i>288</i>&nbsp;            Invoker.invoke(result);</b>
+<i>289</i>&nbsp;        }
+<i>290</i>&nbsp;    }
+<i>291</i>&nbsp;
+<i>292</i>&nbsp;    @Override
+<i>293</i>&nbsp;    &lt;A&gt; Future&lt;FileLock&gt; implLock(final long position,
+<i>294</i>&nbsp;                                  final long size,
+<i>295</i>&nbsp;                                  final boolean shared,
+<i>296</i>&nbsp;                                  A attachment,
+<i>297</i>&nbsp;                                  final CompletionHandler&lt;FileLock,? super A&gt; handler)
+<i>298</i>&nbsp;    {
+<b class="nc"><i>299</i>&nbsp;        if (shared &amp;&amp; !reading)</b>
+<b class="nc"><i>300</i>&nbsp;            throw new NonReadableChannelException();</b>
+<b class="nc"><i>301</i>&nbsp;        if (!shared &amp;&amp; !writing)</b>
+<b class="nc"><i>302</i>&nbsp;            throw new NonWritableChannelException();</b>
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;        // add to lock table
+<b class="nc"><i>305</i>&nbsp;        FileLockImpl fli = addToFileLockTable(position, size, shared);</b>
+<b class="nc"><i>306</i>&nbsp;        if (fli == null) {</b>
+<b class="nc"><i>307</i>&nbsp;            Throwable exc = new ClosedChannelException();</b>
+<b class="nc"><i>308</i>&nbsp;            if (handler == null)</b>
+<b class="nc"><i>309</i>&nbsp;                return CompletedFuture.withFailure(exc);</b>
+<b class="nc"><i>310</i>&nbsp;            Invoker.invoke(this, handler, attachment, null, exc);</b>
+<b class="nc"><i>311</i>&nbsp;            return null;</b>
+<i>312</i>&nbsp;        }
+<i>313</i>&nbsp;
+<i>314</i>&nbsp;        // create Future and task that will be invoked to acquire lock
+<b class="nc"><i>315</i>&nbsp;        PendingFuture&lt;FileLock,A&gt; result =</b>
+<i>316</i>&nbsp;            new PendingFuture&lt;FileLock,A&gt;(this, handler, attachment);
+<b class="nc"><i>317</i>&nbsp;        LockTask&lt;A&gt; lockTask = new LockTask&lt;A&gt;(position, fli, result);</b>
+<b class="nc"><i>318</i>&nbsp;        result.setContext(lockTask);</b>
+<i>319</i>&nbsp;
+<i>320</i>&nbsp;        // initiate I/O
+<b class="nc"><i>321</i>&nbsp;        lockTask.run();</b>
+<b class="nc"><i>322</i>&nbsp;        return result;</b>
+<i>323</i>&nbsp;    }
+<b class="nc"><i>324</i>&nbsp;</b>
+<i>325</i>&nbsp;    static final int NO_LOCK = -1;       // Failed to lock
+<b class="nc"><i>326</i>&nbsp;    static final int LOCKED = 0;         // Obtained requested lock</b>
+<b class="nc"><i>327</i>&nbsp;</b>
+<i>328</i>&nbsp;    @Override
+<b class="nc"><i>329</i>&nbsp;    public FileLock tryLock(long position, long size, boolean shared)</b>
+<i>330</i>&nbsp;        throws IOException
+<b class="nc"><i>331</i>&nbsp;    {</b>
+<i>332</i>&nbsp;        if (shared &amp;&amp; !reading)
+<i>333</i>&nbsp;            throw new NonReadableChannelException();
+<i>334</i>&nbsp;        if (!shared &amp;&amp; !writing)
+<b class="nc"><i>335</i>&nbsp;            throw new NonWritableChannelException();</b>
+<i>336</i>&nbsp;
+<i>337</i>&nbsp;        // add to lock table
+<i>338</i>&nbsp;        final FileLockImpl fli = addToFileLockTable(position, size, shared);
+<i>339</i>&nbsp;        if (fli == null)
+<i>340</i>&nbsp;            throw new ClosedChannelException();
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;        boolean gotLock = false;
+<i>343</i>&nbsp;        try {
+<i>344</i>&nbsp;            begin();
+<b class="nc"><i>345</i>&nbsp;            // try to acquire the lock</b>
+<b class="nc"><i>346</i>&nbsp;            int res = nd.lock(fdObj, false, position, size, shared);</b>
+<b class="nc"><i>347</i>&nbsp;            if (res == NO_LOCK)</b>
+<b class="nc"><i>348</i>&nbsp;                return null;</b>
+<i>349</i>&nbsp;            gotLock = true;
+<i>350</i>&nbsp;            return fli;
+<b class="nc"><i>351</i>&nbsp;        } finally {</b>
+<b class="nc"><i>352</i>&nbsp;            if (!gotLock)</b>
+<b class="nc"><i>353</i>&nbsp;                removeFromFileLockTable(fli);</b>
+<i>354</i>&nbsp;            end();
+<b class="nc"><i>355</i>&nbsp;        }</b>
+<i>356</i>&nbsp;    }
+<b class="nc"><i>357</i>&nbsp;</b>
+<i>358</i>&nbsp;    @Override
+<b class="nc"><i>359</i>&nbsp;    protected void implRelease(FileLockImpl fli) throws IOException {</b>
+<b class="nc"><i>360</i>&nbsp;        nd.release(fdObj, fli.position(), fli.size());</b>
+<b class="nc"><i>361</i>&nbsp;    }</b>
+<b class="nc"><i>362</i>&nbsp;</b>
+<b class="nc"><i>363</i>&nbsp;    /**</b>
+<i>364</i>&nbsp;     * Task that initiates read operation and handles completion result.
+<b class="nc"><i>365</i>&nbsp;     */</b>
+<b class="nc"><i>366</i>&nbsp;    private class ReadTask&lt;A&gt; implements Runnable, Iocp.ResultHandler {</b>
+<b class="nc"><i>367</i>&nbsp;        private final ByteBuffer dst;</b>
+<i>368</i>&nbsp;        private final int pos, rem;     // buffer position/remaining
+<i>369</i>&nbsp;        private final long position;    // file position
+<i>370</i>&nbsp;        private final PendingFuture&lt;Integer,A&gt; result;
+<i>371</i>&nbsp;
+<i>372</i>&nbsp;        // set to dst if direct; otherwise set to substituted direct buffer
+<b class="nc"><i>373</i>&nbsp;        private volatile ByteBuffer buf;</b>
+<i>374</i>&nbsp;
+<i>375</i>&nbsp;        ReadTask(ByteBuffer dst,
+<i>376</i>&nbsp;                 int pos,
+<i>377</i>&nbsp;                 int rem,
+<i>378</i>&nbsp;                 long position,
+<i>379</i>&nbsp;                 PendingFuture&lt;Integer,A&gt; result)
+<i>380</i>&nbsp;        {
+<i>381</i>&nbsp;            this.dst = dst;
+<i>382</i>&nbsp;            this.pos = pos;
+<i>383</i>&nbsp;            this.rem = rem;
+<i>384</i>&nbsp;            this.position = position;
+<i>385</i>&nbsp;            this.result = result;
+<i>386</i>&nbsp;        }
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;        void releaseBufferIfSubstituted() {
+<i>389</i>&nbsp;            if (buf != dst)
+<i>390</i>&nbsp;                Util.releaseTemporaryDirectBuffer(buf);
+<i>391</i>&nbsp;        }
+<i>392</i>&nbsp;
+<b class="nc"><i>393</i>&nbsp;        void updatePosition(int bytesTransferred) {</b>
+<b class="nc"><i>394</i>&nbsp;            // if the I/O succeeded then adjust buffer position</b>
+<b class="nc"><i>395</i>&nbsp;            if (bytesTransferred &gt; 0) {</b>
+<b class="nc"><i>396</i>&nbsp;                if (buf == dst) {</b>
+<b class="nc"><i>397</i>&nbsp;                    try {</b>
+<b class="nc"><i>398</i>&nbsp;                        dst.position(pos + bytesTransferred);</b>
+<i>399</i>&nbsp;                    } catch (IllegalArgumentException x) {
+<i>400</i>&nbsp;                        // someone has changed the position; ignore
+<i>401</i>&nbsp;                    }
+<b class="nc"><i>402</i>&nbsp;                } else {</b>
+<b class="nc"><i>403</i>&nbsp;                    // had to substitute direct buffer</b>
+<i>404</i>&nbsp;                    buf.position(bytesTransferred).flip();
+<i>405</i>&nbsp;                    try {
+<i>406</i>&nbsp;                        dst.put(buf);
+<i>407</i>&nbsp;                    } catch (BufferOverflowException x) {
+<b class="nc"><i>408</i>&nbsp;                        // someone has changed the position; ignore</b>
+<b class="nc"><i>409</i>&nbsp;                    }</b>
+<i>410</i>&nbsp;                }
+<b class="nc"><i>411</i>&nbsp;            }</b>
+<b class="nc"><i>412</i>&nbsp;        }</b>
+<i>413</i>&nbsp;
+<b class="nc"><i>414</i>&nbsp;        @Override</b>
+<i>415</i>&nbsp;        public void run() {
+<i>416</i>&nbsp;            int n = -1;
+<b class="nc"><i>417</i>&nbsp;            long overlapped = 0L;</b>
+<i>418</i>&nbsp;            long address;
+<b class="nc"><i>419</i>&nbsp;</b>
+<b class="nc"><i>420</i>&nbsp;            // Substitute a native buffer if not direct</b>
+<i>421</i>&nbsp;            if (dst instanceof DirectBuffer) {
+<b class="nc"><i>422</i>&nbsp;                buf = dst;</b>
+<i>423</i>&nbsp;                address = ((DirectBuffer)dst).address() + pos;
+<i>424</i>&nbsp;            } else {
+<i>425</i>&nbsp;                buf = Util.getTemporaryDirectBuffer(rem);
+<i>426</i>&nbsp;                address = ((DirectBuffer)buf).address();
+<i>427</i>&nbsp;            }
+<i>428</i>&nbsp;
+<b class="nc"><i>429</i>&nbsp;            boolean pending = false;</b>
+<b class="nc"><i>430</i>&nbsp;            try {</b>
+<i>431</i>&nbsp;                begin();
+<i>432</i>&nbsp;
+<i>433</i>&nbsp;                // allocate OVERLAPPED
+<b class="nc"><i>434</i>&nbsp;                overlapped = ioCache.add(result);</b>
+<b class="nc"><i>435</i>&nbsp;</b>
+<b class="nc"><i>436</i>&nbsp;                // initiate read</b>
+<i>437</i>&nbsp;                n = readFile(handle, address, rem, position, overlapped);
+<b class="nc"><i>438</i>&nbsp;                if (n == IOStatus.UNAVAILABLE) {</b>
+<b class="nc"><i>439</i>&nbsp;                    // I/O is pending</b>
+<i>440</i>&nbsp;                    pending = true;
+<i>441</i>&nbsp;                    return;
+<b class="nc"><i>442</i>&nbsp;                } else if (n == IOStatus.EOF) {</b>
+<i>443</i>&nbsp;                    result.setResult(n);
+<b class="nc"><i>444</i>&nbsp;                } else {</b>
+<i>445</i>&nbsp;                    throw new InternalError(&quot;Unexpected result: &quot; + n);
+<i>446</i>&nbsp;                }
+<b class="nc"><i>447</i>&nbsp;</b>
+<i>448</i>&nbsp;            } catch (Throwable x) {
+<i>449</i>&nbsp;                // failed to initiate read
+<b class="nc"><i>450</i>&nbsp;                result.setFailure(toIOException(x));</b>
+<b class="nc"><i>451</i>&nbsp;            } finally {</b>
+<i>452</i>&nbsp;                if (!pending) {
+<b class="nc"><i>453</i>&nbsp;                    // release resources</b>
+<i>454</i>&nbsp;                    if (overlapped != 0L)
+<b class="nc"><i>455</i>&nbsp;                        ioCache.remove(overlapped);</b>
+<b class="nc"><i>456</i>&nbsp;                    releaseBufferIfSubstituted();</b>
+<i>457</i>&nbsp;                }
+<b class="nc"><i>458</i>&nbsp;                end();</b>
+<i>459</i>&nbsp;            }
+<i>460</i>&nbsp;
+<b class="nc"><i>461</i>&nbsp;            // invoke completion handler</b>
+<i>462</i>&nbsp;            Invoker.invoke(result);
+<b class="nc"><i>463</i>&nbsp;        }</b>
+<i>464</i>&nbsp;
+<b class="nc"><i>465</i>&nbsp;        /**</b>
+<i>466</i>&nbsp;         * Executed when the I/O has completed
+<b class="nc"><i>467</i>&nbsp;         */</b>
+<b class="nc"><i>468</i>&nbsp;        @Override</b>
+<b class="nc"><i>469</i>&nbsp;        public void completed(int bytesTransferred, boolean canInvokeDirect) {</b>
+<i>470</i>&nbsp;            updatePosition(bytesTransferred);
+<b class="nc"><i>471</i>&nbsp;</b>
+<b class="nc"><i>472</i>&nbsp;            // return direct buffer to cache if substituted</b>
+<i>473</i>&nbsp;            releaseBufferIfSubstituted();
+<i>474</i>&nbsp;
+<b class="nc"><i>475</i>&nbsp;            // release waiters and invoke completion handler</b>
+<i>476</i>&nbsp;            result.setResult(bytesTransferred);
+<i>477</i>&nbsp;            if (canInvokeDirect) {
+<i>478</i>&nbsp;                Invoker.invokeUnchecked(result);
+<i>479</i>&nbsp;            } else {
+<i>480</i>&nbsp;                Invoker.invoke(result);
+<i>481</i>&nbsp;            }
+<i>482</i>&nbsp;        }
+<b class="nc"><i>483</i>&nbsp;</b>
+<i>484</i>&nbsp;        @Override
+<i>485</i>&nbsp;        public void failed(int error, IOException x) {
+<b class="nc"><i>486</i>&nbsp;            // if EOF detected asynchronously then it is reported as error</b>
+<i>487</i>&nbsp;            if (error == ERROR_HANDLE_EOF) {
+<i>488</i>&nbsp;                completed(-1, false);
+<b class="nc"><i>489</i>&nbsp;            } else {</b>
+<b class="nc"><i>490</i>&nbsp;                // return direct buffer to cache if substituted</b>
+<b class="nc"><i>491</i>&nbsp;                releaseBufferIfSubstituted();</b>
+<i>492</i>&nbsp;
+<b class="nc"><i>493</i>&nbsp;                // release waiters</b>
+<i>494</i>&nbsp;                if (isOpen()) {
+<i>495</i>&nbsp;                    result.setFailure(x);
+<i>496</i>&nbsp;                } else {
+<i>497</i>&nbsp;                    result.setFailure(new AsynchronousCloseException());
+<i>498</i>&nbsp;                }
+<i>499</i>&nbsp;                Invoker.invoke(result);
+<b class="nc"><i>500</i>&nbsp;            }</b>
+<b class="nc"><i>501</i>&nbsp;        }</b>
+<i>502</i>&nbsp;    }
+<i>503</i>&nbsp;
+<b class="nc"><i>504</i>&nbsp;    @Override</b>
+<i>505</i>&nbsp;    &lt;A&gt; Future&lt;Integer&gt; implRead(ByteBuffer dst,
+<i>506</i>&nbsp;                                 long position,
+<b class="nc"><i>507</i>&nbsp;                                 A attachment,</b>
+<b class="nc"><i>508</i>&nbsp;                                 CompletionHandler&lt;Integer,? super A&gt; handler)</b>
+<i>509</i>&nbsp;    {
+<b class="nc"><i>510</i>&nbsp;        if (!reading)</b>
+<i>511</i>&nbsp;            throw new NonReadableChannelException();
+<b class="nc"><i>512</i>&nbsp;        if (position &lt; 0)</b>
+<i>513</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative position&quot;);
+<i>514</i>&nbsp;        if (dst.isReadOnly())
+<i>515</i>&nbsp;            throw new IllegalArgumentException(&quot;Read-only buffer&quot;);
+<i>516</i>&nbsp;
+<i>517</i>&nbsp;        // check if channel is closed
+<i>518</i>&nbsp;        if (!isOpen()) {
+<i>519</i>&nbsp;            Throwable exc = new ClosedChannelException();
+<i>520</i>&nbsp;            if (handler == null)
+<i>521</i>&nbsp;                return CompletedFuture.withFailure(exc);
+<i>522</i>&nbsp;            Invoker.invoke(this, handler, attachment, null, exc);
+<b class="nc"><i>523</i>&nbsp;            return null;</b>
+<b class="nc"><i>524</i>&nbsp;        }</b>
+<b class="nc"><i>525</i>&nbsp;</b>
+<b class="nc"><i>526</i>&nbsp;        int pos = dst.position();</b>
+<b class="nc"><i>527</i>&nbsp;        int lim = dst.limit();</b>
+<b class="nc"><i>528</i>&nbsp;        assert (pos &lt;= lim);</b>
+<i>529</i>&nbsp;        int rem = (pos &lt;= lim ? lim - pos : 0);
+<i>530</i>&nbsp;
+<b class="nc"><i>531</i>&nbsp;        // no space remaining</b>
+<b class="nc"><i>532</i>&nbsp;        if (rem == 0) {</b>
+<b class="nc"><i>533</i>&nbsp;            if (handler == null)</b>
+<b class="nc"><i>534</i>&nbsp;                return CompletedFuture.withResult(0);</b>
+<b class="nc"><i>535</i>&nbsp;            Invoker.invoke(this, handler, attachment, 0, null);</b>
+<b class="nc"><i>536</i>&nbsp;            return null;</b>
+<i>537</i>&nbsp;        }
+<i>538</i>&nbsp;
+<b class="nc"><i>539</i>&nbsp;        // create Future and task that initiates read</b>
+<b class="nc"><i>540</i>&nbsp;        PendingFuture&lt;Integer,A&gt; result =</b>
+<b class="nc"><i>541</i>&nbsp;            new PendingFuture&lt;Integer,A&gt;(this, handler, attachment);</b>
+<b class="nc"><i>542</i>&nbsp;        ReadTask&lt;A&gt; readTask = new ReadTask&lt;A&gt;(dst, pos, rem, position, result);</b>
+<i>543</i>&nbsp;        result.setContext(readTask);
+<i>544</i>&nbsp;
+<b class="nc"><i>545</i>&nbsp;        // initiate I/O</b>
+<b class="nc"><i>546</i>&nbsp;        readTask.run();</b>
+<b class="nc"><i>547</i>&nbsp;        return result;</b>
+<b class="nc"><i>548</i>&nbsp;    }</b>
+<b class="nc"><i>549</i>&nbsp;</b>
+<i>550</i>&nbsp;    /**
+<i>551</i>&nbsp;     * Task that initiates write operation and handles completion result.
+<i>552</i>&nbsp;     */
+<b class="nc"><i>553</i>&nbsp;    private class WriteTask&lt;A&gt; implements Runnable, Iocp.ResultHandler {</b>
+<i>554</i>&nbsp;        private final ByteBuffer src;
+<b class="nc"><i>555</i>&nbsp;        private final int pos, rem;     // buffer position/remaining</b>
+<b class="nc"><i>556</i>&nbsp;        private final long position;    // file position</b>
+<i>557</i>&nbsp;        private final PendingFuture&lt;Integer,A&gt; result;
+<i>558</i>&nbsp;
+<b class="nc"><i>559</i>&nbsp;        // set to src if direct; otherwise set to substituted direct buffer</b>
+<b class="nc"><i>560</i>&nbsp;        private volatile ByteBuffer buf;</b>
+<i>561</i>&nbsp;
+<b class="nc"><i>562</i>&nbsp;        WriteTask(ByteBuffer src,</b>
+<i>563</i>&nbsp;                  int pos,
+<b class="nc"><i>564</i>&nbsp;                  int rem,</b>
+<i>565</i>&nbsp;                  long position,
+<i>566</i>&nbsp;                  PendingFuture&lt;Integer,A&gt; result)
+<i>567</i>&nbsp;        {
+<i>568</i>&nbsp;            this.src = src;
+<i>569</i>&nbsp;            this.pos = pos;
+<i>570</i>&nbsp;            this.rem = rem;
+<i>571</i>&nbsp;            this.position = position;
+<i>572</i>&nbsp;            this.result = result;
+<i>573</i>&nbsp;        }
+<i>574</i>&nbsp;
+<i>575</i>&nbsp;        void releaseBufferIfSubstituted() {
+<i>576</i>&nbsp;            if (buf != src)
+<i>577</i>&nbsp;                Util.releaseTemporaryDirectBuffer(buf);
+<i>578</i>&nbsp;        }
+<i>579</i>&nbsp;
+<i>580</i>&nbsp;        void updatePosition(int bytesTransferred) {
+<i>581</i>&nbsp;            // if the I/O succeeded then adjust buffer position
+<i>582</i>&nbsp;            if (bytesTransferred &gt; 0) {
+<i>583</i>&nbsp;                try {
+<b class="nc"><i>584</i>&nbsp;                    src.position(pos + bytesTransferred);</b>
+<b class="nc"><i>585</i>&nbsp;                } catch (IllegalArgumentException x) {</b>
+<b class="nc"><i>586</i>&nbsp;                    // someone has changed the position</b>
+<b class="nc"><i>587</i>&nbsp;                }</b>
+<b class="nc"><i>588</i>&nbsp;            }</b>
+<b class="nc"><i>589</i>&nbsp;        }</b>
+<i>590</i>&nbsp;
+<i>591</i>&nbsp;        @Override
+<i>592</i>&nbsp;        public void run() {
+<b class="nc"><i>593</i>&nbsp;            int n = -1;</b>
+<b class="nc"><i>594</i>&nbsp;            long overlapped = 0L;</b>
+<i>595</i>&nbsp;            long address;
+<i>596</i>&nbsp;
+<i>597</i>&nbsp;            // Substitute a native buffer if not direct
+<i>598</i>&nbsp;            if (src instanceof DirectBuffer) {
+<b class="nc"><i>599</i>&nbsp;                buf = src;</b>
+<i>600</i>&nbsp;                address = ((DirectBuffer)src).address() + pos;
+<b class="nc"><i>601</i>&nbsp;            } else {</b>
+<b class="nc"><i>602</i>&nbsp;                buf = Util.getTemporaryDirectBuffer(rem);</b>
+<i>603</i>&nbsp;                buf.put(src);
+<b class="nc"><i>604</i>&nbsp;                buf.flip();</b>
+<i>605</i>&nbsp;                // temporarily restore position as we don&#39;t know how many bytes
+<i>606</i>&nbsp;                // will be written
+<i>607</i>&nbsp;                src.position(pos);
+<i>608</i>&nbsp;                address = ((DirectBuffer)buf).address();
+<i>609</i>&nbsp;            }
+<b class="nc"><i>610</i>&nbsp;</b>
+<b class="nc"><i>611</i>&nbsp;            try {</b>
+<i>612</i>&nbsp;                begin();
+<i>613</i>&nbsp;
+<i>614</i>&nbsp;                // allocate an OVERLAPPED structure
+<b class="nc"><i>615</i>&nbsp;                overlapped = ioCache.add(result);</b>
+<b class="nc"><i>616</i>&nbsp;</b>
+<b class="nc"><i>617</i>&nbsp;                // initiate the write</b>
+<i>618</i>&nbsp;                n = writeFile(handle, address, rem, position, overlapped);
+<b class="nc"><i>619</i>&nbsp;                if (n == IOStatus.UNAVAILABLE) {</b>
+<b class="nc"><i>620</i>&nbsp;                    // I/O is pending</b>
+<b class="nc"><i>621</i>&nbsp;                    return;</b>
+<i>622</i>&nbsp;                } else {
+<i>623</i>&nbsp;                    throw new InternalError(&quot;Unexpected result: &quot; + n);
+<b class="nc"><i>624</i>&nbsp;                }</b>
+<b class="nc"><i>625</i>&nbsp;</b>
+<i>626</i>&nbsp;            } catch (Throwable x) {
+<i>627</i>&nbsp;                // failed to initiate read:
+<i>628</i>&nbsp;                result.setFailure(toIOException(x));
+<b class="nc"><i>629</i>&nbsp;</b>
+<i>630</i>&nbsp;                // release resources
+<i>631</i>&nbsp;                if (overlapped != 0L)
+<b class="nc"><i>632</i>&nbsp;                    ioCache.remove(overlapped);</b>
+<i>633</i>&nbsp;                releaseBufferIfSubstituted();
+<i>634</i>&nbsp;
+<b class="nc"><i>635</i>&nbsp;            } finally {</b>
+<b class="nc"><i>636</i>&nbsp;                end();</b>
+<i>637</i>&nbsp;            }
+<i>638</i>&nbsp;
+<i>639</i>&nbsp;            // invoke completion handler
+<b class="nc"><i>640</i>&nbsp;            Invoker.invoke(result);</b>
+<i>641</i>&nbsp;        }
+<i>642</i>&nbsp;
+<b class="nc"><i>643</i>&nbsp;        /**</b>
+<i>644</i>&nbsp;         * Executed when the I/O has completed
+<b class="nc"><i>645</i>&nbsp;         */</b>
+<i>646</i>&nbsp;        @Override
+<i>647</i>&nbsp;        public void completed(int bytesTransferred, boolean canInvokeDirect) {
+<b class="nc"><i>648</i>&nbsp;            updatePosition(bytesTransferred);</b>
+<b class="nc"><i>649</i>&nbsp;</b>
+<b class="nc"><i>650</i>&nbsp;            // return direct buffer to cache if substituted</b>
+<i>651</i>&nbsp;            releaseBufferIfSubstituted();
+<i>652</i>&nbsp;
+<b class="nc"><i>653</i>&nbsp;            // release waiters and invoke completion handler</b>
+<b class="nc"><i>654</i>&nbsp;            result.setResult(bytesTransferred);</b>
+<i>655</i>&nbsp;            if (canInvokeDirect) {
+<i>656</i>&nbsp;                Invoker.invokeUnchecked(result);
+<b class="nc"><i>657</i>&nbsp;            } else {</b>
+<i>658</i>&nbsp;                Invoker.invoke(result);
+<i>659</i>&nbsp;            }
+<i>660</i>&nbsp;        }
+<i>661</i>&nbsp;
+<i>662</i>&nbsp;        @Override
+<i>663</i>&nbsp;        public void failed(int error, IOException x) {
+<i>664</i>&nbsp;            // return direct buffer to cache if substituted
+<b class="nc"><i>665</i>&nbsp;            releaseBufferIfSubstituted();</b>
+<i>666</i>&nbsp;
+<i>667</i>&nbsp;            // release waiters and invoker completion handler
+<b class="nc"><i>668</i>&nbsp;            if (isOpen()) {</b>
+<i>669</i>&nbsp;                result.setFailure(x);
+<i>670</i>&nbsp;            } else {
+<b class="nc"><i>671</i>&nbsp;                result.setFailure(new AsynchronousCloseException());</b>
+<b class="nc"><i>672</i>&nbsp;            }</b>
+<b class="nc"><i>673</i>&nbsp;            Invoker.invoke(result);</b>
+<i>674</i>&nbsp;        }
+<b class="nc"><i>675</i>&nbsp;    }</b>
+<i>676</i>&nbsp;
+<i>677</i>&nbsp;    &lt;A&gt; Future&lt;Integer&gt; implWrite(ByteBuffer src,
+<i>678</i>&nbsp;                                  long position,
+<i>679</i>&nbsp;                                  A attachment,
+<i>680</i>&nbsp;                                  CompletionHandler&lt;Integer,? super A&gt; handler)
+<i>681</i>&nbsp;    {
+<b class="nc"><i>682</i>&nbsp;        if (!writing)</b>
+<i>683</i>&nbsp;            throw new NonWritableChannelException();
+<i>684</i>&nbsp;        if (position &lt; 0)
+<b class="nc"><i>685</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative position&quot;);</b>
+<b class="nc"><i>686</i>&nbsp;</b>
+<i>687</i>&nbsp;        // check if channel is closed
+<b class="nc"><i>688</i>&nbsp;        if (!isOpen()) {</b>
+<i>689</i>&nbsp;           Throwable exc = new ClosedChannelException();
+<b class="nc"><i>690</i>&nbsp;            if (handler == null)</b>
+<i>691</i>&nbsp;                return CompletedFuture.withFailure(exc);
+<i>692</i>&nbsp;            Invoker.invoke(this, handler, attachment, null, exc);
+<i>693</i>&nbsp;            return null;
+<i>694</i>&nbsp;        }
+<i>695</i>&nbsp;
+<i>696</i>&nbsp;        int pos = src.position();
+<i>697</i>&nbsp;        int lim = src.limit();
+<i>698</i>&nbsp;        assert (pos &lt;= lim);
+<b class="nc"><i>699</i>&nbsp;        int rem = (pos &lt;= lim ? lim - pos : 0);</b>
+<b class="nc"><i>700</i>&nbsp;</b>
+<b class="nc"><i>701</i>&nbsp;        // nothing to write</b>
+<b class="nc"><i>702</i>&nbsp;        if (rem == 0) {</b>
+<i>703</i>&nbsp;            if (handler == null)
+<i>704</i>&nbsp;                return CompletedFuture.withResult(0);
+<b class="nc"><i>705</i>&nbsp;            Invoker.invoke(this, handler, attachment, 0, null);</b>
+<b class="nc"><i>706</i>&nbsp;            return null;</b>
+<b class="nc"><i>707</i>&nbsp;        }</b>
+<b class="nc"><i>708</i>&nbsp;</b>
+<b class="nc"><i>709</i>&nbsp;        // create Future and task to initiate write</b>
+<b class="nc"><i>710</i>&nbsp;        PendingFuture&lt;Integer,A&gt; result =</b>
+<i>711</i>&nbsp;            new PendingFuture&lt;Integer,A&gt;(this, handler, attachment);
+<i>712</i>&nbsp;        WriteTask&lt;A&gt; writeTask = new WriteTask&lt;A&gt;(src, pos, rem, position, result);
+<b class="nc"><i>713</i>&nbsp;        result.setContext(writeTask);</b>
+<b class="nc"><i>714</i>&nbsp;</b>
+<b class="nc"><i>715</i>&nbsp;        // initiate I/O</b>
+<b class="nc"><i>716</i>&nbsp;        writeTask.run();</b>
+<i>717</i>&nbsp;        return result;
+<i>718</i>&nbsp;    }
+<b class="nc"><i>719</i>&nbsp;</b>
+<b class="nc"><i>720</i>&nbsp;    // -- Native methods --</b>
+<b class="nc"><i>721</i>&nbsp;</b>
+<b class="nc"><i>722</i>&nbsp;    private static native int readFile(long handle, long address, int len,</b>
+<b class="nc"><i>723</i>&nbsp;        long offset, long overlapped) throws IOException;</b>
+<i>724</i>&nbsp;
+<i>725</i>&nbsp;    private static native int writeFile(long handle, long address, int len,
+<i>726</i>&nbsp;        long offset, long overlapped) throws IOException;
+<b class="nc"><i>727</i>&nbsp;</b>
+<i>728</i>&nbsp;    private static native int lockFile(long handle, long position, long size,
+<b class="nc"><i>729</i>&nbsp;        boolean shared, long overlapped) throws IOException;</b>
+<b class="nc"><i>730</i>&nbsp;</b>
+<i>731</i>&nbsp;    static {
+<i>732</i>&nbsp;        IOUtil.load();
+<b class="nc"><i>733</i>&nbsp;    }</b>
+<b class="nc"><i>734</i>&nbsp;}</b>
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

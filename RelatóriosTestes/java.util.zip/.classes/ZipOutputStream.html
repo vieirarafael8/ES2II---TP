@@ -1,0 +1,918 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ZipOutputStream</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.zip</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ZipOutputStream (java.util.zip)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ZipOutputStream</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 24)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 360)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">ZipOutputStream$XEntry</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 25)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 363)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.util.zip;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.OutputStream;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import java.nio.charset.Charset;
+<i>31</i>&nbsp;import java.nio.charset.StandardCharsets;
+<i>32</i>&nbsp;import java.util.Vector;
+<i>33</i>&nbsp;import java.util.HashSet;
+<i>34</i>&nbsp;import static java.util.zip.ZipConstants64.*;
+<i>35</i>&nbsp;import static java.util.zip.ZipUtils.*;
+<i>36</i>&nbsp;import sun.security.action.GetPropertyAction;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * This class implements an output stream filter for writing files in the
+<i>40</i>&nbsp; * ZIP file format. Includes support for both compressed and uncompressed
+<i>41</i>&nbsp; * entries.
+<i>42</i>&nbsp; *
+<i>43</i>&nbsp; * @author      David Connelly
+<i>44</i>&nbsp; * @since 1.1
+<i>45</i>&nbsp; */
+<i>46</i>&nbsp;public
+<i>47</i>&nbsp;class ZipOutputStream extends DeflaterOutputStream implements ZipConstants {
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;    /**
+<i>50</i>&nbsp;     * Whether to use ZIP64 for zip files with more than 64k entries.
+<i>51</i>&nbsp;     * Until ZIP64 support in zip implementations is ubiquitous, this
+<i>52</i>&nbsp;     * system property allows the creation of zip files which can be
+<i>53</i>&nbsp;     * read by legacy zip implementations which tolerate &quot;incorrect&quot;
+<i>54</i>&nbsp;     * total entry count fields, such as the ones in jdk6, and even
+<i>55</i>&nbsp;     * some in jdk7.
+<b class="nc"><i>56</i>&nbsp;     */</b>
+<b class="nc"><i>57</i>&nbsp;    private static final boolean inhibitZip64 =</b>
+<i>58</i>&nbsp;        Boolean.parseBoolean(
+<i>59</i>&nbsp;            GetPropertyAction.privilegedGetProperty(&quot;jdk.util.zip.inhibitZip64&quot;));
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;    private static class XEntry {
+<i>62</i>&nbsp;        final ZipEntry entry;
+<i>63</i>&nbsp;        final long offset;
+<b class="nc"><i>64</i>&nbsp;        public XEntry(ZipEntry entry, long offset) {</b>
+<b class="nc"><i>65</i>&nbsp;            this.entry = entry;</b>
+<b class="nc"><i>66</i>&nbsp;            this.offset = offset;</b>
+<i>67</i>&nbsp;        }
+<i>68</i>&nbsp;    }
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    private XEntry current;
+<b class="nc"><i>71</i>&nbsp;    private Vector&lt;XEntry&gt; xentries = new Vector&lt;&gt;();</b>
+<b class="nc"><i>72</i>&nbsp;    private HashSet&lt;String&gt; names = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>73</i>&nbsp;    private CRC32 crc = new CRC32();</b>
+<b class="nc"><i>74</i>&nbsp;    private long written = 0;</b>
+<b class="nc"><i>75</i>&nbsp;    private long locoff = 0;</b>
+<i>76</i>&nbsp;    private byte[] comment;
+<b class="nc"><i>77</i>&nbsp;    private int method = DEFLATED;</b>
+<i>78</i>&nbsp;    private boolean finished;
+<i>79</i>&nbsp;
+<b class="nc"><i>80</i>&nbsp;    private boolean closed = false;</b>
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;    private final ZipCoder zc;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    private static int version(ZipEntry e) throws ZipException {
+<b class="nc"><i>85</i>&nbsp;        switch (e.method) {</b>
+<b class="nc"><i>86</i>&nbsp;        case DEFLATED: return 20;</b>
+<b class="nc"><i>87</i>&nbsp;        case STORED:   return 10;</b>
+<b class="nc"><i>88</i>&nbsp;        default: throw new ZipException(&quot;unsupported compression method&quot;);</b>
+<i>89</i>&nbsp;        }
+<i>90</i>&nbsp;    }
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    /**
+<i>93</i>&nbsp;     * Checks to make sure that this stream has not been closed.
+<i>94</i>&nbsp;     */
+<i>95</i>&nbsp;    private void ensureOpen() throws IOException {
+<b class="nc"><i>96</i>&nbsp;        if (closed) {</b>
+<b class="nc"><i>97</i>&nbsp;            throw new IOException(&quot;Stream closed&quot;);</b>
+<i>98</i>&nbsp;        }
+<i>99</i>&nbsp;    }
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;    /**
+<i>102</i>&nbsp;     * Compression method for uncompressed (STORED) entries.
+<i>103</i>&nbsp;     */
+<i>104</i>&nbsp;    public static final int STORED = ZipEntry.STORED;
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;    /**
+<i>107</i>&nbsp;     * Compression method for compressed (DEFLATED) entries.
+<i>108</i>&nbsp;     */
+<i>109</i>&nbsp;    public static final int DEFLATED = ZipEntry.DEFLATED;
+<i>110</i>&nbsp;
+<i>111</i>&nbsp;    /**
+<i>112</i>&nbsp;     * Creates a new ZIP output stream.
+<i>113</i>&nbsp;     *
+<i>114</i>&nbsp;     * &lt;p&gt;The UTF-8 {@link java.nio.charset.Charset charset} is used
+<i>115</i>&nbsp;     * to encode the entry names and comments.
+<i>116</i>&nbsp;     *
+<i>117</i>&nbsp;     * @param out the actual output stream
+<i>118</i>&nbsp;     */
+<b class="nc"><i>119</i>&nbsp;    public ZipOutputStream(OutputStream out) {</b>
+<i>120</i>&nbsp;        this(out, StandardCharsets.UTF_8);
+<i>121</i>&nbsp;    }
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;    /**
+<i>124</i>&nbsp;     * Creates a new ZIP output stream.
+<i>125</i>&nbsp;     *
+<i>126</i>&nbsp;     * @param out the actual output stream
+<i>127</i>&nbsp;     *
+<i>128</i>&nbsp;     * @param charset the {@linkplain java.nio.charset.Charset charset}
+<i>129</i>&nbsp;     *                to be used to encode the entry names and comments
+<i>130</i>&nbsp;     *
+<i>131</i>&nbsp;     * @since 1.7
+<i>132</i>&nbsp;     */
+<b class="nc"><i>133</i>&nbsp;    public ZipOutputStream(OutputStream out, Charset charset) {</b>
+<b class="nc"><i>134</i>&nbsp;        super(out, new Deflater(Deflater.DEFAULT_COMPRESSION, true));</b>
+<b class="nc"><i>135</i>&nbsp;        if (charset == null)</b>
+<b class="nc"><i>136</i>&nbsp;            throw new NullPointerException(&quot;charset is null&quot;);</b>
+<b class="nc"><i>137</i>&nbsp;        this.zc = ZipCoder.get(charset);</b>
+<i>138</i>&nbsp;        usesDefaultDeflater = true;
+<i>139</i>&nbsp;    }
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;    /**
+<i>142</i>&nbsp;     * Sets the ZIP file comment.
+<i>143</i>&nbsp;     * @param comment the comment string
+<i>144</i>&nbsp;     * @exception IllegalArgumentException if the length of the specified
+<i>145</i>&nbsp;     *            ZIP file comment is greater than 0xFFFF bytes
+<i>146</i>&nbsp;     */
+<b class="nc"><i>147</i>&nbsp;    public void setComment(String comment) {</b>
+<b class="nc"><i>148</i>&nbsp;        if (comment != null) {</b>
+<b class="nc"><i>149</i>&nbsp;            this.comment = zc.getBytes(comment);</b>
+<b class="nc"><i>150</i>&nbsp;            if (this.comment.length &gt; 0xffff)</b>
+<i>151</i>&nbsp;                throw new IllegalArgumentException(&quot;ZIP file comment too long.&quot;);
+<i>152</i>&nbsp;        }
+<i>153</i>&nbsp;    }
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    /**
+<i>156</i>&nbsp;     * Sets the default compression method for subsequent entries. This
+<i>157</i>&nbsp;     * default will be used whenever the compression method is not specified
+<i>158</i>&nbsp;     * for an individual ZIP file entry, and is initially set to DEFLATED.
+<i>159</i>&nbsp;     * @param method the default compression method
+<i>160</i>&nbsp;     * @exception IllegalArgumentException if the specified compression method
+<i>161</i>&nbsp;     *            is invalid
+<i>162</i>&nbsp;     */
+<b class="nc"><i>163</i>&nbsp;    public void setMethod(int method) {</b>
+<b class="nc"><i>164</i>&nbsp;        if (method != DEFLATED &amp;&amp; method != STORED) {</b>
+<i>165</i>&nbsp;            throw new IllegalArgumentException(&quot;invalid compression method&quot;);
+<b class="nc"><i>166</i>&nbsp;        }</b>
+<i>167</i>&nbsp;        this.method = method;
+<i>168</i>&nbsp;    }
+<i>169</i>&nbsp;
+<i>170</i>&nbsp;    /**
+<i>171</i>&nbsp;     * Sets the compression level for subsequent entries which are DEFLATED.
+<i>172</i>&nbsp;     * The default setting is DEFAULT_COMPRESSION.
+<i>173</i>&nbsp;     * @param level the compression level (0-9)
+<i>174</i>&nbsp;     * @exception IllegalArgumentException if the compression level is invalid
+<i>175</i>&nbsp;     */
+<b class="nc"><i>176</i>&nbsp;    public void setLevel(int level) {</b>
+<i>177</i>&nbsp;        def.setLevel(level);
+<i>178</i>&nbsp;    }
+<i>179</i>&nbsp;
+<i>180</i>&nbsp;    /**
+<i>181</i>&nbsp;     * Begins writing a new ZIP file entry and positions the stream to the
+<i>182</i>&nbsp;     * start of the entry data. Closes the current entry if still active.
+<i>183</i>&nbsp;     * The default compression method will be used if no compression method
+<i>184</i>&nbsp;     * was specified for the entry, and the current time will be used if
+<i>185</i>&nbsp;     * the entry has no set modification time.
+<i>186</i>&nbsp;     * @param e the ZIP entry to be written
+<i>187</i>&nbsp;     * @exception ZipException if a ZIP format error has occurred
+<i>188</i>&nbsp;     * @exception IOException if an I/O error has occurred
+<i>189</i>&nbsp;     */
+<b class="nc"><i>190</i>&nbsp;    public void putNextEntry(ZipEntry e) throws IOException {</b>
+<b class="nc"><i>191</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>192</i>&nbsp;        if (current != null) {</b>
+<i>193</i>&nbsp;            closeEntry();       // close previous entry
+<b class="nc"><i>194</i>&nbsp;        }</b>
+<i>195</i>&nbsp;        if (e.xdostime == -1) {
+<i>196</i>&nbsp;            // by default, do NOT use extended timestamps in extra
+<b class="nc"><i>197</i>&nbsp;            // data, for now.</b>
+<i>198</i>&nbsp;            e.setTime(System.currentTimeMillis());
+<b class="nc"><i>199</i>&nbsp;        }</b>
+<b class="nc"><i>200</i>&nbsp;        if (e.method == -1) {</b>
+<i>201</i>&nbsp;            e.method = method;  // use default method
+<i>202</i>&nbsp;        }
+<b class="nc"><i>203</i>&nbsp;        // store size, compressed size, and crc-32 in LOC header</b>
+<b class="nc"><i>204</i>&nbsp;        e.flag = 0;</b>
+<i>205</i>&nbsp;        switch (e.method) {
+<i>206</i>&nbsp;        case DEFLATED:
+<i>207</i>&nbsp;            // store size, compressed size, and crc-32 in data descriptor
+<b class="nc"><i>208</i>&nbsp;            // immediately following the compressed entry data</b>
+<b class="nc"><i>209</i>&nbsp;            if (e.size  == -1 || e.csize == -1 || e.crc   == -1)</b>
+<i>210</i>&nbsp;                e.flag = 8;
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;            break;
+<i>213</i>&nbsp;        case STORED:
+<i>214</i>&nbsp;            // compressed size, uncompressed size, and crc-32 must all be
+<b class="nc"><i>215</i>&nbsp;            // set for entries using STORED compression method</b>
+<b class="nc"><i>216</i>&nbsp;            if (e.size == -1) {</b>
+<b class="nc"><i>217</i>&nbsp;                e.size = e.csize;</b>
+<b class="nc"><i>218</i>&nbsp;            } else if (e.csize == -1) {</b>
+<b class="nc"><i>219</i>&nbsp;                e.csize = e.size;</b>
+<b class="nc"><i>220</i>&nbsp;            } else if (e.size != e.csize) {</b>
+<i>221</i>&nbsp;                throw new ZipException(
+<i>222</i>&nbsp;                    &quot;STORED entry where compressed != uncompressed size&quot;);
+<b class="nc"><i>223</i>&nbsp;            }</b>
+<b class="nc"><i>224</i>&nbsp;            if (e.size == -1 || e.crc == -1) {</b>
+<i>225</i>&nbsp;                throw new ZipException(
+<i>226</i>&nbsp;                    &quot;STORED entry missing size, compressed size, or crc-32&quot;);
+<i>227</i>&nbsp;            }
+<i>228</i>&nbsp;            break;
+<b class="nc"><i>229</i>&nbsp;        default:</b>
+<i>230</i>&nbsp;            throw new ZipException(&quot;unsupported compression method&quot;);
+<b class="nc"><i>231</i>&nbsp;        }</b>
+<b class="nc"><i>232</i>&nbsp;        if (! names.add(e.name)) {</b>
+<i>233</i>&nbsp;            throw new ZipException(&quot;duplicate entry: &quot; + e.name);
+<b class="nc"><i>234</i>&nbsp;        }</b>
+<b class="nc"><i>235</i>&nbsp;        if (zc.isUTF8())</b>
+<b class="nc"><i>236</i>&nbsp;            e.flag |= USE_UTF8;</b>
+<b class="nc"><i>237</i>&nbsp;        current = new XEntry(e, written);</b>
+<b class="nc"><i>238</i>&nbsp;        xentries.add(current);</b>
+<i>239</i>&nbsp;        writeLOC(current);
+<i>240</i>&nbsp;    }
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;    /**
+<i>243</i>&nbsp;     * Closes the current ZIP entry and positions the stream for writing
+<i>244</i>&nbsp;     * the next entry.
+<i>245</i>&nbsp;     * @exception ZipException if a ZIP format error has occurred
+<i>246</i>&nbsp;     * @exception IOException if an I/O error has occurred
+<i>247</i>&nbsp;     */
+<b class="nc"><i>248</i>&nbsp;    public void closeEntry() throws IOException {</b>
+<b class="nc"><i>249</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>250</i>&nbsp;        if (current != null) {</b>
+<b class="nc"><i>251</i>&nbsp;            ZipEntry e = current.entry;</b>
+<i>252</i>&nbsp;            switch (e.method) {
+<b class="nc"><i>253</i>&nbsp;            case DEFLATED:</b>
+<b class="nc"><i>254</i>&nbsp;                def.finish();</b>
+<b class="nc"><i>255</i>&nbsp;                while (!def.finished()) {</b>
+<i>256</i>&nbsp;                    deflate();
+<b class="nc"><i>257</i>&nbsp;                }</b>
+<i>258</i>&nbsp;                if ((e.flag &amp; 8) == 0) {
+<b class="nc"><i>259</i>&nbsp;                    // verify size, compressed size, and crc-32 settings</b>
+<b class="nc"><i>260</i>&nbsp;                    if (e.size != def.getBytesRead()) {</b>
+<i>261</i>&nbsp;                        throw new ZipException(
+<b class="nc"><i>262</i>&nbsp;                            &quot;invalid entry size (expected &quot; + e.size +</b>
+<i>263</i>&nbsp;                            &quot; but got &quot; + def.getBytesRead() + &quot; bytes)&quot;);
+<b class="nc"><i>264</i>&nbsp;                    }</b>
+<b class="nc"><i>265</i>&nbsp;                    if (e.csize != def.getBytesWritten()) {</b>
+<i>266</i>&nbsp;                        throw new ZipException(
+<b class="nc"><i>267</i>&nbsp;                            &quot;invalid entry compressed size (expected &quot; +</b>
+<i>268</i>&nbsp;                            e.csize + &quot; but got &quot; + def.getBytesWritten() + &quot; bytes)&quot;);
+<b class="nc"><i>269</i>&nbsp;                    }</b>
+<b class="nc"><i>270</i>&nbsp;                    if (e.crc != crc.getValue()) {</b>
+<i>271</i>&nbsp;                        throw new ZipException(
+<b class="nc"><i>272</i>&nbsp;                            &quot;invalid entry CRC-32 (expected 0x&quot; +</b>
+<b class="nc"><i>273</i>&nbsp;                            Long.toHexString(e.crc) + &quot; but got 0x&quot; +</b>
+<i>274</i>&nbsp;                            Long.toHexString(crc.getValue()) + &quot;)&quot;);
+<i>275</i>&nbsp;                    }
+<b class="nc"><i>276</i>&nbsp;                } else {</b>
+<b class="nc"><i>277</i>&nbsp;                    e.size  = def.getBytesRead();</b>
+<b class="nc"><i>278</i>&nbsp;                    e.csize = def.getBytesWritten();</b>
+<b class="nc"><i>279</i>&nbsp;                    e.crc = crc.getValue();</b>
+<i>280</i>&nbsp;                    writeEXT(e);
+<b class="nc"><i>281</i>&nbsp;                }</b>
+<b class="nc"><i>282</i>&nbsp;                def.reset();</b>
+<b class="nc"><i>283</i>&nbsp;                written += e.csize;</b>
+<i>284</i>&nbsp;                break;
+<i>285</i>&nbsp;            case STORED:
+<b class="nc"><i>286</i>&nbsp;                // we already know that both e.size and e.csize are the same</b>
+<b class="nc"><i>287</i>&nbsp;                if (e.size != written - locoff) {</b>
+<i>288</i>&nbsp;                    throw new ZipException(
+<i>289</i>&nbsp;                        &quot;invalid entry size (expected &quot; + e.size +
+<i>290</i>&nbsp;                        &quot; but got &quot; + (written - locoff) + &quot; bytes)&quot;);
+<b class="nc"><i>291</i>&nbsp;                }</b>
+<b class="nc"><i>292</i>&nbsp;                if (e.crc != crc.getValue()) {</b>
+<i>293</i>&nbsp;                    throw new ZipException(
+<b class="nc"><i>294</i>&nbsp;                         &quot;invalid entry crc-32 (expected 0x&quot; +</b>
+<b class="nc"><i>295</i>&nbsp;                         Long.toHexString(e.crc) + &quot; but got 0x&quot; +</b>
+<i>296</i>&nbsp;                         Long.toHexString(crc.getValue()) + &quot;)&quot;);
+<i>297</i>&nbsp;                }
+<i>298</i>&nbsp;                break;
+<b class="nc"><i>299</i>&nbsp;            default:</b>
+<i>300</i>&nbsp;                throw new ZipException(&quot;invalid compression method&quot;);
+<b class="nc"><i>301</i>&nbsp;            }</b>
+<b class="nc"><i>302</i>&nbsp;            crc.reset();</b>
+<i>303</i>&nbsp;            current = null;
+<i>304</i>&nbsp;        }
+<i>305</i>&nbsp;    }
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;    /**
+<i>308</i>&nbsp;     * Writes an array of bytes to the current ZIP entry data. This method
+<i>309</i>&nbsp;     * will block until all the bytes are written.
+<i>310</i>&nbsp;     * @param b the data to be written
+<i>311</i>&nbsp;     * @param off the start offset in the data
+<i>312</i>&nbsp;     * @param len the number of bytes that are written
+<i>313</i>&nbsp;     * @exception ZipException if a ZIP file error has occurred
+<i>314</i>&nbsp;     * @exception IOException if an I/O error has occurred
+<i>315</i>&nbsp;     */
+<i>316</i>&nbsp;    public synchronized void write(byte[] b, int off, int len)
+<i>317</i>&nbsp;        throws IOException
+<b class="nc"><i>318</i>&nbsp;    {</b>
+<b class="nc"><i>319</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>320</i>&nbsp;        if (off &lt; 0 || len &lt; 0 || off &gt; b.length - len) {</b>
+<b class="nc"><i>321</i>&nbsp;            throw new IndexOutOfBoundsException();</b>
+<i>322</i>&nbsp;        } else if (len == 0) {
+<i>323</i>&nbsp;            return;
+<i>324</i>&nbsp;        }
+<b class="nc"><i>325</i>&nbsp;</b>
+<b class="nc"><i>326</i>&nbsp;        if (current == null) {</b>
+<i>327</i>&nbsp;            throw new ZipException(&quot;no current ZIP entry&quot;);
+<b class="nc"><i>328</i>&nbsp;        }</b>
+<b class="nc"><i>329</i>&nbsp;        ZipEntry entry = current.entry;</b>
+<i>330</i>&nbsp;        switch (entry.method) {
+<b class="nc"><i>331</i>&nbsp;        case DEFLATED:</b>
+<b class="nc"><i>332</i>&nbsp;            super.write(b, off, len);</b>
+<i>333</i>&nbsp;            break;
+<b class="nc"><i>334</i>&nbsp;        case STORED:</b>
+<b class="nc"><i>335</i>&nbsp;            written += len;</b>
+<b class="nc"><i>336</i>&nbsp;            if (written - locoff &gt; entry.size) {</b>
+<i>337</i>&nbsp;                throw new ZipException(
+<i>338</i>&nbsp;                    &quot;attempt to write past end of STORED entry&quot;);
+<b class="nc"><i>339</i>&nbsp;            }</b>
+<b class="nc"><i>340</i>&nbsp;            out.write(b, off, len);</b>
+<i>341</i>&nbsp;            break;
+<b class="nc"><i>342</i>&nbsp;        default:</b>
+<i>343</i>&nbsp;            throw new ZipException(&quot;invalid compression method&quot;);
+<b class="nc"><i>344</i>&nbsp;        }</b>
+<i>345</i>&nbsp;        crc.update(b, off, len);
+<i>346</i>&nbsp;    }
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;    /**
+<i>349</i>&nbsp;     * Finishes writing the contents of the ZIP output stream without closing
+<i>350</i>&nbsp;     * the underlying stream. Use this method when applying multiple filters
+<i>351</i>&nbsp;     * in succession to the same output stream.
+<i>352</i>&nbsp;     * @exception ZipException if a ZIP file error has occurred
+<i>353</i>&nbsp;     * @exception IOException if an I/O exception has occurred
+<i>354</i>&nbsp;     */
+<b class="nc"><i>355</i>&nbsp;    public void finish() throws IOException {</b>
+<b class="nc"><i>356</i>&nbsp;        ensureOpen();</b>
+<i>357</i>&nbsp;        if (finished) {
+<i>358</i>&nbsp;            return;
+<b class="nc"><i>359</i>&nbsp;        }</b>
+<b class="nc"><i>360</i>&nbsp;        if (current != null) {</b>
+<i>361</i>&nbsp;            closeEntry();
+<i>362</i>&nbsp;        }
+<b class="nc"><i>363</i>&nbsp;        // write central directory</b>
+<b class="nc"><i>364</i>&nbsp;        long off = written;</b>
+<b class="nc"><i>365</i>&nbsp;        for (XEntry xentry : xentries)</b>
+<b class="nc"><i>366</i>&nbsp;            writeCEN(xentry);</b>
+<b class="nc"><i>367</i>&nbsp;        writeEND(off, written - off);</b>
+<i>368</i>&nbsp;        finished = true;
+<i>369</i>&nbsp;    }
+<i>370</i>&nbsp;
+<i>371</i>&nbsp;    /**
+<i>372</i>&nbsp;     * Closes the ZIP output stream as well as the stream being filtered.
+<i>373</i>&nbsp;     * @exception ZipException if a ZIP file error has occurred
+<i>374</i>&nbsp;     * @exception IOException if an I/O error has occurred
+<i>375</i>&nbsp;     */
+<b class="nc"><i>376</i>&nbsp;    public void close() throws IOException {</b>
+<b class="nc"><i>377</i>&nbsp;        if (!closed) {</b>
+<b class="nc"><i>378</i>&nbsp;            super.close();</b>
+<i>379</i>&nbsp;            closed = true;
+<i>380</i>&nbsp;        }
+<i>381</i>&nbsp;    }
+<i>382</i>&nbsp;
+<i>383</i>&nbsp;    /*
+<i>384</i>&nbsp;     * Writes local file (LOC) header for specified entry.
+<i>385</i>&nbsp;     */
+<b class="nc"><i>386</i>&nbsp;    private void writeLOC(XEntry xentry) throws IOException {</b>
+<b class="nc"><i>387</i>&nbsp;        ZipEntry e = xentry.entry;</b>
+<b class="nc"><i>388</i>&nbsp;        int flag = e.flag;</b>
+<b class="nc"><i>389</i>&nbsp;        boolean hasZip64 = false;</b>
+<i>390</i>&nbsp;        int elen = getExtraLen(e.extra);
+<b class="nc"><i>391</i>&nbsp;</b>
+<b class="nc"><i>392</i>&nbsp;        writeInt(LOCSIG);               // LOC header signature</b>
+<b class="nc"><i>393</i>&nbsp;        if ((flag &amp; 8) == 8) {</b>
+<b class="nc"><i>394</i>&nbsp;            writeShort(version(e));     // version needed to extract</b>
+<b class="nc"><i>395</i>&nbsp;            writeShort(flag);           // general purpose bit flag</b>
+<b class="nc"><i>396</i>&nbsp;            writeShort(e.method);       // compression method</b>
+<i>397</i>&nbsp;            writeInt(e.xdostime);       // last modification time
+<i>398</i>&nbsp;            // store size, uncompressed size, and crc-32 in data descriptor
+<b class="nc"><i>399</i>&nbsp;            // immediately following compressed entry data</b>
+<b class="nc"><i>400</i>&nbsp;            writeInt(0);</b>
+<b class="nc"><i>401</i>&nbsp;            writeInt(0);</b>
+<i>402</i>&nbsp;            writeInt(0);
+<b class="nc"><i>403</i>&nbsp;        } else {</b>
+<b class="nc"><i>404</i>&nbsp;            if (e.csize &gt;= ZIP64_MAGICVAL || e.size &gt;= ZIP64_MAGICVAL) {</b>
+<b class="nc"><i>405</i>&nbsp;                hasZip64 = true;</b>
+<i>406</i>&nbsp;                writeShort(45);         // ver 4.5 for zip64
+<b class="nc"><i>407</i>&nbsp;            } else {</b>
+<i>408</i>&nbsp;                writeShort(version(e)); // version needed to extract
+<b class="nc"><i>409</i>&nbsp;            }</b>
+<b class="nc"><i>410</i>&nbsp;            writeShort(flag);           // general purpose bit flag</b>
+<b class="nc"><i>411</i>&nbsp;            writeShort(e.method);       // compression method</b>
+<b class="nc"><i>412</i>&nbsp;            writeInt(e.xdostime);       // last modification time</b>
+<b class="nc"><i>413</i>&nbsp;            writeInt(e.crc);            // crc-32</b>
+<b class="nc"><i>414</i>&nbsp;            if (hasZip64) {</b>
+<b class="nc"><i>415</i>&nbsp;                writeInt(ZIP64_MAGICVAL);</b>
+<b class="nc"><i>416</i>&nbsp;                writeInt(ZIP64_MAGICVAL);</b>
+<i>417</i>&nbsp;                elen += 20;        //headid(2) + size(2) + size(8) + csize(8)
+<b class="nc"><i>418</i>&nbsp;            } else {</b>
+<b class="nc"><i>419</i>&nbsp;                writeInt(e.csize);  // compressed size</b>
+<i>420</i>&nbsp;                writeInt(e.size);   // uncompressed size
+<i>421</i>&nbsp;            }
+<b class="nc"><i>422</i>&nbsp;        }</b>
+<b class="nc"><i>423</i>&nbsp;        byte[] nameBytes = zc.getBytes(e.name);</b>
+<i>424</i>&nbsp;        writeShort(nameBytes.length);
+<b class="nc"><i>425</i>&nbsp;</b>
+<b class="nc"><i>426</i>&nbsp;        int elenEXTT = 0;         // info-zip extended timestamp</b>
+<b class="nc"><i>427</i>&nbsp;        int flagEXTT = 0;</b>
+<b class="nc"><i>428</i>&nbsp;        long umtime = -1;</b>
+<b class="nc"><i>429</i>&nbsp;        long uatime = -1;</b>
+<i>430</i>&nbsp;        long uctime = -1;
+<b class="nc"><i>431</i>&nbsp;        if (e.mtime != null) {</b>
+<b class="nc"><i>432</i>&nbsp;            elenEXTT += 4;</b>
+<b class="nc"><i>433</i>&nbsp;            flagEXTT |= EXTT_FLAG_LMT;</b>
+<i>434</i>&nbsp;            umtime = fileTimeToUnixTime(e.mtime);
+<b class="nc"><i>435</i>&nbsp;        }</b>
+<b class="nc"><i>436</i>&nbsp;        if (e.atime != null) {</b>
+<b class="nc"><i>437</i>&nbsp;            elenEXTT += 4;</b>
+<i>438</i>&nbsp;            flagEXTT |= EXTT_FLAG_LAT;
+<b class="nc"><i>439</i>&nbsp;            uatime = fileTimeToUnixTime(e.atime);</b>
+<b class="nc"><i>440</i>&nbsp;        }</b>
+<b class="nc"><i>441</i>&nbsp;        if (e.ctime != null) {</b>
+<b class="nc"><i>442</i>&nbsp;            elenEXTT += 4;</b>
+<b class="nc"><i>443</i>&nbsp;            flagEXTT |= EXTT_FLAT_CT;</b>
+<b class="nc"><i>444</i>&nbsp;            uctime = fileTimeToUnixTime(e.ctime);</b>
+<b class="nc"><i>445</i>&nbsp;        }</b>
+<b class="nc"><i>446</i>&nbsp;        if (flagEXTT != 0) {</b>
+<b class="nc"><i>447</i>&nbsp;            // to use ntfs time if any m/a/ctime is beyond unixtime upper bound</b>
+<i>448</i>&nbsp;            if (umtime &gt; UPPER_UNIXTIME_BOUND ||
+<b class="nc"><i>449</i>&nbsp;                uatime &gt; UPPER_UNIXTIME_BOUND ||</b>
+<b class="nc"><i>450</i>&nbsp;                uctime &gt; UPPER_UNIXTIME_BOUND) {</b>
+<b class="nc"><i>451</i>&nbsp;                elen += 36;                // NTFS time, total 36 bytes</b>
+<b class="nc"><i>452</i>&nbsp;            } else {</b>
+<b class="nc"><i>453</i>&nbsp;                elen += (elenEXTT + 5);    // headid(2) + size(2) + flag(1) + data</b>
+<b class="nc"><i>454</i>&nbsp;            }</b>
+<b class="nc"><i>455</i>&nbsp;        }</b>
+<b class="nc"><i>456</i>&nbsp;        writeShort(elen);</b>
+<b class="nc"><i>457</i>&nbsp;        writeBytes(nameBytes, 0, nameBytes.length);</b>
+<b class="nc"><i>458</i>&nbsp;        if (hasZip64) {</b>
+<i>459</i>&nbsp;            writeShort(ZIP64_EXTID);
+<b class="nc"><i>460</i>&nbsp;            writeShort(16);</b>
+<b class="nc"><i>461</i>&nbsp;            writeLong(e.size);</b>
+<i>462</i>&nbsp;            writeLong(e.csize);
+<i>463</i>&nbsp;        }
+<i>464</i>&nbsp;        if (flagEXTT != 0) {
+<i>465</i>&nbsp;            if (umtime &gt; UPPER_UNIXTIME_BOUND ||
+<i>466</i>&nbsp;                uatime &gt; UPPER_UNIXTIME_BOUND ||
+<i>467</i>&nbsp;                uctime &gt; UPPER_UNIXTIME_BOUND) {
+<b class="nc"><i>468</i>&nbsp;                writeShort(EXTID_NTFS);    // id</b>
+<b class="nc"><i>469</i>&nbsp;                writeShort(32);            // data size</b>
+<b class="nc"><i>470</i>&nbsp;                writeInt(0);               // reserved</b>
+<b class="nc"><i>471</i>&nbsp;                writeShort(0x0001);        // NTFS attr tag</b>
+<b class="nc"><i>472</i>&nbsp;                writeShort(24);</b>
+<i>473</i>&nbsp;                writeLong(e.mtime == null ? WINDOWS_TIME_NOT_AVAILABLE
+<b class="nc"><i>474</i>&nbsp;                                          : fileTimeToWinTime(e.mtime));</b>
+<b class="nc"><i>475</i>&nbsp;                writeLong(e.atime == null ? WINDOWS_TIME_NOT_AVAILABLE</b>
+<i>476</i>&nbsp;                                          : fileTimeToWinTime(e.atime));
+<i>477</i>&nbsp;                writeLong(e.ctime == null ? WINDOWS_TIME_NOT_AVAILABLE
+<i>478</i>&nbsp;                                          : fileTimeToWinTime(e.ctime));
+<i>479</i>&nbsp;            } else {
+<i>480</i>&nbsp;                writeShort(EXTID_EXTT);
+<i>481</i>&nbsp;                writeShort(elenEXTT + 1);  // flag + data
+<i>482</i>&nbsp;                writeByte(flagEXTT);
+<i>483</i>&nbsp;                if (e.mtime != null)
+<b class="nc"><i>484</i>&nbsp;                    writeInt(umtime);</b>
+<b class="nc"><i>485</i>&nbsp;                if (e.atime != null)</b>
+<b class="nc"><i>486</i>&nbsp;                    writeInt(uatime);</b>
+<b class="nc"><i>487</i>&nbsp;                if (e.ctime != null)</b>
+<b class="nc"><i>488</i>&nbsp;                    writeInt(uctime);</b>
+<b class="nc"><i>489</i>&nbsp;            }</b>
+<b class="nc"><i>490</i>&nbsp;        }</b>
+<b class="nc"><i>491</i>&nbsp;        writeExtra(e.extra);</b>
+<i>492</i>&nbsp;        locoff = written;
+<b class="nc"><i>493</i>&nbsp;    }</b>
+<b class="nc"><i>494</i>&nbsp;</b>
+<b class="nc"><i>495</i>&nbsp;    /*</b>
+<b class="nc"><i>496</i>&nbsp;     * Writes extra data descriptor (EXT) for specified entry.</b>
+<i>497</i>&nbsp;     */
+<b class="nc"><i>498</i>&nbsp;    private void writeEXT(ZipEntry e) throws IOException {</b>
+<b class="nc"><i>499</i>&nbsp;        writeInt(EXTSIG);           // EXT header signature</b>
+<b class="nc"><i>500</i>&nbsp;        writeInt(e.crc);            // crc-32</b>
+<b class="nc"><i>501</i>&nbsp;        if (e.csize &gt;= ZIP64_MAGICVAL || e.size &gt;= ZIP64_MAGICVAL) {</b>
+<i>502</i>&nbsp;            writeLong(e.csize);
+<b class="nc"><i>503</i>&nbsp;            writeLong(e.size);</b>
+<b class="nc"><i>504</i>&nbsp;        } else {</b>
+<b class="nc"><i>505</i>&nbsp;            writeInt(e.csize);          // compressed size</b>
+<b class="nc"><i>506</i>&nbsp;            writeInt(e.size);           // uncompressed size</b>
+<i>507</i>&nbsp;        }
+<b class="nc"><i>508</i>&nbsp;    }</b>
+<b class="nc"><i>509</i>&nbsp;</b>
+<b class="nc"><i>510</i>&nbsp;    /*</b>
+<b class="nc"><i>511</i>&nbsp;     * Write central directory (CEN) header for specified entry.</b>
+<i>512</i>&nbsp;     * REMIND: add support for file attributes
+<b class="nc"><i>513</i>&nbsp;     */</b>
+<b class="nc"><i>514</i>&nbsp;    private void writeCEN(XEntry xentry) throws IOException {</b>
+<i>515</i>&nbsp;        ZipEntry e  = xentry.entry;
+<b class="nc"><i>516</i>&nbsp;        int flag = e.flag;</b>
+<b class="nc"><i>517</i>&nbsp;        int version = version(e);</b>
+<b class="nc"><i>518</i>&nbsp;        long csize = e.csize;</b>
+<b class="nc"><i>519</i>&nbsp;        long size = e.size;</b>
+<b class="nc"><i>520</i>&nbsp;        long offset = xentry.offset;</b>
+<b class="nc"><i>521</i>&nbsp;        int elenZIP64 = 0;</b>
+<b class="nc"><i>522</i>&nbsp;        boolean hasZip64 = false;</b>
+<b class="nc"><i>523</i>&nbsp;</b>
+<i>524</i>&nbsp;        if (e.csize &gt;= ZIP64_MAGICVAL) {
+<b class="nc"><i>525</i>&nbsp;            csize = ZIP64_MAGICVAL;</b>
+<b class="nc"><i>526</i>&nbsp;            elenZIP64 += 8;              // csize(8)</b>
+<b class="nc"><i>527</i>&nbsp;            hasZip64 = true;</b>
+<i>528</i>&nbsp;        }
+<i>529</i>&nbsp;        if (e.size &gt;= ZIP64_MAGICVAL) {
+<i>530</i>&nbsp;            size = ZIP64_MAGICVAL;    // size(8)
+<b class="nc"><i>531</i>&nbsp;            elenZIP64 += 8;</b>
+<b class="nc"><i>532</i>&nbsp;            hasZip64 = true;</b>
+<b class="nc"><i>533</i>&nbsp;        }</b>
+<b class="nc"><i>534</i>&nbsp;        if (xentry.offset &gt;= ZIP64_MAGICVAL) {</b>
+<i>535</i>&nbsp;            offset = ZIP64_MAGICVAL;
+<b class="nc"><i>536</i>&nbsp;            elenZIP64 += 8;              // offset(8)</b>
+<b class="nc"><i>537</i>&nbsp;            hasZip64 = true;</b>
+<i>538</i>&nbsp;        }
+<b class="nc"><i>539</i>&nbsp;        writeInt(CENSIG);           // CEN header signature</b>
+<b class="nc"><i>540</i>&nbsp;        if (hasZip64) {</b>
+<i>541</i>&nbsp;            writeShort(45);         // ver 4.5 for zip64
+<b class="nc"><i>542</i>&nbsp;            writeShort(45);</b>
+<b class="nc"><i>543</i>&nbsp;        } else {</b>
+<i>544</i>&nbsp;            writeShort(version);    // version made by
+<b class="nc"><i>545</i>&nbsp;            writeShort(version);    // version needed to extract</b>
+<i>546</i>&nbsp;        }
+<b class="nc"><i>547</i>&nbsp;        writeShort(flag);           // general purpose bit flag</b>
+<b class="nc"><i>548</i>&nbsp;        writeShort(e.method);       // compression method</b>
+<b class="nc"><i>549</i>&nbsp;        writeInt(e.xdostime);       // last modification time</b>
+<i>550</i>&nbsp;        writeInt(e.crc);            // crc-32
+<b class="nc"><i>551</i>&nbsp;        writeInt(csize);            // compressed size</b>
+<b class="nc"><i>552</i>&nbsp;        writeInt(size);             // uncompressed size</b>
+<i>553</i>&nbsp;        byte[] nameBytes = zc.getBytes(e.name);
+<b class="nc"><i>554</i>&nbsp;        writeShort(nameBytes.length);</b>
+<b class="nc"><i>555</i>&nbsp;</b>
+<b class="nc"><i>556</i>&nbsp;        int elen = getExtraLen(e.extra);</b>
+<b class="nc"><i>557</i>&nbsp;        if (hasZip64) {</b>
+<b class="nc"><i>558</i>&nbsp;            elen += (elenZIP64 + 4);// + headid(2) + datasize(2)</b>
+<i>559</i>&nbsp;        }
+<i>560</i>&nbsp;        // cen info-zip extended timestamp only outputs mtime
+<b class="nc"><i>561</i>&nbsp;        // but set the flag for a/ctime, if present in loc</b>
+<b class="nc"><i>562</i>&nbsp;        int flagEXTT = 0;</b>
+<b class="nc"><i>563</i>&nbsp;        long umtime = -1;</b>
+<b class="nc"><i>564</i>&nbsp;        long uatime = -1;</b>
+<b class="nc"><i>565</i>&nbsp;        long uctime = -1;</b>
+<b class="nc"><i>566</i>&nbsp;        if (e.mtime != null) {</b>
+<b class="nc"><i>567</i>&nbsp;            flagEXTT |= EXTT_FLAG_LMT;</b>
+<b class="nc"><i>568</i>&nbsp;            umtime = fileTimeToUnixTime(e.mtime);</b>
+<b class="nc"><i>569</i>&nbsp;        }</b>
+<i>570</i>&nbsp;        if (e.atime != null) {
+<b class="nc"><i>571</i>&nbsp;            flagEXTT |= EXTT_FLAG_LAT;</b>
+<b class="nc"><i>572</i>&nbsp;            uatime = fileTimeToUnixTime(e.atime);</b>
+<b class="nc"><i>573</i>&nbsp;        }</b>
+<b class="nc"><i>574</i>&nbsp;        if (e.ctime != null) {</b>
+<b class="nc"><i>575</i>&nbsp;            flagEXTT |= EXTT_FLAT_CT;</b>
+<b class="nc"><i>576</i>&nbsp;            uctime = fileTimeToUnixTime(e.ctime);</b>
+<i>577</i>&nbsp;        }
+<b class="nc"><i>578</i>&nbsp;        if (flagEXTT != 0) {</b>
+<b class="nc"><i>579</i>&nbsp;            // to use ntfs time if any m/a/ctime is beyond unixtime upper bound</b>
+<i>580</i>&nbsp;            if (umtime &gt; UPPER_UNIXTIME_BOUND ||
+<i>581</i>&nbsp;                uatime &gt; UPPER_UNIXTIME_BOUND ||
+<b class="nc"><i>582</i>&nbsp;                uctime &gt; UPPER_UNIXTIME_BOUND) {</b>
+<b class="nc"><i>583</i>&nbsp;                elen += 36;         // NTFS time total 36 bytes</b>
+<b class="nc"><i>584</i>&nbsp;            } else {</b>
+<i>585</i>&nbsp;                elen += 9;          // headid(2) + sz(2) + flag(1) + mtime (4)
+<i>586</i>&nbsp;            }
+<i>587</i>&nbsp;        }
+<i>588</i>&nbsp;        writeShort(elen);
+<i>589</i>&nbsp;        byte[] commentBytes;
+<i>590</i>&nbsp;        if (e.comment != null) {
+<i>591</i>&nbsp;            commentBytes = zc.getBytes(e.comment);
+<b class="nc"><i>592</i>&nbsp;            writeShort(Math.min(commentBytes.length, 0xffff));</b>
+<b class="nc"><i>593</i>&nbsp;        } else {</b>
+<b class="nc"><i>594</i>&nbsp;            commentBytes = null;</b>
+<b class="nc"><i>595</i>&nbsp;            writeShort(0);</b>
+<b class="nc"><i>596</i>&nbsp;        }</b>
+<b class="nc"><i>597</i>&nbsp;        writeShort(0);              // starting disk number</b>
+<i>598</i>&nbsp;        writeShort(0);              // internal file attributes (unused)
+<b class="nc"><i>599</i>&nbsp;        writeInt(0);                // external file attributes (unused)</b>
+<b class="nc"><i>600</i>&nbsp;        writeInt(offset);           // relative offset of local header</b>
+<b class="nc"><i>601</i>&nbsp;        writeBytes(nameBytes, 0, nameBytes.length);</b>
+<i>602</i>&nbsp;
+<b class="nc"><i>603</i>&nbsp;        // take care of EXTID_ZIP64 and EXTID_EXTT</b>
+<b class="nc"><i>604</i>&nbsp;        if (hasZip64) {</b>
+<b class="nc"><i>605</i>&nbsp;            writeShort(ZIP64_EXTID);// Zip64 extra</b>
+<b class="nc"><i>606</i>&nbsp;            writeShort(elenZIP64);</b>
+<b class="nc"><i>607</i>&nbsp;            if (size == ZIP64_MAGICVAL)</b>
+<i>608</i>&nbsp;                writeLong(e.size);
+<i>609</i>&nbsp;            if (csize == ZIP64_MAGICVAL)
+<b class="nc"><i>610</i>&nbsp;                writeLong(e.csize);</b>
+<b class="nc"><i>611</i>&nbsp;            if (offset == ZIP64_MAGICVAL)</b>
+<i>612</i>&nbsp;                writeLong(xentry.offset);
+<b class="nc"><i>613</i>&nbsp;        }</b>
+<b class="nc"><i>614</i>&nbsp;        if (flagEXTT != 0) {</b>
+<b class="nc"><i>615</i>&nbsp;            if (umtime &gt; UPPER_UNIXTIME_BOUND ||</b>
+<b class="nc"><i>616</i>&nbsp;                uatime &gt; UPPER_UNIXTIME_BOUND ||</b>
+<b class="nc"><i>617</i>&nbsp;                uctime &gt; UPPER_UNIXTIME_BOUND) {</b>
+<b class="nc"><i>618</i>&nbsp;                writeShort(EXTID_NTFS);    // id</b>
+<b class="nc"><i>619</i>&nbsp;                writeShort(32);            // data size</b>
+<b class="nc"><i>620</i>&nbsp;                writeInt(0);               // reserved</b>
+<b class="nc"><i>621</i>&nbsp;                writeShort(0x0001);        // NTFS attr tag</b>
+<b class="nc"><i>622</i>&nbsp;                writeShort(24);</b>
+<i>623</i>&nbsp;                writeLong(e.mtime == null ? WINDOWS_TIME_NOT_AVAILABLE
+<i>624</i>&nbsp;                                          : fileTimeToWinTime(e.mtime));
+<b class="nc"><i>625</i>&nbsp;                writeLong(e.atime == null ? WINDOWS_TIME_NOT_AVAILABLE</b>
+<b class="nc"><i>626</i>&nbsp;                                          : fileTimeToWinTime(e.atime));</b>
+<b class="nc"><i>627</i>&nbsp;                writeLong(e.ctime == null ? WINDOWS_TIME_NOT_AVAILABLE</b>
+<b class="nc"><i>628</i>&nbsp;                                          : fileTimeToWinTime(e.ctime));</b>
+<i>629</i>&nbsp;            } else {
+<b class="nc"><i>630</i>&nbsp;                writeShort(EXTID_EXTT);</b>
+<b class="nc"><i>631</i>&nbsp;                if (e.mtime != null) {</b>
+<b class="nc"><i>632</i>&nbsp;                    writeShort(5);      // flag + mtime</b>
+<b class="nc"><i>633</i>&nbsp;                    writeByte(flagEXTT);</b>
+<b class="nc"><i>634</i>&nbsp;                    writeInt(umtime);</b>
+<b class="nc"><i>635</i>&nbsp;                } else {</b>
+<b class="nc"><i>636</i>&nbsp;                    writeShort(1);      // flag only</b>
+<b class="nc"><i>637</i>&nbsp;                    writeByte(flagEXTT);</b>
+<b class="nc"><i>638</i>&nbsp;                }</b>
+<b class="nc"><i>639</i>&nbsp;            }</b>
+<i>640</i>&nbsp;        }
+<b class="nc"><i>641</i>&nbsp;        writeExtra(e.extra);</b>
+<i>642</i>&nbsp;        if (commentBytes != null) {
+<i>643</i>&nbsp;            writeBytes(commentBytes, 0, Math.min(commentBytes.length, 0xffff));
+<i>644</i>&nbsp;        }
+<i>645</i>&nbsp;    }
+<i>646</i>&nbsp;
+<i>647</i>&nbsp;    /*
+<i>648</i>&nbsp;     * Writes end of central directory (END) header.
+<b class="nc"><i>649</i>&nbsp;     */</b>
+<b class="nc"><i>650</i>&nbsp;    private void writeEND(long off, long len) throws IOException {</b>
+<b class="nc"><i>651</i>&nbsp;        boolean hasZip64 = false;</b>
+<b class="nc"><i>652</i>&nbsp;        long xlen = len;</b>
+<b class="nc"><i>653</i>&nbsp;        long xoff = off;</b>
+<b class="nc"><i>654</i>&nbsp;        if (xlen &gt;= ZIP64_MAGICVAL) {</b>
+<b class="nc"><i>655</i>&nbsp;            xlen = ZIP64_MAGICVAL;</b>
+<b class="nc"><i>656</i>&nbsp;            hasZip64 = true;</b>
+<b class="nc"><i>657</i>&nbsp;        }</b>
+<b class="nc"><i>658</i>&nbsp;        if (xoff &gt;= ZIP64_MAGICVAL) {</b>
+<i>659</i>&nbsp;            xoff = ZIP64_MAGICVAL;
+<b class="nc"><i>660</i>&nbsp;            hasZip64 = true;</b>
+<b class="nc"><i>661</i>&nbsp;        }</b>
+<i>662</i>&nbsp;        int count = xentries.size();
+<b class="nc"><i>663</i>&nbsp;        if (count &gt;= ZIP64_MAGICCOUNT) {</b>
+<b class="nc"><i>664</i>&nbsp;            hasZip64 |= !inhibitZip64;</b>
+<b class="nc"><i>665</i>&nbsp;            if (hasZip64) {</b>
+<i>666</i>&nbsp;                count = ZIP64_MAGICCOUNT;
+<i>667</i>&nbsp;            }
+<i>668</i>&nbsp;        }
+<i>669</i>&nbsp;        if (hasZip64) {
+<i>670</i>&nbsp;            long off64 = written;
+<i>671</i>&nbsp;            //zip64 end of central directory record
+<i>672</i>&nbsp;            writeInt(ZIP64_ENDSIG);        // zip64 END record signature
+<i>673</i>&nbsp;            writeLong(ZIP64_ENDHDR - 12);  // size of zip64 end
+<i>674</i>&nbsp;            writeShort(45);                // version made by
+<b class="nc"><i>675</i>&nbsp;            writeShort(45);                // version needed to extract</b>
+<b class="nc"><i>676</i>&nbsp;            writeInt(0);                   // number of this disk</b>
+<b class="nc"><i>677</i>&nbsp;            writeInt(0);                   // central directory start disk</b>
+<b class="nc"><i>678</i>&nbsp;            writeLong(xentries.size());    // number of directory entires on disk</b>
+<b class="nc"><i>679</i>&nbsp;            writeLong(xentries.size());    // number of directory entires</b>
+<b class="nc"><i>680</i>&nbsp;            writeLong(len);                // length of central directory</b>
+<b class="nc"><i>681</i>&nbsp;            writeLong(off);                // offset of central directory</b>
+<b class="nc"><i>682</i>&nbsp;</b>
+<i>683</i>&nbsp;            //zip64 end of central directory locator
+<i>684</i>&nbsp;            writeInt(ZIP64_LOCSIG);        // zip64 END locator signature
+<b class="nc"><i>685</i>&nbsp;            writeInt(0);                   // zip64 END start disk</b>
+<b class="nc"><i>686</i>&nbsp;            writeLong(off64);              // offset of zip64 END</b>
+<i>687</i>&nbsp;            writeInt(1);                   // total number of disks (?)
+<b class="nc"><i>688</i>&nbsp;        }</b>
+<b class="nc"><i>689</i>&nbsp;        writeInt(ENDSIG);                 // END record signature</b>
+<b class="nc"><i>690</i>&nbsp;        writeShort(0);                    // number of this disk</b>
+<b class="nc"><i>691</i>&nbsp;        writeShort(0);                    // central directory start disk</b>
+<i>692</i>&nbsp;        writeShort(count);                // number of directory entries on disk
+<i>693</i>&nbsp;        writeShort(count);                // total number of directory entries
+<i>694</i>&nbsp;        writeInt(xlen);                   // length of central directory
+<i>695</i>&nbsp;        writeInt(xoff);                   // offset of central directory
+<i>696</i>&nbsp;        if (comment != null) {            // zip file comment
+<i>697</i>&nbsp;            writeShort(comment.length);
+<i>698</i>&nbsp;            writeBytes(comment, 0, comment.length);
+<i>699</i>&nbsp;        } else {
+<b class="nc"><i>700</i>&nbsp;            writeShort(0);</b>
+<b class="nc"><i>701</i>&nbsp;        }</b>
+<b class="nc"><i>702</i>&nbsp;    }</b>
+<i>703</i>&nbsp;
+<i>704</i>&nbsp;    /*
+<i>705</i>&nbsp;     * Returns the length of extra data without EXTT and ZIP64.
+<i>706</i>&nbsp;     */
+<i>707</i>&nbsp;    private int getExtraLen(byte[] extra) {
+<i>708</i>&nbsp;        if (extra == null)
+<b class="nc"><i>709</i>&nbsp;            return 0;</b>
+<b class="nc"><i>710</i>&nbsp;        int skipped = 0;</b>
+<b class="nc"><i>711</i>&nbsp;        int len = extra.length;</b>
+<b class="nc"><i>712</i>&nbsp;        int off = 0;</b>
+<i>713</i>&nbsp;        while (off + 4 &lt;= len) {
+<i>714</i>&nbsp;            int tag = get16(extra, off);
+<i>715</i>&nbsp;            int sz = get16(extra, off + 2);
+<i>716</i>&nbsp;            if (sz &lt; 0 || (off + 4 + sz) &gt; len) {
+<i>717</i>&nbsp;                break;
+<i>718</i>&nbsp;            }
+<b class="nc"><i>719</i>&nbsp;            if (tag == EXTID_EXTT || tag == EXTID_ZIP64) {</b>
+<b class="nc"><i>720</i>&nbsp;                skipped += (sz + 4);</b>
+<b class="nc"><i>721</i>&nbsp;            }</b>
+<b class="nc"><i>722</i>&nbsp;            off += (sz + 4);</b>
+<b class="nc"><i>723</i>&nbsp;        }</b>
+<b class="nc"><i>724</i>&nbsp;        return len - skipped;</b>
+<i>725</i>&nbsp;    }
+<i>726</i>&nbsp;
+<i>727</i>&nbsp;    /*
+<i>728</i>&nbsp;     * Writes extra data without EXTT and ZIP64.
+<i>729</i>&nbsp;     *
+<i>730</i>&nbsp;     * Extra timestamp and ZIP64 data is handled/output separately
+<b class="nc"><i>731</i>&nbsp;     * in writeLOC and writeCEN.</b>
+<b class="nc"><i>732</i>&nbsp;     */</b>
+<b class="nc"><i>733</i>&nbsp;    private void writeExtra(byte[] extra) throws IOException {</b>
+<b class="nc"><i>734</i>&nbsp;        if (extra != null) {</b>
+<b class="nc"><i>735</i>&nbsp;            int len = extra.length;</b>
+<b class="nc"><i>736</i>&nbsp;            int off = 0;</b>
+<b class="nc"><i>737</i>&nbsp;            while (off + 4 &lt;= len) {</b>
+<b class="nc"><i>738</i>&nbsp;                int tag = get16(extra, off);</b>
+<b class="nc"><i>739</i>&nbsp;                int sz = get16(extra, off + 2);</b>
+<b class="nc"><i>740</i>&nbsp;                if (sz &lt; 0 || (off + 4 + sz) &gt; len) {</b>
+<i>741</i>&nbsp;                    writeBytes(extra, off, len - off);
+<i>742</i>&nbsp;                    return;
+<i>743</i>&nbsp;                }
+<i>744</i>&nbsp;                if (tag != EXTID_EXTT &amp;&amp; tag != EXTID_ZIP64) {
+<i>745</i>&nbsp;                    writeBytes(extra, off, sz + 4);
+<i>746</i>&nbsp;                }
+<b class="nc"><i>747</i>&nbsp;                off += (sz + 4);</b>
+<b class="nc"><i>748</i>&nbsp;            }</b>
+<i>749</i>&nbsp;            if (off &lt; len) {
+<i>750</i>&nbsp;                writeBytes(extra, off, len - off);
+<i>751</i>&nbsp;            }
+<i>752</i>&nbsp;        }
+<i>753</i>&nbsp;    }
+<i>754</i>&nbsp;
+<i>755</i>&nbsp;    /*
+<i>756</i>&nbsp;     * Writes a 8-bit byte to the output stream.
+<i>757</i>&nbsp;     */
+<i>758</i>&nbsp;    private void writeByte(int v) throws IOException {
+<i>759</i>&nbsp;        OutputStream out = this.out;
+<i>760</i>&nbsp;        out.write(v &amp; 0xff);
+<i>761</i>&nbsp;        written += 1;
+<i>762</i>&nbsp;    }
+<i>763</i>&nbsp;
+<i>764</i>&nbsp;    /*
+<i>765</i>&nbsp;     * Writes a 16-bit short to the output stream in little-endian byte order.
+<i>766</i>&nbsp;     */
+<i>767</i>&nbsp;    private void writeShort(int v) throws IOException {
+<i>768</i>&nbsp;        OutputStream out = this.out;
+<i>769</i>&nbsp;        out.write((v &gt;&gt;&gt; 0) &amp; 0xff);
+<i>770</i>&nbsp;        out.write((v &gt;&gt;&gt; 8) &amp; 0xff);
+<i>771</i>&nbsp;        written += 2;
+<i>772</i>&nbsp;    }
+<i>773</i>&nbsp;
+<i>774</i>&nbsp;    /*
+<i>775</i>&nbsp;     * Writes a 32-bit int to the output stream in little-endian byte order.
+<i>776</i>&nbsp;     */
+<i>777</i>&nbsp;    private void writeInt(long v) throws IOException {
+<i>778</i>&nbsp;        OutputStream out = this.out;
+<i>779</i>&nbsp;        out.write((int)((v &gt;&gt;&gt;  0) &amp; 0xff));
+<i>780</i>&nbsp;        out.write((int)((v &gt;&gt;&gt;  8) &amp; 0xff));
+<i>781</i>&nbsp;        out.write((int)((v &gt;&gt;&gt; 16) &amp; 0xff));
+<i>782</i>&nbsp;        out.write((int)((v &gt;&gt;&gt; 24) &amp; 0xff));
+<i>783</i>&nbsp;        written += 4;
+<i>784</i>&nbsp;    }
+<i>785</i>&nbsp;
+<i>786</i>&nbsp;    /*
+<i>787</i>&nbsp;     * Writes a 64-bit int to the output stream in little-endian byte order.
+<i>788</i>&nbsp;     */
+<i>789</i>&nbsp;    private void writeLong(long v) throws IOException {
+<i>790</i>&nbsp;        OutputStream out = this.out;
+<i>791</i>&nbsp;        out.write((int)((v &gt;&gt;&gt;  0) &amp; 0xff));
+<i>792</i>&nbsp;        out.write((int)((v &gt;&gt;&gt;  8) &amp; 0xff));
+<i>793</i>&nbsp;        out.write((int)((v &gt;&gt;&gt; 16) &amp; 0xff));
+<i>794</i>&nbsp;        out.write((int)((v &gt;&gt;&gt; 24) &amp; 0xff));
+<i>795</i>&nbsp;        out.write((int)((v &gt;&gt;&gt; 32) &amp; 0xff));
+<i>796</i>&nbsp;        out.write((int)((v &gt;&gt;&gt; 40) &amp; 0xff));
+<i>797</i>&nbsp;        out.write((int)((v &gt;&gt;&gt; 48) &amp; 0xff));
+<i>798</i>&nbsp;        out.write((int)((v &gt;&gt;&gt; 56) &amp; 0xff));
+<i>799</i>&nbsp;        written += 8;
+<i>800</i>&nbsp;    }
+<i>801</i>&nbsp;
+<i>802</i>&nbsp;    /*
+<i>803</i>&nbsp;     * Writes an array of bytes to the output stream.
+<i>804</i>&nbsp;     */
+<i>805</i>&nbsp;    private void writeBytes(byte[] b, int off, int len) throws IOException {
+<i>806</i>&nbsp;        super.out.write(b, off, len);
+<i>807</i>&nbsp;        written += len;
+<i>808</i>&nbsp;    }
+<i>809</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,723 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: SignerInfo</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.pkcs</a> ]
+</div>
+
+<h1>Coverage Summary for Class: SignerInfo (sun.security.pkcs)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SignerInfo</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 23)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 226)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.pkcs;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.OutputStream;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import java.math.BigInteger;
+<i>31</i>&nbsp;import java.security.cert.CertPathValidatorException;
+<i>32</i>&nbsp;import java.security.cert.CertificateException;
+<i>33</i>&nbsp;import java.security.cert.CertificateFactory;
+<i>34</i>&nbsp;import java.security.cert.CertPath;
+<i>35</i>&nbsp;import java.security.cert.X509Certificate;
+<i>36</i>&nbsp;import java.security.*;
+<i>37</i>&nbsp;import java.util.ArrayList;
+<i>38</i>&nbsp;import java.util.Arrays;
+<i>39</i>&nbsp;import java.util.Collections;
+<i>40</i>&nbsp;import java.util.EnumSet;
+<i>41</i>&nbsp;import java.util.Set;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;import sun.security.timestamp.TimestampToken;
+<i>44</i>&nbsp;import sun.security.util.ConstraintsParameters;
+<i>45</i>&nbsp;import sun.security.util.Debug;
+<i>46</i>&nbsp;import sun.security.util.DerEncoder;
+<i>47</i>&nbsp;import sun.security.util.DerInputStream;
+<i>48</i>&nbsp;import sun.security.util.DerOutputStream;
+<i>49</i>&nbsp;import sun.security.util.DerValue;
+<i>50</i>&nbsp;import sun.security.util.DisabledAlgorithmConstraints;
+<i>51</i>&nbsp;import sun.security.util.HexDumpEncoder;
+<i>52</i>&nbsp;import sun.security.util.KeyUtil;
+<i>53</i>&nbsp;import sun.security.util.ObjectIdentifier;
+<i>54</i>&nbsp;import sun.security.x509.AlgorithmId;
+<i>55</i>&nbsp;import sun.security.x509.X500Name;
+<i>56</i>&nbsp;import sun.security.x509.KeyUsageExtension;
+<i>57</i>&nbsp;import sun.security.util.SignatureUtil;
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;/**
+<i>60</i>&nbsp; * A SignerInfo, as defined in PKCS#7&#39;s signedData type.
+<i>61</i>&nbsp; *
+<i>62</i>&nbsp; * @author Benjamin Renaud
+<i>63</i>&nbsp; */
+<i>64</i>&nbsp;public class SignerInfo implements DerEncoder {
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    // Digest and Signature restrictions
+<i>67</i>&nbsp;    private static final Set&lt;CryptoPrimitive&gt; DIGEST_PRIMITIVE_SET =
+<i>68</i>&nbsp;            Collections.unmodifiableSet(EnumSet.of(CryptoPrimitive.MESSAGE_DIGEST));
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    private static final Set&lt;CryptoPrimitive&gt; SIG_PRIMITIVE_SET =
+<i>71</i>&nbsp;            Collections.unmodifiableSet(EnumSet.of(CryptoPrimitive.SIGNATURE));
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;    private static final DisabledAlgorithmConstraints JAR_DISABLED_CHECK =
+<b class="nc"><i>74</i>&nbsp;            new DisabledAlgorithmConstraints(</b>
+<b class="nc"><i>75</i>&nbsp;                    DisabledAlgorithmConstraints.PROPERTY_JAR_DISABLED_ALGS);</b>
+<i>76</i>&nbsp;
+<b class="nc"><i>77</i>&nbsp;    BigInteger version;</b>
+<b class="nc"><i>78</i>&nbsp;    X500Name issuerName;</b>
+<i>79</i>&nbsp;    BigInteger certificateSerialNumber;
+<b class="nc"><i>80</i>&nbsp;    AlgorithmId digestAlgorithmId;</b>
+<i>81</i>&nbsp;    AlgorithmId digestEncryptionAlgorithmId;
+<i>82</i>&nbsp;    byte[] encryptedDigest;
+<i>83</i>&nbsp;    Timestamp timestamp;
+<i>84</i>&nbsp;    private boolean hasTimestamp = true;
+<i>85</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;jar&quot;);
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    PKCS9Attributes authenticatedAttributes;
+<i>88</i>&nbsp;    PKCS9Attributes unauthenticatedAttributes;
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    public SignerInfo(X500Name  issuerName,
+<b class="nc"><i>91</i>&nbsp;                      BigInteger serial,</b>
+<b class="nc"><i>92</i>&nbsp;                      AlgorithmId digestAlgorithmId,</b>
+<i>93</i>&nbsp;                      AlgorithmId digestEncryptionAlgorithmId,
+<i>94</i>&nbsp;                      byte[] encryptedDigest) {
+<i>95</i>&nbsp;        this.version = BigInteger.ONE;
+<i>96</i>&nbsp;        this.issuerName = issuerName;
+<i>97</i>&nbsp;        this.certificateSerialNumber = serial;
+<i>98</i>&nbsp;        this.digestAlgorithmId = digestAlgorithmId;
+<i>99</i>&nbsp;        this.digestEncryptionAlgorithmId = digestEncryptionAlgorithmId;
+<i>100</i>&nbsp;        this.encryptedDigest = encryptedDigest;
+<b class="nc"><i>101</i>&nbsp;    }</b>
+<b class="nc"><i>102</i>&nbsp;</b>
+<b class="nc"><i>103</i>&nbsp;    public SignerInfo(X500Name  issuerName,</b>
+<b class="nc"><i>104</i>&nbsp;                      BigInteger serial,</b>
+<b class="nc"><i>105</i>&nbsp;                      AlgorithmId digestAlgorithmId,</b>
+<b class="nc"><i>106</i>&nbsp;                      PKCS9Attributes authenticatedAttributes,</b>
+<b class="nc"><i>107</i>&nbsp;                      AlgorithmId digestEncryptionAlgorithmId,</b>
+<i>108</i>&nbsp;                      byte[] encryptedDigest,
+<i>109</i>&nbsp;                      PKCS9Attributes unauthenticatedAttributes) {
+<i>110</i>&nbsp;        this.version = BigInteger.ONE;
+<i>111</i>&nbsp;        this.issuerName = issuerName;
+<i>112</i>&nbsp;        this.certificateSerialNumber = serial;
+<i>113</i>&nbsp;        this.digestAlgorithmId = digestAlgorithmId;
+<i>114</i>&nbsp;        this.authenticatedAttributes = authenticatedAttributes;
+<i>115</i>&nbsp;        this.digestEncryptionAlgorithmId = digestEncryptionAlgorithmId;
+<b class="nc"><i>116</i>&nbsp;        this.encryptedDigest = encryptedDigest;</b>
+<b class="nc"><i>117</i>&nbsp;        this.unauthenticatedAttributes = unauthenticatedAttributes;</b>
+<b class="nc"><i>118</i>&nbsp;    }</b>
+<b class="nc"><i>119</i>&nbsp;</b>
+<b class="nc"><i>120</i>&nbsp;    /**</b>
+<b class="nc"><i>121</i>&nbsp;     * Parses a PKCS#7 signer info.</b>
+<b class="nc"><i>122</i>&nbsp;     */</b>
+<b class="nc"><i>123</i>&nbsp;    public SignerInfo(DerInputStream derin)</b>
+<b class="nc"><i>124</i>&nbsp;        throws IOException, ParsingException</b>
+<i>125</i>&nbsp;    {
+<i>126</i>&nbsp;        this(derin, false);
+<i>127</i>&nbsp;    }
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    /**
+<i>130</i>&nbsp;     * Parses a PKCS#7 signer info.
+<i>131</i>&nbsp;     *
+<i>132</i>&nbsp;     * &lt;p&gt;This constructor is used only for backwards compatibility with
+<b class="nc"><i>133</i>&nbsp;     * PKCS#7 blocks that were generated using JDK1.1.x.</b>
+<i>134</i>&nbsp;     *
+<i>135</i>&nbsp;     * @param derin the ASN.1 encoding of the signer info.
+<i>136</i>&nbsp;     * @param oldStyle flag indicating whether or not the given signer info
+<i>137</i>&nbsp;     * is encoded according to JDK1.1.x.
+<i>138</i>&nbsp;     */
+<i>139</i>&nbsp;    public SignerInfo(DerInputStream derin, boolean oldStyle)
+<i>140</i>&nbsp;        throws IOException, ParsingException
+<i>141</i>&nbsp;    {
+<i>142</i>&nbsp;        // version
+<i>143</i>&nbsp;        version = derin.getBigInteger();
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;        // issuerAndSerialNumber
+<i>146</i>&nbsp;        DerValue[] issuerAndSerialNumber = derin.getSequence(2);
+<i>147</i>&nbsp;        byte[] issuerBytes = issuerAndSerialNumber[0].toByteArray();
+<b class="nc"><i>148</i>&nbsp;        issuerName = new X500Name(new DerValue(DerValue.tag_Sequence,</b>
+<i>149</i>&nbsp;                                               issuerBytes));
+<b class="nc"><i>150</i>&nbsp;        certificateSerialNumber = issuerAndSerialNumber[1].getBigInteger();</b>
+<i>151</i>&nbsp;
+<i>152</i>&nbsp;        // digestAlgorithmId
+<b class="nc"><i>153</i>&nbsp;        DerValue tmp = derin.getDerValue();</b>
+<b class="nc"><i>154</i>&nbsp;</b>
+<b class="nc"><i>155</i>&nbsp;        digestAlgorithmId = AlgorithmId.parse(tmp);</b>
+<i>156</i>&nbsp;
+<b class="nc"><i>157</i>&nbsp;        // authenticatedAttributes</b>
+<i>158</i>&nbsp;        if (oldStyle) {
+<i>159</i>&nbsp;            // In JDK1.1.x, the authenticatedAttributes are always present,
+<b class="nc"><i>160</i>&nbsp;            // encoded as an empty Set (Set of length zero)</b>
+<i>161</i>&nbsp;            derin.getSet(0);
+<b class="nc"><i>162</i>&nbsp;        } else {</b>
+<i>163</i>&nbsp;            // check if set of auth attributes (implicit tag) is provided
+<i>164</i>&nbsp;            // (auth attributes are OPTIONAL)
+<b class="nc"><i>165</i>&nbsp;            if ((byte)(derin.peekByte()) == (byte)0xA0) {</b>
+<i>166</i>&nbsp;                authenticatedAttributes = new PKCS9Attributes(derin);
+<i>167</i>&nbsp;            }
+<b class="nc"><i>168</i>&nbsp;        }</b>
+<i>169</i>&nbsp;
+<i>170</i>&nbsp;        // digestEncryptionAlgorithmId - little RSA naming scheme -
+<i>171</i>&nbsp;        // signature == encryption...
+<b class="nc"><i>172</i>&nbsp;        tmp = derin.getDerValue();</b>
+<b class="nc"><i>173</i>&nbsp;</b>
+<i>174</i>&nbsp;        digestEncryptionAlgorithmId = AlgorithmId.parse(tmp);
+<i>175</i>&nbsp;
+<i>176</i>&nbsp;        // encryptedDigest
+<i>177</i>&nbsp;        encryptedDigest = derin.getOctetString();
+<i>178</i>&nbsp;
+<b class="nc"><i>179</i>&nbsp;        // unauthenticatedAttributes</b>
+<i>180</i>&nbsp;        if (oldStyle) {
+<b class="nc"><i>181</i>&nbsp;            // In JDK1.1.x, the unauthenticatedAttributes are always present,</b>
+<i>182</i>&nbsp;            // encoded as an empty Set (Set of length zero)
+<i>183</i>&nbsp;            derin.getSet(0);
+<b class="nc"><i>184</i>&nbsp;        } else {</b>
+<i>185</i>&nbsp;            // check if set of unauth attributes (implicit tag) is provided
+<i>186</i>&nbsp;            // (unauth attributes are OPTIONAL)
+<b class="nc"><i>187</i>&nbsp;            if (derin.available() != 0</b>
+<i>188</i>&nbsp;                &amp;&amp; (byte)(derin.peekByte()) == (byte)0xA1) {
+<i>189</i>&nbsp;                unauthenticatedAttributes =
+<b class="nc"><i>190</i>&nbsp;                    new PKCS9Attributes(derin, true);// ignore unsupported attrs</b>
+<i>191</i>&nbsp;            }
+<i>192</i>&nbsp;        }
+<i>193</i>&nbsp;
+<b class="nc"><i>194</i>&nbsp;        // all done</b>
+<b class="nc"><i>195</i>&nbsp;        if (derin.available() != 0) {</b>
+<b class="nc"><i>196</i>&nbsp;            throw new ParsingException(&quot;extra data at the end&quot;);</b>
+<i>197</i>&nbsp;        }
+<i>198</i>&nbsp;    }
+<i>199</i>&nbsp;
+<i>200</i>&nbsp;    public void encode(DerOutputStream out) throws IOException {
+<i>201</i>&nbsp;
+<b class="nc"><i>202</i>&nbsp;        derEncode(out);</b>
+<b class="nc"><i>203</i>&nbsp;    }</b>
+<i>204</i>&nbsp;
+<i>205</i>&nbsp;    /**
+<i>206</i>&nbsp;     * DER encode this object onto an output stream.
+<i>207</i>&nbsp;     * Implements the {@code DerEncoder} interface.
+<i>208</i>&nbsp;     *
+<b class="nc"><i>209</i>&nbsp;     * @param out</b>
+<i>210</i>&nbsp;     * the output stream on which to write the DER encoding.
+<i>211</i>&nbsp;     *
+<i>212</i>&nbsp;     * @exception IOException on encoding error.
+<i>213</i>&nbsp;     */
+<i>214</i>&nbsp;    public void derEncode(OutputStream out) throws IOException {
+<i>215</i>&nbsp;        DerOutputStream seq = new DerOutputStream();
+<i>216</i>&nbsp;        seq.putInteger(version);
+<i>217</i>&nbsp;        DerOutputStream issuerAndSerialNumber = new DerOutputStream();
+<i>218</i>&nbsp;        issuerName.encode(issuerAndSerialNumber);
+<i>219</i>&nbsp;        issuerAndSerialNumber.putInteger(certificateSerialNumber);
+<i>220</i>&nbsp;        seq.write(DerValue.tag_Sequence, issuerAndSerialNumber);
+<i>221</i>&nbsp;
+<b class="nc"><i>222</i>&nbsp;        digestAlgorithmId.encode(seq);</b>
+<b class="nc"><i>223</i>&nbsp;</b>
+<b class="nc"><i>224</i>&nbsp;        // encode authenticated attributes if there are any</b>
+<b class="nc"><i>225</i>&nbsp;        if (authenticatedAttributes != null)</b>
+<b class="nc"><i>226</i>&nbsp;            authenticatedAttributes.encode((byte)0xA0, seq);</b>
+<b class="nc"><i>227</i>&nbsp;</b>
+<i>228</i>&nbsp;        digestEncryptionAlgorithmId.encode(seq);
+<b class="nc"><i>229</i>&nbsp;</b>
+<i>230</i>&nbsp;        seq.putOctetString(encryptedDigest);
+<i>231</i>&nbsp;
+<b class="nc"><i>232</i>&nbsp;        // encode unauthenticated attributes if there are any</b>
+<b class="nc"><i>233</i>&nbsp;        if (unauthenticatedAttributes != null)</b>
+<i>234</i>&nbsp;            unauthenticatedAttributes.encode((byte)0xA1, seq);
+<b class="nc"><i>235</i>&nbsp;</b>
+<i>236</i>&nbsp;        DerOutputStream tmp = new DerOutputStream();
+<b class="nc"><i>237</i>&nbsp;        tmp.write(DerValue.tag_Sequence, seq);</b>
+<i>238</i>&nbsp;
+<i>239</i>&nbsp;        out.write(tmp.toByteArray());
+<b class="nc"><i>240</i>&nbsp;    }</b>
+<b class="nc"><i>241</i>&nbsp;</b>
+<i>242</i>&nbsp;
+<b class="nc"><i>243</i>&nbsp;</b>
+<b class="nc"><i>244</i>&nbsp;    /*</b>
+<i>245</i>&nbsp;     * Returns the (user) certificate pertaining to this SignerInfo.
+<b class="nc"><i>246</i>&nbsp;     */</b>
+<i>247</i>&nbsp;    public X509Certificate getCertificate(PKCS7 block)
+<i>248</i>&nbsp;        throws IOException
+<i>249</i>&nbsp;    {
+<i>250</i>&nbsp;        return block.getCertificate(certificateSerialNumber, issuerName);
+<i>251</i>&nbsp;    }
+<i>252</i>&nbsp;
+<i>253</i>&nbsp;    /*
+<i>254</i>&nbsp;     * Returns the certificate chain pertaining to this SignerInfo.
+<i>255</i>&nbsp;     */
+<i>256</i>&nbsp;    public ArrayList&lt;X509Certificate&gt; getCertificateChain(PKCS7 block)
+<b class="nc"><i>257</i>&nbsp;        throws IOException</b>
+<i>258</i>&nbsp;    {
+<i>259</i>&nbsp;        X509Certificate userCert;
+<i>260</i>&nbsp;        userCert = block.getCertificate(certificateSerialNumber, issuerName);
+<i>261</i>&nbsp;        if (userCert == null)
+<i>262</i>&nbsp;            return null;
+<i>263</i>&nbsp;
+<i>264</i>&nbsp;        ArrayList&lt;X509Certificate&gt; certList = new ArrayList&lt;&gt;();
+<i>265</i>&nbsp;        certList.add(userCert);
+<i>266</i>&nbsp;
+<b class="nc"><i>267</i>&nbsp;        X509Certificate[] pkcsCerts = block.getCertificates();</b>
+<b class="nc"><i>268</i>&nbsp;        if (pkcsCerts == null</b>
+<b class="nc"><i>269</i>&nbsp;            || userCert.getSubjectDN().equals(userCert.getIssuerDN())) {</b>
+<i>270</i>&nbsp;            return certList;
+<b class="nc"><i>271</i>&nbsp;        }</b>
+<b class="nc"><i>272</i>&nbsp;</b>
+<i>273</i>&nbsp;        Principal issuer = userCert.getIssuerDN();
+<b class="nc"><i>274</i>&nbsp;        int start = 0;</b>
+<b class="nc"><i>275</i>&nbsp;        while (true) {</b>
+<b class="nc"><i>276</i>&nbsp;            boolean match = false;</b>
+<b class="nc"><i>277</i>&nbsp;            int i = start;</b>
+<i>278</i>&nbsp;            while (i &lt; pkcsCerts.length) {
+<i>279</i>&nbsp;                if (issuer.equals(pkcsCerts[i].getSubjectDN())) {
+<b class="nc"><i>280</i>&nbsp;                    // next cert in chain found</b>
+<b class="nc"><i>281</i>&nbsp;                    certList.add(pkcsCerts[i]);</b>
+<i>282</i>&nbsp;                    // if selected cert is self-signed, we&#39;re done
+<b class="nc"><i>283</i>&nbsp;                    // constructing the chain</b>
+<b class="nc"><i>284</i>&nbsp;                    if (pkcsCerts[i].getSubjectDN().equals(</b>
+<b class="nc"><i>285</i>&nbsp;                                            pkcsCerts[i].getIssuerDN())) {</b>
+<b class="nc"><i>286</i>&nbsp;                        start = pkcsCerts.length;</b>
+<i>287</i>&nbsp;                    } else {
+<b class="nc"><i>288</i>&nbsp;                        issuer = pkcsCerts[i].getIssuerDN();</b>
+<i>289</i>&nbsp;                        X509Certificate tmpCert = pkcsCerts[start];
+<i>290</i>&nbsp;                        pkcsCerts[start] = pkcsCerts[i];
+<b class="nc"><i>291</i>&nbsp;                        pkcsCerts[i] = tmpCert;</b>
+<b class="nc"><i>292</i>&nbsp;                        start++;</b>
+<b class="nc"><i>293</i>&nbsp;                    }</b>
+<i>294</i>&nbsp;                    match = true;
+<b class="nc"><i>295</i>&nbsp;                    break;</b>
+<b class="nc"><i>296</i>&nbsp;                } else {</b>
+<b class="nc"><i>297</i>&nbsp;                    i++;</b>
+<b class="nc"><i>298</i>&nbsp;                }</b>
+<b class="nc"><i>299</i>&nbsp;            }</b>
+<i>300</i>&nbsp;            if (!match)
+<b class="nc"><i>301</i>&nbsp;                break;</b>
+<b class="nc"><i>302</i>&nbsp;        }</b>
+<i>303</i>&nbsp;
+<b class="nc"><i>304</i>&nbsp;        return certList;</b>
+<i>305</i>&nbsp;    }
+<i>306</i>&nbsp;
+<b class="nc"><i>307</i>&nbsp;    /* Returns null if verify fails, this signerInfo if</b>
+<b class="nc"><i>308</i>&nbsp;       verify succeeds. */</b>
+<b class="nc"><i>309</i>&nbsp;    SignerInfo verify(PKCS7 block, byte[] data)</b>
+<i>310</i>&nbsp;    throws NoSuchAlgorithmException, SignatureException {
+<b class="nc"><i>311</i>&nbsp;</b>
+<i>312</i>&nbsp;        try {
+<i>313</i>&nbsp;
+<i>314</i>&nbsp;            ContentInfo content = block.getContentInfo();
+<i>315</i>&nbsp;            if (data == null) {
+<i>316</i>&nbsp;                data = content.getContentBytes();
+<i>317</i>&nbsp;            }
+<i>318</i>&nbsp;
+<i>319</i>&nbsp;            Timestamp timestamp = null;
+<i>320</i>&nbsp;            try {
+<b class="nc"><i>321</i>&nbsp;                timestamp = getTimestamp();</b>
+<b class="nc"><i>322</i>&nbsp;            } catch (Exception ignore) {</b>
+<b class="nc"><i>323</i>&nbsp;            }</b>
+<i>324</i>&nbsp;
+<i>325</i>&nbsp;            ConstraintsParameters cparams =
+<b class="nc"><i>326</i>&nbsp;                    new ConstraintsParameters(timestamp);</b>
+<i>327</i>&nbsp;            String digestAlgname = getDigestAlgorithmId().getName();
+<b class="nc"><i>328</i>&nbsp;</b>
+<i>329</i>&nbsp;            byte[] dataSigned;
+<i>330</i>&nbsp;
+<i>331</i>&nbsp;            // if there are authenticate attributes, get the message
+<i>332</i>&nbsp;            // digest and compare it with the digest of data
+<i>333</i>&nbsp;            if (authenticatedAttributes == null) {
+<b class="nc"><i>334</i>&nbsp;                dataSigned = data;</b>
+<b class="nc"><i>335</i>&nbsp;            } else {</b>
+<i>336</i>&nbsp;
+<i>337</i>&nbsp;                // first, check content type
+<i>338</i>&nbsp;                ObjectIdentifier contentType = (ObjectIdentifier)
+<b class="nc"><i>339</i>&nbsp;                       authenticatedAttributes.getAttributeValue(</b>
+<b class="nc"><i>340</i>&nbsp;                         PKCS9Attribute.CONTENT_TYPE_OID);</b>
+<i>341</i>&nbsp;                if (contentType == null ||
+<b class="nc"><i>342</i>&nbsp;                    !contentType.equals(content.contentType))</b>
+<b class="nc"><i>343</i>&nbsp;                    return null;  // contentType does not match, bad SignerInfo</b>
+<b class="nc"><i>344</i>&nbsp;</b>
+<i>345</i>&nbsp;                // now, check message digest
+<i>346</i>&nbsp;                byte[] messageDigest = (byte[])
+<b class="nc"><i>347</i>&nbsp;                    authenticatedAttributes.getAttributeValue(</b>
+<b class="nc"><i>348</i>&nbsp;                         PKCS9Attribute.MESSAGE_DIGEST_OID);</b>
+<i>349</i>&nbsp;
+<i>350</i>&nbsp;                if (messageDigest == null) // fail if there is no message digest
+<b class="nc"><i>351</i>&nbsp;                    return null;</b>
+<b class="nc"><i>352</i>&nbsp;</b>
+<i>353</i>&nbsp;                // check that digest algorithm is not restricted
+<i>354</i>&nbsp;                try {
+<i>355</i>&nbsp;                    JAR_DISABLED_CHECK.permits(digestAlgname, cparams);
+<b class="nc"><i>356</i>&nbsp;                } catch (CertPathValidatorException e) {</b>
+<b class="nc"><i>357</i>&nbsp;                    throw new SignatureException(e.getMessage(), e);</b>
+<b class="nc"><i>358</i>&nbsp;                }</b>
+<b class="nc"><i>359</i>&nbsp;</b>
+<i>360</i>&nbsp;                MessageDigest md = MessageDigest.getInstance(digestAlgname);
+<b class="nc"><i>361</i>&nbsp;                byte[] computedMessageDigest = md.digest(data);</b>
+<b class="nc"><i>362</i>&nbsp;</b>
+<i>363</i>&nbsp;                if (messageDigest.length != computedMessageDigest.length)
+<b class="nc"><i>364</i>&nbsp;                    return null;</b>
+<b class="nc"><i>365</i>&nbsp;                for (int i = 0; i &lt; messageDigest.length; i++) {</b>
+<b class="nc"><i>366</i>&nbsp;                    if (messageDigest[i] != computedMessageDigest[i])</b>
+<b class="nc"><i>367</i>&nbsp;                        return null;</b>
+<b class="nc"><i>368</i>&nbsp;                }</b>
+<i>369</i>&nbsp;
+<i>370</i>&nbsp;                // message digest attribute matched
+<i>371</i>&nbsp;                // digest of original data
+<i>372</i>&nbsp;
+<i>373</i>&nbsp;                // the data actually signed is the DER encoding of
+<i>374</i>&nbsp;                // the authenticated attributes (tagged with
+<i>375</i>&nbsp;                // the &quot;SET OF&quot; tag, not 0xA0).
+<i>376</i>&nbsp;                dataSigned = authenticatedAttributes.getDerEncoding();
+<b class="nc"><i>377</i>&nbsp;            }</b>
+<i>378</i>&nbsp;
+<i>379</i>&nbsp;            // put together digest algorithm and encryption algorithm
+<i>380</i>&nbsp;            // to form signing algorithm
+<i>381</i>&nbsp;            String encryptionAlgname =
+<b class="nc"><i>382</i>&nbsp;                getDigestEncryptionAlgorithmId().getName();</b>
+<b class="nc"><i>383</i>&nbsp;</b>
+<i>384</i>&nbsp;            // Workaround: sometimes the encryptionAlgname is actually
+<i>385</i>&nbsp;            // a signature name
+<i>386</i>&nbsp;            String tmp = AlgorithmId.getEncAlgFromSigAlg(encryptionAlgname);
+<b class="nc"><i>387</i>&nbsp;            if (tmp != null) encryptionAlgname = tmp;</b>
+<b class="nc"><i>388</i>&nbsp;            String algname = AlgorithmId.makeSigAlg(</b>
+<b class="nc"><i>389</i>&nbsp;                    digestAlgname, encryptionAlgname);</b>
+<i>390</i>&nbsp;
+<i>391</i>&nbsp;            // check that jar signature algorithm is not restricted
+<i>392</i>&nbsp;            try {
+<i>393</i>&nbsp;                JAR_DISABLED_CHECK.permits(algname, cparams);
+<b class="nc"><i>394</i>&nbsp;            } catch (CertPathValidatorException e) {</b>
+<b class="nc"><i>395</i>&nbsp;                throw new SignatureException(e.getMessage(), e);</b>
+<b class="nc"><i>396</i>&nbsp;            }</b>
+<b class="nc"><i>397</i>&nbsp;</b>
+<i>398</i>&nbsp;            X509Certificate cert = getCertificate(block);
+<b class="nc"><i>399</i>&nbsp;            if (cert == null) {</b>
+<b class="nc"><i>400</i>&nbsp;                return null;</b>
+<b class="nc"><i>401</i>&nbsp;            }</b>
+<i>402</i>&nbsp;            PublicKey key = cert.getPublicKey();
+<b class="nc"><i>403</i>&nbsp;</b>
+<i>404</i>&nbsp;            // check if the public key is restricted
+<i>405</i>&nbsp;            if (!JAR_DISABLED_CHECK.permits(SIG_PRIMITIVE_SET, key)) {
+<b class="nc"><i>406</i>&nbsp;                throw new SignatureException(&quot;Public key check failed. &quot; +</b>
+<b class="nc"><i>407</i>&nbsp;                        &quot;Disabled key used: &quot; +</b>
+<i>408</i>&nbsp;                        KeyUtil.getKeySize(key) + &quot; bit &quot; +
+<b class="nc"><i>409</i>&nbsp;                        key.getAlgorithm());</b>
+<b class="nc"><i>410</i>&nbsp;            }</b>
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;            if (cert.hasUnsupportedCriticalExtension()) {
+<b class="nc"><i>413</i>&nbsp;                throw new SignatureException(&quot;Certificate has unsupported &quot;</b>
+<b class="nc"><i>414</i>&nbsp;                                             + &quot;critical extension(s)&quot;);</b>
+<i>415</i>&nbsp;            }
+<i>416</i>&nbsp;
+<i>417</i>&nbsp;            // Make sure that if the usage of the key in the certificate is
+<i>418</i>&nbsp;            // restricted, it can be used for digital signatures.
+<i>419</i>&nbsp;            // XXX We may want to check for additional extensions in the
+<i>420</i>&nbsp;            // future.
+<i>421</i>&nbsp;            boolean[] keyUsageBits = cert.getKeyUsage();
+<b class="nc"><i>422</i>&nbsp;            if (keyUsageBits != null) {</b>
+<b class="nc"><i>423</i>&nbsp;                KeyUsageExtension keyUsage;</b>
+<i>424</i>&nbsp;                try {
+<i>425</i>&nbsp;                    // We don&#39;t care whether or not this extension was marked
+<i>426</i>&nbsp;                    // critical in the certificate.
+<i>427</i>&nbsp;                    // We&#39;re interested only in its value (i.e., the bits set)
+<i>428</i>&nbsp;                    // and treat the extension as critical.
+<i>429</i>&nbsp;                    keyUsage = new KeyUsageExtension(keyUsageBits);
+<b class="nc"><i>430</i>&nbsp;                } catch (IOException ioe) {</b>
+<b class="nc"><i>431</i>&nbsp;                    throw new SignatureException(&quot;Failed to parse keyUsage &quot;</b>
+<b class="nc"><i>432</i>&nbsp;                                                 + &quot;extension&quot;);</b>
+<i>433</i>&nbsp;                }
+<b class="nc"><i>434</i>&nbsp;</b>
+<i>435</i>&nbsp;                boolean digSigAllowed = keyUsage.get(
+<b class="nc"><i>436</i>&nbsp;                        KeyUsageExtension.DIGITAL_SIGNATURE).booleanValue();</b>
+<b class="nc"><i>437</i>&nbsp;</b>
+<i>438</i>&nbsp;                boolean nonRepuAllowed = keyUsage.get(
+<b class="nc"><i>439</i>&nbsp;                        KeyUsageExtension.NON_REPUDIATION).booleanValue();</b>
+<b class="nc"><i>440</i>&nbsp;</b>
+<i>441</i>&nbsp;                if (!digSigAllowed &amp;&amp; !nonRepuAllowed) {
+<b class="nc"><i>442</i>&nbsp;                    throw new SignatureException(&quot;Key usage restricted: &quot;</b>
+<b class="nc"><i>443</i>&nbsp;                                                 + &quot;cannot be used for &quot;</b>
+<i>444</i>&nbsp;                                                 + &quot;digital signatures&quot;);
+<i>445</i>&nbsp;                }
+<i>446</i>&nbsp;            }
+<i>447</i>&nbsp;
+<i>448</i>&nbsp;            Signature sig = Signature.getInstance(algname);
+<b class="nc"><i>449</i>&nbsp;</b>
+<b class="nc"><i>450</i>&nbsp;            sig.initVerify(key);</b>
+<b class="nc"><i>451</i>&nbsp;</b>
+<b class="nc"><i>452</i>&nbsp;            // set parameters after Signature.initSign/initVerify call,</b>
+<b class="nc"><i>453</i>&nbsp;            // so the deferred provider selections occur when key is set</b>
+<i>454</i>&nbsp;            AlgorithmParameters ap =
+<i>455</i>&nbsp;                digestEncryptionAlgorithmId.getParameters();
+<b class="nc"><i>456</i>&nbsp;            try {</b>
+<b class="nc"><i>457</i>&nbsp;                SignatureUtil.specialSetParameter(sig, ap);</b>
+<b class="nc"><i>458</i>&nbsp;            } catch (ProviderException | InvalidAlgorithmParameterException e) {</b>
+<i>459</i>&nbsp;                throw new SignatureException(e.getMessage(), e);
+<b class="nc"><i>460</i>&nbsp;            }</b>
+<b class="nc"><i>461</i>&nbsp;</b>
+<i>462</i>&nbsp;            sig.update(dataSigned);
+<b class="nc"><i>463</i>&nbsp;            if (sig.verify(encryptedDigest)) {</b>
+<b class="nc"><i>464</i>&nbsp;                return this;</b>
+<i>465</i>&nbsp;            }
+<i>466</i>&nbsp;        } catch (IOException e) {
+<i>467</i>&nbsp;            throw new SignatureException(&quot;IO error verifying signature:\n&quot; +
+<i>468</i>&nbsp;                                         e.getMessage());
+<i>469</i>&nbsp;        } catch (InvalidKeyException e) {
+<b class="nc"><i>470</i>&nbsp;            throw new SignatureException(&quot;InvalidKey: &quot; + e.getMessage());</b>
+<i>471</i>&nbsp;        }
+<i>472</i>&nbsp;        return null;
+<i>473</i>&nbsp;    }
+<i>474</i>&nbsp;
+<b class="nc"><i>475</i>&nbsp;    /* Verify the content of the pkcs7 block. */</b>
+<i>476</i>&nbsp;    SignerInfo verify(PKCS7 block)
+<i>477</i>&nbsp;        throws NoSuchAlgorithmException, SignatureException {
+<i>478</i>&nbsp;        return verify(block, null);
+<b class="nc"><i>479</i>&nbsp;    }</b>
+<i>480</i>&nbsp;
+<i>481</i>&nbsp;    public BigInteger getVersion() {
+<i>482</i>&nbsp;            return version;
+<b class="nc"><i>483</i>&nbsp;    }</b>
+<i>484</i>&nbsp;
+<i>485</i>&nbsp;    public X500Name getIssuerName() {
+<i>486</i>&nbsp;        return issuerName;
+<b class="nc"><i>487</i>&nbsp;    }</b>
+<i>488</i>&nbsp;
+<i>489</i>&nbsp;    public BigInteger getCertificateSerialNumber() {
+<i>490</i>&nbsp;        return certificateSerialNumber;
+<b class="nc"><i>491</i>&nbsp;    }</b>
+<i>492</i>&nbsp;
+<i>493</i>&nbsp;    public AlgorithmId getDigestAlgorithmId() {
+<i>494</i>&nbsp;        return digestAlgorithmId;
+<b class="nc"><i>495</i>&nbsp;    }</b>
+<i>496</i>&nbsp;
+<i>497</i>&nbsp;    public PKCS9Attributes getAuthenticatedAttributes() {
+<i>498</i>&nbsp;        return authenticatedAttributes;
+<b class="nc"><i>499</i>&nbsp;    }</b>
+<i>500</i>&nbsp;
+<i>501</i>&nbsp;    public AlgorithmId getDigestEncryptionAlgorithmId() {
+<i>502</i>&nbsp;        return digestEncryptionAlgorithmId;
+<b class="nc"><i>503</i>&nbsp;    }</b>
+<i>504</i>&nbsp;
+<i>505</i>&nbsp;    public byte[] getEncryptedDigest() {
+<i>506</i>&nbsp;        return encryptedDigest;
+<i>507</i>&nbsp;    }
+<i>508</i>&nbsp;
+<i>509</i>&nbsp;    public PKCS9Attributes getUnauthenticatedAttributes() {
+<i>510</i>&nbsp;        return unauthenticatedAttributes;
+<b class="nc"><i>511</i>&nbsp;    }</b>
+<b class="nc"><i>512</i>&nbsp;</b>
+<i>513</i>&nbsp;    /**
+<b class="nc"><i>514</i>&nbsp;     * Returns the timestamp PKCS7 data unverified.</b>
+<b class="nc"><i>515</i>&nbsp;     * @return a PKCS7 object</b>
+<i>516</i>&nbsp;     */
+<b class="nc"><i>517</i>&nbsp;    public PKCS7 getTsToken() throws IOException {</b>
+<b class="nc"><i>518</i>&nbsp;        if (unauthenticatedAttributes == null) {</b>
+<i>519</i>&nbsp;            return null;
+<b class="nc"><i>520</i>&nbsp;        }</b>
+<i>521</i>&nbsp;        PKCS9Attribute tsTokenAttr =
+<i>522</i>&nbsp;                unauthenticatedAttributes.getAttribute(
+<i>523</i>&nbsp;                        PKCS9Attribute.SIGNATURE_TIMESTAMP_TOKEN_OID);
+<i>524</i>&nbsp;        if (tsTokenAttr == null) {
+<i>525</i>&nbsp;            return null;
+<i>526</i>&nbsp;        }
+<i>527</i>&nbsp;        return new PKCS7((byte[])tsTokenAttr.getValue());
+<i>528</i>&nbsp;    }
+<i>529</i>&nbsp;
+<i>530</i>&nbsp;    /*
+<i>531</i>&nbsp;     * Extracts a timestamp from a PKCS7 SignerInfo.
+<i>532</i>&nbsp;     *
+<i>533</i>&nbsp;     * Examines the signer&#39;s unsigned attributes for a
+<i>534</i>&nbsp;     * {@code signatureTimestampToken} attribute. If present,
+<i>535</i>&nbsp;     * then it is parsed to extract the date and time at which the
+<i>536</i>&nbsp;     * timestamp was generated.
+<i>537</i>&nbsp;     *
+<i>538</i>&nbsp;     * @param info A signer information element of a PKCS 7 block.
+<i>539</i>&nbsp;     *
+<i>540</i>&nbsp;     * @return A timestamp token or null if none is present.
+<i>541</i>&nbsp;     * @throws IOException if an error is encountered while parsing the
+<i>542</i>&nbsp;     *         PKCS7 data.
+<i>543</i>&nbsp;     * @throws NoSuchAlgorithmException if an error is encountered while
+<i>544</i>&nbsp;     *         verifying the PKCS7 object.
+<i>545</i>&nbsp;     * @throws SignatureException if an error is encountered while
+<i>546</i>&nbsp;     *         verifying the PKCS7 object.
+<b class="nc"><i>547</i>&nbsp;     * @throws CertificateException if an error is encountered while generating</b>
+<b class="nc"><i>548</i>&nbsp;     *         the TSA&#39;s certpath.</b>
+<i>549</i>&nbsp;     */
+<b class="nc"><i>550</i>&nbsp;    public Timestamp getTimestamp()</b>
+<b class="nc"><i>551</i>&nbsp;        throws IOException, NoSuchAlgorithmException, SignatureException,</b>
+<b class="nc"><i>552</i>&nbsp;               CertificateException</b>
+<b class="nc"><i>553</i>&nbsp;    {</b>
+<i>554</i>&nbsp;        if (timestamp != null || !hasTimestamp)
+<i>555</i>&nbsp;            return timestamp;
+<i>556</i>&nbsp;
+<b class="nc"><i>557</i>&nbsp;        PKCS7 tsToken = getTsToken();</b>
+<i>558</i>&nbsp;        if (tsToken == null) {
+<i>559</i>&nbsp;            hasTimestamp = false;
+<b class="nc"><i>560</i>&nbsp;            return null;</b>
+<i>561</i>&nbsp;        }
+<b class="nc"><i>562</i>&nbsp;</b>
+<b class="nc"><i>563</i>&nbsp;        // Extract the content (an encoded timestamp token info)</b>
+<b class="nc"><i>564</i>&nbsp;        byte[] encTsTokenInfo = tsToken.getContentInfo().getData();</b>
+<i>565</i>&nbsp;        // Extract the signer (the Timestamping Authority)
+<b class="nc"><i>566</i>&nbsp;        // while verifying the content</b>
+<i>567</i>&nbsp;        SignerInfo[] tsa = tsToken.verify(encTsTokenInfo);
+<b class="nc"><i>568</i>&nbsp;        // Expect only one signer</b>
+<i>569</i>&nbsp;        ArrayList&lt;X509Certificate&gt; chain = tsa[0].getCertificateChain(tsToken);
+<b class="nc"><i>570</i>&nbsp;        CertificateFactory cf = CertificateFactory.getInstance(&quot;X.509&quot;);</b>
+<b class="nc"><i>571</i>&nbsp;        CertPath tsaChain = cf.generateCertPath(chain);</b>
+<i>572</i>&nbsp;        // Create a timestamp token info object
+<i>573</i>&nbsp;        TimestampToken tsTokenInfo = new TimestampToken(encTsTokenInfo);
+<i>574</i>&nbsp;        // Check that the signature timestamp applies to this signature
+<i>575</i>&nbsp;        verifyTimestamp(tsTokenInfo);
+<i>576</i>&nbsp;        // Create a timestamp object
+<i>577</i>&nbsp;        timestamp = new Timestamp(tsTokenInfo.getDate(), tsaChain);
+<i>578</i>&nbsp;        return timestamp;
+<i>579</i>&nbsp;    }
+<i>580</i>&nbsp;
+<b class="nc"><i>581</i>&nbsp;    /*</b>
+<i>582</i>&nbsp;     * Check that the signature timestamp applies to this signature.
+<b class="nc"><i>583</i>&nbsp;     * Match the hash present in the signature timestamp token against the hash</b>
+<i>584</i>&nbsp;     * of this signature.
+<b class="nc"><i>585</i>&nbsp;     */</b>
+<i>586</i>&nbsp;    private void verifyTimestamp(TimestampToken token)
+<i>587</i>&nbsp;        throws NoSuchAlgorithmException, SignatureException {
+<i>588</i>&nbsp;        String digestAlgname = token.getHashAlgorithm().getName();
+<b class="nc"><i>589</i>&nbsp;        // check that algorithm is not restricted</b>
+<b class="nc"><i>590</i>&nbsp;        if (!JAR_DISABLED_CHECK.permits(DIGEST_PRIMITIVE_SET, digestAlgname,</b>
+<i>591</i>&nbsp;                null)) {
+<b class="nc"><i>592</i>&nbsp;            throw new SignatureException(&quot;Timestamp token digest check failed. &quot; +</b>
+<b class="nc"><i>593</i>&nbsp;                    &quot;Disabled algorithm used: &quot; + digestAlgname);</b>
+<i>594</i>&nbsp;        }
+<b class="nc"><i>595</i>&nbsp;</b>
+<b class="nc"><i>596</i>&nbsp;        MessageDigest md =</b>
+<i>597</i>&nbsp;            MessageDigest.getInstance(digestAlgname);
+<i>598</i>&nbsp;
+<i>599</i>&nbsp;        if (!Arrays.equals(token.getHashedMessage(),
+<b class="nc"><i>600</i>&nbsp;            md.digest(encryptedDigest))) {</b>
+<b class="nc"><i>601</i>&nbsp;</b>
+<b class="nc"><i>602</i>&nbsp;            throw new SignatureException(&quot;Signature timestamp (#&quot; +</b>
+<b class="nc"><i>603</i>&nbsp;                token.getSerialNumber() + &quot;) generated on &quot; + token.getDate() +</b>
+<b class="nc"><i>604</i>&nbsp;                &quot; is inapplicable&quot;);</b>
+<i>605</i>&nbsp;        }
+<i>606</i>&nbsp;
+<i>607</i>&nbsp;        if (debug != null) {
+<i>608</i>&nbsp;            debug.println();
+<b class="nc"><i>609</i>&nbsp;            debug.println(&quot;Detected signature timestamp (#&quot; +</b>
+<i>610</i>&nbsp;                token.getSerialNumber() + &quot;) generated on &quot; + token.getDate());
+<b class="nc"><i>611</i>&nbsp;            debug.println();</b>
+<i>612</i>&nbsp;        }
+<b class="nc"><i>613</i>&nbsp;    }</b>
+<b class="nc"><i>614</i>&nbsp;</b>
+<b class="nc"><i>615</i>&nbsp;    public String toString() {</b>
+<b class="nc"><i>616</i>&nbsp;        HexDumpEncoder hexDump = new HexDumpEncoder();</b>
+<b class="nc"><i>617</i>&nbsp;</b>
+<b class="nc"><i>618</i>&nbsp;        String out = &quot;&quot;;</b>
+<b class="nc"><i>619</i>&nbsp;</b>
+<i>620</i>&nbsp;        out += &quot;Signer Info for (issuer): &quot; + issuerName + &quot;\n&quot;;
+<i>621</i>&nbsp;        out += &quot;\tversion: &quot; + Debug.toHexString(version) + &quot;\n&quot;;
+<b class="nc"><i>622</i>&nbsp;        out += &quot;\tcertificateSerialNumber: &quot; +</b>
+<i>623</i>&nbsp;               Debug.toHexString(certificateSerialNumber) + &quot;\n&quot;;
+<i>624</i>&nbsp;        out += &quot;\tdigestAlgorithmId: &quot; + digestAlgorithmId + &quot;\n&quot;;
+<b class="nc"><i>625</i>&nbsp;        if (authenticatedAttributes != null) {</b>
+<b class="nc"><i>626</i>&nbsp;            out += &quot;\tauthenticatedAttributes: &quot; + authenticatedAttributes +</b>
+<b class="nc"><i>627</i>&nbsp;                   &quot;\n&quot;;</b>
+<b class="nc"><i>628</i>&nbsp;        }</b>
+<i>629</i>&nbsp;        out += &quot;\tdigestEncryptionAlgorithmId: &quot; + digestEncryptionAlgorithmId +
+<i>630</i>&nbsp;            &quot;\n&quot;;
+<b class="nc"><i>631</i>&nbsp;</b>
+<i>632</i>&nbsp;        out += &quot;\tencryptedDigest: &quot; + &quot;\n&quot; +
+<i>633</i>&nbsp;            hexDump.encodeBuffer(encryptedDigest) + &quot;\n&quot;;
+<i>634</i>&nbsp;        if (unauthenticatedAttributes != null) {
+<i>635</i>&nbsp;            out += &quot;\tunauthenticatedAttributes: &quot; +
+<i>636</i>&nbsp;                   unauthenticatedAttributes + &quot;\n&quot;;
+<i>637</i>&nbsp;        }
+<i>638</i>&nbsp;        return out;
+<i>639</i>&nbsp;    }
+<i>640</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

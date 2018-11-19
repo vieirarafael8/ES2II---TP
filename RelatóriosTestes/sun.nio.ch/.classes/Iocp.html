@@ -1,0 +1,586 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Iocp</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.ch</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Iocp (sun.nio.ch)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Iocp</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 18)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 95)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">Iocp$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">Iocp$CompletionStatus</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">Iocp$EventHandlerTask</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 45)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 29)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 149)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.ch;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.channels.*;
+<i>29</i>&nbsp;import java.nio.channels.spi.AsynchronousChannelProvider;
+<i>30</i>&nbsp;import java.io.Closeable;
+<i>31</i>&nbsp;import java.io.IOException;
+<i>32</i>&nbsp;import java.io.FileDescriptor;
+<i>33</i>&nbsp;import java.util.*;
+<i>34</i>&nbsp;import java.util.concurrent.*;
+<i>35</i>&nbsp;import java.util.concurrent.locks.ReadWriteLock;
+<i>36</i>&nbsp;import java.util.concurrent.locks.ReentrantReadWriteLock;
+<i>37</i>&nbsp;import jdk.internal.misc.Unsafe;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp; * Windows implementation of AsynchronousChannelGroup encapsulating an I/O
+<i>41</i>&nbsp; * completion port.
+<i>42</i>&nbsp; */
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;class Iocp extends AsynchronousChannelGroupImpl {
+<i>45</i>&nbsp;    private static final Unsafe unsafe = Unsafe.getUnsafe();
+<b class="nc"><i>46</i>&nbsp;    private static final long INVALID_HANDLE_VALUE  = -1L;</b>
+<b class="nc"><i>47</i>&nbsp;</b>
+<i>48</i>&nbsp;    // maps completion key to channel
+<i>49</i>&nbsp;    private final ReadWriteLock keyToChannelLock = new ReentrantReadWriteLock();
+<i>50</i>&nbsp;    private final Map&lt;Integer,OverlappedChannel&gt; keyToChannel =
+<i>51</i>&nbsp;        new HashMap&lt;Integer,OverlappedChannel&gt;();
+<b class="nc"><i>52</i>&nbsp;    private int nextCompletionKey;</b>
+<b class="nc"><i>53</i>&nbsp;</b>
+<i>54</i>&nbsp;    // handle to completion port
+<i>55</i>&nbsp;    private final long port;
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;    // true if port has been closed
+<i>58</i>&nbsp;    private boolean closed;
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    // the set of &quot;stale&quot; OVERLAPPED structures. These OVERLAPPED structures
+<i>61</i>&nbsp;    // relate to I/O operations where the completion notification was not
+<i>62</i>&nbsp;    // received in a timely manner after the channel is closed.
+<i>63</i>&nbsp;    private final Set&lt;Long&gt; staleIoSet = new HashSet&lt;Long&gt;();
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    Iocp(AsynchronousChannelProvider provider, ThreadPool pool)
+<b class="nc"><i>66</i>&nbsp;        throws IOException</b>
+<i>67</i>&nbsp;    {
+<i>68</i>&nbsp;        super(provider, pool);
+<i>69</i>&nbsp;        this.port =
+<i>70</i>&nbsp;          createIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, fixedThreadCount());
+<b class="nc"><i>71</i>&nbsp;        this.nextCompletionKey = 1;</b>
+<b class="nc"><i>72</i>&nbsp;    }</b>
+<b class="nc"><i>73</i>&nbsp;</b>
+<b class="nc"><i>74</i>&nbsp;    Iocp start() {</b>
+<i>75</i>&nbsp;        startThreads(new EventHandlerTask());
+<i>76</i>&nbsp;        return this;
+<i>77</i>&nbsp;    }
+<b class="nc"><i>78</i>&nbsp;</b>
+<b class="nc"><i>79</i>&nbsp;    /*</b>
+<i>80</i>&nbsp;     * Channels implements this interface support overlapped I/O and can be
+<i>81</i>&nbsp;     * associated with a completion port.
+<i>82</i>&nbsp;     */
+<i>83</i>&nbsp;    static interface OverlappedChannel extends Closeable {
+<i>84</i>&nbsp;        /**
+<i>85</i>&nbsp;         * Returns a reference to the pending I/O result.
+<i>86</i>&nbsp;         */
+<i>87</i>&nbsp;        &lt;V,A&gt; PendingFuture&lt;V,A&gt; getByOverlapped(long overlapped);
+<i>88</i>&nbsp;    }
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    // release all resources
+<i>91</i>&nbsp;    void implClose() {
+<i>92</i>&nbsp;        synchronized (this) {
+<i>93</i>&nbsp;            if (closed)
+<i>94</i>&nbsp;                return;
+<i>95</i>&nbsp;            closed = true;
+<i>96</i>&nbsp;        }
+<b class="nc"><i>97</i>&nbsp;        close0(port);</b>
+<i>98</i>&nbsp;        synchronized (staleIoSet) {
+<i>99</i>&nbsp;            for (Long ov: staleIoSet) {
+<i>100</i>&nbsp;                unsafe.freeMemory(ov);
+<i>101</i>&nbsp;            }
+<b class="nc"><i>102</i>&nbsp;            staleIoSet.clear();</b>
+<b class="nc"><i>103</i>&nbsp;        }</b>
+<b class="nc"><i>104</i>&nbsp;    }</b>
+<b class="nc"><i>105</i>&nbsp;</b>
+<b class="nc"><i>106</i>&nbsp;    @Override</b>
+<b class="nc"><i>107</i>&nbsp;    boolean isEmpty() {</b>
+<b class="nc"><i>108</i>&nbsp;        keyToChannelLock.writeLock().lock();</b>
+<b class="nc"><i>109</i>&nbsp;        try {</b>
+<b class="nc"><i>110</i>&nbsp;            return keyToChannel.isEmpty();</b>
+<b class="nc"><i>111</i>&nbsp;        } finally {</b>
+<b class="nc"><i>112</i>&nbsp;            keyToChannelLock.writeLock().unlock();</b>
+<b class="nc"><i>113</i>&nbsp;        }</b>
+<i>114</i>&nbsp;    }
+<i>115</i>&nbsp;
+<i>116</i>&nbsp;    @Override
+<i>117</i>&nbsp;    final Object attachForeignChannel(final Channel channel, FileDescriptor fdObj)
+<b class="nc"><i>118</i>&nbsp;        throws IOException</b>
+<i>119</i>&nbsp;    {
+<b class="nc"><i>120</i>&nbsp;        int key = associate(new OverlappedChannel() {</b>
+<i>121</i>&nbsp;            public &lt;V,A&gt; PendingFuture&lt;V,A&gt; getByOverlapped(long overlapped) {
+<b class="nc"><i>122</i>&nbsp;                return null;</b>
+<i>123</i>&nbsp;            }
+<i>124</i>&nbsp;            public void close() throws IOException {
+<i>125</i>&nbsp;                channel.close();
+<i>126</i>&nbsp;            }
+<i>127</i>&nbsp;        }, 0L);
+<i>128</i>&nbsp;        return Integer.valueOf(key);
+<i>129</i>&nbsp;    }
+<b class="nc"><i>130</i>&nbsp;</b>
+<i>131</i>&nbsp;    @Override
+<b class="nc"><i>132</i>&nbsp;    final void detachForeignChannel(Object key) {</b>
+<i>133</i>&nbsp;        disassociate((Integer)key);
+<i>134</i>&nbsp;    }
+<b class="nc"><i>135</i>&nbsp;</b>
+<i>136</i>&nbsp;    @Override
+<i>137</i>&nbsp;    void closeAllChannels() {
+<b class="nc"><i>138</i>&nbsp;        /**</b>
+<i>139</i>&nbsp;         * On Windows the close operation will close the socket/file handle
+<i>140</i>&nbsp;         * and then wait until all outstanding I/O operations have aborted.
+<i>141</i>&nbsp;         * This is necessary as each channel&#39;s cache of OVERLAPPED structures
+<i>142</i>&nbsp;         * can only be freed once all I/O operations have completed. As I/O
+<b class="nc"><i>143</i>&nbsp;         * completion requires a lookup of the keyToChannel then we must close</b>
+<i>144</i>&nbsp;         * the channels when not holding the write lock.
+<i>145</i>&nbsp;         */
+<i>146</i>&nbsp;        final int MAX_BATCH_SIZE = 32;
+<i>147</i>&nbsp;        OverlappedChannel channels[] = new OverlappedChannel[MAX_BATCH_SIZE];
+<i>148</i>&nbsp;        int count;
+<i>149</i>&nbsp;        do {
+<i>150</i>&nbsp;            // grab a batch of up to 32 channels
+<i>151</i>&nbsp;            keyToChannelLock.writeLock().lock();
+<i>152</i>&nbsp;            count = 0;
+<i>153</i>&nbsp;            try {
+<i>154</i>&nbsp;                for (Integer key: keyToChannel.keySet()) {
+<i>155</i>&nbsp;                    channels[count++] = keyToChannel.get(key);
+<i>156</i>&nbsp;                    if (count &gt;= MAX_BATCH_SIZE)
+<b class="nc"><i>157</i>&nbsp;                        break;</b>
+<i>158</i>&nbsp;                }
+<i>159</i>&nbsp;            } finally {
+<i>160</i>&nbsp;                keyToChannelLock.writeLock().unlock();
+<b class="nc"><i>161</i>&nbsp;            }</b>
+<b class="nc"><i>162</i>&nbsp;</b>
+<i>163</i>&nbsp;            // close them
+<b class="nc"><i>164</i>&nbsp;            for (int i=0; i&lt;count; i++) {</b>
+<b class="nc"><i>165</i>&nbsp;                try {</b>
+<b class="nc"><i>166</i>&nbsp;                    channels[i].close();</b>
+<b class="nc"><i>167</i>&nbsp;                } catch (IOException ignore) { }</b>
+<b class="nc"><i>168</i>&nbsp;            }</b>
+<i>169</i>&nbsp;        } while (count &gt; 0);
+<b class="nc"><i>170</i>&nbsp;    }</b>
+<b class="nc"><i>171</i>&nbsp;</b>
+<i>172</i>&nbsp;    private void wakeup() {
+<i>173</i>&nbsp;        try {
+<b class="nc"><i>174</i>&nbsp;            postQueuedCompletionStatus(port, 0);</b>
+<i>175</i>&nbsp;        } catch (IOException e) {
+<b class="nc"><i>176</i>&nbsp;            // should not happen</b>
+<b class="nc"><i>177</i>&nbsp;            throw new AssertionError(e);</b>
+<i>178</i>&nbsp;        }
+<b class="nc"><i>179</i>&nbsp;    }</b>
+<i>180</i>&nbsp;
+<i>181</i>&nbsp;    @Override
+<i>182</i>&nbsp;    void executeOnHandlerTask(Runnable task) {
+<i>183</i>&nbsp;        synchronized (this) {
+<b class="nc"><i>184</i>&nbsp;            if (closed)</b>
+<b class="nc"><i>185</i>&nbsp;                throw new RejectedExecutionException();</b>
+<i>186</i>&nbsp;            offerTask(task);
+<b class="nc"><i>187</i>&nbsp;            wakeup();</b>
+<b class="nc"><i>188</i>&nbsp;        }</b>
+<i>189</i>&nbsp;
+<i>190</i>&nbsp;    }
+<i>191</i>&nbsp;
+<i>192</i>&nbsp;    @Override
+<b class="nc"><i>193</i>&nbsp;    void shutdownHandlerTasks() {</b>
+<b class="nc"><i>194</i>&nbsp;        // shutdown all handler threads</b>
+<b class="nc"><i>195</i>&nbsp;        int nThreads = threadCount();</b>
+<b class="nc"><i>196</i>&nbsp;        while (nThreads-- &gt; 0) {</b>
+<b class="nc"><i>197</i>&nbsp;            wakeup();</b>
+<b class="nc"><i>198</i>&nbsp;        }</b>
+<i>199</i>&nbsp;    }
+<i>200</i>&nbsp;
+<i>201</i>&nbsp;    /**
+<i>202</i>&nbsp;     * Associate the given handle with this group
+<i>203</i>&nbsp;     */
+<i>204</i>&nbsp;    int associate(OverlappedChannel ch, long handle) throws IOException {
+<b class="nc"><i>205</i>&nbsp;        keyToChannelLock.writeLock().lock();</b>
+<b class="nc"><i>206</i>&nbsp;</b>
+<b class="nc"><i>207</i>&nbsp;        // generate a completion key (if not shutdown)</b>
+<i>208</i>&nbsp;        int key;
+<i>209</i>&nbsp;        try {
+<i>210</i>&nbsp;            if (isShutdown())
+<i>211</i>&nbsp;                throw new ShutdownChannelGroupException();
+<i>212</i>&nbsp;
+<i>213</i>&nbsp;            // generate unique key
+<i>214</i>&nbsp;            do {
+<b class="nc"><i>215</i>&nbsp;                key = nextCompletionKey++;</b>
+<i>216</i>&nbsp;            } while ((key == 0) || keyToChannel.containsKey(key));
+<i>217</i>&nbsp;
+<i>218</i>&nbsp;            // associate with I/O completion port
+<i>219</i>&nbsp;            if (handle != 0L) {
+<b class="nc"><i>220</i>&nbsp;                createIoCompletionPort(handle, port, key, 0);</b>
+<b class="nc"><i>221</i>&nbsp;            }</b>
+<i>222</i>&nbsp;
+<i>223</i>&nbsp;            // setup mapping
+<i>224</i>&nbsp;            keyToChannel.put(key, ch);
+<b class="nc"><i>225</i>&nbsp;        } finally {</b>
+<b class="nc"><i>226</i>&nbsp;            keyToChannelLock.writeLock().unlock();</b>
+<i>227</i>&nbsp;        }
+<i>228</i>&nbsp;        return key;
+<b class="nc"><i>229</i>&nbsp;    }</b>
+<b class="nc"><i>230</i>&nbsp;</b>
+<i>231</i>&nbsp;    /**
+<i>232</i>&nbsp;     * Disassociate channel from the group.
+<i>233</i>&nbsp;     */
+<b class="nc"><i>234</i>&nbsp;    void disassociate(int key) {</b>
+<i>235</i>&nbsp;        boolean checkForShutdown = false;
+<b class="nc"><i>236</i>&nbsp;</b>
+<b class="nc"><i>237</i>&nbsp;        keyToChannelLock.writeLock().lock();</b>
+<b class="nc"><i>238</i>&nbsp;        try {</b>
+<i>239</i>&nbsp;            keyToChannel.remove(key);
+<i>240</i>&nbsp;
+<i>241</i>&nbsp;            // last key to be removed so check if group is shutdown
+<i>242</i>&nbsp;            if (keyToChannel.isEmpty())
+<i>243</i>&nbsp;                checkForShutdown = true;
+<i>244</i>&nbsp;
+<b class="nc"><i>245</i>&nbsp;        } finally {</b>
+<i>246</i>&nbsp;            keyToChannelLock.writeLock().unlock();
+<b class="nc"><i>247</i>&nbsp;        }</b>
+<i>248</i>&nbsp;
+<b class="nc"><i>249</i>&nbsp;        // continue shutdown</b>
+<i>250</i>&nbsp;        if (checkForShutdown &amp;&amp; isShutdown()) {
+<i>251</i>&nbsp;            try {
+<b class="nc"><i>252</i>&nbsp;                shutdownNow();</b>
+<b class="nc"><i>253</i>&nbsp;            } catch (IOException ignore) { }</b>
+<i>254</i>&nbsp;        }
+<i>255</i>&nbsp;    }
+<b class="nc"><i>256</i>&nbsp;</b>
+<b class="nc"><i>257</i>&nbsp;    /**</b>
+<i>258</i>&nbsp;     * Invoked when a channel associated with this port is closed before
+<i>259</i>&nbsp;     * notifications for all outstanding I/O operations have been received.
+<b class="nc"><i>260</i>&nbsp;     */</b>
+<i>261</i>&nbsp;    void makeStale(Long overlapped) {
+<b class="nc"><i>262</i>&nbsp;        synchronized (staleIoSet) {</b>
+<b class="nc"><i>263</i>&nbsp;            staleIoSet.add(overlapped);</b>
+<i>264</i>&nbsp;        }
+<i>265</i>&nbsp;    }
+<i>266</i>&nbsp;
+<i>267</i>&nbsp;    /**
+<i>268</i>&nbsp;     * Checks if the given OVERLAPPED is stale and if so, releases it.
+<i>269</i>&nbsp;     */
+<i>270</i>&nbsp;    private void checkIfStale(long ov) {
+<i>271</i>&nbsp;        synchronized (staleIoSet) {
+<b class="nc"><i>272</i>&nbsp;            boolean removed = staleIoSet.remove(ov);</b>
+<b class="nc"><i>273</i>&nbsp;            if (removed) {</b>
+<b class="nc"><i>274</i>&nbsp;                unsafe.freeMemory(ov);</b>
+<i>275</i>&nbsp;            }
+<i>276</i>&nbsp;        }
+<i>277</i>&nbsp;    }
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;    /**
+<i>280</i>&nbsp;     * The handler for consuming the result of an asynchronous I/O operation.
+<b class="nc"><i>281</i>&nbsp;     */</b>
+<b class="nc"><i>282</i>&nbsp;    static interface ResultHandler {</b>
+<b class="nc"><i>283</i>&nbsp;        /**</b>
+<b class="nc"><i>284</i>&nbsp;         * Invoked if the I/O operation completes successfully.</b>
+<i>285</i>&nbsp;         */
+<b class="nc"><i>286</i>&nbsp;        public void completed(int bytesTransferred, boolean canInvokeDirect);</b>
+<i>287</i>&nbsp;
+<i>288</i>&nbsp;        /**
+<i>289</i>&nbsp;         * Invoked if the I/O operation fails.
+<i>290</i>&nbsp;         */
+<i>291</i>&nbsp;        public void failed(int error, IOException ioe);
+<i>292</i>&nbsp;    }
+<i>293</i>&nbsp;
+<i>294</i>&nbsp;    // Creates IOException for the given I/O error.
+<i>295</i>&nbsp;    private static IOException translateErrorToIOException(int error) {
+<i>296</i>&nbsp;        String msg = getErrorMessage(error);
+<i>297</i>&nbsp;        if (msg == null)
+<i>298</i>&nbsp;            msg = &quot;Unknown error: 0x0&quot; + Integer.toHexString(error);
+<i>299</i>&nbsp;        return new IOException(msg);
+<i>300</i>&nbsp;    }
+<i>301</i>&nbsp;
+<i>302</i>&nbsp;    /**
+<i>303</i>&nbsp;     * Long-running task servicing system-wide or per-file completion port
+<i>304</i>&nbsp;     */
+<i>305</i>&nbsp;    private class EventHandlerTask implements Runnable {
+<b class="nc"><i>306</i>&nbsp;        public void run() {</b>
+<b class="nc"><i>307</i>&nbsp;            Invoker.GroupAndInvokeCount myGroupAndInvokeCount =</b>
+<b class="nc"><i>308</i>&nbsp;                Invoker.getGroupAndInvokeCount();</b>
+<b class="nc"><i>309</i>&nbsp;            boolean canInvokeDirect = (myGroupAndInvokeCount != null);</b>
+<i>310</i>&nbsp;            CompletionStatus ioResult = new CompletionStatus();
+<i>311</i>&nbsp;            boolean replaceMe = false;
+<i>312</i>&nbsp;
+<i>313</i>&nbsp;            try {
+<i>314</i>&nbsp;                for (;;) {
+<b class="nc"><i>315</i>&nbsp;                    // reset invoke count</b>
+<i>316</i>&nbsp;                    if (myGroupAndInvokeCount != null)
+<i>317</i>&nbsp;                        myGroupAndInvokeCount.resetInvokeCount();
+<b class="nc"><i>318</i>&nbsp;</b>
+<b class="nc"><i>319</i>&nbsp;                    // wait for I/O completion event</b>
+<b class="nc"><i>320</i>&nbsp;                    // A error here is fatal (thread will not be replaced)</b>
+<b class="nc"><i>321</i>&nbsp;                    replaceMe = false;</b>
+<i>322</i>&nbsp;                    try {
+<i>323</i>&nbsp;                        getQueuedCompletionStatus(port, ioResult);
+<i>324</i>&nbsp;                    } catch (IOException x) {
+<i>325</i>&nbsp;                        // should not happen
+<b class="nc"><i>326</i>&nbsp;                        x.printStackTrace();</b>
+<b class="nc"><i>327</i>&nbsp;                        return;</b>
+<i>328</i>&nbsp;                    }
+<i>329</i>&nbsp;
+<i>330</i>&nbsp;                    // handle wakeup to execute task or shutdown
+<b class="nc"><i>331</i>&nbsp;                    if (ioResult.completionKey() == 0 &amp;&amp;</b>
+<i>332</i>&nbsp;                        ioResult.overlapped() == 0L)
+<b class="nc"><i>333</i>&nbsp;                    {</b>
+<b class="nc"><i>334</i>&nbsp;                        Runnable task = pollTask();</b>
+<i>335</i>&nbsp;                        if (task == null) {
+<b class="nc"><i>336</i>&nbsp;                            // shutdown request</b>
+<i>337</i>&nbsp;                            return;
+<b class="nc"><i>338</i>&nbsp;                        }</b>
+<i>339</i>&nbsp;
+<i>340</i>&nbsp;                        // run task
+<b class="nc"><i>341</i>&nbsp;                        // (if error/exception then replace thread)</b>
+<b class="nc"><i>342</i>&nbsp;                        replaceMe = true;</b>
+<i>343</i>&nbsp;                        task.run();
+<b class="nc"><i>344</i>&nbsp;                        continue;</b>
+<b class="nc"><i>345</i>&nbsp;                    }</b>
+<i>346</i>&nbsp;
+<i>347</i>&nbsp;                    // map key to channel
+<i>348</i>&nbsp;                    OverlappedChannel ch = null;
+<i>349</i>&nbsp;                    keyToChannelLock.readLock().lock();
+<i>350</i>&nbsp;                    try {
+<i>351</i>&nbsp;                        ch = keyToChannel.get(ioResult.completionKey());
+<b class="nc"><i>352</i>&nbsp;                        if (ch == null) {</b>
+<b class="nc"><i>353</i>&nbsp;                            checkIfStale(ioResult.overlapped());</b>
+<b class="nc"><i>354</i>&nbsp;                            continue;</b>
+<i>355</i>&nbsp;                        }
+<i>356</i>&nbsp;                    } finally {
+<i>357</i>&nbsp;                        keyToChannelLock.readLock().unlock();
+<b class="nc"><i>358</i>&nbsp;                    }</b>
+<b class="nc"><i>359</i>&nbsp;</b>
+<i>360</i>&nbsp;                    // lookup I/O request
+<b class="nc"><i>361</i>&nbsp;                    PendingFuture&lt;?,?&gt; result = ch.getByOverlapped(ioResult.overlapped());</b>
+<b class="nc"><i>362</i>&nbsp;                    if (result == null) {</b>
+<b class="nc"><i>363</i>&nbsp;                        // we get here if the OVERLAPPED structure is associated</b>
+<i>364</i>&nbsp;                        // with an I/O operation on a channel that was closed
+<i>365</i>&nbsp;                        // but the I/O operation event wasn&#39;t read in a timely
+<i>366</i>&nbsp;                        // manner. Alternatively, it may be related to a
+<b class="nc"><i>367</i>&nbsp;                        // tryLock operation as the OVERLAPPED structures for</b>
+<b class="nc"><i>368</i>&nbsp;                        // these operations are not in the I/O cache.</b>
+<i>369</i>&nbsp;                        checkIfStale(ioResult.overlapped());
+<i>370</i>&nbsp;                        continue;
+<b class="nc"><i>371</i>&nbsp;                    }</b>
+<b class="nc"><i>372</i>&nbsp;</b>
+<i>373</i>&nbsp;                    // synchronize on result in case I/O completed immediately
+<i>374</i>&nbsp;                    // and was handled by initiator
+<i>375</i>&nbsp;                    synchronized (result) {
+<i>376</i>&nbsp;                        if (result.isDone()) {
+<i>377</i>&nbsp;                            continue;
+<i>378</i>&nbsp;                        }
+<b class="nc"><i>379</i>&nbsp;                        // not handled by initiator</b>
+<b class="nc"><i>380</i>&nbsp;                    }</b>
+<i>381</i>&nbsp;
+<i>382</i>&nbsp;                    // invoke I/O result handler
+<i>383</i>&nbsp;                    int error = ioResult.error();
+<i>384</i>&nbsp;                    ResultHandler rh = (ResultHandler)result.getContext();
+<b class="nc"><i>385</i>&nbsp;                    replaceMe = true; // (if error/exception then replace thread)</b>
+<b class="nc"><i>386</i>&nbsp;                    if (error == 0) {</b>
+<b class="nc"><i>387</i>&nbsp;                        rh.completed(ioResult.bytesTransferred(), canInvokeDirect);</b>
+<i>388</i>&nbsp;                    } else {
+<i>389</i>&nbsp;                        rh.failed(error, translateErrorToIOException(error));
+<b class="nc"><i>390</i>&nbsp;                    }</b>
+<i>391</i>&nbsp;                }
+<i>392</i>&nbsp;            } finally {
+<b class="nc"><i>393</i>&nbsp;                // last thread to exit when shutdown releases resources</b>
+<b class="nc"><i>394</i>&nbsp;                int remaining = threadExit(this, replaceMe);</b>
+<b class="nc"><i>395</i>&nbsp;                if (remaining == 0 &amp;&amp; isShutdown()) {</b>
+<b class="nc"><i>396</i>&nbsp;                    implClose();</b>
+<b class="nc"><i>397</i>&nbsp;                }</b>
+<i>398</i>&nbsp;            }
+<b class="nc"><i>399</i>&nbsp;        }</b>
+<i>400</i>&nbsp;    }
+<b class="nc"><i>401</i>&nbsp;</b>
+<i>402</i>&nbsp;    /**
+<i>403</i>&nbsp;     * Container for data returned by GetQueuedCompletionStatus
+<b class="nc"><i>404</i>&nbsp;     */</b>
+<b class="nc"><i>405</i>&nbsp;    private static class CompletionStatus {</b>
+<b class="nc"><i>406</i>&nbsp;        private int error;</b>
+<i>407</i>&nbsp;        private int bytesTransferred;
+<b class="nc"><i>408</i>&nbsp;        private int completionKey;</b>
+<i>409</i>&nbsp;        private long overlapped;
+<i>410</i>&nbsp;
+<i>411</i>&nbsp;        private CompletionStatus() { }
+<i>412</i>&nbsp;        int error() { return error; }
+<i>413</i>&nbsp;        int bytesTransferred() { return bytesTransferred; }
+<i>414</i>&nbsp;        int completionKey() { return completionKey; }
+<b class="nc"><i>415</i>&nbsp;        long overlapped() { return overlapped; }</b>
+<i>416</i>&nbsp;    }
+<i>417</i>&nbsp;
+<i>418</i>&nbsp;    // -- native methods --
+<i>419</i>&nbsp;
+<i>420</i>&nbsp;    private static native void initIDs();
+<b class="nc"><i>421</i>&nbsp;</b>
+<b class="nc"><i>422</i>&nbsp;    private static native long createIoCompletionPort(long handle,</b>
+<b class="nc"><i>423</i>&nbsp;        long existingPort, int completionKey, int concurrency) throws IOException;</b>
+<b class="nc"><i>424</i>&nbsp;</b>
+<b class="nc"><i>425</i>&nbsp;    private static native void close0(long handle);</b>
+<i>426</i>&nbsp;
+<i>427</i>&nbsp;    private static native void getQueuedCompletionStatus(long completionPort,
+<i>428</i>&nbsp;        CompletionStatus status) throws IOException;
+<i>429</i>&nbsp;
+<i>430</i>&nbsp;    private static native void postQueuedCompletionStatus(long completionPort,
+<i>431</i>&nbsp;        int completionKey) throws IOException;
+<i>432</i>&nbsp;
+<i>433</i>&nbsp;    private static native String getErrorMessage(int error);
+<i>434</i>&nbsp;
+<i>435</i>&nbsp;    static {
+<i>436</i>&nbsp;        IOUtil.load();
+<i>437</i>&nbsp;        initIDs();
+<i>438</i>&nbsp;    }
+<i>439</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

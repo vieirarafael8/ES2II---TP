@@ -1,0 +1,1029 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ForwardBuilder</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.provider.certpath</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ForwardBuilder (sun.security.provider.certpath)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ForwardBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 11)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 189)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">ForwardBuilder$PKIXCertComparator</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 132)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 321)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.provider.certpath;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.security.GeneralSecurityException;
+<i>30</i>&nbsp;import java.security.InvalidKeyException;
+<i>31</i>&nbsp;import java.security.PublicKey;
+<i>32</i>&nbsp;import java.security.cert.CertificateException;
+<i>33</i>&nbsp;import java.security.cert.CertPathValidatorException;
+<i>34</i>&nbsp;import java.security.cert.PKIXReason;
+<i>35</i>&nbsp;import java.security.cert.CertStore;
+<i>36</i>&nbsp;import java.security.cert.CertStoreException;
+<i>37</i>&nbsp;import java.security.cert.PKIXBuilderParameters;
+<i>38</i>&nbsp;import java.security.cert.PKIXCertPathChecker;
+<i>39</i>&nbsp;import java.security.cert.TrustAnchor;
+<i>40</i>&nbsp;import java.security.cert.X509Certificate;
+<i>41</i>&nbsp;import java.security.cert.X509CertSelector;
+<i>42</i>&nbsp;import java.util.*;
+<i>43</i>&nbsp;import javax.security.auth.x500.X500Principal;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;import sun.security.provider.certpath.PKIX.BuilderParams;
+<i>46</i>&nbsp;import sun.security.util.Debug;
+<i>47</i>&nbsp;import sun.security.x509.AccessDescription;
+<i>48</i>&nbsp;import sun.security.x509.AuthorityInfoAccessExtension;
+<i>49</i>&nbsp;import sun.security.x509.AuthorityKeyIdentifierExtension;
+<i>50</i>&nbsp;import static sun.security.x509.PKIXExtensions.*;
+<i>51</i>&nbsp;import sun.security.x509.X500Name;
+<i>52</i>&nbsp;import sun.security.x509.X509CertImpl;
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;/**
+<i>55</i>&nbsp; * This class represents a forward builder, which is able to retrieve
+<i>56</i>&nbsp; * matching certificates from CertStores and verify a particular certificate
+<i>57</i>&nbsp; * against a ForwardState.
+<i>58</i>&nbsp; *
+<i>59</i>&nbsp; * @since       1.4
+<i>60</i>&nbsp; * @author      Yassir Elley
+<i>61</i>&nbsp; * @author      Sean Mullan
+<i>62</i>&nbsp; */
+<b class="nc"><i>63</i>&nbsp;class ForwardBuilder extends Builder {</b>
+<i>64</i>&nbsp;
+<b class="nc"><i>65</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;certpath&quot;);</b>
+<i>66</i>&nbsp;    private final Set&lt;X509Certificate&gt; trustedCerts;
+<i>67</i>&nbsp;    private final Set&lt;X500Principal&gt; trustedSubjectDNs;
+<i>68</i>&nbsp;    private final Set&lt;TrustAnchor&gt; trustAnchors;
+<i>69</i>&nbsp;    private X509CertSelector eeSelector;
+<i>70</i>&nbsp;    private AdaptableX509CertSelector caSelector;
+<i>71</i>&nbsp;    private X509CertSelector caTargetSelector;
+<i>72</i>&nbsp;    TrustAnchor trustAnchor;
+<b class="nc"><i>73</i>&nbsp;    private boolean searchAllCertStores = true;</b>
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    /**
+<i>76</i>&nbsp;     * Initialize the builder with the input parameters.
+<i>77</i>&nbsp;     *
+<i>78</i>&nbsp;     * @param params the parameter set used to build a certification path
+<i>79</i>&nbsp;     */
+<i>80</i>&nbsp;    ForwardBuilder(BuilderParams buildParams, boolean searchAllCertStores) {
+<b class="nc"><i>81</i>&nbsp;        super(buildParams);</b>
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;        // populate sets of trusted certificates and subject DNs
+<b class="nc"><i>84</i>&nbsp;        trustAnchors = buildParams.trustAnchors();</b>
+<b class="nc"><i>85</i>&nbsp;        trustedCerts = new HashSet&lt;X509Certificate&gt;(trustAnchors.size());</b>
+<b class="nc"><i>86</i>&nbsp;        trustedSubjectDNs = new HashSet&lt;X500Principal&gt;(trustAnchors.size());</b>
+<b class="nc"><i>87</i>&nbsp;        for (TrustAnchor anchor : trustAnchors) {</b>
+<b class="nc"><i>88</i>&nbsp;            X509Certificate trustedCert = anchor.getTrustedCert();</b>
+<b class="nc"><i>89</i>&nbsp;            if (trustedCert != null) {</b>
+<b class="nc"><i>90</i>&nbsp;                trustedCerts.add(trustedCert);</b>
+<b class="nc"><i>91</i>&nbsp;                trustedSubjectDNs.add(trustedCert.getSubjectX500Principal());</b>
+<i>92</i>&nbsp;            } else {
+<b class="nc"><i>93</i>&nbsp;                trustedSubjectDNs.add(anchor.getCA());</b>
+<i>94</i>&nbsp;            }
+<b class="nc"><i>95</i>&nbsp;        }</b>
+<b class="nc"><i>96</i>&nbsp;        this.searchAllCertStores = searchAllCertStores;</b>
+<i>97</i>&nbsp;    }
+<i>98</i>&nbsp;
+<i>99</i>&nbsp;    /**
+<i>100</i>&nbsp;     * Retrieves all certs from the specified CertStores that satisfy the
+<i>101</i>&nbsp;     * requirements specified in the parameters and the current
+<i>102</i>&nbsp;     * PKIX state (name constraints, policy constraints, etc).
+<i>103</i>&nbsp;     *
+<i>104</i>&nbsp;     * @param currentState the current state.
+<i>105</i>&nbsp;     *        Must be an instance of &lt;code&gt;ForwardState&lt;/code&gt;
+<i>106</i>&nbsp;     * @param certStores list of CertStores
+<i>107</i>&nbsp;     */
+<i>108</i>&nbsp;    @Override
+<i>109</i>&nbsp;    Collection&lt;X509Certificate&gt; getMatchingCerts(State currentState,
+<i>110</i>&nbsp;                                                 List&lt;CertStore&gt; certStores)
+<i>111</i>&nbsp;        throws CertStoreException, CertificateException, IOException
+<i>112</i>&nbsp;    {
+<b class="nc"><i>113</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>114</i>&nbsp;            debug.println(&quot;ForwardBuilder.getMatchingCerts()...&quot;);</b>
+<i>115</i>&nbsp;        }
+<i>116</i>&nbsp;
+<b class="nc"><i>117</i>&nbsp;        ForwardState currState = (ForwardState) currentState;</b>
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;        /*
+<i>120</i>&nbsp;         * We store certs in a Set because we don&#39;t want duplicates.
+<i>121</i>&nbsp;         * As each cert is added, it is sorted based on the PKIXCertComparator
+<i>122</i>&nbsp;         * algorithm.
+<i>123</i>&nbsp;         */
+<b class="nc"><i>124</i>&nbsp;        Comparator&lt;X509Certificate&gt; comparator =</b>
+<i>125</i>&nbsp;            new PKIXCertComparator(trustedSubjectDNs, currState.cert);
+<b class="nc"><i>126</i>&nbsp;        Set&lt;X509Certificate&gt; certs = new TreeSet&lt;&gt;(comparator);</b>
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;        /*
+<i>129</i>&nbsp;         * Only look for EE certs if search has just started.
+<i>130</i>&nbsp;         */
+<b class="nc"><i>131</i>&nbsp;        if (currState.isInitial()) {</b>
+<b class="nc"><i>132</i>&nbsp;            getMatchingEECerts(currState, certStores, certs);</b>
+<i>133</i>&nbsp;        }
+<b class="nc"><i>134</i>&nbsp;        getMatchingCACerts(currState, certStores, certs);</b>
+<i>135</i>&nbsp;
+<b class="nc"><i>136</i>&nbsp;        return certs;</b>
+<i>137</i>&nbsp;    }
+<i>138</i>&nbsp;
+<i>139</i>&nbsp;    /*
+<i>140</i>&nbsp;     * Retrieves all end-entity certificates which satisfy constraints
+<i>141</i>&nbsp;     * and requirements specified in the parameters and PKIX state.
+<i>142</i>&nbsp;     */
+<i>143</i>&nbsp;    private void getMatchingEECerts(ForwardState currentState,
+<i>144</i>&nbsp;                                    List&lt;CertStore&gt; certStores,
+<i>145</i>&nbsp;                                    Collection&lt;X509Certificate&gt; eeCerts)
+<i>146</i>&nbsp;        throws IOException
+<i>147</i>&nbsp;    {
+<b class="nc"><i>148</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>149</i>&nbsp;            debug.println(&quot;ForwardBuilder.getMatchingEECerts()...&quot;);</b>
+<i>150</i>&nbsp;        }
+<i>151</i>&nbsp;        /*
+<i>152</i>&nbsp;         * Compose a certificate matching rule to filter out
+<i>153</i>&nbsp;         * certs which don&#39;t satisfy constraints
+<i>154</i>&nbsp;         *
+<i>155</i>&nbsp;         * First, retrieve clone of current target cert constraints,
+<i>156</i>&nbsp;         * and then add more selection criteria based on current validation
+<i>157</i>&nbsp;         * state. Since selector never changes, cache local copy &amp; reuse.
+<i>158</i>&nbsp;         */
+<b class="nc"><i>159</i>&nbsp;        if (eeSelector == null) {</b>
+<b class="nc"><i>160</i>&nbsp;            eeSelector = (X509CertSelector) targetCertConstraints.clone();</b>
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;            /*
+<i>163</i>&nbsp;             * Match on certificate validity date
+<i>164</i>&nbsp;             */
+<b class="nc"><i>165</i>&nbsp;            eeSelector.setCertificateValid(buildParams.date());</b>
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;            /*
+<i>168</i>&nbsp;             * Policy processing optimizations
+<i>169</i>&nbsp;             */
+<b class="nc"><i>170</i>&nbsp;            if (buildParams.explicitPolicyRequired()) {</b>
+<b class="nc"><i>171</i>&nbsp;                eeSelector.setPolicy(getMatchingPolicies());</b>
+<i>172</i>&nbsp;            }
+<i>173</i>&nbsp;            /*
+<i>174</i>&nbsp;             * Require EE certs
+<i>175</i>&nbsp;             */
+<b class="nc"><i>176</i>&nbsp;            eeSelector.setBasicConstraints(-2);</b>
+<i>177</i>&nbsp;        }
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;        /* Retrieve matching EE certs from CertStores */
+<b class="nc"><i>180</i>&nbsp;        addMatchingCerts(eeSelector, certStores, eeCerts, searchAllCertStores);</b>
+<i>181</i>&nbsp;    }
+<i>182</i>&nbsp;
+<i>183</i>&nbsp;    /**
+<i>184</i>&nbsp;     * Retrieves all CA certificates which satisfy constraints
+<i>185</i>&nbsp;     * and requirements specified in the parameters and PKIX state.
+<i>186</i>&nbsp;     */
+<i>187</i>&nbsp;    private void getMatchingCACerts(ForwardState currentState,
+<i>188</i>&nbsp;                                    List&lt;CertStore&gt; certStores,
+<i>189</i>&nbsp;                                    Collection&lt;X509Certificate&gt; caCerts)
+<i>190</i>&nbsp;        throws IOException
+<i>191</i>&nbsp;    {
+<b class="nc"><i>192</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>193</i>&nbsp;            debug.println(&quot;ForwardBuilder.getMatchingCACerts()...&quot;);</b>
+<i>194</i>&nbsp;        }
+<b class="nc"><i>195</i>&nbsp;        int initialSize = caCerts.size();</b>
+<i>196</i>&nbsp;
+<i>197</i>&nbsp;        /*
+<i>198</i>&nbsp;         * Compose a CertSelector to filter out
+<i>199</i>&nbsp;         * certs which do not satisfy requirements.
+<i>200</i>&nbsp;         */
+<b class="nc"><i>201</i>&nbsp;        X509CertSelector sel = null;</b>
+<i>202</i>&nbsp;
+<b class="nc"><i>203</i>&nbsp;        if (currentState.isInitial()) {</b>
+<b class="nc"><i>204</i>&nbsp;            if (targetCertConstraints.getBasicConstraints() == -2) {</b>
+<i>205</i>&nbsp;                // no need to continue: this means we never can match a CA cert
+<i>206</i>&nbsp;                return;
+<i>207</i>&nbsp;            }
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;            /* This means a CA is the target, so match on same stuff as
+<i>210</i>&nbsp;             * getMatchingEECerts
+<i>211</i>&nbsp;             */
+<b class="nc"><i>212</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>213</i>&nbsp;                debug.println(&quot;ForwardBuilder.getMatchingCACerts(): &quot; +</b>
+<i>214</i>&nbsp;                              &quot;the target is a CA&quot;);
+<i>215</i>&nbsp;            }
+<i>216</i>&nbsp;
+<b class="nc"><i>217</i>&nbsp;            if (caTargetSelector == null) {</b>
+<b class="nc"><i>218</i>&nbsp;                caTargetSelector =</b>
+<b class="nc"><i>219</i>&nbsp;                    (X509CertSelector) targetCertConstraints.clone();</b>
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;                /*
+<i>222</i>&nbsp;                 * Since we don&#39;t check the validity period of trusted
+<i>223</i>&nbsp;                 * certificates, please don&#39;t set the certificate valid
+<i>224</i>&nbsp;                 * criterion unless the trusted certificate matching is
+<i>225</i>&nbsp;                 * completed.
+<i>226</i>&nbsp;                 */
+<i>227</i>&nbsp;
+<i>228</i>&nbsp;                /*
+<i>229</i>&nbsp;                 * Policy processing optimizations
+<i>230</i>&nbsp;                 */
+<b class="nc"><i>231</i>&nbsp;                if (buildParams.explicitPolicyRequired())</b>
+<b class="nc"><i>232</i>&nbsp;                    caTargetSelector.setPolicy(getMatchingPolicies());</b>
+<i>233</i>&nbsp;            }
+<i>234</i>&nbsp;
+<b class="nc"><i>235</i>&nbsp;            sel = caTargetSelector;</b>
+<i>236</i>&nbsp;        } else {
+<i>237</i>&nbsp;
+<b class="nc"><i>238</i>&nbsp;            if (caSelector == null) {</b>
+<b class="nc"><i>239</i>&nbsp;                caSelector = new AdaptableX509CertSelector();</b>
+<i>240</i>&nbsp;
+<i>241</i>&nbsp;                /*
+<i>242</i>&nbsp;                 * Since we don&#39;t check the validity period of trusted
+<i>243</i>&nbsp;                 * certificates, please don&#39;t set the certificate valid
+<i>244</i>&nbsp;                 * criterion unless the trusted certificate matching is
+<i>245</i>&nbsp;                 * completed.
+<i>246</i>&nbsp;                 */
+<i>247</i>&nbsp;
+<i>248</i>&nbsp;                /*
+<i>249</i>&nbsp;                 * Policy processing optimizations
+<i>250</i>&nbsp;                 */
+<b class="nc"><i>251</i>&nbsp;                if (buildParams.explicitPolicyRequired())</b>
+<b class="nc"><i>252</i>&nbsp;                    caSelector.setPolicy(getMatchingPolicies());</b>
+<i>253</i>&nbsp;            }
+<i>254</i>&nbsp;
+<i>255</i>&nbsp;            /*
+<i>256</i>&nbsp;             * Match on subject (issuer of previous cert)
+<i>257</i>&nbsp;             */
+<b class="nc"><i>258</i>&nbsp;            caSelector.setSubject(currentState.issuerDN);</b>
+<i>259</i>&nbsp;
+<i>260</i>&nbsp;            /*
+<i>261</i>&nbsp;             * Match on subjectNamesTraversed (both DNs and AltNames)
+<i>262</i>&nbsp;             * (checks that current cert&#39;s name constraints permit it
+<i>263</i>&nbsp;             * to certify all the DNs and AltNames that have been traversed)
+<i>264</i>&nbsp;             */
+<b class="nc"><i>265</i>&nbsp;            CertPathHelper.setPathToNames</b>
+<b class="nc"><i>266</i>&nbsp;                (caSelector, currentState.subjectNamesTraversed);</b>
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;            /*
+<i>269</i>&nbsp;             * check the validity period
+<i>270</i>&nbsp;             */
+<b class="nc"><i>271</i>&nbsp;            caSelector.setValidityPeriod(currentState.cert.getNotBefore(),</b>
+<b class="nc"><i>272</i>&nbsp;                                         currentState.cert.getNotAfter());</b>
+<i>273</i>&nbsp;
+<b class="nc"><i>274</i>&nbsp;            sel = caSelector;</b>
+<i>275</i>&nbsp;        }
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;        /*
+<i>278</i>&nbsp;         * For compatibility, conservatively, we don&#39;t check the path
+<i>279</i>&nbsp;         * length constraint of trusted anchors.  Please don&#39;t set the
+<i>280</i>&nbsp;         * basic constraints criterion unless the trusted certificate
+<i>281</i>&nbsp;         * matching is completed.
+<i>282</i>&nbsp;         */
+<b class="nc"><i>283</i>&nbsp;        sel.setBasicConstraints(-1);</b>
+<i>284</i>&nbsp;
+<b class="nc"><i>285</i>&nbsp;        for (X509Certificate trustedCert : trustedCerts) {</b>
+<b class="nc"><i>286</i>&nbsp;            if (sel.match(trustedCert)) {</b>
+<b class="nc"><i>287</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>288</i>&nbsp;                    debug.println(&quot;ForwardBuilder.getMatchingCACerts: &quot; +</b>
+<i>289</i>&nbsp;                        &quot;found matching trust anchor.&quot; +
+<i>290</i>&nbsp;                        &quot;\n  SN: &quot; +
+<b class="nc"><i>291</i>&nbsp;                            Debug.toHexString(trustedCert.getSerialNumber()) +</b>
+<i>292</i>&nbsp;                        &quot;\n  Subject: &quot; +
+<b class="nc"><i>293</i>&nbsp;                            trustedCert.getSubjectX500Principal() +</b>
+<i>294</i>&nbsp;                        &quot;\n  Issuer: &quot; +
+<b class="nc"><i>295</i>&nbsp;                            trustedCert.getIssuerX500Principal());</b>
+<i>296</i>&nbsp;                }
+<b class="nc"><i>297</i>&nbsp;                if (caCerts.add(trustedCert) &amp;&amp; !searchAllCertStores) {</b>
+<i>298</i>&nbsp;                    return;
+<i>299</i>&nbsp;                }
+<i>300</i>&nbsp;            }
+<b class="nc"><i>301</i>&nbsp;        }</b>
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;        /*
+<i>304</i>&nbsp;         * The trusted certificate matching is completed. We need to match
+<i>305</i>&nbsp;         * on certificate validity date.
+<i>306</i>&nbsp;         */
+<b class="nc"><i>307</i>&nbsp;        sel.setCertificateValid(buildParams.date());</b>
+<i>308</i>&nbsp;
+<i>309</i>&nbsp;        /*
+<i>310</i>&nbsp;         * Require CA certs with a pathLenConstraint that allows
+<i>311</i>&nbsp;         * at least as many CA certs that have already been traversed
+<i>312</i>&nbsp;         */
+<b class="nc"><i>313</i>&nbsp;        sel.setBasicConstraints(currentState.traversedCACerts);</b>
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;        /*
+<i>316</i>&nbsp;         * If we have already traversed as many CA certs as the maxPathLength
+<i>317</i>&nbsp;         * will allow us to, then we don&#39;t bother looking through these
+<i>318</i>&nbsp;         * certificate pairs. If maxPathLength has a value of -1, this
+<i>319</i>&nbsp;         * means it is unconstrained, so we always look through the
+<i>320</i>&nbsp;         * certificate pairs.
+<i>321</i>&nbsp;         */
+<b class="nc"><i>322</i>&nbsp;        if (currentState.isInitial() ||</b>
+<b class="nc"><i>323</i>&nbsp;           (buildParams.maxPathLength() == -1) ||</b>
+<b class="nc"><i>324</i>&nbsp;           (buildParams.maxPathLength() &gt; currentState.traversedCACerts))</b>
+<i>325</i>&nbsp;        {
+<b class="nc"><i>326</i>&nbsp;            if (addMatchingCerts(sel, certStores,</b>
+<i>327</i>&nbsp;                                 caCerts, searchAllCertStores)
+<i>328</i>&nbsp;                &amp;&amp; !searchAllCertStores) {
+<i>329</i>&nbsp;                return;
+<i>330</i>&nbsp;            }
+<i>331</i>&nbsp;        }
+<i>332</i>&nbsp;
+<b class="nc"><i>333</i>&nbsp;        if (!currentState.isInitial() &amp;&amp; Builder.USE_AIA) {</b>
+<i>334</i>&nbsp;            // check for AuthorityInformationAccess extension
+<b class="nc"><i>335</i>&nbsp;            AuthorityInfoAccessExtension aiaExt =</b>
+<b class="nc"><i>336</i>&nbsp;                currentState.cert.getAuthorityInfoAccessExtension();</b>
+<b class="nc"><i>337</i>&nbsp;            if (aiaExt != null) {</b>
+<b class="nc"><i>338</i>&nbsp;                getCerts(aiaExt, caCerts);</b>
+<i>339</i>&nbsp;            }
+<i>340</i>&nbsp;        }
+<i>341</i>&nbsp;
+<b class="nc"><i>342</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>343</i>&nbsp;            int numCerts = caCerts.size() - initialSize;</b>
+<b class="nc"><i>344</i>&nbsp;            debug.println(&quot;ForwardBuilder.getMatchingCACerts: found &quot; +</b>
+<i>345</i>&nbsp;                numCerts + &quot; CA certs&quot;);
+<i>346</i>&nbsp;        }
+<i>347</i>&nbsp;    }
+<i>348</i>&nbsp;
+<i>349</i>&nbsp;    /**
+<i>350</i>&nbsp;     * Download Certificates from the given AIA and add them to the
+<i>351</i>&nbsp;     * specified Collection.
+<i>352</i>&nbsp;     */
+<i>353</i>&nbsp;    // cs.getCertificates(caSelector) returns a collection of X509Certificate&#39;s
+<i>354</i>&nbsp;    // because of the selector, so the cast is safe
+<i>355</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>356</i>&nbsp;    private boolean getCerts(AuthorityInfoAccessExtension aiaExt,
+<i>357</i>&nbsp;                             Collection&lt;X509Certificate&gt; certs)
+<i>358</i>&nbsp;    {
+<b class="nc"><i>359</i>&nbsp;        if (Builder.USE_AIA == false) {</b>
+<b class="nc"><i>360</i>&nbsp;            return false;</b>
+<i>361</i>&nbsp;        }
+<b class="nc"><i>362</i>&nbsp;        List&lt;AccessDescription&gt; adList = aiaExt.getAccessDescriptions();</b>
+<b class="nc"><i>363</i>&nbsp;        if (adList == null || adList.isEmpty()) {</b>
+<b class="nc"><i>364</i>&nbsp;            return false;</b>
+<i>365</i>&nbsp;        }
+<i>366</i>&nbsp;
+<b class="nc"><i>367</i>&nbsp;        boolean add = false;</b>
+<b class="nc"><i>368</i>&nbsp;        for (AccessDescription ad : adList) {</b>
+<b class="nc"><i>369</i>&nbsp;            CertStore cs = URICertStore.getInstance(ad);</b>
+<b class="nc"><i>370</i>&nbsp;            if (cs != null) {</b>
+<i>371</i>&nbsp;                try {
+<b class="nc"><i>372</i>&nbsp;                    if (certs.addAll((Collection&lt;X509Certificate&gt;)</b>
+<b class="nc"><i>373</i>&nbsp;                        cs.getCertificates(caSelector))) {</b>
+<b class="nc"><i>374</i>&nbsp;                        add = true;</b>
+<b class="nc"><i>375</i>&nbsp;                        if (!searchAllCertStores) {</b>
+<b class="nc"><i>376</i>&nbsp;                            return true;</b>
+<i>377</i>&nbsp;                        }
+<i>378</i>&nbsp;                    }
+<b class="nc"><i>379</i>&nbsp;                } catch (CertStoreException cse) {</b>
+<b class="nc"><i>380</i>&nbsp;                    if (debug != null) {</b>
+<b class="nc"><i>381</i>&nbsp;                        debug.println(&quot;exception getting certs from CertStore:&quot;);</b>
+<b class="nc"><i>382</i>&nbsp;                        cse.printStackTrace();</b>
+<i>383</i>&nbsp;                    }
+<b class="nc"><i>384</i>&nbsp;                }</b>
+<i>385</i>&nbsp;            }
+<b class="nc"><i>386</i>&nbsp;        }</b>
+<b class="nc"><i>387</i>&nbsp;        return add;</b>
+<i>388</i>&nbsp;    }
+<i>389</i>&nbsp;
+<i>390</i>&nbsp;    /**
+<i>391</i>&nbsp;     * This inner class compares 2 PKIX certificates according to which
+<i>392</i>&nbsp;     * should be tried first when building a path from the target.
+<i>393</i>&nbsp;     * The preference order is as follows:
+<i>394</i>&nbsp;     *
+<i>395</i>&nbsp;     * Given trusted certificate(s):
+<i>396</i>&nbsp;     *    Subject:ou=D,ou=C,o=B,c=A
+<i>397</i>&nbsp;     *
+<i>398</i>&nbsp;     * Preference order for current cert:
+<i>399</i>&nbsp;     *
+<i>400</i>&nbsp;     * 1) The key identifier of an AKID extension (if present) in the
+<i>401</i>&nbsp;     *    previous certificate matches the key identifier in the SKID extension
+<i>402</i>&nbsp;     *
+<i>403</i>&nbsp;     * 2) Issuer matches a trusted subject
+<i>404</i>&nbsp;     *    Issuer: ou=D,ou=C,o=B,c=A
+<i>405</i>&nbsp;     *
+<i>406</i>&nbsp;     * 3) Issuer is a descendant of a trusted subject (in order of
+<i>407</i>&nbsp;     *    number of links to the trusted subject)
+<i>408</i>&nbsp;     *    a) Issuer: ou=E,ou=D,ou=C,o=B,c=A        [links=1]
+<i>409</i>&nbsp;     *    b) Issuer: ou=F,ou=E,ou=D,ou=C,ou=B,c=A  [links=2]
+<i>410</i>&nbsp;     *
+<i>411</i>&nbsp;     * 4) Issuer is an ancestor of a trusted subject (in order of number of
+<i>412</i>&nbsp;     *    links to the trusted subject)
+<i>413</i>&nbsp;     *    a) Issuer: ou=C,o=B,c=A [links=1]
+<i>414</i>&nbsp;     *    b) Issuer: o=B,c=A      [links=2]
+<i>415</i>&nbsp;     *
+<i>416</i>&nbsp;     * 5) Issuer is in the same namespace as a trusted subject (in order of
+<i>417</i>&nbsp;     *    number of links to the trusted subject)
+<i>418</i>&nbsp;     *    a) Issuer: ou=G,ou=C,o=B,c=A  [links=2]
+<i>419</i>&nbsp;     *    b) Issuer: ou=H,o=B,c=A       [links=3]
+<i>420</i>&nbsp;     *
+<i>421</i>&nbsp;     * 6) Issuer is an ancestor of certificate subject (in order of number
+<i>422</i>&nbsp;     *    of links to the certificate subject)
+<i>423</i>&nbsp;     *    a) Issuer:  ou=K,o=J,c=A
+<i>424</i>&nbsp;     *       Subject: ou=L,ou=K,o=J,c=A
+<i>425</i>&nbsp;     *    b) Issuer:  o=J,c=A
+<i>426</i>&nbsp;     *       Subject: ou=L,ou=K,0=J,c=A
+<i>427</i>&nbsp;     *
+<i>428</i>&nbsp;     * 7) Any other certificates
+<i>429</i>&nbsp;     */
+<i>430</i>&nbsp;    static class PKIXCertComparator implements Comparator&lt;X509Certificate&gt; {
+<i>431</i>&nbsp;
+<i>432</i>&nbsp;        static final String METHOD_NME = &quot;PKIXCertComparator.compare()&quot;;
+<i>433</i>&nbsp;
+<i>434</i>&nbsp;        private final Set&lt;X500Principal&gt; trustedSubjectDNs;
+<i>435</i>&nbsp;        private final X509CertSelector certSkidSelector;
+<i>436</i>&nbsp;
+<i>437</i>&nbsp;        PKIXCertComparator(Set&lt;X500Principal&gt; trustedSubjectDNs,
+<b class="nc"><i>438</i>&nbsp;                           X509CertImpl previousCert) throws IOException {</b>
+<b class="nc"><i>439</i>&nbsp;            this.trustedSubjectDNs = trustedSubjectDNs;</b>
+<b class="nc"><i>440</i>&nbsp;            this.certSkidSelector = getSelector(previousCert);</b>
+<i>441</i>&nbsp;        }
+<i>442</i>&nbsp;
+<i>443</i>&nbsp;        /**
+<i>444</i>&nbsp;         * Returns an X509CertSelector for matching on the authority key
+<i>445</i>&nbsp;         * identifier, or null if not applicable.
+<i>446</i>&nbsp;         */
+<i>447</i>&nbsp;        private X509CertSelector getSelector(X509CertImpl previousCert)
+<i>448</i>&nbsp;            throws IOException {
+<b class="nc"><i>449</i>&nbsp;            if (previousCert != null) {</b>
+<b class="nc"><i>450</i>&nbsp;                AuthorityKeyIdentifierExtension akidExt =</b>
+<b class="nc"><i>451</i>&nbsp;                    previousCert.getAuthorityKeyIdentifierExtension();</b>
+<b class="nc"><i>452</i>&nbsp;                if (akidExt != null) {</b>
+<b class="nc"><i>453</i>&nbsp;                    byte[] skid = akidExt.getEncodedKeyIdentifier();</b>
+<b class="nc"><i>454</i>&nbsp;                    if (skid != null) {</b>
+<b class="nc"><i>455</i>&nbsp;                        X509CertSelector selector = new X509CertSelector();</b>
+<b class="nc"><i>456</i>&nbsp;                        selector.setSubjectKeyIdentifier(skid);</b>
+<b class="nc"><i>457</i>&nbsp;                        return selector;</b>
+<i>458</i>&nbsp;                    }
+<i>459</i>&nbsp;                }
+<i>460</i>&nbsp;            }
+<b class="nc"><i>461</i>&nbsp;            return null;</b>
+<i>462</i>&nbsp;        }
+<i>463</i>&nbsp;
+<i>464</i>&nbsp;        /**
+<i>465</i>&nbsp;         * @param oCert1 First X509Certificate to be compared
+<i>466</i>&nbsp;         * @param oCert2 Second X509Certificate to be compared
+<i>467</i>&nbsp;         * @return -1 if oCert1 is preferable to oCert2, or
+<i>468</i>&nbsp;         *            if oCert1 and oCert2 are equally preferable (in this
+<i>469</i>&nbsp;         *            case it doesn&#39;t matter which is preferable, but we don&#39;t
+<i>470</i>&nbsp;         *            return 0 because the comparator would behave strangely
+<i>471</i>&nbsp;         *            when used in a SortedSet).
+<i>472</i>&nbsp;         *          1 if oCert2 is preferable to oCert1
+<i>473</i>&nbsp;         *          0 if oCert1.equals(oCert2). We only return 0 if the
+<i>474</i>&nbsp;         *          certs are equal so that this comparator behaves
+<i>475</i>&nbsp;         *          correctly when used in a SortedSet.
+<i>476</i>&nbsp;         * @throws ClassCastException if either argument is not of type
+<i>477</i>&nbsp;         * X509Certificate
+<i>478</i>&nbsp;         */
+<i>479</i>&nbsp;        @Override
+<i>480</i>&nbsp;        public int compare(X509Certificate oCert1, X509Certificate oCert2) {
+<i>481</i>&nbsp;
+<i>482</i>&nbsp;            // if certs are the same, return 0
+<b class="nc"><i>483</i>&nbsp;            if (oCert1.equals(oCert2)) return 0;</b>
+<i>484</i>&nbsp;
+<i>485</i>&nbsp;            // If akid/skid match then it is preferable
+<b class="nc"><i>486</i>&nbsp;            if (certSkidSelector != null) {</b>
+<b class="nc"><i>487</i>&nbsp;                if (certSkidSelector.match(oCert1)) {</b>
+<b class="nc"><i>488</i>&nbsp;                    return -1;</b>
+<i>489</i>&nbsp;                }
+<b class="nc"><i>490</i>&nbsp;                if (certSkidSelector.match(oCert2)) {</b>
+<b class="nc"><i>491</i>&nbsp;                    return 1;</b>
+<i>492</i>&nbsp;                }
+<i>493</i>&nbsp;            }
+<i>494</i>&nbsp;
+<b class="nc"><i>495</i>&nbsp;            X500Principal cIssuer1 = oCert1.getIssuerX500Principal();</b>
+<b class="nc"><i>496</i>&nbsp;            X500Principal cIssuer2 = oCert2.getIssuerX500Principal();</b>
+<b class="nc"><i>497</i>&nbsp;            X500Name cIssuer1Name = X500Name.asX500Name(cIssuer1);</b>
+<b class="nc"><i>498</i>&nbsp;            X500Name cIssuer2Name = X500Name.asX500Name(cIssuer2);</b>
+<i>499</i>&nbsp;
+<b class="nc"><i>500</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>501</i>&nbsp;                debug.println(METHOD_NME + &quot; o1 Issuer:  &quot; + cIssuer1);</b>
+<b class="nc"><i>502</i>&nbsp;                debug.println(METHOD_NME + &quot; o2 Issuer:  &quot; + cIssuer2);</b>
+<i>503</i>&nbsp;            }
+<i>504</i>&nbsp;
+<i>505</i>&nbsp;            /* If one cert&#39;s issuer matches a trusted subject, then it is
+<i>506</i>&nbsp;             * preferable.
+<i>507</i>&nbsp;             */
+<b class="nc"><i>508</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>509</i>&nbsp;                debug.println(METHOD_NME + &quot; MATCH TRUSTED SUBJECT TEST...&quot;);</b>
+<i>510</i>&nbsp;            }
+<i>511</i>&nbsp;
+<b class="nc"><i>512</i>&nbsp;            boolean m1 = trustedSubjectDNs.contains(cIssuer1);</b>
+<b class="nc"><i>513</i>&nbsp;            boolean m2 = trustedSubjectDNs.contains(cIssuer2);</b>
+<b class="nc"><i>514</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>515</i>&nbsp;                debug.println(METHOD_NME + &quot; m1: &quot; + m1);</b>
+<b class="nc"><i>516</i>&nbsp;                debug.println(METHOD_NME + &quot; m2: &quot; + m2);</b>
+<i>517</i>&nbsp;            }
+<b class="nc"><i>518</i>&nbsp;            if (m1 &amp;&amp; m2) {</b>
+<b class="nc"><i>519</i>&nbsp;                return -1;</b>
+<b class="nc"><i>520</i>&nbsp;            } else if (m1) {</b>
+<b class="nc"><i>521</i>&nbsp;                return -1;</b>
+<b class="nc"><i>522</i>&nbsp;            } else if (m2) {</b>
+<b class="nc"><i>523</i>&nbsp;                return 1;</b>
+<i>524</i>&nbsp;            }
+<i>525</i>&nbsp;
+<i>526</i>&nbsp;            /* If one cert&#39;s issuer is a naming descendant of a trusted subject,
+<i>527</i>&nbsp;             * then it is preferable, in order of increasing naming distance.
+<i>528</i>&nbsp;             */
+<b class="nc"><i>529</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>530</i>&nbsp;                debug.println(METHOD_NME + &quot; NAMING DESCENDANT TEST...&quot;);</b>
+<i>531</i>&nbsp;            }
+<b class="nc"><i>532</i>&nbsp;            for (X500Principal tSubject : trustedSubjectDNs) {</b>
+<b class="nc"><i>533</i>&nbsp;                X500Name tSubjectName = X500Name.asX500Name(tSubject);</b>
+<b class="nc"><i>534</i>&nbsp;                int distanceTto1 =</b>
+<b class="nc"><i>535</i>&nbsp;                    Builder.distance(tSubjectName, cIssuer1Name, -1);</b>
+<b class="nc"><i>536</i>&nbsp;                int distanceTto2 =</b>
+<b class="nc"><i>537</i>&nbsp;                    Builder.distance(tSubjectName, cIssuer2Name, -1);</b>
+<b class="nc"><i>538</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>539</i>&nbsp;                    debug.println(METHOD_NME +&quot; distanceTto1: &quot; + distanceTto1);</b>
+<b class="nc"><i>540</i>&nbsp;                    debug.println(METHOD_NME +&quot; distanceTto2: &quot; + distanceTto2);</b>
+<i>541</i>&nbsp;                }
+<b class="nc"><i>542</i>&nbsp;                if (distanceTto1 &gt; 0 || distanceTto2 &gt; 0) {</b>
+<b class="nc"><i>543</i>&nbsp;                    if (distanceTto1 == distanceTto2) {</b>
+<b class="nc"><i>544</i>&nbsp;                        return -1;</b>
+<b class="nc"><i>545</i>&nbsp;                    } else if (distanceTto1 &gt; 0 &amp;&amp; distanceTto2 &lt;= 0) {</b>
+<b class="nc"><i>546</i>&nbsp;                        return -1;</b>
+<b class="nc"><i>547</i>&nbsp;                    } else if (distanceTto1 &lt;= 0 &amp;&amp; distanceTto2 &gt; 0) {</b>
+<b class="nc"><i>548</i>&nbsp;                        return 1;</b>
+<b class="nc"><i>549</i>&nbsp;                    } else if (distanceTto1 &lt; distanceTto2) {</b>
+<b class="nc"><i>550</i>&nbsp;                        return -1;</b>
+<i>551</i>&nbsp;                    } else {    // distanceTto1 &gt; distanceTto2
+<b class="nc"><i>552</i>&nbsp;                        return 1;</b>
+<i>553</i>&nbsp;                    }
+<i>554</i>&nbsp;                }
+<b class="nc"><i>555</i>&nbsp;            }</b>
+<i>556</i>&nbsp;
+<i>557</i>&nbsp;            /* If one cert&#39;s issuer is a naming ancestor of a trusted subject,
+<i>558</i>&nbsp;             * then it is preferable, in order of increasing naming distance.
+<i>559</i>&nbsp;             */
+<b class="nc"><i>560</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>561</i>&nbsp;                debug.println(METHOD_NME + &quot; NAMING ANCESTOR TEST...&quot;);</b>
+<i>562</i>&nbsp;            }
+<b class="nc"><i>563</i>&nbsp;            for (X500Principal tSubject : trustedSubjectDNs) {</b>
+<b class="nc"><i>564</i>&nbsp;                X500Name tSubjectName = X500Name.asX500Name(tSubject);</b>
+<i>565</i>&nbsp;
+<b class="nc"><i>566</i>&nbsp;                int distanceTto1 = Builder.distance</b>
+<b class="nc"><i>567</i>&nbsp;                    (tSubjectName, cIssuer1Name, Integer.MAX_VALUE);</b>
+<b class="nc"><i>568</i>&nbsp;                int distanceTto2 = Builder.distance</b>
+<b class="nc"><i>569</i>&nbsp;                    (tSubjectName, cIssuer2Name, Integer.MAX_VALUE);</b>
+<b class="nc"><i>570</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>571</i>&nbsp;                    debug.println(METHOD_NME +&quot; distanceTto1: &quot; + distanceTto1);</b>
+<b class="nc"><i>572</i>&nbsp;                    debug.println(METHOD_NME +&quot; distanceTto2: &quot; + distanceTto2);</b>
+<i>573</i>&nbsp;                }
+<b class="nc"><i>574</i>&nbsp;                if (distanceTto1 &lt; 0 || distanceTto2 &lt; 0) {</b>
+<b class="nc"><i>575</i>&nbsp;                    if (distanceTto1 == distanceTto2) {</b>
+<b class="nc"><i>576</i>&nbsp;                        return -1;</b>
+<b class="nc"><i>577</i>&nbsp;                    } else if (distanceTto1 &lt; 0 &amp;&amp; distanceTto2 &gt;= 0) {</b>
+<b class="nc"><i>578</i>&nbsp;                        return -1;</b>
+<b class="nc"><i>579</i>&nbsp;                    } else if (distanceTto1 &gt;= 0 &amp;&amp; distanceTto2 &lt; 0) {</b>
+<b class="nc"><i>580</i>&nbsp;                        return 1;</b>
+<b class="nc"><i>581</i>&nbsp;                    } else if (distanceTto1 &gt; distanceTto2) {</b>
+<b class="nc"><i>582</i>&nbsp;                        return -1;</b>
+<i>583</i>&nbsp;                    } else {
+<b class="nc"><i>584</i>&nbsp;                        return 1;</b>
+<i>585</i>&nbsp;                    }
+<i>586</i>&nbsp;                }
+<b class="nc"><i>587</i>&nbsp;            }</b>
+<i>588</i>&nbsp;
+<i>589</i>&nbsp;            /* If one cert&#39;s issuer is in the same namespace as a trusted
+<i>590</i>&nbsp;             * subject, then it is preferable, in order of increasing naming
+<i>591</i>&nbsp;             * distance.
+<i>592</i>&nbsp;             */
+<b class="nc"><i>593</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>594</i>&nbsp;                debug.println(METHOD_NME +&quot; SAME NAMESPACE AS TRUSTED TEST...&quot;);</b>
+<i>595</i>&nbsp;            }
+<b class="nc"><i>596</i>&nbsp;            for (X500Principal tSubject : trustedSubjectDNs) {</b>
+<b class="nc"><i>597</i>&nbsp;                X500Name tSubjectName = X500Name.asX500Name(tSubject);</b>
+<b class="nc"><i>598</i>&nbsp;                X500Name tAo1 = tSubjectName.commonAncestor(cIssuer1Name);</b>
+<b class="nc"><i>599</i>&nbsp;                X500Name tAo2 = tSubjectName.commonAncestor(cIssuer2Name);</b>
+<b class="nc"><i>600</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>601</i>&nbsp;                    debug.println(METHOD_NME +&quot; tAo1: &quot; + String.valueOf(tAo1));</b>
+<b class="nc"><i>602</i>&nbsp;                    debug.println(METHOD_NME +&quot; tAo2: &quot; + String.valueOf(tAo2));</b>
+<i>603</i>&nbsp;                }
+<b class="nc"><i>604</i>&nbsp;                if (tAo1 != null || tAo2 != null) {</b>
+<b class="nc"><i>605</i>&nbsp;                    if (tAo1 != null &amp;&amp; tAo2 != null) {</b>
+<b class="nc"><i>606</i>&nbsp;                        int hopsTto1 = Builder.hops</b>
+<b class="nc"><i>607</i>&nbsp;                            (tSubjectName, cIssuer1Name, Integer.MAX_VALUE);</b>
+<b class="nc"><i>608</i>&nbsp;                        int hopsTto2 = Builder.hops</b>
+<b class="nc"><i>609</i>&nbsp;                            (tSubjectName, cIssuer2Name, Integer.MAX_VALUE);</b>
+<b class="nc"><i>610</i>&nbsp;                        if (debug != null) {</b>
+<b class="nc"><i>611</i>&nbsp;                            debug.println(METHOD_NME +&quot; hopsTto1: &quot; + hopsTto1);</b>
+<b class="nc"><i>612</i>&nbsp;                            debug.println(METHOD_NME +&quot; hopsTto2: &quot; + hopsTto2);</b>
+<i>613</i>&nbsp;                        }
+<b class="nc"><i>614</i>&nbsp;                        if (hopsTto1 == hopsTto2) {</b>
+<b class="nc"><i>615</i>&nbsp;                        } else if (hopsTto1 &gt; hopsTto2) {</b>
+<b class="nc"><i>616</i>&nbsp;                            return 1;</b>
+<i>617</i>&nbsp;                        } else {  // hopsTto1 &lt; hopsTto2
+<b class="nc"><i>618</i>&nbsp;                            return -1;</b>
+<i>619</i>&nbsp;                        }
+<b class="nc"><i>620</i>&nbsp;                    } else if (tAo1 == null) {</b>
+<b class="nc"><i>621</i>&nbsp;                        return 1;</b>
+<i>622</i>&nbsp;                    } else {
+<b class="nc"><i>623</i>&nbsp;                        return -1;</b>
+<i>624</i>&nbsp;                    }
+<i>625</i>&nbsp;                }
+<b class="nc"><i>626</i>&nbsp;            }</b>
+<i>627</i>&nbsp;
+<i>628</i>&nbsp;
+<i>629</i>&nbsp;            /* If one cert&#39;s issuer is an ancestor of that cert&#39;s subject,
+<i>630</i>&nbsp;             * then it is preferable, in order of increasing naming distance.
+<i>631</i>&nbsp;             */
+<b class="nc"><i>632</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>633</i>&nbsp;                debug.println(METHOD_NME+&quot; CERT ISSUER/SUBJECT COMPARISON TEST...&quot;);</b>
+<i>634</i>&nbsp;            }
+<b class="nc"><i>635</i>&nbsp;            X500Principal cSubject1 = oCert1.getSubjectX500Principal();</b>
+<b class="nc"><i>636</i>&nbsp;            X500Principal cSubject2 = oCert2.getSubjectX500Principal();</b>
+<b class="nc"><i>637</i>&nbsp;            X500Name cSubject1Name = X500Name.asX500Name(cSubject1);</b>
+<b class="nc"><i>638</i>&nbsp;            X500Name cSubject2Name = X500Name.asX500Name(cSubject2);</b>
+<i>639</i>&nbsp;
+<b class="nc"><i>640</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>641</i>&nbsp;                debug.println(METHOD_NME + &quot; o1 Subject: &quot; + cSubject1);</b>
+<b class="nc"><i>642</i>&nbsp;                debug.println(METHOD_NME + &quot; o2 Subject: &quot; + cSubject2);</b>
+<i>643</i>&nbsp;            }
+<b class="nc"><i>644</i>&nbsp;            int distanceStoI1 = Builder.distance</b>
+<b class="nc"><i>645</i>&nbsp;                (cSubject1Name, cIssuer1Name, Integer.MAX_VALUE);</b>
+<b class="nc"><i>646</i>&nbsp;            int distanceStoI2 = Builder.distance</b>
+<b class="nc"><i>647</i>&nbsp;                (cSubject2Name, cIssuer2Name, Integer.MAX_VALUE);</b>
+<b class="nc"><i>648</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>649</i>&nbsp;                debug.println(METHOD_NME + &quot; distanceStoI1: &quot; + distanceStoI1);</b>
+<b class="nc"><i>650</i>&nbsp;                debug.println(METHOD_NME + &quot; distanceStoI2: &quot; + distanceStoI2);</b>
+<i>651</i>&nbsp;            }
+<b class="nc"><i>652</i>&nbsp;            if (distanceStoI2 &gt; distanceStoI1) {</b>
+<b class="nc"><i>653</i>&nbsp;                return -1;</b>
+<b class="nc"><i>654</i>&nbsp;            } else if (distanceStoI2 &lt; distanceStoI1) {</b>
+<b class="nc"><i>655</i>&nbsp;                return 1;</b>
+<i>656</i>&nbsp;            }
+<i>657</i>&nbsp;
+<i>658</i>&nbsp;            /* Otherwise, certs are equally preferable.
+<i>659</i>&nbsp;             */
+<b class="nc"><i>660</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>661</i>&nbsp;                debug.println(METHOD_NME + &quot; no tests matched; RETURN 0&quot;);</b>
+<i>662</i>&nbsp;            }
+<b class="nc"><i>663</i>&nbsp;            return -1;</b>
+<i>664</i>&nbsp;        }
+<i>665</i>&nbsp;    }
+<i>666</i>&nbsp;
+<i>667</i>&nbsp;    /**
+<i>668</i>&nbsp;     * Verifies a matching certificate.
+<i>669</i>&nbsp;     *
+<i>670</i>&nbsp;     * This method executes the validation steps in the PKIX path
+<i>671</i>&nbsp;     * validation algorithm &lt;draft-ietf-pkix-new-part1-08.txt&gt; which were
+<i>672</i>&nbsp;     * not satisfied by the selection criteria used by getCertificates()
+<i>673</i>&nbsp;     * to find the certs and only the steps that can be executed in a
+<i>674</i>&nbsp;     * forward direction (target to trust anchor). Those steps that can
+<i>675</i>&nbsp;     * only be executed in a reverse direction are deferred until the
+<i>676</i>&nbsp;     * complete path has been built.
+<i>677</i>&nbsp;     *
+<i>678</i>&nbsp;     * Trust anchor certs are not validated, but are used to verify the
+<i>679</i>&nbsp;     * signature and revocation status of the previous cert.
+<i>680</i>&nbsp;     *
+<i>681</i>&nbsp;     * If the last certificate is being verified (the one whose subject
+<i>682</i>&nbsp;     * matches the target subject, then steps in 6.1.4 of the PKIX
+<i>683</i>&nbsp;     * Certification Path Validation algorithm are NOT executed,
+<i>684</i>&nbsp;     * regardless of whether or not the last cert is an end-entity
+<i>685</i>&nbsp;     * cert or not. This allows callers to certify CA certs as
+<i>686</i>&nbsp;     * well as EE certs.
+<i>687</i>&nbsp;     *
+<i>688</i>&nbsp;     * @param cert the certificate to be verified
+<i>689</i>&nbsp;     * @param currentState the current state against which the cert is verified
+<i>690</i>&nbsp;     * @param certPathList the certPathList generated thus far
+<i>691</i>&nbsp;     */
+<i>692</i>&nbsp;    @Override
+<i>693</i>&nbsp;    void verifyCert(X509Certificate cert, State currentState,
+<i>694</i>&nbsp;                    List&lt;X509Certificate&gt; certPathList)
+<i>695</i>&nbsp;        throws GeneralSecurityException
+<i>696</i>&nbsp;    {
+<b class="nc"><i>697</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>698</i>&nbsp;            debug.println(&quot;ForwardBuilder.verifyCert(SN: &quot;</b>
+<b class="nc"><i>699</i>&nbsp;                + Debug.toHexString(cert.getSerialNumber())</b>
+<b class="nc"><i>700</i>&nbsp;                + &quot;\n  Issuer: &quot; + cert.getIssuerX500Principal() + &quot;)&quot;</b>
+<b class="nc"><i>701</i>&nbsp;                + &quot;\n  Subject: &quot; + cert.getSubjectX500Principal() + &quot;)&quot;);</b>
+<i>702</i>&nbsp;        }
+<i>703</i>&nbsp;
+<b class="nc"><i>704</i>&nbsp;        ForwardState currState = (ForwardState)currentState;</b>
+<i>705</i>&nbsp;
+<i>706</i>&nbsp;        // Don&#39;t bother to verify untrusted certificate more.
+<b class="nc"><i>707</i>&nbsp;        currState.untrustedChecker.check(cert, Collections.&lt;String&gt;emptySet());</b>
+<i>708</i>&nbsp;
+<i>709</i>&nbsp;        /*
+<i>710</i>&nbsp;         * check for looping - abort a loop if we encounter the same
+<i>711</i>&nbsp;         * certificate twice
+<i>712</i>&nbsp;         */
+<b class="nc"><i>713</i>&nbsp;        if (certPathList != null) {</b>
+<b class="nc"><i>714</i>&nbsp;            for (X509Certificate cpListCert : certPathList) {</b>
+<b class="nc"><i>715</i>&nbsp;                if (cert.equals(cpListCert)) {</b>
+<b class="nc"><i>716</i>&nbsp;                    if (debug != null) {</b>
+<b class="nc"><i>717</i>&nbsp;                        debug.println(&quot;loop detected!!&quot;);</b>
+<i>718</i>&nbsp;                    }
+<b class="nc"><i>719</i>&nbsp;                    throw new CertPathValidatorException(&quot;loop detected&quot;);</b>
+<i>720</i>&nbsp;                }
+<b class="nc"><i>721</i>&nbsp;            }</b>
+<i>722</i>&nbsp;        }
+<i>723</i>&nbsp;
+<i>724</i>&nbsp;        /* check if trusted cert */
+<b class="nc"><i>725</i>&nbsp;        boolean isTrustedCert = trustedCerts.contains(cert);</b>
+<i>726</i>&nbsp;
+<i>727</i>&nbsp;        /* we don&#39;t perform any validation of the trusted cert */
+<b class="nc"><i>728</i>&nbsp;        if (!isTrustedCert) {</b>
+<i>729</i>&nbsp;            /*
+<i>730</i>&nbsp;             * Check CRITICAL private extensions for user checkers that
+<i>731</i>&nbsp;             * support forward checking (forwardCheckers) and remove
+<i>732</i>&nbsp;             * ones we know how to check.
+<i>733</i>&nbsp;             */
+<b class="nc"><i>734</i>&nbsp;            Set&lt;String&gt; unresCritExts = cert.getCriticalExtensionOIDs();</b>
+<b class="nc"><i>735</i>&nbsp;            if (unresCritExts == null) {</b>
+<b class="nc"><i>736</i>&nbsp;                unresCritExts = Collections.&lt;String&gt;emptySet();</b>
+<i>737</i>&nbsp;            }
+<b class="nc"><i>738</i>&nbsp;            for (PKIXCertPathChecker checker : currState.forwardCheckers) {</b>
+<b class="nc"><i>739</i>&nbsp;                checker.check(cert, unresCritExts);</b>
+<b class="nc"><i>740</i>&nbsp;            }</b>
+<i>741</i>&nbsp;
+<i>742</i>&nbsp;            /*
+<i>743</i>&nbsp;             * Remove extensions from user checkers that don&#39;t support
+<i>744</i>&nbsp;             * forward checking. After this step, we will have removed
+<i>745</i>&nbsp;             * all extensions that all user checkers are capable of
+<i>746</i>&nbsp;             * processing.
+<i>747</i>&nbsp;             */
+<b class="nc"><i>748</i>&nbsp;            for (PKIXCertPathChecker checker : buildParams.certPathCheckers()) {</b>
+<b class="nc"><i>749</i>&nbsp;                if (!checker.isForwardCheckingSupported()) {</b>
+<b class="nc"><i>750</i>&nbsp;                    Set&lt;String&gt; supportedExts = checker.getSupportedExtensions();</b>
+<b class="nc"><i>751</i>&nbsp;                    if (supportedExts != null) {</b>
+<b class="nc"><i>752</i>&nbsp;                        unresCritExts.removeAll(supportedExts);</b>
+<i>753</i>&nbsp;                    }
+<i>754</i>&nbsp;                }
+<b class="nc"><i>755</i>&nbsp;            }</b>
+<i>756</i>&nbsp;
+<i>757</i>&nbsp;            /*
+<i>758</i>&nbsp;             * Look at the remaining extensions and remove any ones we know how
+<i>759</i>&nbsp;             * to check. If there are any left, throw an exception!
+<i>760</i>&nbsp;             */
+<b class="nc"><i>761</i>&nbsp;            if (!unresCritExts.isEmpty()) {</b>
+<b class="nc"><i>762</i>&nbsp;                unresCritExts.remove(BasicConstraints_Id.toString());</b>
+<b class="nc"><i>763</i>&nbsp;                unresCritExts.remove(NameConstraints_Id.toString());</b>
+<b class="nc"><i>764</i>&nbsp;                unresCritExts.remove(CertificatePolicies_Id.toString());</b>
+<b class="nc"><i>765</i>&nbsp;                unresCritExts.remove(PolicyMappings_Id.toString());</b>
+<b class="nc"><i>766</i>&nbsp;                unresCritExts.remove(PolicyConstraints_Id.toString());</b>
+<b class="nc"><i>767</i>&nbsp;                unresCritExts.remove(InhibitAnyPolicy_Id.toString());</b>
+<b class="nc"><i>768</i>&nbsp;                unresCritExts.remove(SubjectAlternativeName_Id.toString());</b>
+<b class="nc"><i>769</i>&nbsp;                unresCritExts.remove(KeyUsage_Id.toString());</b>
+<b class="nc"><i>770</i>&nbsp;                unresCritExts.remove(ExtendedKeyUsage_Id.toString());</b>
+<i>771</i>&nbsp;
+<b class="nc"><i>772</i>&nbsp;                if (!unresCritExts.isEmpty())</b>
+<b class="nc"><i>773</i>&nbsp;                    throw new CertPathValidatorException</b>
+<i>774</i>&nbsp;                        (&quot;Unrecognized critical extension(s)&quot;, null, null, -1,
+<i>775</i>&nbsp;                         PKIXReason.UNRECOGNIZED_CRIT_EXT);
+<i>776</i>&nbsp;            }
+<i>777</i>&nbsp;        }
+<i>778</i>&nbsp;
+<i>779</i>&nbsp;        /*
+<i>780</i>&nbsp;         * if this is the target certificate (init=true), then we are
+<i>781</i>&nbsp;         * not able to do any more verification, so just return
+<i>782</i>&nbsp;         */
+<b class="nc"><i>783</i>&nbsp;        if (currState.isInitial()) {</b>
+<i>784</i>&nbsp;            return;
+<i>785</i>&nbsp;        }
+<i>786</i>&nbsp;
+<i>787</i>&nbsp;        /* we don&#39;t perform any validation of the trusted cert */
+<b class="nc"><i>788</i>&nbsp;        if (!isTrustedCert) {</b>
+<i>789</i>&nbsp;            /* Make sure this is a CA cert */
+<b class="nc"><i>790</i>&nbsp;            if (cert.getBasicConstraints() == -1) {</b>
+<b class="nc"><i>791</i>&nbsp;                throw new CertificateException(&quot;cert is NOT a CA cert&quot;);</b>
+<i>792</i>&nbsp;            }
+<i>793</i>&nbsp;
+<i>794</i>&nbsp;            /*
+<i>795</i>&nbsp;             * Check keyUsage extension
+<i>796</i>&nbsp;             */
+<b class="nc"><i>797</i>&nbsp;            KeyChecker.verifyCAKeyUsage(cert);</b>
+<i>798</i>&nbsp;        }
+<i>799</i>&nbsp;
+<i>800</i>&nbsp;        /*
+<i>801</i>&nbsp;         * the following checks are performed even when the cert
+<i>802</i>&nbsp;         * is a trusted cert, since we are only extracting the
+<i>803</i>&nbsp;         * subjectDN, and publicKey from the cert
+<i>804</i>&nbsp;         * in order to verify a previous cert
+<i>805</i>&nbsp;         */
+<i>806</i>&nbsp;
+<i>807</i>&nbsp;        /*
+<i>808</i>&nbsp;         * Check signature only if no key requiring key parameters has been
+<i>809</i>&nbsp;         * encountered.
+<i>810</i>&nbsp;         */
+<b class="nc"><i>811</i>&nbsp;        if (!currState.keyParamsNeeded()) {</b>
+<b class="nc"><i>812</i>&nbsp;            (currState.cert).verify(cert.getPublicKey(),</b>
+<b class="nc"><i>813</i>&nbsp;                                    buildParams.sigProvider());</b>
+<i>814</i>&nbsp;        }
+<i>815</i>&nbsp;    }
+<i>816</i>&nbsp;
+<i>817</i>&nbsp;    /**
+<i>818</i>&nbsp;     * Verifies whether the input certificate completes the path.
+<i>819</i>&nbsp;     * First checks the cert against each trust anchor that was specified,
+<i>820</i>&nbsp;     * in order, and returns true if the cert matches the trust anchor
+<i>821</i>&nbsp;     * specified as a certificate or has the same key and subject of an anchor
+<i>822</i>&nbsp;     * specified as a trusted {pubkey, caname} pair.
+<i>823</i>&nbsp;     * If no match has been found, does a second check of the cert against
+<i>824</i>&nbsp;     * anchors specified as a trusted {pubkey, caname} pair to see if the cert
+<i>825</i>&nbsp;     * was issued by that anchor.
+<i>826</i>&nbsp;     * Returns false if none of the trust anchors are valid for this cert.
+<i>827</i>&nbsp;     *
+<i>828</i>&nbsp;     * @param cert the certificate to test
+<i>829</i>&nbsp;     * @return a boolean value indicating whether the cert completes the path.
+<i>830</i>&nbsp;     */
+<i>831</i>&nbsp;    @Override
+<i>832</i>&nbsp;    boolean isPathCompleted(X509Certificate cert) {
+<b class="nc"><i>833</i>&nbsp;        List&lt;TrustAnchor&gt; otherAnchors = new ArrayList&lt;&gt;();</b>
+<i>834</i>&nbsp;        // first, check if cert is already trusted
+<b class="nc"><i>835</i>&nbsp;        for (TrustAnchor anchor : trustAnchors) {</b>
+<b class="nc"><i>836</i>&nbsp;            if (anchor.getTrustedCert() != null) {</b>
+<b class="nc"><i>837</i>&nbsp;                if (cert.equals(anchor.getTrustedCert())) {</b>
+<b class="nc"><i>838</i>&nbsp;                    this.trustAnchor = anchor;</b>
+<b class="nc"><i>839</i>&nbsp;                    return true;</b>
+<i>840</i>&nbsp;                } else {
+<i>841</i>&nbsp;                    continue;
+<i>842</i>&nbsp;                }
+<i>843</i>&nbsp;            }
+<b class="nc"><i>844</i>&nbsp;            X500Principal principal = anchor.getCA();</b>
+<b class="nc"><i>845</i>&nbsp;            PublicKey publicKey = anchor.getCAPublicKey();</b>
+<i>846</i>&nbsp;
+<b class="nc"><i>847</i>&nbsp;            if (principal != null &amp;&amp; publicKey != null &amp;&amp;</b>
+<b class="nc"><i>848</i>&nbsp;                    principal.equals(cert.getSubjectX500Principal())) {</b>
+<b class="nc"><i>849</i>&nbsp;                if (publicKey.equals(cert.getPublicKey())) {</b>
+<i>850</i>&nbsp;                    // the cert itself is a trust anchor
+<b class="nc"><i>851</i>&nbsp;                    this.trustAnchor = anchor;</b>
+<b class="nc"><i>852</i>&nbsp;                    return true;</b>
+<i>853</i>&nbsp;                }
+<i>854</i>&nbsp;                // else, it is a self-issued certificate of the anchor
+<i>855</i>&nbsp;            }
+<b class="nc"><i>856</i>&nbsp;            otherAnchors.add(anchor);</b>
+<b class="nc"><i>857</i>&nbsp;        }</b>
+<i>858</i>&nbsp;        // next, check if cert is issued by anchor specified by key/name
+<b class="nc"><i>859</i>&nbsp;        for (TrustAnchor anchor : otherAnchors) {</b>
+<b class="nc"><i>860</i>&nbsp;            X500Principal principal = anchor.getCA();</b>
+<b class="nc"><i>861</i>&nbsp;            PublicKey publicKey = anchor.getCAPublicKey();</b>
+<i>862</i>&nbsp;            // Check subject/issuer name chaining
+<b class="nc"><i>863</i>&nbsp;            if (principal == null ||</b>
+<b class="nc"><i>864</i>&nbsp;                    !principal.equals(cert.getIssuerX500Principal())) {</b>
+<b class="nc"><i>865</i>&nbsp;                continue;</b>
+<i>866</i>&nbsp;            }
+<i>867</i>&nbsp;
+<i>868</i>&nbsp;            // skip anchor if it contains a DSA key with no DSA params
+<b class="nc"><i>869</i>&nbsp;            if (PKIX.isDSAPublicKeyWithoutParams(publicKey)) {</b>
+<b class="nc"><i>870</i>&nbsp;                continue;</b>
+<i>871</i>&nbsp;            }
+<i>872</i>&nbsp;
+<i>873</i>&nbsp;            /*
+<i>874</i>&nbsp;             * Check signature
+<i>875</i>&nbsp;             */
+<i>876</i>&nbsp;            try {
+<b class="nc"><i>877</i>&nbsp;                cert.verify(publicKey, buildParams.sigProvider());</b>
+<b class="nc"><i>878</i>&nbsp;            } catch (InvalidKeyException ike) {</b>
+<b class="nc"><i>879</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>880</i>&nbsp;                    debug.println(&quot;ForwardBuilder.isPathCompleted() invalid &quot;</b>
+<i>881</i>&nbsp;                                  + &quot;DSA key found&quot;);
+<i>882</i>&nbsp;                }
+<b class="nc"><i>883</i>&nbsp;                continue;</b>
+<b class="nc"><i>884</i>&nbsp;            } catch (GeneralSecurityException e){</b>
+<b class="nc"><i>885</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>886</i>&nbsp;                    debug.println(&quot;ForwardBuilder.isPathCompleted() &quot; +</b>
+<i>887</i>&nbsp;                                  &quot;unexpected exception&quot;);
+<b class="nc"><i>888</i>&nbsp;                    e.printStackTrace();</b>
+<i>889</i>&nbsp;                }
+<b class="nc"><i>890</i>&nbsp;                continue;</b>
+<b class="nc"><i>891</i>&nbsp;            }</b>
+<i>892</i>&nbsp;
+<b class="nc"><i>893</i>&nbsp;            this.trustAnchor = anchor;</b>
+<b class="nc"><i>894</i>&nbsp;            return true;</b>
+<i>895</i>&nbsp;        }
+<i>896</i>&nbsp;
+<b class="nc"><i>897</i>&nbsp;        return false;</b>
+<i>898</i>&nbsp;    }
+<i>899</i>&nbsp;
+<i>900</i>&nbsp;    /** Adds the certificate to the certPathList
+<i>901</i>&nbsp;     *
+<i>902</i>&nbsp;     * @param cert the certificate to be added
+<i>903</i>&nbsp;     * @param certPathList the certification path list
+<i>904</i>&nbsp;     */
+<i>905</i>&nbsp;    @Override
+<i>906</i>&nbsp;    void addCertToPath(X509Certificate cert,
+<i>907</i>&nbsp;                       LinkedList&lt;X509Certificate&gt; certPathList)
+<i>908</i>&nbsp;    {
+<b class="nc"><i>909</i>&nbsp;        certPathList.addFirst(cert);</b>
+<i>910</i>&nbsp;    }
+<i>911</i>&nbsp;
+<i>912</i>&nbsp;    /** Removes final certificate from the certPathList
+<i>913</i>&nbsp;     *
+<i>914</i>&nbsp;     * @param certPathList the certification path list
+<i>915</i>&nbsp;     */
+<i>916</i>&nbsp;    @Override
+<i>917</i>&nbsp;    void removeFinalCertFromPath(LinkedList&lt;X509Certificate&gt; certPathList) {
+<b class="nc"><i>918</i>&nbsp;        certPathList.removeFirst();</b>
+<i>919</i>&nbsp;    }
+<i>920</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

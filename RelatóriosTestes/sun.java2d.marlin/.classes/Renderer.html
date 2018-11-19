@@ -1,0 +1,1621 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Renderer</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.java2d.marlin</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Renderer (sun.java2d.marlin)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Renderer</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 20)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 606)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.java2d.marlin;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import sun.awt.geom.PathConsumer2D;
+<i>29</i>&nbsp;import static sun.java2d.marlin.OffHeapArray.SIZE_INT;
+<i>30</i>&nbsp;import jdk.internal.misc.Unsafe;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;final class Renderer implements PathConsumer2D, MarlinRenderer {
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;    static final boolean DISABLE_RENDER = false;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;    static final boolean ENABLE_BLOCK_FLAGS = MarlinProperties.isUseTileFlags();
+<b class="nc"><i>37</i>&nbsp;    static final boolean ENABLE_BLOCK_FLAGS_HEURISTICS = MarlinProperties.isUseTileFlagsWithHeuristics();</b>
+<b class="nc"><i>38</i>&nbsp;</b>
+<i>39</i>&nbsp;    private static final int ALL_BUT_LSB = 0xFFFFFFFE;
+<i>40</i>&nbsp;    private static final int ERR_STEP_MAX = 0x7FFFFFFF; // = 2^31 - 1
+<i>41</i>&nbsp;
+<i>42</i>&nbsp;    private static final double POWER_2_TO_32 = 0x1.0p32d;
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;    // use float to make tosubpix methods faster (no int to float conversion)
+<i>45</i>&nbsp;    static final float SUBPIXEL_SCALE_X = (float) SUBPIXEL_POSITIONS_X;
+<b class="nc"><i>46</i>&nbsp;    static final float SUBPIXEL_SCALE_Y = (float) SUBPIXEL_POSITIONS_Y;</b>
+<b class="nc"><i>47</i>&nbsp;    static final int SUBPIXEL_MASK_X = SUBPIXEL_POSITIONS_X - 1;</b>
+<b class="nc"><i>48</i>&nbsp;    static final int SUBPIXEL_MASK_Y = SUBPIXEL_POSITIONS_Y - 1;</b>
+<b class="nc"><i>49</i>&nbsp;</b>
+<i>50</i>&nbsp;    static final float RDR_OFFSET_X = 0.5f / SUBPIXEL_SCALE_X;
+<b class="nc"><i>51</i>&nbsp;    static final float RDR_OFFSET_Y = 0.5f / SUBPIXEL_SCALE_Y;</b>
+<b class="nc"><i>52</i>&nbsp;</b>
+<i>53</i>&nbsp;    // number of subpixels corresponding to a tile line
+<i>54</i>&nbsp;    private static final int SUBPIXEL_TILE
+<b class="nc"><i>55</i>&nbsp;        = TILE_H &lt;&lt; SUBPIXEL_LG_POSITIONS_Y;</b>
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;    // 2176 pixels (height) x 8 subpixels = 68K
+<i>58</i>&nbsp;    static final int INITIAL_BUCKET_ARRAY
+<b class="nc"><i>59</i>&nbsp;        = INITIAL_PIXEL_HEIGHT * SUBPIXEL_POSITIONS_Y;</b>
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;    // crossing capacity = edges count / 4 ~ 1024
+<i>62</i>&nbsp;    static final int INITIAL_CROSSING_COUNT = INITIAL_EDGES_COUNT &gt;&gt; 2;
+<b class="nc"><i>63</i>&nbsp;</b>
+<i>64</i>&nbsp;    // common to all types of input path segments.
+<i>65</i>&nbsp;    // OFFSET as bytes
+<i>66</i>&nbsp;    // only integer values:
+<i>67</i>&nbsp;    public static final long OFF_CURX_OR  = 0;
+<i>68</i>&nbsp;    public static final long OFF_ERROR    = OFF_CURX_OR  + SIZE_INT;
+<b class="nc"><i>69</i>&nbsp;    public static final long OFF_BUMP_X   = OFF_ERROR    + SIZE_INT;</b>
+<b class="nc"><i>70</i>&nbsp;    public static final long OFF_BUMP_ERR = OFF_BUMP_X   + SIZE_INT;</b>
+<b class="nc"><i>71</i>&nbsp;    public static final long OFF_NEXT     = OFF_BUMP_ERR + SIZE_INT;</b>
+<b class="nc"><i>72</i>&nbsp;    public static final long OFF_YMAX     = OFF_NEXT     + SIZE_INT;</b>
+<b class="nc"><i>73</i>&nbsp;</b>
+<i>74</i>&nbsp;    // size of one edge in bytes
+<i>75</i>&nbsp;    public static final int SIZEOF_EDGE_BYTES = (int)(OFF_YMAX + SIZE_INT);
+<b class="nc"><i>76</i>&nbsp;</b>
+<i>77</i>&nbsp;    // curve break into lines
+<i>78</i>&nbsp;    // cubic error in subpixels to decrement step
+<i>79</i>&nbsp;    private static final float CUB_DEC_ERR_SUBPIX
+<i>80</i>&nbsp;        = MarlinProperties.getCubicDecD2() * (SUBPIXEL_POSITIONS_X / 8.0f); // 1.0 / 8th pixel
+<b class="nc"><i>81</i>&nbsp;    // cubic error in subpixels to increment step</b>
+<i>82</i>&nbsp;    private static final float CUB_INC_ERR_SUBPIX
+<i>83</i>&nbsp;        = MarlinProperties.getCubicIncD1() * (SUBPIXEL_POSITIONS_X / 8.0f); // 0.4 / 8th pixel
+<b class="nc"><i>84</i>&nbsp;    // scale factor for Y-axis contribution to quad / cubic errors:</b>
+<i>85</i>&nbsp;    public static final float SCALE_DY = ((float) SUBPIXEL_POSITIONS_X) / SUBPIXEL_POSITIONS_Y;
+<b class="nc"><i>86</i>&nbsp;</b>
+<i>87</i>&nbsp;    // TestNonAARasterization (JDK-8170879): cubics
+<i>88</i>&nbsp;    // bad paths (59294/100000 == 59,29%, 94335 bad pixels (avg = 1,59), 3966 warnings (avg = 0,07)
+<i>89</i>&nbsp;// 2018
+<i>90</i>&nbsp;    // 1.0 / 0.2: bad paths (67194/100000 == 67,19%, 117394 bad pixels (avg = 1,75 - max =  9), 4042 warnings (avg = 0,06)
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    // cubic bind length to decrement step
+<i>93</i>&nbsp;    public static final float CUB_DEC_BND
+<b class="nc"><i>94</i>&nbsp;        = 8.0f * CUB_DEC_ERR_SUBPIX;</b>
+<i>95</i>&nbsp;    // cubic bind length to increment step
+<i>96</i>&nbsp;    public static final float CUB_INC_BND
+<b class="nc"><i>97</i>&nbsp;        = 8.0f * CUB_INC_ERR_SUBPIX;</b>
+<i>98</i>&nbsp;
+<i>99</i>&nbsp;    // cubic countlg
+<i>100</i>&nbsp;    public static final int CUB_COUNT_LG = 2;
+<i>101</i>&nbsp;    // cubic count = 2^countlg
+<i>102</i>&nbsp;    private static final int CUB_COUNT = 1 &lt;&lt; CUB_COUNT_LG;
+<i>103</i>&nbsp;    // cubic count^2 = 4^countlg
+<i>104</i>&nbsp;    private static final int CUB_COUNT_2 = 1 &lt;&lt; (2 * CUB_COUNT_LG);
+<i>105</i>&nbsp;    // cubic count^3 = 8^countlg
+<i>106</i>&nbsp;    private static final int CUB_COUNT_3 = 1 &lt;&lt; (3 * CUB_COUNT_LG);
+<i>107</i>&nbsp;    // cubic dt = 1 / count
+<i>108</i>&nbsp;    private static final float CUB_INV_COUNT = 1.0f / CUB_COUNT;
+<i>109</i>&nbsp;    // cubic dt^2 = 1 / count^2 = 1 / 4^countlg
+<i>110</i>&nbsp;    private static final float CUB_INV_COUNT_2 = 1.0f / CUB_COUNT_2;
+<i>111</i>&nbsp;    // cubic dt^3 = 1 / count^3 = 1 / 8^countlg
+<i>112</i>&nbsp;    private static final float CUB_INV_COUNT_3 = 1.0f / CUB_COUNT_3;
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    // quad break into lines
+<i>115</i>&nbsp;    // quadratic error in subpixels
+<i>116</i>&nbsp;    private static final float QUAD_DEC_ERR_SUBPIX
+<i>117</i>&nbsp;        = MarlinProperties.getQuadDecD2() * (SUBPIXEL_POSITIONS_X / 8.0f); // 0.5 / 8th pixel
+<b class="nc"><i>118</i>&nbsp;</b>
+<i>119</i>&nbsp;    // TestNonAARasterization (JDK-8170879): quads
+<i>120</i>&nbsp;    // bad paths (62916/100000 == 62,92%, 103818 bad pixels (avg = 1,65), 6514 warnings (avg = 0,10)
+<i>121</i>&nbsp;// 2018
+<i>122</i>&nbsp;    // 0.50px  = bad paths (62915/100000 == 62,92%, 103810 bad pixels (avg = 1,65), 6512 warnings (avg = 0,10)
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    // quadratic bind length to decrement step
+<i>125</i>&nbsp;    public static final float QUAD_DEC_BND
+<b class="nc"><i>126</i>&nbsp;        = 8.0f * QUAD_DEC_ERR_SUBPIX;</b>
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;//////////////////////////////////////////////////////////////////////////////
+<i>129</i>&nbsp;//  SCAN LINE
+<i>130</i>&nbsp;//////////////////////////////////////////////////////////////////////////////
+<i>131</i>&nbsp;    // crossings ie subpixel edge x coordinates
+<i>132</i>&nbsp;    private int[] crossings;
+<i>133</i>&nbsp;    // auxiliary storage for crossings (merge sort)
+<i>134</i>&nbsp;    private int[] aux_crossings;
+<i>135</i>&nbsp;
+<i>136</i>&nbsp;    // indices into the segment pointer lists. They indicate the &quot;active&quot;
+<i>137</i>&nbsp;    // sublist in the segment lists (the portion of the list that contains
+<i>138</i>&nbsp;    // all the segments that cross the next scan line).
+<i>139</i>&nbsp;    private int edgeCount;
+<i>140</i>&nbsp;    private int[] edgePtrs;
+<i>141</i>&nbsp;    // auxiliary storage for edge pointers (merge sort)
+<i>142</i>&nbsp;    private int[] aux_edgePtrs;
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;    // max used for both edgePtrs and crossings (stats only)
+<i>145</i>&nbsp;    private int activeEdgeMaxUsed;
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;    // crossings ref (dirty)
+<i>148</i>&nbsp;    private final IntArrayCache.Reference crossings_ref;
+<i>149</i>&nbsp;    // edgePtrs ref (dirty)
+<i>150</i>&nbsp;    private final IntArrayCache.Reference edgePtrs_ref;
+<i>151</i>&nbsp;    // merge sort initial arrays (large enough to satisfy most usages) (1024)
+<i>152</i>&nbsp;    // aux_crossings ref (dirty)
+<i>153</i>&nbsp;    private final IntArrayCache.Reference aux_crossings_ref;
+<i>154</i>&nbsp;    // aux_edgePtrs ref (dirty)
+<i>155</i>&nbsp;    private final IntArrayCache.Reference aux_edgePtrs_ref;
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;//////////////////////////////////////////////////////////////////////////////
+<i>158</i>&nbsp;//  EDGE LIST
+<i>159</i>&nbsp;//////////////////////////////////////////////////////////////////////////////
+<i>160</i>&nbsp;    private int edgeMinY = Integer.MAX_VALUE;
+<b class="nc"><i>161</i>&nbsp;    private int edgeMaxY = Integer.MIN_VALUE;</b>
+<b class="nc"><i>162</i>&nbsp;    private float edgeMinX = Float.POSITIVE_INFINITY;</b>
+<b class="nc"><i>163</i>&nbsp;    private float edgeMaxX = Float.NEGATIVE_INFINITY;</b>
+<b class="nc"><i>164</i>&nbsp;</b>
+<i>165</i>&nbsp;    // edges [ints] stored in off-heap memory
+<i>166</i>&nbsp;    private final OffHeapArray edges;
+<i>167</i>&nbsp;
+<i>168</i>&nbsp;    private int[] edgeBuckets;
+<i>169</i>&nbsp;    private int[] edgeBucketCounts; // 2*newedges + (1 if pruning needed)
+<i>170</i>&nbsp;    // used range for edgeBuckets / edgeBucketCounts
+<i>171</i>&nbsp;    private int buckets_minY;
+<i>172</i>&nbsp;    private int buckets_maxY;
+<i>173</i>&nbsp;
+<i>174</i>&nbsp;    // edgeBuckets ref (clean)
+<i>175</i>&nbsp;    private final IntArrayCache.Reference edgeBuckets_ref;
+<i>176</i>&nbsp;    // edgeBucketCounts ref (clean)
+<i>177</i>&nbsp;    private final IntArrayCache.Reference edgeBucketCounts_ref;
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;    // Flattens using adaptive forward differencing. This only carries out
+<i>180</i>&nbsp;    // one iteration of the AFD loop. All it does is update AFD variables (i.e.
+<i>181</i>&nbsp;    // X0, Y0, D*[X|Y], COUNT; not variables used for computing scanline crossings).
+<i>182</i>&nbsp;    private void quadBreakIntoLinesAndAdd(float x0, float y0,
+<i>183</i>&nbsp;                                          final Curve c,
+<i>184</i>&nbsp;                                          final float x2, final float y2)
+<i>185</i>&nbsp;    {
+<i>186</i>&nbsp;        int count = 1; // dt = 1 / count
+<b class="nc"><i>187</i>&nbsp;</b>
+<i>188</i>&nbsp;        // maximum(ddX|Y) = norm(dbx, dby) * dt^2 (= 1)
+<i>189</i>&nbsp;        float maxDD = Math.abs(c.dbx) + Math.abs(c.dby) * SCALE_DY;
+<b class="nc"><i>190</i>&nbsp;</b>
+<i>191</i>&nbsp;        final float _DEC_BND = QUAD_DEC_BND;
+<b class="nc"><i>192</i>&nbsp;</b>
+<i>193</i>&nbsp;        while (maxDD &gt;= _DEC_BND) {
+<b class="nc"><i>194</i>&nbsp;            // divide step by half:</b>
+<i>195</i>&nbsp;            maxDD /= 4.0f; // error divided by 2^2 = 4
+<b class="nc"><i>196</i>&nbsp;</b>
+<i>197</i>&nbsp;            count &lt;&lt;= 1;
+<b class="nc"><i>198</i>&nbsp;            if (DO_STATS) {</b>
+<b class="nc"><i>199</i>&nbsp;                rdrCtx.stats.stat_rdr_quadBreak_dec.add(count);</b>
+<b class="nc"><i>200</i>&nbsp;            }</b>
+<i>201</i>&nbsp;        }
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;        final int nL = count; // line count
+<b class="nc"><i>204</i>&nbsp;</b>
+<i>205</i>&nbsp;        if (count &gt; 1) {
+<b class="nc"><i>206</i>&nbsp;            final float icount = 1.0f / count; // dt</b>
+<b class="nc"><i>207</i>&nbsp;            final float icount2 = icount * icount; // dt^2</b>
+<b class="nc"><i>208</i>&nbsp;</b>
+<i>209</i>&nbsp;            final float ddx = c.dbx * icount2;
+<b class="nc"><i>210</i>&nbsp;            final float ddy = c.dby * icount2;</b>
+<b class="nc"><i>211</i>&nbsp;            float dx = c.bx * icount2 + c.cx * icount;</b>
+<b class="nc"><i>212</i>&nbsp;            float dy = c.by * icount2 + c.cy * icount;</b>
+<b class="nc"><i>213</i>&nbsp;</b>
+<i>214</i>&nbsp;            // we use x0, y0 to walk the line
+<i>215</i>&nbsp;            for (float x1 = x0, y1 = y0; --count &gt; 0; dx += ddx, dy += ddy) {
+<b class="nc"><i>216</i>&nbsp;                x1 += dx;</b>
+<b class="nc"><i>217</i>&nbsp;                y1 += dy;</b>
+<b class="nc"><i>218</i>&nbsp;</b>
+<i>219</i>&nbsp;                addLine(x0, y0, x1, y1);
+<b class="nc"><i>220</i>&nbsp;                x0 = x1;</b>
+<b class="nc"><i>221</i>&nbsp;                y0 = y1;</b>
+<b class="nc"><i>222</i>&nbsp;            }</b>
+<i>223</i>&nbsp;        }
+<i>224</i>&nbsp;        addLine(x0, y0, x2, y2);
+<b class="nc"><i>225</i>&nbsp;</b>
+<i>226</i>&nbsp;        if (DO_STATS) {
+<b class="nc"><i>227</i>&nbsp;            rdrCtx.stats.stat_rdr_quadBreak.add(nL);</b>
+<b class="nc"><i>228</i>&nbsp;        }</b>
+<i>229</i>&nbsp;    }
+<i>230</i>&nbsp;
+<i>231</i>&nbsp;    // x0, y0 and x3,y3 are the endpoints of the curve. We could compute these
+<i>232</i>&nbsp;    // using c.xat(0),c.yat(0) and c.xat(1),c.yat(1), but this might introduce
+<i>233</i>&nbsp;    // numerical errors, and our callers already have the exact values.
+<i>234</i>&nbsp;    // Another alternative would be to pass all the control points, and call
+<i>235</i>&nbsp;    // c.set here, but then too many numbers are passed around.
+<i>236</i>&nbsp;    private void curveBreakIntoLinesAndAdd(float x0, float y0,
+<i>237</i>&nbsp;                                           final Curve c,
+<i>238</i>&nbsp;                                           final float x3, final float y3)
+<i>239</i>&nbsp;    {
+<i>240</i>&nbsp;        int count           = CUB_COUNT;
+<b class="nc"><i>241</i>&nbsp;        final float icount  = CUB_INV_COUNT;   // dt</b>
+<i>242</i>&nbsp;        final float icount2 = CUB_INV_COUNT_2; // dt^2
+<i>243</i>&nbsp;        final float icount3 = CUB_INV_COUNT_3; // dt^3
+<i>244</i>&nbsp;
+<i>245</i>&nbsp;        // the dx and dy refer to forward differencing variables, not the last
+<i>246</i>&nbsp;        // coefficients of the &quot;points&quot; polynomial
+<i>247</i>&nbsp;        float dddx, dddy, ddx, ddy, dx, dy;
+<i>248</i>&nbsp;        dddx = 2.0f * c.dax * icount3;
+<b class="nc"><i>249</i>&nbsp;        dddy = 2.0f * c.day * icount3;</b>
+<b class="nc"><i>250</i>&nbsp;        ddx = dddx + c.dbx * icount2;</b>
+<b class="nc"><i>251</i>&nbsp;        ddy = dddy + c.dby * icount2;</b>
+<b class="nc"><i>252</i>&nbsp;        dx = c.ax * icount3 + c.bx * icount2 + c.cx * icount;</b>
+<b class="nc"><i>253</i>&nbsp;        dy = c.ay * icount3 + c.by * icount2 + c.cy * icount;</b>
+<b class="nc"><i>254</i>&nbsp;</b>
+<i>255</i>&nbsp;        int nL = 0; // line count
+<b class="nc"><i>256</i>&nbsp;</b>
+<i>257</i>&nbsp;        final float _DEC_BND = CUB_DEC_BND;
+<b class="nc"><i>258</i>&nbsp;        final float _INC_BND = CUB_INC_BND;</b>
+<b class="nc"><i>259</i>&nbsp;        final float _SCALE_DY = SCALE_DY;</b>
+<b class="nc"><i>260</i>&nbsp;</b>
+<i>261</i>&nbsp;        // we use x0, y0 to walk the line
+<i>262</i>&nbsp;        for (float x1 = x0, y1 = y0; count &gt; 0; ) {
+<b class="nc"><i>263</i>&nbsp;            // inc / dec =&gt; ratio ~ 5 to minimize upscale / downscale but minimize edges</b>
+<i>264</i>&nbsp;
+<i>265</i>&nbsp;            // float step:
+<i>266</i>&nbsp;            // can only do this on even &quot;count&quot; values, because we must divide count by 2
+<i>267</i>&nbsp;            while ((count % 2 == 0)
+<b class="nc"><i>268</i>&nbsp;                    &amp;&amp; ((Math.abs(ddx) + Math.abs(ddy) * _SCALE_DY) &lt;= _INC_BND)) {</b>
+<b class="nc"><i>269</i>&nbsp;                dx = 2.0f * dx + ddx;</b>
+<i>270</i>&nbsp;                dy = 2.0f * dy + ddy;
+<i>271</i>&nbsp;                ddx = 4.0f * (ddx + dddx);
+<b class="nc"><i>272</i>&nbsp;                ddy = 4.0f * (ddy + dddy);</b>
+<b class="nc"><i>273</i>&nbsp;                dddx *= 8.0f;</b>
+<b class="nc"><i>274</i>&nbsp;                dddy *= 8.0f;</b>
+<b class="nc"><i>275</i>&nbsp;</b>
+<b class="nc"><i>276</i>&nbsp;                count &gt;&gt;= 1;</b>
+<b class="nc"><i>277</i>&nbsp;                if (DO_STATS) {</b>
+<i>278</i>&nbsp;                    rdrCtx.stats.stat_rdr_curveBreak_inc.add(count);
+<b class="nc"><i>279</i>&nbsp;                }</b>
+<b class="nc"><i>280</i>&nbsp;            }</b>
+<b class="nc"><i>281</i>&nbsp;</b>
+<i>282</i>&nbsp;            // divide step by half:
+<i>283</i>&nbsp;            while ((Math.abs(ddx) + Math.abs(ddy) * _SCALE_DY) &gt;= _DEC_BND) {
+<i>284</i>&nbsp;                dddx /= 8.0f;
+<i>285</i>&nbsp;                dddy /= 8.0f;
+<b class="nc"><i>286</i>&nbsp;                ddx = ddx / 4.0f - dddx;</b>
+<i>287</i>&nbsp;                ddy = ddy / 4.0f - dddy;
+<i>288</i>&nbsp;                dx = (dx - ddx) / 2.0f;
+<b class="nc"><i>289</i>&nbsp;                dy = (dy - ddy) / 2.0f;</b>
+<b class="nc"><i>290</i>&nbsp;</b>
+<b class="nc"><i>291</i>&nbsp;                count &lt;&lt;= 1;</b>
+<b class="nc"><i>292</i>&nbsp;                if (DO_STATS) {</b>
+<b class="nc"><i>293</i>&nbsp;                    rdrCtx.stats.stat_rdr_curveBreak_dec.add(count);</b>
+<b class="nc"><i>294</i>&nbsp;                }</b>
+<i>295</i>&nbsp;            }
+<b class="nc"><i>296</i>&nbsp;            if (--count == 0) {</b>
+<b class="nc"><i>297</i>&nbsp;                break;</b>
+<b class="nc"><i>298</i>&nbsp;            }</b>
+<i>299</i>&nbsp;
+<i>300</i>&nbsp;            x1 += dx;
+<b class="nc"><i>301</i>&nbsp;            y1 += dy;</b>
+<b class="nc"><i>302</i>&nbsp;            dx += ddx;</b>
+<i>303</i>&nbsp;            dy += ddy;
+<i>304</i>&nbsp;            ddx += dddx;
+<b class="nc"><i>305</i>&nbsp;            ddy += dddy;</b>
+<b class="nc"><i>306</i>&nbsp;</b>
+<b class="nc"><i>307</i>&nbsp;            addLine(x0, y0, x1, y1);</b>
+<b class="nc"><i>308</i>&nbsp;            x0 = x1;</b>
+<b class="nc"><i>309</i>&nbsp;            y0 = y1;</b>
+<b class="nc"><i>310</i>&nbsp;        }</b>
+<i>311</i>&nbsp;        addLine(x0, y0, x3, y3);
+<b class="nc"><i>312</i>&nbsp;</b>
+<b class="nc"><i>313</i>&nbsp;        if (DO_STATS) {</b>
+<b class="nc"><i>314</i>&nbsp;            rdrCtx.stats.stat_rdr_curveBreak.add(nL + 1);</b>
+<i>315</i>&nbsp;        }
+<b class="nc"><i>316</i>&nbsp;    }</b>
+<i>317</i>&nbsp;
+<b class="nc"><i>318</i>&nbsp;    private void addLine(float x1, float y1, float x2, float y2) {</b>
+<b class="nc"><i>319</i>&nbsp;        if (DO_MONITORS) {</b>
+<i>320</i>&nbsp;            rdrCtx.stats.mon_rdr_addLine.start();
+<i>321</i>&nbsp;        }
+<i>322</i>&nbsp;        if (DO_STATS) {
+<i>323</i>&nbsp;            rdrCtx.stats.stat_rdr_addLine.add(1);
+<i>324</i>&nbsp;        }
+<i>325</i>&nbsp;        int or = 1; // orientation of the line. 1 if y increases, 0 otherwise.
+<i>326</i>&nbsp;        if (y2 &lt; y1) {
+<b class="nc"><i>327</i>&nbsp;            or = 0;</b>
+<b class="nc"><i>328</i>&nbsp;            float tmp = y2;</b>
+<i>329</i>&nbsp;            y2 = y1;
+<b class="nc"><i>330</i>&nbsp;            y1 = tmp;</b>
+<b class="nc"><i>331</i>&nbsp;            tmp = x2;</b>
+<b class="nc"><i>332</i>&nbsp;            x2 = x1;</b>
+<b class="nc"><i>333</i>&nbsp;            x1 = tmp;</b>
+<b class="nc"><i>334</i>&nbsp;        }</b>
+<b class="nc"><i>335</i>&nbsp;</b>
+<b class="nc"><i>336</i>&nbsp;        // convert subpixel coordinates [float] into pixel positions [int]</b>
+<b class="nc"><i>337</i>&nbsp;</b>
+<b class="nc"><i>338</i>&nbsp;        // The index of the pixel that holds the next HPC is at ceil(trueY - 0.5)</b>
+<i>339</i>&nbsp;        // Since y1 and y2 are biased by -0.5 in tosubpixy(), this is simply
+<i>340</i>&nbsp;        // ceil(y1) or ceil(y2)
+<i>341</i>&nbsp;        // upper integer (inclusive)
+<i>342</i>&nbsp;        final int firstCrossing = FloatMath.max(FloatMath.ceil_int(y1), boundsMinY);
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;        // note: use boundsMaxY (last Y exclusive) to compute correct coverage
+<i>345</i>&nbsp;        // upper integer (exclusive)
+<i>346</i>&nbsp;        final int lastCrossing  = FloatMath.min(FloatMath.ceil_int(y2), boundsMaxY);
+<b class="nc"><i>347</i>&nbsp;</b>
+<i>348</i>&nbsp;        /* skip horizontal lines in pixel space and clip edges
+<i>349</i>&nbsp;           out of y range [boundsMinY; boundsMaxY] */
+<i>350</i>&nbsp;        if (firstCrossing &gt;= lastCrossing) {
+<b class="nc"><i>351</i>&nbsp;            if (DO_MONITORS) {</b>
+<i>352</i>&nbsp;                rdrCtx.stats.mon_rdr_addLine.stop();
+<i>353</i>&nbsp;            }
+<i>354</i>&nbsp;            if (DO_STATS) {
+<b class="nc"><i>355</i>&nbsp;                rdrCtx.stats.stat_rdr_addLine_skip.add(1);</b>
+<i>356</i>&nbsp;            }
+<i>357</i>&nbsp;            return;
+<i>358</i>&nbsp;        }
+<b class="nc"><i>359</i>&nbsp;</b>
+<b class="nc"><i>360</i>&nbsp;        // edge min/max X/Y are in subpixel space (half-open interval):</b>
+<i>361</i>&nbsp;        // note: Use integer crossings to ensure consistent range within
+<i>362</i>&nbsp;        // edgeBuckets / edgeBucketCounts arrays in case of NaN values (int = 0)
+<i>363</i>&nbsp;        if (firstCrossing &lt; edgeMinY) {
+<i>364</i>&nbsp;            edgeMinY = firstCrossing;
+<i>365</i>&nbsp;        }
+<i>366</i>&nbsp;        if (lastCrossing &gt; edgeMaxY) {
+<i>367</i>&nbsp;            edgeMaxY = lastCrossing;
+<b class="nc"><i>368</i>&nbsp;        }</b>
+<b class="nc"><i>369</i>&nbsp;</b>
+<i>370</i>&nbsp;        // Use double-precision for improved accuracy:
+<b class="nc"><i>371</i>&nbsp;        final double x1d   = x1;</b>
+<b class="nc"><i>372</i>&nbsp;        final double y1d   = y1;</b>
+<i>373</i>&nbsp;        final double slope = (x1d - x2) / (y1d - y2);
+<i>374</i>&nbsp;
+<i>375</i>&nbsp;        if (slope &gt;= 0.0d) { // &lt;==&gt; x1 &lt; x2
+<b class="nc"><i>376</i>&nbsp;            if (x1 &lt; edgeMinX) {</b>
+<b class="nc"><i>377</i>&nbsp;                edgeMinX = x1;</b>
+<b class="nc"><i>378</i>&nbsp;            }</b>
+<i>379</i>&nbsp;            if (x2 &gt; edgeMaxX) {
+<b class="nc"><i>380</i>&nbsp;                edgeMaxX = x2;</b>
+<b class="nc"><i>381</i>&nbsp;            }</b>
+<b class="nc"><i>382</i>&nbsp;        } else {</b>
+<i>383</i>&nbsp;            if (x2 &lt; edgeMinX) {
+<b class="nc"><i>384</i>&nbsp;                edgeMinX = x2;</b>
+<b class="nc"><i>385</i>&nbsp;            }</b>
+<i>386</i>&nbsp;            if (x1 &gt; edgeMaxX) {
+<i>387</i>&nbsp;                edgeMaxX = x1;
+<b class="nc"><i>388</i>&nbsp;            }</b>
+<b class="nc"><i>389</i>&nbsp;        }</b>
+<i>390</i>&nbsp;
+<b class="nc"><i>391</i>&nbsp;        // local variables for performance:</b>
+<b class="nc"><i>392</i>&nbsp;        final int _SIZEOF_EDGE_BYTES = SIZEOF_EDGE_BYTES;</b>
+<i>393</i>&nbsp;
+<i>394</i>&nbsp;        final OffHeapArray _edges = edges;
+<i>395</i>&nbsp;
+<i>396</i>&nbsp;        // get free pointer (ie length in bytes)
+<b class="nc"><i>397</i>&nbsp;        final int edgePtr = _edges.used;</b>
+<i>398</i>&nbsp;
+<b class="nc"><i>399</i>&nbsp;        // use substraction to avoid integer overflow:</b>
+<i>400</i>&nbsp;        if (_edges.length - edgePtr &lt; _SIZEOF_EDGE_BYTES) {
+<i>401</i>&nbsp;            // suppose _edges.length &gt; _SIZEOF_EDGE_BYTES
+<b class="nc"><i>402</i>&nbsp;            // so doubling size is enough to add needed bytes</b>
+<i>403</i>&nbsp;            // note: throw IOOB if neededSize &gt; 2Gb:
+<i>404</i>&nbsp;            final long edgeNewSize = ArrayCacheConst.getNewLargeSize(
+<b class="nc"><i>405</i>&nbsp;                                        _edges.length,</b>
+<i>406</i>&nbsp;                                        edgePtr + _SIZEOF_EDGE_BYTES);
+<i>407</i>&nbsp;
+<i>408</i>&nbsp;            if (DO_STATS) {
+<b class="nc"><i>409</i>&nbsp;                rdrCtx.stats.stat_rdr_edges_resizes.add(edgeNewSize);</b>
+<i>410</i>&nbsp;            }
+<i>411</i>&nbsp;            _edges.resize(edgeNewSize);
+<i>412</i>&nbsp;        }
+<b class="nc"><i>413</i>&nbsp;</b>
+<b class="nc"><i>414</i>&nbsp;</b>
+<i>415</i>&nbsp;        final Unsafe _unsafe = OffHeapArray.UNSAFE;
+<b class="nc"><i>416</i>&nbsp;        final long SIZE_INT = 4L;</b>
+<i>417</i>&nbsp;        long addr   = _edges.address + edgePtr;
+<i>418</i>&nbsp;
+<i>419</i>&nbsp;        // The x value must be bumped up to its position at the next HPC we will evaluate.
+<b class="nc"><i>420</i>&nbsp;        // &quot;firstcrossing&quot; is the (sub)pixel number where the next crossing occurs</b>
+<i>421</i>&nbsp;        // thus, the actual coordinate of the next HPC is &quot;firstcrossing + 0.5&quot;
+<b class="nc"><i>422</i>&nbsp;        // so the Y distance we cover is &quot;firstcrossing + 0.5 - trueY&quot;.</b>
+<i>423</i>&nbsp;        // Note that since y1 (and y2) are already biased by -0.5 in tosubpixy(), we have
+<i>424</i>&nbsp;        // y1 = trueY - 0.5
+<i>425</i>&nbsp;        // trueY = y1 + 0.5
+<i>426</i>&nbsp;        // firstcrossing + 0.5 - trueY = firstcrossing + 0.5 - (y1 + 0.5)
+<i>427</i>&nbsp;        //                             = firstcrossing - y1
+<i>428</i>&nbsp;        // The x coordinate at that HPC is then:
+<i>429</i>&nbsp;        // x1_intercept = x1 + (firstcrossing - y1) * slope
+<i>430</i>&nbsp;        // The next VPC is then given by:
+<i>431</i>&nbsp;        // VPC index = ceil(x1_intercept - 0.5), or alternately
+<i>432</i>&nbsp;        // VPC index = floor(x1_intercept - 0.5 + 1 - epsilon)
+<i>433</i>&nbsp;        // epsilon is hard to pin down in floating point, but easy in fixed point, so if
+<i>434</i>&nbsp;        // we convert to fixed point then these operations get easier:
+<i>435</i>&nbsp;        // long x1_fixed = x1_intercept * 2^32;  (fixed point 32.32 format)
+<i>436</i>&nbsp;        // curx = next VPC = fixed_floor(x1_fixed - 2^31 + 2^32 - 1)
+<i>437</i>&nbsp;        //                 = fixed_floor(x1_fixed + 2^31 - 1)
+<i>438</i>&nbsp;        //                 = fixed_floor(x1_fixed + 0x7FFFFFFF)
+<i>439</i>&nbsp;        // and error       = fixed_fract(x1_fixed + 0x7FFFFFFF)
+<i>440</i>&nbsp;        final double x1_intercept = x1d + (firstCrossing - y1d) * slope;
+<i>441</i>&nbsp;
+<i>442</i>&nbsp;        // inlined scalb(x1_intercept, 32):
+<i>443</i>&nbsp;        final long x1_fixed_biased = ((long) (POWER_2_TO_32 * x1_intercept))
+<i>444</i>&nbsp;                                     + 0x7FFFFFFFL;
+<b class="nc"><i>445</i>&nbsp;        // curx:</b>
+<i>446</i>&nbsp;        // last bit corresponds to the orientation
+<i>447</i>&nbsp;        _unsafe.putInt(addr, (((int) (x1_fixed_biased &gt;&gt; 31L)) &amp; ALL_BUT_LSB) | or);
+<b class="nc"><i>448</i>&nbsp;        addr += SIZE_INT;</b>
+<i>449</i>&nbsp;        _unsafe.putInt(addr,  ((int)  x1_fixed_biased) &gt;&gt;&gt; 1);
+<i>450</i>&nbsp;        addr += SIZE_INT;
+<i>451</i>&nbsp;
+<b class="nc"><i>452</i>&nbsp;        // inlined scalb(slope, 32):</b>
+<b class="nc"><i>453</i>&nbsp;        final long slope_fixed = (long) (POWER_2_TO_32 * slope);</b>
+<b class="nc"><i>454</i>&nbsp;</b>
+<b class="nc"><i>455</i>&nbsp;        // last bit set to 0 to keep orientation:</b>
+<i>456</i>&nbsp;        _unsafe.putInt(addr, (((int) (slope_fixed &gt;&gt; 31L)) &amp; ALL_BUT_LSB));
+<i>457</i>&nbsp;        addr += SIZE_INT;
+<b class="nc"><i>458</i>&nbsp;        _unsafe.putInt(addr,  ((int)  slope_fixed) &gt;&gt;&gt; 1);</b>
+<i>459</i>&nbsp;        addr += SIZE_INT;
+<i>460</i>&nbsp;
+<b class="nc"><i>461</i>&nbsp;        final int[] _edgeBuckets      = edgeBuckets;</b>
+<b class="nc"><i>462</i>&nbsp;        final int[] _edgeBucketCounts = edgeBucketCounts;</b>
+<b class="nc"><i>463</i>&nbsp;</b>
+<b class="nc"><i>464</i>&nbsp;        final int _boundsMinY = boundsMinY;</b>
+<i>465</i>&nbsp;
+<b class="nc"><i>466</i>&nbsp;        // each bucket is a linked list. this method adds ptr to the</b>
+<b class="nc"><i>467</i>&nbsp;        // start of the &quot;bucket&quot;th linked list.</b>
+<i>468</i>&nbsp;        final int bucketIdx = firstCrossing - _boundsMinY;
+<b class="nc"><i>469</i>&nbsp;</b>
+<i>470</i>&nbsp;        // pointer from bucket
+<i>471</i>&nbsp;        _unsafe.putInt(addr, _edgeBuckets[bucketIdx]);
+<i>472</i>&nbsp;        addr += SIZE_INT;
+<b class="nc"><i>473</i>&nbsp;        // y max (exclusive)</b>
+<i>474</i>&nbsp;        _unsafe.putInt(addr,  lastCrossing);
+<i>475</i>&nbsp;
+<b class="nc"><i>476</i>&nbsp;        // Update buckets:</b>
+<b class="nc"><i>477</i>&nbsp;        // directly the edge struct &quot;pointer&quot;</b>
+<i>478</i>&nbsp;        _edgeBuckets[bucketIdx]       = edgePtr;
+<b class="nc"><i>479</i>&nbsp;        _edgeBucketCounts[bucketIdx] += 2; // 1 &lt;&lt; 1</b>
+<i>480</i>&nbsp;        // last bit means edge end
+<i>481</i>&nbsp;        _edgeBucketCounts[lastCrossing - _boundsMinY] |= 0x1;
+<i>482</i>&nbsp;
+<b class="nc"><i>483</i>&nbsp;        // update free pointer (ie length in bytes)</b>
+<b class="nc"><i>484</i>&nbsp;        _edges.used += _SIZEOF_EDGE_BYTES;</b>
+<i>485</i>&nbsp;
+<b class="nc"><i>486</i>&nbsp;        if (DO_MONITORS) {</b>
+<i>487</i>&nbsp;            rdrCtx.stats.mon_rdr_addLine.stop();
+<i>488</i>&nbsp;        }
+<b class="nc"><i>489</i>&nbsp;    }</b>
+<i>490</i>&nbsp;
+<i>491</i>&nbsp;// END EDGE LIST
+<i>492</i>&nbsp;//////////////////////////////////////////////////////////////////////////////
+<i>493</i>&nbsp;
+<i>494</i>&nbsp;    // Cache to store RLE-encoded coverage mask of the current primitive
+<i>495</i>&nbsp;    final MarlinCache cache;
+<i>496</i>&nbsp;
+<i>497</i>&nbsp;    // Bounds of the drawing region, at subpixel precision.
+<i>498</i>&nbsp;    private int boundsMinX, boundsMinY, boundsMaxX, boundsMaxY;
+<i>499</i>&nbsp;
+<i>500</i>&nbsp;    // Current winding rule
+<i>501</i>&nbsp;    private int windingRule;
+<i>502</i>&nbsp;
+<i>503</i>&nbsp;    // Current drawing position, i.e., final point of last segment
+<i>504</i>&nbsp;    private float x0, y0;
+<i>505</i>&nbsp;
+<i>506</i>&nbsp;    // Position of most recent &#39;moveTo&#39; command
+<i>507</i>&nbsp;    private float sx0, sy0;
+<i>508</i>&nbsp;
+<i>509</i>&nbsp;    // per-thread renderer context
+<i>510</i>&nbsp;    final RendererContext rdrCtx;
+<i>511</i>&nbsp;    // dirty curve
+<i>512</i>&nbsp;    private final Curve curve;
+<i>513</i>&nbsp;
+<i>514</i>&nbsp;    // clean alpha array (zero filled)
+<i>515</i>&nbsp;    private int[] alphaLine;
+<i>516</i>&nbsp;
+<i>517</i>&nbsp;    // alphaLine ref (clean)
+<i>518</i>&nbsp;    private final IntArrayCache.Reference alphaLine_ref;
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;    private boolean enableBlkFlags = false;
+<i>521</i>&nbsp;    private boolean prevUseBlkFlags = false;
+<i>522</i>&nbsp;
+<i>523</i>&nbsp;    /* block flags (0|1) */
+<i>524</i>&nbsp;    private int[] blkFlags;
+<b class="nc"><i>525</i>&nbsp;</b>
+<b class="nc"><i>526</i>&nbsp;    // blkFlags ref (clean)</b>
+<i>527</i>&nbsp;    private final IntArrayCache.Reference blkFlags_ref;
+<i>528</i>&nbsp;
+<i>529</i>&nbsp;    Renderer(final RendererContext rdrCtx) {
+<i>530</i>&nbsp;        this.rdrCtx = rdrCtx;
+<i>531</i>&nbsp;        this.curve = rdrCtx.curve;
+<i>532</i>&nbsp;        this.cache = rdrCtx.cache;
+<i>533</i>&nbsp;
+<b class="nc"><i>534</i>&nbsp;        this.edges = rdrCtx.newOffHeapArray(INITIAL_EDGES_CAPACITY); // 96K</b>
+<b class="nc"><i>535</i>&nbsp;</b>
+<b class="nc"><i>536</i>&nbsp;        edgeBuckets_ref      = rdrCtx.newCleanIntArrayRef(INITIAL_BUCKET_ARRAY); // 64K</b>
+<b class="nc"><i>537</i>&nbsp;        edgeBucketCounts_ref = rdrCtx.newCleanIntArrayRef(INITIAL_BUCKET_ARRAY); // 64K</b>
+<i>538</i>&nbsp;
+<b class="nc"><i>539</i>&nbsp;        edgeBuckets      = edgeBuckets_ref.initial;</b>
+<i>540</i>&nbsp;        edgeBucketCounts = edgeBucketCounts_ref.initial;
+<b class="nc"><i>541</i>&nbsp;</b>
+<b class="nc"><i>542</i>&nbsp;        // 4096 pixels large</b>
+<i>543</i>&nbsp;        alphaLine_ref = rdrCtx.newCleanIntArrayRef(INITIAL_AA_ARRAY); // 16K
+<b class="nc"><i>544</i>&nbsp;        alphaLine     = alphaLine_ref.initial;</b>
+<b class="nc"><i>545</i>&nbsp;</b>
+<i>546</i>&nbsp;        crossings_ref     = rdrCtx.newDirtyIntArrayRef(INITIAL_CROSSING_COUNT); // 2K
+<i>547</i>&nbsp;        aux_crossings_ref = rdrCtx.newDirtyIntArrayRef(INITIAL_CROSSING_COUNT); // 2K
+<b class="nc"><i>548</i>&nbsp;        edgePtrs_ref      = rdrCtx.newDirtyIntArrayRef(INITIAL_CROSSING_COUNT); // 2K</b>
+<b class="nc"><i>549</i>&nbsp;        aux_edgePtrs_ref  = rdrCtx.newDirtyIntArrayRef(INITIAL_CROSSING_COUNT); // 2K</b>
+<i>550</i>&nbsp;
+<b class="nc"><i>551</i>&nbsp;        crossings     = crossings_ref.initial;</b>
+<b class="nc"><i>552</i>&nbsp;        aux_crossings = aux_crossings_ref.initial;</b>
+<b class="nc"><i>553</i>&nbsp;        edgePtrs      = edgePtrs_ref.initial;</b>
+<b class="nc"><i>554</i>&nbsp;        aux_edgePtrs  = aux_edgePtrs_ref.initial;</b>
+<i>555</i>&nbsp;
+<b class="nc"><i>556</i>&nbsp;        blkFlags_ref = rdrCtx.newCleanIntArrayRef(INITIAL_ARRAY); // 1K = 1 tile line</b>
+<b class="nc"><i>557</i>&nbsp;        blkFlags     = blkFlags_ref.initial;</b>
+<b class="nc"><i>558</i>&nbsp;    }</b>
+<b class="nc"><i>559</i>&nbsp;</b>
+<i>560</i>&nbsp;    Renderer init(final int pix_boundsX, final int pix_boundsY,
+<b class="nc"><i>561</i>&nbsp;                  final int pix_boundsWidth, final int pix_boundsHeight,</b>
+<b class="nc"><i>562</i>&nbsp;                  final int windingRule)</b>
+<i>563</i>&nbsp;    {
+<i>564</i>&nbsp;        this.windingRule = windingRule;
+<i>565</i>&nbsp;
+<i>566</i>&nbsp;        // bounds as half-open intervals: minX &lt;= x &lt; maxX and minY &lt;= y &lt; maxY
+<i>567</i>&nbsp;        this.boundsMinX =  pix_boundsX &lt;&lt; SUBPIXEL_LG_POSITIONS_X;
+<i>568</i>&nbsp;        this.boundsMaxX =
+<b class="nc"><i>569</i>&nbsp;            (pix_boundsX + pix_boundsWidth) &lt;&lt; SUBPIXEL_LG_POSITIONS_X;</b>
+<i>570</i>&nbsp;        this.boundsMinY =  pix_boundsY &lt;&lt; SUBPIXEL_LG_POSITIONS_Y;
+<i>571</i>&nbsp;        this.boundsMaxY =
+<b class="nc"><i>572</i>&nbsp;            (pix_boundsY + pix_boundsHeight) &lt;&lt; SUBPIXEL_LG_POSITIONS_Y;</b>
+<b class="nc"><i>573</i>&nbsp;</b>
+<i>574</i>&nbsp;        if (DO_LOG_BOUNDS) {
+<b class="nc"><i>575</i>&nbsp;            MarlinUtils.logInfo(&quot;boundsXY = [&quot; + boundsMinX + &quot; ... &quot;</b>
+<b class="nc"><i>576</i>&nbsp;                                + boundsMaxX + &quot;[ [&quot; + boundsMinY + &quot; ... &quot;</b>
+<i>577</i>&nbsp;                                + boundsMaxY + &quot;[&quot;);
+<i>578</i>&nbsp;        }
+<b class="nc"><i>579</i>&nbsp;</b>
+<b class="nc"><i>580</i>&nbsp;        // see addLine: ceil(boundsMaxY) =&gt; boundsMaxY + 1</b>
+<i>581</i>&nbsp;        // +1 for edgeBucketCounts
+<i>582</i>&nbsp;        final int edgeBucketsLength = (boundsMaxY - boundsMinY) + 1;
+<i>583</i>&nbsp;
+<i>584</i>&nbsp;        if (edgeBucketsLength &gt; INITIAL_BUCKET_ARRAY) {
+<i>585</i>&nbsp;            if (DO_STATS) {
+<i>586</i>&nbsp;                rdrCtx.stats.stat_array_renderer_edgeBuckets
+<b class="nc"><i>587</i>&nbsp;                    .add(edgeBucketsLength);</b>
+<i>588</i>&nbsp;                rdrCtx.stats.stat_array_renderer_edgeBucketCounts
+<b class="nc"><i>589</i>&nbsp;                    .add(edgeBucketsLength);</b>
+<b class="nc"><i>590</i>&nbsp;            }</b>
+<b class="nc"><i>591</i>&nbsp;            edgeBuckets = edgeBuckets_ref.getArray(edgeBucketsLength);</b>
+<b class="nc"><i>592</i>&nbsp;            edgeBucketCounts = edgeBucketCounts_ref.getArray(edgeBucketsLength);</b>
+<b class="nc"><i>593</i>&nbsp;        }</b>
+<b class="nc"><i>594</i>&nbsp;</b>
+<i>595</i>&nbsp;        edgeMinY = Integer.MAX_VALUE;
+<b class="nc"><i>596</i>&nbsp;        edgeMaxY = Integer.MIN_VALUE;</b>
+<b class="nc"><i>597</i>&nbsp;        edgeMinX = Float.POSITIVE_INFINITY;</b>
+<i>598</i>&nbsp;        edgeMaxX = Float.NEGATIVE_INFINITY;
+<i>599</i>&nbsp;
+<b class="nc"><i>600</i>&nbsp;        // reset used mark:</b>
+<b class="nc"><i>601</i>&nbsp;        edgeCount = 0;</b>
+<b class="nc"><i>602</i>&nbsp;        activeEdgeMaxUsed = 0;</b>
+<b class="nc"><i>603</i>&nbsp;        edges.used = 0;</b>
+<i>604</i>&nbsp;
+<i>605</i>&nbsp;        return this; // fluent API
+<b class="nc"><i>606</i>&nbsp;    }</b>
+<b class="nc"><i>607</i>&nbsp;</b>
+<b class="nc"><i>608</i>&nbsp;    /**</b>
+<i>609</i>&nbsp;     * Disposes this renderer and recycle it clean up before reusing this instance
+<b class="nc"><i>610</i>&nbsp;     */</b>
+<i>611</i>&nbsp;    void dispose() {
+<i>612</i>&nbsp;        if (DO_STATS) {
+<i>613</i>&nbsp;            rdrCtx.stats.stat_rdr_activeEdges.add(activeEdgeMaxUsed);
+<i>614</i>&nbsp;            rdrCtx.stats.stat_rdr_edges.add(edges.used);
+<i>615</i>&nbsp;            rdrCtx.stats.stat_rdr_edges_count.add(edges.used / SIZEOF_EDGE_BYTES);
+<i>616</i>&nbsp;            rdrCtx.stats.hist_rdr_edges_count.add(edges.used / SIZEOF_EDGE_BYTES);
+<b class="nc"><i>617</i>&nbsp;            rdrCtx.stats.totalOffHeap += edges.length;</b>
+<b class="nc"><i>618</i>&nbsp;        }</b>
+<b class="nc"><i>619</i>&nbsp;        // Return arrays:</b>
+<b class="nc"><i>620</i>&nbsp;        crossings = crossings_ref.putArray(crossings);</b>
+<b class="nc"><i>621</i>&nbsp;        aux_crossings = aux_crossings_ref.putArray(aux_crossings);</b>
+<b class="nc"><i>622</i>&nbsp;</b>
+<i>623</i>&nbsp;        edgePtrs = edgePtrs_ref.putArray(edgePtrs);
+<i>624</i>&nbsp;        aux_edgePtrs = aux_edgePtrs_ref.putArray(aux_edgePtrs);
+<b class="nc"><i>625</i>&nbsp;</b>
+<b class="nc"><i>626</i>&nbsp;        alphaLine = alphaLine_ref.putArray(alphaLine, 0, 0); // already zero filled</b>
+<i>627</i>&nbsp;        blkFlags  = blkFlags_ref.putArray(blkFlags, 0, 0); // already zero filled
+<b class="nc"><i>628</i>&nbsp;</b>
+<b class="nc"><i>629</i>&nbsp;        if (edgeMinY != Integer.MAX_VALUE) {</b>
+<i>630</i>&nbsp;            // if context is maked as DIRTY:
+<b class="nc"><i>631</i>&nbsp;            if (rdrCtx.dirty) {</b>
+<b class="nc"><i>632</i>&nbsp;                // may happen if an exception if thrown in the pipeline processing:</b>
+<i>633</i>&nbsp;                // clear completely buckets arrays:
+<b class="nc"><i>634</i>&nbsp;                buckets_minY = 0;</b>
+<i>635</i>&nbsp;                buckets_maxY = boundsMaxY - boundsMinY;
+<b class="nc"><i>636</i>&nbsp;            }</b>
+<i>637</i>&nbsp;            // clear only used part
+<i>638</i>&nbsp;            edgeBuckets = edgeBuckets_ref.putArray(edgeBuckets, buckets_minY,
+<b class="nc"><i>639</i>&nbsp;                                                                buckets_maxY);</b>
+<b class="nc"><i>640</i>&nbsp;            edgeBucketCounts = edgeBucketCounts_ref.putArray(edgeBucketCounts,</b>
+<i>641</i>&nbsp;                                                             buckets_minY,
+<i>642</i>&nbsp;                                                             buckets_maxY + 1);
+<b class="nc"><i>643</i>&nbsp;        } else {</b>
+<i>644</i>&nbsp;            // unused arrays
+<b class="nc"><i>645</i>&nbsp;            edgeBuckets = edgeBuckets_ref.putArray(edgeBuckets, 0, 0);</b>
+<i>646</i>&nbsp;            edgeBucketCounts = edgeBucketCounts_ref.putArray(edgeBucketCounts, 0, 0);
+<i>647</i>&nbsp;        }
+<i>648</i>&nbsp;
+<i>649</i>&nbsp;        // At last: resize back off-heap edges to initial size
+<b class="nc"><i>650</i>&nbsp;        if (edges.length != INITIAL_EDGES_CAPACITY) {</b>
+<b class="nc"><i>651</i>&nbsp;            // note: may throw OOME:</b>
+<i>652</i>&nbsp;            edges.resize(INITIAL_EDGES_CAPACITY);
+<i>653</i>&nbsp;        }
+<i>654</i>&nbsp;        if (DO_CLEAN_DIRTY) {
+<b class="nc"><i>655</i>&nbsp;            // Force zero-fill dirty arrays:</b>
+<i>656</i>&nbsp;            edges.fill(BYTE_0);
+<b class="nc"><i>657</i>&nbsp;        }</b>
+<i>658</i>&nbsp;        if (DO_MONITORS) {
+<i>659</i>&nbsp;            rdrCtx.stats.mon_rdr_endRendering.stop();
+<i>660</i>&nbsp;        }
+<i>661</i>&nbsp;        // recycle the RendererContext instance
+<i>662</i>&nbsp;        MarlinRenderingEngine.returnRendererContext(rdrCtx);
+<i>663</i>&nbsp;    }
+<i>664</i>&nbsp;
+<i>665</i>&nbsp;    private static float tosubpixx(final float pix_x) {
+<i>666</i>&nbsp;        return SUBPIXEL_SCALE_X * pix_x;
+<b class="nc"><i>667</i>&nbsp;    }</b>
+<i>668</i>&nbsp;
+<i>669</i>&nbsp;    private static float tosubpixy(final float pix_y) {
+<i>670</i>&nbsp;        // shift y by -0.5 for fast ceil(y - 0.5):
+<b class="nc"><i>671</i>&nbsp;        return SUBPIXEL_SCALE_Y * pix_y - 0.5f;</b>
+<i>672</i>&nbsp;    }
+<i>673</i>&nbsp;
+<i>674</i>&nbsp;    @Override
+<i>675</i>&nbsp;    public void moveTo(final float pix_x0, final float pix_y0) {
+<b class="nc"><i>676</i>&nbsp;        closePath();</b>
+<i>677</i>&nbsp;        final float sx = tosubpixx(pix_x0);
+<i>678</i>&nbsp;        final float sy = tosubpixy(pix_y0);
+<i>679</i>&nbsp;        this.sx0 = sx;
+<i>680</i>&nbsp;        this.sy0 = sy;
+<b class="nc"><i>681</i>&nbsp;        this.x0 = sx;</b>
+<b class="nc"><i>682</i>&nbsp;        this.y0 = sy;</b>
+<b class="nc"><i>683</i>&nbsp;    }</b>
+<b class="nc"><i>684</i>&nbsp;</b>
+<b class="nc"><i>685</i>&nbsp;    @Override</b>
+<b class="nc"><i>686</i>&nbsp;    public void lineTo(final float pix_x1, final float pix_y1) {</b>
+<b class="nc"><i>687</i>&nbsp;        final float x1 = tosubpixx(pix_x1);</b>
+<i>688</i>&nbsp;        final float y1 = tosubpixy(pix_y1);
+<i>689</i>&nbsp;        addLine(x0, y0, x1, y1);
+<i>690</i>&nbsp;        x0 = x1;
+<i>691</i>&nbsp;        y0 = y1;
+<b class="nc"><i>692</i>&nbsp;    }</b>
+<b class="nc"><i>693</i>&nbsp;</b>
+<b class="nc"><i>694</i>&nbsp;    @Override</b>
+<b class="nc"><i>695</i>&nbsp;    public void curveTo(final float pix_x1, final float pix_y1,</b>
+<b class="nc"><i>696</i>&nbsp;                        final float pix_x2, final float pix_y2,</b>
+<i>697</i>&nbsp;                        final float pix_x3, final float pix_y3)
+<i>698</i>&nbsp;    {
+<i>699</i>&nbsp;        final float xe = tosubpixx(pix_x3);
+<i>700</i>&nbsp;        final float ye = tosubpixy(pix_y3);
+<i>701</i>&nbsp;        curve.set(x0, y0,
+<i>702</i>&nbsp;                tosubpixx(pix_x1), tosubpixy(pix_y1),
+<i>703</i>&nbsp;                tosubpixx(pix_x2), tosubpixy(pix_y2),
+<b class="nc"><i>704</i>&nbsp;                xe, ye);</b>
+<b class="nc"><i>705</i>&nbsp;        curveBreakIntoLinesAndAdd(x0, y0, curve, xe, ye);</b>
+<b class="nc"><i>706</i>&nbsp;        x0 = xe;</b>
+<b class="nc"><i>707</i>&nbsp;        y0 = ye;</b>
+<b class="nc"><i>708</i>&nbsp;    }</b>
+<i>709</i>&nbsp;
+<b class="nc"><i>710</i>&nbsp;    @Override</b>
+<b class="nc"><i>711</i>&nbsp;    public void quadTo(final float pix_x1, final float pix_y1,</b>
+<b class="nc"><i>712</i>&nbsp;                       final float pix_x2, final float pix_y2)</b>
+<i>713</i>&nbsp;    {
+<i>714</i>&nbsp;        final float xe = tosubpixx(pix_x2);
+<i>715</i>&nbsp;        final float ye = tosubpixy(pix_y2);
+<i>716</i>&nbsp;        curve.set(x0, y0,
+<i>717</i>&nbsp;                tosubpixx(pix_x1), tosubpixy(pix_y1),
+<i>718</i>&nbsp;                xe, ye);
+<b class="nc"><i>719</i>&nbsp;        quadBreakIntoLinesAndAdd(x0, y0, curve, xe, ye);</b>
+<b class="nc"><i>720</i>&nbsp;        x0 = xe;</b>
+<b class="nc"><i>721</i>&nbsp;        y0 = ye;</b>
+<b class="nc"><i>722</i>&nbsp;    }</b>
+<i>723</i>&nbsp;
+<b class="nc"><i>724</i>&nbsp;    @Override</b>
+<b class="nc"><i>725</i>&nbsp;    public void closePath() {</b>
+<b class="nc"><i>726</i>&nbsp;        if (x0 != sx0 || y0 != sy0) {</b>
+<i>727</i>&nbsp;            addLine(x0, y0, sx0, sy0);
+<i>728</i>&nbsp;            x0 = sx0;
+<i>729</i>&nbsp;            y0 = sy0;
+<i>730</i>&nbsp;        }
+<b class="nc"><i>731</i>&nbsp;    }</b>
+<b class="nc"><i>732</i>&nbsp;</b>
+<b class="nc"><i>733</i>&nbsp;    @Override</b>
+<b class="nc"><i>734</i>&nbsp;    public void pathDone() {</b>
+<i>735</i>&nbsp;        closePath();
+<i>736</i>&nbsp;    }
+<i>737</i>&nbsp;
+<i>738</i>&nbsp;    @Override
+<i>739</i>&nbsp;    public long getNativeConsumer() {
+<b class="nc"><i>740</i>&nbsp;        throw new InternalError(&quot;Renderer does not use a native consumer.&quot;);</b>
+<i>741</i>&nbsp;    }
+<i>742</i>&nbsp;
+<i>743</i>&nbsp;    private void _endRendering(final int ymin, final int ymax) {
+<i>744</i>&nbsp;        if (DISABLE_RENDER) {
+<b class="nc"><i>745</i>&nbsp;            return;</b>
+<i>746</i>&nbsp;        }
+<i>747</i>&nbsp;
+<i>748</i>&nbsp;        // Get X bounds as true pixel boundaries to compute correct pixel coverage:
+<i>749</i>&nbsp;        final int bboxx0 = bbox_spminX;
+<i>750</i>&nbsp;        final int bboxx1 = bbox_spmaxX;
+<i>751</i>&nbsp;
+<i>752</i>&nbsp;        final boolean windingRuleEvenOdd = (windingRule == WIND_EVEN_ODD);
+<i>753</i>&nbsp;
+<b class="nc"><i>754</i>&nbsp;        // Useful when processing tile line by tile line</b>
+<b class="nc"><i>755</i>&nbsp;        final int[] _alpha = alphaLine;</b>
+<i>756</i>&nbsp;
+<b class="nc"><i>757</i>&nbsp;        // local vars (performance):</b>
+<i>758</i>&nbsp;        final MarlinCache _cache = cache;
+<i>759</i>&nbsp;        final OffHeapArray _edges = edges;
+<b class="nc"><i>760</i>&nbsp;        final int[] _edgeBuckets = edgeBuckets;</b>
+<i>761</i>&nbsp;        final int[] _edgeBucketCounts = edgeBucketCounts;
+<i>762</i>&nbsp;
+<b class="nc"><i>763</i>&nbsp;        int[] _crossings = this.crossings;</b>
+<b class="nc"><i>764</i>&nbsp;        int[] _edgePtrs  = this.edgePtrs;</b>
+<b class="nc"><i>765</i>&nbsp;</b>
+<b class="nc"><i>766</i>&nbsp;        // merge sort auxiliary storage:</b>
+<i>767</i>&nbsp;        int[] _aux_crossings = this.aux_crossings;
+<b class="nc"><i>768</i>&nbsp;        int[] _aux_edgePtrs  = this.aux_edgePtrs;</b>
+<b class="nc"><i>769</i>&nbsp;</b>
+<i>770</i>&nbsp;        // copy constants:
+<i>771</i>&nbsp;        final long _OFF_ERROR    = OFF_ERROR;
+<b class="nc"><i>772</i>&nbsp;        final long _OFF_BUMP_X   = OFF_BUMP_X;</b>
+<b class="nc"><i>773</i>&nbsp;        final long _OFF_BUMP_ERR = OFF_BUMP_ERR;</b>
+<i>774</i>&nbsp;
+<i>775</i>&nbsp;        final long _OFF_NEXT     = OFF_NEXT;
+<b class="nc"><i>776</i>&nbsp;        final long _OFF_YMAX     = OFF_YMAX;</b>
+<b class="nc"><i>777</i>&nbsp;</b>
+<b class="nc"><i>778</i>&nbsp;        final int _ALL_BUT_LSB   = ALL_BUT_LSB;</b>
+<i>779</i>&nbsp;        final int _ERR_STEP_MAX  = ERR_STEP_MAX;
+<b class="nc"><i>780</i>&nbsp;</b>
+<b class="nc"><i>781</i>&nbsp;        // unsafe I/O:</b>
+<i>782</i>&nbsp;        final Unsafe _unsafe = OffHeapArray.UNSAFE;
+<i>783</i>&nbsp;        final long    addr0  = _edges.address;
+<i>784</i>&nbsp;        long addr;
+<i>785</i>&nbsp;        final int _SUBPIXEL_LG_POSITIONS_X = SUBPIXEL_LG_POSITIONS_X;
+<i>786</i>&nbsp;        final int _SUBPIXEL_LG_POSITIONS_Y = SUBPIXEL_LG_POSITIONS_Y;
+<b class="nc"><i>787</i>&nbsp;        final int _SUBPIXEL_MASK_X = SUBPIXEL_MASK_X;</b>
+<b class="nc"><i>788</i>&nbsp;        final int _SUBPIXEL_MASK_Y = SUBPIXEL_MASK_Y;</b>
+<i>789</i>&nbsp;        final int _SUBPIXEL_POSITIONS_X = SUBPIXEL_POSITIONS_X;
+<b class="nc"><i>790</i>&nbsp;</b>
+<b class="nc"><i>791</i>&nbsp;        final int _MIN_VALUE = Integer.MIN_VALUE;</b>
+<b class="nc"><i>792</i>&nbsp;        final int _MAX_VALUE = Integer.MAX_VALUE;</b>
+<b class="nc"><i>793</i>&nbsp;</b>
+<b class="nc"><i>794</i>&nbsp;        // Now we iterate through the scanlines. We must tell emitRow the coord</b>
+<i>795</i>&nbsp;        // of the first non-transparent pixel, so we must keep accumulators for
+<i>796</i>&nbsp;        // the first and last pixels of the section of the current pixel row
+<i>797</i>&nbsp;        // that we will emit.
+<i>798</i>&nbsp;        // We also need to accumulate pix_bbox, but the iterator does it
+<i>799</i>&nbsp;        // for us. We will just get the values from it once this loop is done
+<i>800</i>&nbsp;        int minX = _MAX_VALUE;
+<i>801</i>&nbsp;        int maxX = _MIN_VALUE;
+<i>802</i>&nbsp;
+<i>803</i>&nbsp;        int y = ymin;
+<i>804</i>&nbsp;        int bucket = y - boundsMinY;
+<b class="nc"><i>805</i>&nbsp;</b>
+<b class="nc"><i>806</i>&nbsp;        int numCrossings = this.edgeCount;</b>
+<i>807</i>&nbsp;        int edgePtrsLen = _edgePtrs.length;
+<b class="nc"><i>808</i>&nbsp;        int crossingsLen = _crossings.length;</b>
+<b class="nc"><i>809</i>&nbsp;        int _arrayMaxUsed = activeEdgeMaxUsed;</b>
+<i>810</i>&nbsp;        int ptrLen = 0, newCount, ptrEnd;
+<b class="nc"><i>811</i>&nbsp;</b>
+<b class="nc"><i>812</i>&nbsp;        int bucketcount, i, j, ecur;</b>
+<b class="nc"><i>813</i>&nbsp;        int cross, lastCross;</b>
+<b class="nc"><i>814</i>&nbsp;        int x0, x1, tmp, sum, prev, curx, curxo, crorientation, err;</b>
+<b class="nc"><i>815</i>&nbsp;        int pix_x, pix_xmaxm1, pix_xmax;</b>
+<i>816</i>&nbsp;
+<i>817</i>&nbsp;        int low, high, mid, prevNumCrossings;
+<i>818</i>&nbsp;        boolean useBinarySearch;
+<i>819</i>&nbsp;
+<i>820</i>&nbsp;        final int[] _blkFlags = blkFlags;
+<i>821</i>&nbsp;        final int _BLK_SIZE_LG = BLOCK_SIZE_LG;
+<i>822</i>&nbsp;        final int _BLK_SIZE = BLOCK_SIZE;
+<i>823</i>&nbsp;
+<i>824</i>&nbsp;        final boolean _enableBlkFlagsHeuristics = ENABLE_BLOCK_FLAGS_HEURISTICS &amp;&amp; this.enableBlkFlags;
+<b class="nc"><i>825</i>&nbsp;</b>
+<b class="nc"><i>826</i>&nbsp;        // Use block flags if large pixel span and few crossings:</b>
+<b class="nc"><i>827</i>&nbsp;        // ie mean(distance between crossings) is high</b>
+<i>828</i>&nbsp;        boolean useBlkFlags = this.prevUseBlkFlags;
+<b class="nc"><i>829</i>&nbsp;</b>
+<i>830</i>&nbsp;        final int stroking = rdrCtx.stroking;
+<i>831</i>&nbsp;
+<i>832</i>&nbsp;        int lastY = -1; // last emited row
+<b class="nc"><i>833</i>&nbsp;</b>
+<i>834</i>&nbsp;
+<b class="nc"><i>835</i>&nbsp;        // Iteration on scanlines</b>
+<i>836</i>&nbsp;        for (; y &lt; ymax; y++, bucket++) {
+<b class="nc"><i>837</i>&nbsp;            // --- from former ScanLineIterator.next()</b>
+<i>838</i>&nbsp;            bucketcount = _edgeBucketCounts[bucket];
+<i>839</i>&nbsp;
+<i>840</i>&nbsp;            // marker on previously sorted edges:
+<b class="nc"><i>841</i>&nbsp;            prevNumCrossings = numCrossings;</b>
+<i>842</i>&nbsp;
+<b class="nc"><i>843</i>&nbsp;            // bucketCount indicates new edge / edge end:</b>
+<i>844</i>&nbsp;            if (bucketcount != 0) {
+<i>845</i>&nbsp;                if (DO_STATS) {
+<b class="nc"><i>846</i>&nbsp;                    rdrCtx.stats.stat_rdr_activeEdges_updates.add(numCrossings);</b>
+<i>847</i>&nbsp;                }
+<i>848</i>&nbsp;
+<b class="nc"><i>849</i>&nbsp;                // last bit set to 1 means that edges ends</b>
+<b class="nc"><i>850</i>&nbsp;                if ((bucketcount &amp; 0x1) != 0) {</b>
+<b class="nc"><i>851</i>&nbsp;                    // eviction in active edge list</b>
+<i>852</i>&nbsp;                    // cache edges[] address + offset
+<i>853</i>&nbsp;                    addr = addr0 + _OFF_YMAX;
+<i>854</i>&nbsp;
+<b class="nc"><i>855</i>&nbsp;                    for (i = 0, newCount = 0; i &lt; numCrossings; i++) {</b>
+<i>856</i>&nbsp;                        // get the pointer to the edge
+<i>857</i>&nbsp;                        ecur = _edgePtrs[i];
+<b class="nc"><i>858</i>&nbsp;                        // random access so use unsafe:</b>
+<i>859</i>&nbsp;                        if (_unsafe.getInt(addr + ecur) &gt; y) {
+<b class="nc"><i>860</i>&nbsp;                            _edgePtrs[newCount++] = ecur;</b>
+<i>861</i>&nbsp;                        }
+<b class="nc"><i>862</i>&nbsp;                    }</b>
+<i>863</i>&nbsp;                    // update marker on sorted edges minus removed edges:
+<b class="nc"><i>864</i>&nbsp;                    prevNumCrossings = numCrossings = newCount;</b>
+<b class="nc"><i>865</i>&nbsp;                }</b>
+<i>866</i>&nbsp;
+<i>867</i>&nbsp;                ptrLen = bucketcount &gt;&gt; 1; // number of new edge
+<i>868</i>&nbsp;
+<b class="nc"><i>869</i>&nbsp;                if (ptrLen != 0) {</b>
+<i>870</i>&nbsp;                    if (DO_STATS) {
+<i>871</i>&nbsp;                        rdrCtx.stats.stat_rdr_activeEdges_adds.add(ptrLen);
+<b class="nc"><i>872</i>&nbsp;                        if (ptrLen &gt; 10) {</b>
+<i>873</i>&nbsp;                            rdrCtx.stats.stat_rdr_activeEdges_adds_high.add(ptrLen);
+<b class="nc"><i>874</i>&nbsp;                        }</b>
+<b class="nc"><i>875</i>&nbsp;                    }</b>
+<b class="nc"><i>876</i>&nbsp;                    ptrEnd = numCrossings + ptrLen;</b>
+<b class="nc"><i>877</i>&nbsp;</b>
+<b class="nc"><i>878</i>&nbsp;                    if (edgePtrsLen &lt; ptrEnd) {</b>
+<i>879</i>&nbsp;                        if (DO_STATS) {
+<i>880</i>&nbsp;                            rdrCtx.stats.stat_array_renderer_edgePtrs.add(ptrEnd);
+<b class="nc"><i>881</i>&nbsp;                        }</b>
+<i>882</i>&nbsp;                        this.edgePtrs = _edgePtrs
+<b class="nc"><i>883</i>&nbsp;                            = edgePtrs_ref.widenArray(_edgePtrs, numCrossings,</b>
+<b class="nc"><i>884</i>&nbsp;                                                      ptrEnd);</b>
+<b class="nc"><i>885</i>&nbsp;</b>
+<i>886</i>&nbsp;                        edgePtrsLen = _edgePtrs.length;
+<b class="nc"><i>887</i>&nbsp;                        // Get larger auxiliary storage:</b>
+<b class="nc"><i>888</i>&nbsp;                        aux_edgePtrs_ref.putArray(_aux_edgePtrs);</b>
+<i>889</i>&nbsp;
+<i>890</i>&nbsp;                        // use ArrayCache.getNewSize() to use the same growing
+<b class="nc"><i>891</i>&nbsp;                        // factor than widenArray():</b>
+<i>892</i>&nbsp;                        if (DO_STATS) {
+<b class="nc"><i>893</i>&nbsp;                            rdrCtx.stats.stat_array_renderer_aux_edgePtrs.add(ptrEnd);</b>
+<i>894</i>&nbsp;                        }
+<i>895</i>&nbsp;                        this.aux_edgePtrs = _aux_edgePtrs
+<i>896</i>&nbsp;                            = aux_edgePtrs_ref.getArray(
+<b class="nc"><i>897</i>&nbsp;                                ArrayCacheConst.getNewSize(numCrossings, ptrEnd)</b>
+<b class="nc"><i>898</i>&nbsp;                            );</b>
+<i>899</i>&nbsp;                    }
+<b class="nc"><i>900</i>&nbsp;</b>
+<b class="nc"><i>901</i>&nbsp;                    // cache edges[] address + offset</b>
+<b class="nc"><i>902</i>&nbsp;                    addr = addr0 + _OFF_NEXT;</b>
+<i>903</i>&nbsp;
+<i>904</i>&nbsp;                    // add new edges to active edge list:
+<i>905</i>&nbsp;                    for (ecur = _edgeBuckets[bucket];
+<i>906</i>&nbsp;                         numCrossings &lt; ptrEnd; numCrossings++)
+<b class="nc"><i>907</i>&nbsp;                    {</b>
+<i>908</i>&nbsp;                        // store the pointer to the edge
+<i>909</i>&nbsp;                        _edgePtrs[numCrossings] = ecur;
+<b class="nc"><i>910</i>&nbsp;                        // random access so use unsafe:</b>
+<b class="nc"><i>911</i>&nbsp;                        ecur = _unsafe.getInt(addr + ecur);</b>
+<i>912</i>&nbsp;                    }
+<i>913</i>&nbsp;
+<b class="nc"><i>914</i>&nbsp;                    if (crossingsLen &lt; numCrossings) {</b>
+<i>915</i>&nbsp;                        // Get larger array:
+<b class="nc"><i>916</i>&nbsp;                        crossings_ref.putArray(_crossings);</b>
+<i>917</i>&nbsp;
+<i>918</i>&nbsp;                        if (DO_STATS) {
+<b class="nc"><i>919</i>&nbsp;                            rdrCtx.stats.stat_array_renderer_crossings</b>
+<i>920</i>&nbsp;                                .add(numCrossings);
+<b class="nc"><i>921</i>&nbsp;                        }</b>
+<i>922</i>&nbsp;                        this.crossings = _crossings
+<b class="nc"><i>923</i>&nbsp;                            = crossings_ref.getArray(numCrossings);</b>
+<b class="nc"><i>924</i>&nbsp;</b>
+<b class="nc"><i>925</i>&nbsp;                        // Get larger auxiliary storage:</b>
+<i>926</i>&nbsp;                        aux_crossings_ref.putArray(_aux_crossings);
+<b class="nc"><i>927</i>&nbsp;</b>
+<b class="nc"><i>928</i>&nbsp;                        if (DO_STATS) {</b>
+<i>929</i>&nbsp;                            rdrCtx.stats.stat_array_renderer_aux_crossings
+<i>930</i>&nbsp;                                .add(numCrossings);
+<b class="nc"><i>931</i>&nbsp;                        }</b>
+<i>932</i>&nbsp;                        this.aux_crossings = _aux_crossings
+<b class="nc"><i>933</i>&nbsp;                            = aux_crossings_ref.getArray(numCrossings);</b>
+<b class="nc"><i>934</i>&nbsp;</b>
+<b class="nc"><i>935</i>&nbsp;                        crossingsLen = _crossings.length;</b>
+<i>936</i>&nbsp;                    }
+<b class="nc"><i>937</i>&nbsp;                    if (DO_STATS) {</b>
+<b class="nc"><i>938</i>&nbsp;                        // update max used mark</b>
+<i>939</i>&nbsp;                        if (numCrossings &gt; _arrayMaxUsed) {
+<b class="nc"><i>940</i>&nbsp;                            _arrayMaxUsed = numCrossings;</b>
+<i>941</i>&nbsp;                        }
+<b class="nc"><i>942</i>&nbsp;                    }</b>
+<i>943</i>&nbsp;                } // ptrLen != 0
+<b class="nc"><i>944</i>&nbsp;            } // bucketCount != 0</b>
+<b class="nc"><i>945</i>&nbsp;</b>
+<i>946</i>&nbsp;
+<i>947</i>&nbsp;            if (numCrossings != 0) {
+<i>948</i>&nbsp;                /*
+<i>949</i>&nbsp;                 * thresholds to switch to optimized merge sort
+<i>950</i>&nbsp;                 * for newly added edges + final merge pass.
+<i>951</i>&nbsp;                 */
+<b class="nc"><i>952</i>&nbsp;                if ((ptrLen &lt; 10) || (numCrossings &lt; 40)) {</b>
+<i>953</i>&nbsp;                    if (DO_STATS) {
+<i>954</i>&nbsp;                        rdrCtx.stats.hist_rdr_crossings.add(numCrossings);
+<i>955</i>&nbsp;                        rdrCtx.stats.hist_rdr_crossings_adds.add(ptrLen);
+<i>956</i>&nbsp;                    }
+<b class="nc"><i>957</i>&nbsp;</b>
+<b class="nc"><i>958</i>&nbsp;                    /*</b>
+<b class="nc"><i>959</i>&nbsp;                     * threshold to use binary insertion sort instead of</b>
+<b class="nc"><i>960</i>&nbsp;                     * straight insertion sort (to reduce minimize comparisons).</b>
+<i>961</i>&nbsp;                     */
+<i>962</i>&nbsp;                    useBinarySearch = (numCrossings &gt;= 20);
+<i>963</i>&nbsp;
+<i>964</i>&nbsp;                    // if small enough:
+<i>965</i>&nbsp;                    lastCross = _MIN_VALUE;
+<i>966</i>&nbsp;
+<b class="nc"><i>967</i>&nbsp;                    for (i = 0; i &lt; numCrossings; i++) {</b>
+<i>968</i>&nbsp;                        // get the pointer to the edge
+<i>969</i>&nbsp;                        ecur = _edgePtrs[i];
+<b class="nc"><i>970</i>&nbsp;</b>
+<i>971</i>&nbsp;                        /* convert subpixel coordinates into pixel
+<b class="nc"><i>972</i>&nbsp;                            positions for coming scanline */</b>
+<i>973</i>&nbsp;                        /* note: it is faster to always update edges even
+<b class="nc"><i>974</i>&nbsp;                           if it is removed from AEL for coming or last scanline */</b>
+<i>975</i>&nbsp;
+<i>976</i>&nbsp;                        // random access so use unsafe:
+<i>977</i>&nbsp;                        addr = addr0 + ecur; // ecur + OFF_F_CURX
+<i>978</i>&nbsp;
+<i>979</i>&nbsp;                        // get current crossing:
+<i>980</i>&nbsp;                        curx = _unsafe.getInt(addr);
+<i>981</i>&nbsp;
+<b class="nc"><i>982</i>&nbsp;                        // update crossing with orientation at last bit:</b>
+<i>983</i>&nbsp;                        cross = curx;
+<i>984</i>&nbsp;
+<b class="nc"><i>985</i>&nbsp;                        // Increment x using DDA (fixed point):</b>
+<i>986</i>&nbsp;                        curx += _unsafe.getInt(addr + _OFF_BUMP_X);
+<i>987</i>&nbsp;
+<b class="nc"><i>988</i>&nbsp;                        // Increment error:</b>
+<i>989</i>&nbsp;                        err  =  _unsafe.getInt(addr + _OFF_ERROR)
+<i>990</i>&nbsp;                              + _unsafe.getInt(addr + _OFF_BUMP_ERR);
+<b class="nc"><i>991</i>&nbsp;</b>
+<i>992</i>&nbsp;                        // Manual carry handling:
+<i>993</i>&nbsp;                        // keep sign and carry bit only and ignore last bit (preserve orientation):
+<b class="nc"><i>994</i>&nbsp;                        _unsafe.putInt(addr,               curx - ((err &gt;&gt; 30) &amp; _ALL_BUT_LSB));</b>
+<b class="nc"><i>995</i>&nbsp;                        _unsafe.putInt(addr + _OFF_ERROR, (err &amp; _ERR_STEP_MAX));</b>
+<i>996</i>&nbsp;
+<i>997</i>&nbsp;                        if (DO_STATS) {
+<i>998</i>&nbsp;                            rdrCtx.stats.stat_rdr_crossings_updates.add(numCrossings);
+<b class="nc"><i>999</i>&nbsp;                        }</b>
+<b class="nc"><i>1000</i>&nbsp;</b>
+<i>1001</i>&nbsp;                        // insertion sort of crossings:
+<b class="nc"><i>1002</i>&nbsp;                        if (cross &lt; lastCross) {</b>
+<b class="nc"><i>1003</i>&nbsp;                            if (DO_STATS) {</b>
+<i>1004</i>&nbsp;                                rdrCtx.stats.stat_rdr_crossings_sorts.add(i);
+<i>1005</i>&nbsp;                            }
+<i>1006</i>&nbsp;
+<b class="nc"><i>1007</i>&nbsp;                            /* use binary search for newly added edges</b>
+<b class="nc"><i>1008</i>&nbsp;                               in crossings if arrays are large enough */</b>
+<b class="nc"><i>1009</i>&nbsp;                            if (useBinarySearch &amp;&amp; (i &gt;= prevNumCrossings)) {</b>
+<i>1010</i>&nbsp;                                if (DO_STATS) {
+<i>1011</i>&nbsp;                                    rdrCtx.stats.stat_rdr_crossings_bsearch.add(i);
+<i>1012</i>&nbsp;                                }
+<i>1013</i>&nbsp;                                low = 0;
+<b class="nc"><i>1014</i>&nbsp;                                high = i - 1;</b>
+<b class="nc"><i>1015</i>&nbsp;</b>
+<b class="nc"><i>1016</i>&nbsp;                                do {</b>
+<i>1017</i>&nbsp;                                    // note: use signed shift (not &gt;&gt;&gt;) for performance
+<b class="nc"><i>1018</i>&nbsp;                                    // as indices are small enough to exceed Integer.MAX_VALUE</b>
+<b class="nc"><i>1019</i>&nbsp;                                    mid = (low + high) &gt;&gt; 1;</b>
+<i>1020</i>&nbsp;
+<i>1021</i>&nbsp;                                    if (_crossings[mid] &lt; cross) {
+<i>1022</i>&nbsp;                                        low = mid + 1;
+<i>1023</i>&nbsp;                                    } else {
+<b class="nc"><i>1024</i>&nbsp;                                        high = mid - 1;</b>
+<i>1025</i>&nbsp;                                    }
+<b class="nc"><i>1026</i>&nbsp;                                } while (low &lt;= high);</b>
+<b class="nc"><i>1027</i>&nbsp;</b>
+<i>1028</i>&nbsp;                                for (j = i - 1; j &gt;= low; j--) {
+<b class="nc"><i>1029</i>&nbsp;                                    _crossings[j + 1] = _crossings[j];</b>
+<i>1030</i>&nbsp;                                    _edgePtrs [j + 1] = _edgePtrs[j];
+<b class="nc"><i>1031</i>&nbsp;                                }</b>
+<i>1032</i>&nbsp;                                _crossings[low] = cross;
+<b class="nc"><i>1033</i>&nbsp;                                _edgePtrs [low] = ecur;</b>
+<b class="nc"><i>1034</i>&nbsp;</b>
+<b class="nc"><i>1035</i>&nbsp;                            } else {</b>
+<i>1036</i>&nbsp;                                j = i - 1;
+<b class="nc"><i>1037</i>&nbsp;                                _crossings[i] = _crossings[j];</b>
+<b class="nc"><i>1038</i>&nbsp;                                _edgePtrs[i] = _edgePtrs[j];</b>
+<i>1039</i>&nbsp;
+<i>1040</i>&nbsp;                                while ((--j &gt;= 0) &amp;&amp; (_crossings[j] &gt; cross)) {
+<b class="nc"><i>1041</i>&nbsp;                                    _crossings[j + 1] = _crossings[j];</b>
+<b class="nc"><i>1042</i>&nbsp;                                    _edgePtrs [j + 1] = _edgePtrs[j];</b>
+<b class="nc"><i>1043</i>&nbsp;                                }</b>
+<i>1044</i>&nbsp;                                _crossings[j + 1] = cross;
+<b class="nc"><i>1045</i>&nbsp;                                _edgePtrs [j + 1] = ecur;</b>
+<b class="nc"><i>1046</i>&nbsp;                            }</b>
+<b class="nc"><i>1047</i>&nbsp;</b>
+<i>1048</i>&nbsp;                        } else {
+<b class="nc"><i>1049</i>&nbsp;                            _crossings[i] = lastCross = cross;</b>
+<b class="nc"><i>1050</i>&nbsp;                        }</b>
+<i>1051</i>&nbsp;                    }
+<i>1052</i>&nbsp;                } else {
+<i>1053</i>&nbsp;                    if (DO_STATS) {
+<b class="nc"><i>1054</i>&nbsp;                        rdrCtx.stats.stat_rdr_crossings_msorts.add(numCrossings);</b>
+<i>1055</i>&nbsp;                        rdrCtx.stats.hist_rdr_crossings_ratio
+<i>1056</i>&nbsp;                            .add((1000 * ptrLen) / numCrossings);
+<i>1057</i>&nbsp;                        rdrCtx.stats.hist_rdr_crossings_msorts.add(numCrossings);
+<b class="nc"><i>1058</i>&nbsp;                        rdrCtx.stats.hist_rdr_crossings_msorts_adds.add(ptrLen);</b>
+<b class="nc"><i>1059</i>&nbsp;                    }</b>
+<b class="nc"><i>1060</i>&nbsp;</b>
+<b class="nc"><i>1061</i>&nbsp;                    // Copy sorted data in auxiliary arrays</b>
+<b class="nc"><i>1062</i>&nbsp;                    // and perform insertion sort on almost sorted data</b>
+<b class="nc"><i>1063</i>&nbsp;                    // (ie i &lt; prevNumCrossings):</b>
+<i>1064</i>&nbsp;
+<i>1065</i>&nbsp;                    lastCross = _MIN_VALUE;
+<i>1066</i>&nbsp;
+<i>1067</i>&nbsp;                    for (i = 0; i &lt; numCrossings; i++) {
+<i>1068</i>&nbsp;                        // get the pointer to the edge
+<i>1069</i>&nbsp;                        ecur = _edgePtrs[i];
+<b class="nc"><i>1070</i>&nbsp;</b>
+<i>1071</i>&nbsp;                        /* convert subpixel coordinates into pixel
+<b class="nc"><i>1072</i>&nbsp;                            positions for coming scanline */</b>
+<i>1073</i>&nbsp;                        /* note: it is faster to always update edges even
+<b class="nc"><i>1074</i>&nbsp;                           if it is removed from AEL for coming or last scanline */</b>
+<i>1075</i>&nbsp;
+<i>1076</i>&nbsp;                        // random access so use unsafe:
+<i>1077</i>&nbsp;                        addr = addr0 + ecur; // ecur + OFF_F_CURX
+<i>1078</i>&nbsp;
+<i>1079</i>&nbsp;                        // get current crossing:
+<i>1080</i>&nbsp;                        curx = _unsafe.getInt(addr);
+<i>1081</i>&nbsp;
+<b class="nc"><i>1082</i>&nbsp;                        // update crossing with orientation at last bit:</b>
+<i>1083</i>&nbsp;                        cross = curx;
+<i>1084</i>&nbsp;
+<b class="nc"><i>1085</i>&nbsp;                        // Increment x using DDA (fixed point):</b>
+<i>1086</i>&nbsp;                        curx += _unsafe.getInt(addr + _OFF_BUMP_X);
+<i>1087</i>&nbsp;
+<b class="nc"><i>1088</i>&nbsp;                        // Increment error:</b>
+<i>1089</i>&nbsp;                        err  =  _unsafe.getInt(addr + _OFF_ERROR)
+<i>1090</i>&nbsp;                              + _unsafe.getInt(addr + _OFF_BUMP_ERR);
+<b class="nc"><i>1091</i>&nbsp;</b>
+<i>1092</i>&nbsp;                        // Manual carry handling:
+<i>1093</i>&nbsp;                        // keep sign and carry bit only and ignore last bit (preserve orientation):
+<b class="nc"><i>1094</i>&nbsp;                        _unsafe.putInt(addr,               curx - ((err &gt;&gt; 30) &amp; _ALL_BUT_LSB));</b>
+<b class="nc"><i>1095</i>&nbsp;                        _unsafe.putInt(addr + _OFF_ERROR, (err &amp; _ERR_STEP_MAX));</b>
+<i>1096</i>&nbsp;
+<i>1097</i>&nbsp;                        if (DO_STATS) {
+<i>1098</i>&nbsp;                            rdrCtx.stats.stat_rdr_crossings_updates.add(numCrossings);
+<b class="nc"><i>1099</i>&nbsp;                        }</b>
+<b class="nc"><i>1100</i>&nbsp;</b>
+<i>1101</i>&nbsp;                        if (i &gt;= prevNumCrossings) {
+<b class="nc"><i>1102</i>&nbsp;                            // simply store crossing as edgePtrs is in-place:</b>
+<b class="nc"><i>1103</i>&nbsp;                            // will be copied and sorted efficiently by mergesort later:</b>
+<i>1104</i>&nbsp;                            _crossings[i]     = cross;
+<i>1105</i>&nbsp;
+<b class="nc"><i>1106</i>&nbsp;                        } else if (cross &lt; lastCross) {</b>
+<i>1107</i>&nbsp;                            if (DO_STATS) {
+<i>1108</i>&nbsp;                                rdrCtx.stats.stat_rdr_crossings_sorts.add(i);
+<b class="nc"><i>1109</i>&nbsp;                            }</b>
+<i>1110</i>&nbsp;
+<b class="nc"><i>1111</i>&nbsp;                            // (straight) insertion sort of crossings:</b>
+<b class="nc"><i>1112</i>&nbsp;                            j = i - 1;</b>
+<b class="nc"><i>1113</i>&nbsp;                            _aux_crossings[i] = _aux_crossings[j];</b>
+<i>1114</i>&nbsp;                            _aux_edgePtrs[i] = _aux_edgePtrs[j];
+<i>1115</i>&nbsp;
+<i>1116</i>&nbsp;                            while ((--j &gt;= 0) &amp;&amp; (_aux_crossings[j] &gt; cross)) {
+<b class="nc"><i>1117</i>&nbsp;                                _aux_crossings[j + 1] = _aux_crossings[j];</b>
+<b class="nc"><i>1118</i>&nbsp;                                _aux_edgePtrs [j + 1] = _aux_edgePtrs[j];</b>
+<b class="nc"><i>1119</i>&nbsp;                            }</b>
+<i>1120</i>&nbsp;                            _aux_crossings[j + 1] = cross;
+<b class="nc"><i>1121</i>&nbsp;                            _aux_edgePtrs [j + 1] = ecur;</b>
+<b class="nc"><i>1122</i>&nbsp;</b>
+<b class="nc"><i>1123</i>&nbsp;                        } else {</b>
+<i>1124</i>&nbsp;                            // auxiliary storage:
+<b class="nc"><i>1125</i>&nbsp;                            _aux_crossings[i] = lastCross = cross;</b>
+<b class="nc"><i>1126</i>&nbsp;                            _aux_edgePtrs [i] = ecur;</b>
+<i>1127</i>&nbsp;                        }
+<i>1128</i>&nbsp;                    }
+<i>1129</i>&nbsp;
+<b class="nc"><i>1130</i>&nbsp;                    // use Mergesort using auxiliary arrays (sort only right part)</b>
+<b class="nc"><i>1131</i>&nbsp;                    MergeSort.mergeSortNoCopy(_crossings,     _edgePtrs,</b>
+<i>1132</i>&nbsp;                                              _aux_crossings, _aux_edgePtrs,
+<i>1133</i>&nbsp;                                              numCrossings,   prevNumCrossings);
+<i>1134</i>&nbsp;                }
+<i>1135</i>&nbsp;
+<b class="nc"><i>1136</i>&nbsp;                // reset ptrLen</b>
+<i>1137</i>&nbsp;                ptrLen = 0;
+<i>1138</i>&nbsp;                // --- from former ScanLineIterator.next()
+<i>1139</i>&nbsp;
+<i>1140</i>&nbsp;
+<i>1141</i>&nbsp;                /* note: bboxx0 and bboxx1 must be pixel boundaries
+<b class="nc"><i>1142</i>&nbsp;                   to have correct coverage computation */</b>
+<i>1143</i>&nbsp;
+<i>1144</i>&nbsp;                // right shift on crossings to get the x-coordinate:
+<i>1145</i>&nbsp;                curxo = _crossings[0];
+<i>1146</i>&nbsp;                x0    = curxo &gt;&gt; 1;
+<i>1147</i>&nbsp;                if (x0 &lt; minX) {
+<i>1148</i>&nbsp;                    minX = x0; // subpixel coordinate
+<i>1149</i>&nbsp;                }
+<b class="nc"><i>1150</i>&nbsp;</b>
+<b class="nc"><i>1151</i>&nbsp;                x1 = _crossings[numCrossings - 1] &gt;&gt; 1;</b>
+<b class="nc"><i>1152</i>&nbsp;                if (x1 &gt; maxX) {</b>
+<b class="nc"><i>1153</i>&nbsp;                    maxX = x1; // subpixel coordinate</b>
+<i>1154</i>&nbsp;                }
+<i>1155</i>&nbsp;
+<b class="nc"><i>1156</i>&nbsp;</b>
+<b class="nc"><i>1157</i>&nbsp;                // compute pixel coverages</b>
+<b class="nc"><i>1158</i>&nbsp;                prev = curx = x0;</b>
+<i>1159</i>&nbsp;                // to turn {0, 1} into {-1, 1}, multiply by 2 and subtract 1.
+<i>1160</i>&nbsp;                // last bit contains orientation (0 or 1)
+<i>1161</i>&nbsp;                crorientation = ((curxo &amp; 0x1) &lt;&lt; 1) - 1;
+<i>1162</i>&nbsp;
+<b class="nc"><i>1163</i>&nbsp;                if (windingRuleEvenOdd) {</b>
+<i>1164</i>&nbsp;                    sum = crorientation;
+<i>1165</i>&nbsp;
+<b class="nc"><i>1166</i>&nbsp;                    // Even Odd winding rule: take care of mask ie sum(orientations)</b>
+<i>1167</i>&nbsp;                    for (i = 1; i &lt; numCrossings; i++) {
+<b class="nc"><i>1168</i>&nbsp;                        curxo = _crossings[i];</b>
+<b class="nc"><i>1169</i>&nbsp;                        curx  =  curxo &gt;&gt; 1;</b>
+<i>1170</i>&nbsp;                        // to turn {0, 1} into {-1, 1}, multiply by 2 and subtract 1.
+<i>1171</i>&nbsp;                        // last bit contains orientation (0 or 1)
+<b class="nc"><i>1172</i>&nbsp;                        crorientation = ((curxo &amp; 0x1) &lt;&lt; 1) - 1;</b>
+<b class="nc"><i>1173</i>&nbsp;</b>
+<b class="nc"><i>1174</i>&nbsp;                        if ((sum &amp; 0x1) != 0) {</b>
+<i>1175</i>&nbsp;                            // TODO: perform line clipping on left-right sides
+<i>1176</i>&nbsp;                            // to avoid such bound checks:
+<b class="nc"><i>1177</i>&nbsp;                            x0 = (prev &gt; bboxx0) ? prev : bboxx0;</b>
+<i>1178</i>&nbsp;
+<b class="nc"><i>1179</i>&nbsp;                            if (curx &lt; bboxx1) {</b>
+<i>1180</i>&nbsp;                                x1 = curx;
+<i>1181</i>&nbsp;                            } else {
+<b class="nc"><i>1182</i>&nbsp;                                x1 = bboxx1;</b>
+<i>1183</i>&nbsp;                                // skip right side (fast exit loop):
+<b class="nc"><i>1184</i>&nbsp;                                i = numCrossings;</b>
+<b class="nc"><i>1185</i>&nbsp;                            }</b>
+<i>1186</i>&nbsp;
+<b class="nc"><i>1187</i>&nbsp;                            if (x0 &lt; x1) {</b>
+<i>1188</i>&nbsp;                                x0 -= bboxx0; // turn x0, x1 from coords to indices
+<b class="nc"><i>1189</i>&nbsp;                                x1 -= bboxx0; // in the alpha array.</b>
+<i>1190</i>&nbsp;
+<i>1191</i>&nbsp;                                pix_x      =  x0      &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;
+<b class="nc"><i>1192</i>&nbsp;                                pix_xmaxm1 = (x1 - 1) &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;</b>
+<b class="nc"><i>1193</i>&nbsp;</b>
+<b class="nc"><i>1194</i>&nbsp;                                if (pix_x == pix_xmaxm1) {</b>
+<i>1195</i>&nbsp;                                    // Start and end in same pixel
+<b class="nc"><i>1196</i>&nbsp;                                    tmp = (x1 - x0); // number of subpixels</b>
+<b class="nc"><i>1197</i>&nbsp;                                    _alpha[pix_x    ] += tmp;</b>
+<i>1198</i>&nbsp;                                    _alpha[pix_x + 1] -= tmp;
+<b class="nc"><i>1199</i>&nbsp;</b>
+<i>1200</i>&nbsp;                                    if (useBlkFlags) {
+<b class="nc"><i>1201</i>&nbsp;                                        // flag used blocks:</b>
+<b class="nc"><i>1202</i>&nbsp;                                        // note: block processing handles extra pixel:</b>
+<b class="nc"><i>1203</i>&nbsp;                                        _blkFlags[pix_x    &gt;&gt; _BLK_SIZE_LG] = 1;</b>
+<i>1204</i>&nbsp;                                    }
+<b class="nc"><i>1205</i>&nbsp;                                } else {</b>
+<i>1206</i>&nbsp;                                    tmp = (x0 &amp; _SUBPIXEL_MASK_X);
+<i>1207</i>&nbsp;                                    _alpha[pix_x    ]
+<b class="nc"><i>1208</i>&nbsp;                                        += (_SUBPIXEL_POSITIONS_X - tmp);</b>
+<i>1209</i>&nbsp;                                    _alpha[pix_x + 1]
+<i>1210</i>&nbsp;                                        += tmp;
+<b class="nc"><i>1211</i>&nbsp;</b>
+<b class="nc"><i>1212</i>&nbsp;                                    pix_xmax = x1 &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;</b>
+<i>1213</i>&nbsp;
+<b class="nc"><i>1214</i>&nbsp;                                    tmp = (x1 &amp; _SUBPIXEL_MASK_X);</b>
+<i>1215</i>&nbsp;                                    _alpha[pix_xmax    ]
+<i>1216</i>&nbsp;                                        -= (_SUBPIXEL_POSITIONS_X - tmp);
+<b class="nc"><i>1217</i>&nbsp;                                    _alpha[pix_xmax + 1]</b>
+<i>1218</i>&nbsp;                                        -= tmp;
+<b class="nc"><i>1219</i>&nbsp;</b>
+<b class="nc"><i>1220</i>&nbsp;                                    if (useBlkFlags) {</b>
+<i>1221</i>&nbsp;                                        // flag used blocks:
+<b class="nc"><i>1222</i>&nbsp;                                        // note: block processing handles extra pixel:</b>
+<i>1223</i>&nbsp;                                        _blkFlags[pix_x    &gt;&gt; _BLK_SIZE_LG] = 1;
+<i>1224</i>&nbsp;                                        _blkFlags[pix_xmax &gt;&gt; _BLK_SIZE_LG] = 1;
+<b class="nc"><i>1225</i>&nbsp;                                    }</b>
+<i>1226</i>&nbsp;                                }
+<i>1227</i>&nbsp;                            }
+<b class="nc"><i>1228</i>&nbsp;                        }</b>
+<b class="nc"><i>1229</i>&nbsp;</b>
+<i>1230</i>&nbsp;                        sum += crorientation;
+<i>1231</i>&nbsp;                        prev = curx;
+<i>1232</i>&nbsp;                    }
+<i>1233</i>&nbsp;                } else {
+<i>1234</i>&nbsp;                    // Non-zero winding rule: optimize that case (default)
+<b class="nc"><i>1235</i>&nbsp;                    // and avoid processing intermediate crossings</b>
+<b class="nc"><i>1236</i>&nbsp;                    for (i = 1, sum = 0;; i++) {</b>
+<i>1237</i>&nbsp;                        sum += crorientation;
+<i>1238</i>&nbsp;
+<i>1239</i>&nbsp;                        if (sum != 0) {
+<i>1240</i>&nbsp;                            // prev = min(curx)
+<b class="nc"><i>1241</i>&nbsp;                            if (prev &gt; curx) {</b>
+<b class="nc"><i>1242</i>&nbsp;                                prev = curx;</b>
+<i>1243</i>&nbsp;                            }
+<b class="nc"><i>1244</i>&nbsp;                        } else {</b>
+<i>1245</i>&nbsp;                            // TODO: perform line clipping on left-right sides
+<b class="nc"><i>1246</i>&nbsp;                            // to avoid such bound checks:</b>
+<b class="nc"><i>1247</i>&nbsp;                            x0 = (prev &gt; bboxx0) ? prev : bboxx0;</b>
+<i>1248</i>&nbsp;
+<i>1249</i>&nbsp;                            if (curx &lt; bboxx1) {
+<i>1250</i>&nbsp;                                x1 = curx;
+<i>1251</i>&nbsp;                            } else {
+<b class="nc"><i>1252</i>&nbsp;                                x1 = bboxx1;</b>
+<i>1253</i>&nbsp;                                // skip right side (fast exit loop):
+<b class="nc"><i>1254</i>&nbsp;                                i = numCrossings;</b>
+<b class="nc"><i>1255</i>&nbsp;                            }</b>
+<i>1256</i>&nbsp;
+<b class="nc"><i>1257</i>&nbsp;                            if (x0 &lt; x1) {</b>
+<i>1258</i>&nbsp;                                x0 -= bboxx0; // turn x0, x1 from coords to indices
+<b class="nc"><i>1259</i>&nbsp;                                x1 -= bboxx0; // in the alpha array.</b>
+<i>1260</i>&nbsp;
+<i>1261</i>&nbsp;                                pix_x      =  x0      &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;
+<b class="nc"><i>1262</i>&nbsp;                                pix_xmaxm1 = (x1 - 1) &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;</b>
+<b class="nc"><i>1263</i>&nbsp;</b>
+<b class="nc"><i>1264</i>&nbsp;                                if (pix_x == pix_xmaxm1) {</b>
+<i>1265</i>&nbsp;                                    // Start and end in same pixel
+<b class="nc"><i>1266</i>&nbsp;                                    tmp = (x1 - x0); // number of subpixels</b>
+<b class="nc"><i>1267</i>&nbsp;                                    _alpha[pix_x    ] += tmp;</b>
+<i>1268</i>&nbsp;                                    _alpha[pix_x + 1] -= tmp;
+<b class="nc"><i>1269</i>&nbsp;</b>
+<i>1270</i>&nbsp;                                    if (useBlkFlags) {
+<b class="nc"><i>1271</i>&nbsp;                                        // flag used blocks:</b>
+<b class="nc"><i>1272</i>&nbsp;                                        // note: block processing handles extra pixel:</b>
+<b class="nc"><i>1273</i>&nbsp;                                        _blkFlags[pix_x    &gt;&gt; _BLK_SIZE_LG] = 1;</b>
+<i>1274</i>&nbsp;                                    }
+<b class="nc"><i>1275</i>&nbsp;                                } else {</b>
+<i>1276</i>&nbsp;                                    tmp = (x0 &amp; _SUBPIXEL_MASK_X);
+<i>1277</i>&nbsp;                                    _alpha[pix_x    ]
+<b class="nc"><i>1278</i>&nbsp;                                        += (_SUBPIXEL_POSITIONS_X - tmp);</b>
+<i>1279</i>&nbsp;                                    _alpha[pix_x + 1]
+<i>1280</i>&nbsp;                                        += tmp;
+<b class="nc"><i>1281</i>&nbsp;</b>
+<b class="nc"><i>1282</i>&nbsp;                                    pix_xmax = x1 &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;</b>
+<i>1283</i>&nbsp;
+<b class="nc"><i>1284</i>&nbsp;                                    tmp = (x1 &amp; _SUBPIXEL_MASK_X);</b>
+<i>1285</i>&nbsp;                                    _alpha[pix_xmax    ]
+<i>1286</i>&nbsp;                                        -= (_SUBPIXEL_POSITIONS_X - tmp);
+<b class="nc"><i>1287</i>&nbsp;                                    _alpha[pix_xmax + 1]</b>
+<i>1288</i>&nbsp;                                        -= tmp;
+<b class="nc"><i>1289</i>&nbsp;</b>
+<b class="nc"><i>1290</i>&nbsp;                                    if (useBlkFlags) {</b>
+<i>1291</i>&nbsp;                                        // flag used blocks:
+<b class="nc"><i>1292</i>&nbsp;                                        // note: block processing handles extra pixel:</b>
+<i>1293</i>&nbsp;                                        _blkFlags[pix_x    &gt;&gt; _BLK_SIZE_LG] = 1;
+<i>1294</i>&nbsp;                                        _blkFlags[pix_xmax &gt;&gt; _BLK_SIZE_LG] = 1;
+<b class="nc"><i>1295</i>&nbsp;                                    }</b>
+<i>1296</i>&nbsp;                                }
+<i>1297</i>&nbsp;                            }
+<b class="nc"><i>1298</i>&nbsp;                            prev = _MAX_VALUE;</b>
+<b class="nc"><i>1299</i>&nbsp;                        }</b>
+<i>1300</i>&nbsp;
+<i>1301</i>&nbsp;                        if (i == numCrossings) {
+<i>1302</i>&nbsp;                            break;
+<b class="nc"><i>1303</i>&nbsp;                        }</b>
+<i>1304</i>&nbsp;
+<i>1305</i>&nbsp;                        curxo = _crossings[i];
+<b class="nc"><i>1306</i>&nbsp;                        curx  =  curxo &gt;&gt; 1;</b>
+<b class="nc"><i>1307</i>&nbsp;                        // to turn {0, 1} into {-1, 1}, multiply by 2 and subtract 1.</b>
+<i>1308</i>&nbsp;                        // last bit contains orientation (0 or 1)
+<i>1309</i>&nbsp;                        crorientation = ((curxo &amp; 0x1) &lt;&lt; 1) - 1;
+<b class="nc"><i>1310</i>&nbsp;                    }</b>
+<b class="nc"><i>1311</i>&nbsp;                }</b>
+<i>1312</i>&nbsp;            } // numCrossings &gt; 0
+<i>1313</i>&nbsp;
+<b class="nc"><i>1314</i>&nbsp;            // even if this last row had no crossings, alpha will be zeroed</b>
+<i>1315</i>&nbsp;            // from the last emitRow call. But this doesn&#39;t matter because
+<i>1316</i>&nbsp;            // maxX &lt; minX, so no row will be emitted to the MarlinCache.
+<i>1317</i>&nbsp;            if ((y &amp; _SUBPIXEL_MASK_Y) == _SUBPIXEL_MASK_Y) {
+<i>1318</i>&nbsp;                lastY = y &gt;&gt; _SUBPIXEL_LG_POSITIONS_Y;
+<i>1319</i>&nbsp;
+<i>1320</i>&nbsp;                // convert subpixel to pixel coordinate within boundaries:
+<i>1321</i>&nbsp;                minX = FloatMath.max(minX, bboxx0) &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;
+<b class="nc"><i>1322</i>&nbsp;                maxX = FloatMath.min(maxX, bboxx1) &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;</b>
+<b class="nc"><i>1323</i>&nbsp;</b>
+<i>1324</i>&nbsp;                if (maxX &gt;= minX) {
+<i>1325</i>&nbsp;                    // note: alpha array will be zeroed by copyAARow()
+<b class="nc"><i>1326</i>&nbsp;                    // +1 because alpha [pix_minX; pix_maxX[</b>
+<b class="nc"><i>1327</i>&nbsp;                    // fix range [x0; x1[</b>
+<i>1328</i>&nbsp;                    // note: if x1=bboxx1, then alpha is written up to bboxx1+1
+<b class="nc"><i>1329</i>&nbsp;                    // inclusive: alpha[bboxx1] ignored, alpha[bboxx1+1] == 0</b>
+<i>1330</i>&nbsp;                    // (normally so never cleared below)
+<i>1331</i>&nbsp;                    copyAARow(_alpha, lastY, minX, maxX + 1, useBlkFlags);
+<i>1332</i>&nbsp;
+<i>1333</i>&nbsp;                    // speculative for next pixel row (scanline coherence):
+<i>1334</i>&nbsp;                    if (_enableBlkFlagsHeuristics) {
+<i>1335</i>&nbsp;                        // Use block flags if large pixel span and few crossings:
+<b class="nc"><i>1336</i>&nbsp;                        // ie mean(distance between crossings) is larger than</b>
+<i>1337</i>&nbsp;                        // 1 block size;
+<i>1338</i>&nbsp;
+<b class="nc"><i>1339</i>&nbsp;                        // fast check width:</b>
+<i>1340</i>&nbsp;                        maxX -= minX;
+<i>1341</i>&nbsp;
+<i>1342</i>&nbsp;                        // if stroking: numCrossings /= 2
+<i>1343</i>&nbsp;                        // =&gt; shift numCrossings by 1
+<i>1344</i>&nbsp;                        // condition = (width / (numCrossings - 1)) &gt; blockSize
+<b class="nc"><i>1345</i>&nbsp;                        useBlkFlags = (maxX &gt; _BLK_SIZE) &amp;&amp; (maxX &gt;</b>
+<i>1346</i>&nbsp;                            (((numCrossings &gt;&gt; stroking) - 1) &lt;&lt; _BLK_SIZE_LG));
+<i>1347</i>&nbsp;
+<i>1348</i>&nbsp;                        if (DO_STATS) {
+<i>1349</i>&nbsp;                            tmp = FloatMath.max(1,
+<b class="nc"><i>1350</i>&nbsp;                                    ((numCrossings &gt;&gt; stroking) - 1));</b>
+<i>1351</i>&nbsp;                            rdrCtx.stats.hist_tile_generator_encoding_dist
+<i>1352</i>&nbsp;                                .add(maxX / tmp);
+<b class="nc"><i>1353</i>&nbsp;                        }</b>
+<b class="nc"><i>1354</i>&nbsp;                    }</b>
+<i>1355</i>&nbsp;                } else {
+<b class="nc"><i>1356</i>&nbsp;                    _cache.clearAARow(lastY);</b>
+<b class="nc"><i>1357</i>&nbsp;                }</b>
+<i>1358</i>&nbsp;                minX = _MAX_VALUE;
+<i>1359</i>&nbsp;                maxX = _MIN_VALUE;
+<i>1360</i>&nbsp;            }
+<b class="nc"><i>1361</i>&nbsp;        } // scan line iterator</b>
+<i>1362</i>&nbsp;
+<b class="nc"><i>1363</i>&nbsp;        // Emit final row</b>
+<b class="nc"><i>1364</i>&nbsp;        y--;</b>
+<i>1365</i>&nbsp;        y &gt;&gt;= _SUBPIXEL_LG_POSITIONS_Y;
+<i>1366</i>&nbsp;
+<i>1367</i>&nbsp;        // convert subpixel to pixel coordinate within boundaries:
+<i>1368</i>&nbsp;        minX = FloatMath.max(minX, bboxx0) &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;
+<b class="nc"><i>1369</i>&nbsp;        maxX = FloatMath.min(maxX, bboxx1) &gt;&gt; _SUBPIXEL_LG_POSITIONS_X;</b>
+<b class="nc"><i>1370</i>&nbsp;</b>
+<i>1371</i>&nbsp;        if (maxX &gt;= minX) {
+<i>1372</i>&nbsp;            // note: alpha array will be zeroed by copyAARow()
+<b class="nc"><i>1373</i>&nbsp;            // +1 because alpha [pix_minX; pix_maxX[</b>
+<b class="nc"><i>1374</i>&nbsp;            // fix range [x0; x1[</b>
+<i>1375</i>&nbsp;            // note: if x1=bboxx1, then alpha is written up to bboxx1+1
+<b class="nc"><i>1376</i>&nbsp;            // inclusive: alpha[bboxx1] ignored then cleared and</b>
+<i>1377</i>&nbsp;            // alpha[bboxx1+1] == 0 (normally so never cleared after)
+<i>1378</i>&nbsp;            copyAARow(_alpha, y, minX, maxX + 1, useBlkFlags);
+<i>1379</i>&nbsp;        } else if (y != lastY) {
+<i>1380</i>&nbsp;            _cache.clearAARow(y);
+<i>1381</i>&nbsp;        }
+<i>1382</i>&nbsp;
+<b class="nc"><i>1383</i>&nbsp;        // update member:</b>
+<b class="nc"><i>1384</i>&nbsp;        edgeCount = numCrossings;</b>
+<b class="nc"><i>1385</i>&nbsp;        prevUseBlkFlags = useBlkFlags;</b>
+<i>1386</i>&nbsp;
+<i>1387</i>&nbsp;        if (DO_STATS) {
+<i>1388</i>&nbsp;            // update max used mark
+<b class="nc"><i>1389</i>&nbsp;            activeEdgeMaxUsed = _arrayMaxUsed;</b>
+<b class="nc"><i>1390</i>&nbsp;        }</b>
+<i>1391</i>&nbsp;    }
+<b class="nc"><i>1392</i>&nbsp;</b>
+<i>1393</i>&nbsp;    boolean endRendering() {
+<b class="nc"><i>1394</i>&nbsp;        if (DO_MONITORS) {</b>
+<i>1395</i>&nbsp;            rdrCtx.stats.mon_rdr_endRendering.start();
+<i>1396</i>&nbsp;        }
+<i>1397</i>&nbsp;        if (edgeMinY == Integer.MAX_VALUE) {
+<i>1398</i>&nbsp;            return false; // undefined edges bounds
+<i>1399</i>&nbsp;        }
+<i>1400</i>&nbsp;
+<i>1401</i>&nbsp;        // bounds as half-open intervals
+<b class="nc"><i>1402</i>&nbsp;        final int spminX = FloatMath.max(FloatMath.ceil_int(edgeMinX - 0.5f), boundsMinX);</b>
+<b class="nc"><i>1403</i>&nbsp;        final int spmaxX = FloatMath.min(FloatMath.ceil_int(edgeMaxX - 0.5f), boundsMaxX);</b>
+<i>1404</i>&nbsp;
+<i>1405</i>&nbsp;        // edge Min/Max Y are already rounded to subpixels within bounds:
+<i>1406</i>&nbsp;        final int spminY = edgeMinY;
+<b class="nc"><i>1407</i>&nbsp;        final int spmaxY = edgeMaxY;</b>
+<b class="nc"><i>1408</i>&nbsp;</b>
+<i>1409</i>&nbsp;        buckets_minY = spminY - boundsMinY;
+<i>1410</i>&nbsp;        buckets_maxY = spmaxY - boundsMinY;
+<b class="nc"><i>1411</i>&nbsp;</b>
+<b class="nc"><i>1412</i>&nbsp;        if (DO_LOG_BOUNDS) {</b>
+<i>1413</i>&nbsp;            MarlinUtils.logInfo(&quot;edgesXY = [&quot; + edgeMinX + &quot; ... &quot; + edgeMaxX
+<b class="nc"><i>1414</i>&nbsp;                                + &quot;[ [&quot; + edgeMinY + &quot; ... &quot; + edgeMaxY + &quot;[&quot;);</b>
+<b class="nc"><i>1415</i>&nbsp;            MarlinUtils.logInfo(&quot;spXY    = [&quot; + spminX + &quot; ... &quot; + spmaxX</b>
+<i>1416</i>&nbsp;                                + &quot;[ [&quot; + spminY + &quot; ... &quot; + spmaxY + &quot;[&quot;);
+<b class="nc"><i>1417</i>&nbsp;        }</b>
+<b class="nc"><i>1418</i>&nbsp;</b>
+<i>1419</i>&nbsp;        // test clipping for shapes out of bounds
+<b class="nc"><i>1420</i>&nbsp;        if ((spminX &gt;= spmaxX) || (spminY &gt;= spmaxY)) {</b>
+<i>1421</i>&nbsp;            return false;
+<i>1422</i>&nbsp;        }
+<i>1423</i>&nbsp;
+<i>1424</i>&nbsp;        // half open intervals
+<b class="nc"><i>1425</i>&nbsp;        // inclusive:</b>
+<b class="nc"><i>1426</i>&nbsp;        final int pminX =  spminX                    &gt;&gt; SUBPIXEL_LG_POSITIONS_X;</b>
+<i>1427</i>&nbsp;        // exclusive:
+<i>1428</i>&nbsp;        final int pmaxX = (spmaxX + SUBPIXEL_MASK_X) &gt;&gt; SUBPIXEL_LG_POSITIONS_X;
+<i>1429</i>&nbsp;        // inclusive:
+<i>1430</i>&nbsp;        final int pminY =  spminY                    &gt;&gt; SUBPIXEL_LG_POSITIONS_Y;
+<b class="nc"><i>1431</i>&nbsp;        // exclusive:</b>
+<i>1432</i>&nbsp;        final int pmaxY = (spmaxY + SUBPIXEL_MASK_Y) &gt;&gt; SUBPIXEL_LG_POSITIONS_Y;
+<b class="nc"><i>1433</i>&nbsp;</b>
+<i>1434</i>&nbsp;        // store BBox to answer ptg.getBBox():
+<b class="nc"><i>1435</i>&nbsp;        this.cache.init(pminX, pminY, pmaxX, pmaxY);</b>
+<i>1436</i>&nbsp;
+<b class="nc"><i>1437</i>&nbsp;        // Heuristics for using block flags:</b>
+<i>1438</i>&nbsp;        if (ENABLE_BLOCK_FLAGS) {
+<i>1439</i>&nbsp;            enableBlkFlags = this.cache.useRLE;
+<b class="nc"><i>1440</i>&nbsp;            prevUseBlkFlags = enableBlkFlags &amp;&amp; !ENABLE_BLOCK_FLAGS_HEURISTICS;</b>
+<i>1441</i>&nbsp;
+<i>1442</i>&nbsp;            if (enableBlkFlags) {
+<b class="nc"><i>1443</i>&nbsp;                // ensure blockFlags array is large enough:</b>
+<b class="nc"><i>1444</i>&nbsp;                // note: +2 to ensure enough space left at end</b>
+<b class="nc"><i>1445</i>&nbsp;                final int blkLen = ((pmaxX - pminX) &gt;&gt; BLOCK_SIZE_LG) + 2;</b>
+<i>1446</i>&nbsp;                if (blkLen &gt; INITIAL_ARRAY) {
+<b class="nc"><i>1447</i>&nbsp;                    blkFlags = blkFlags_ref.getArray(blkLen);</b>
+<i>1448</i>&nbsp;                }
+<i>1449</i>&nbsp;            }
+<b class="nc"><i>1450</i>&nbsp;        }</b>
+<b class="nc"><i>1451</i>&nbsp;</b>
+<b class="nc"><i>1452</i>&nbsp;        // memorize the rendering bounding box:</b>
+<i>1453</i>&nbsp;        /* note: bbox_spminX and bbox_spmaxX must be pixel boundaries
+<i>1454</i>&nbsp;           to have correct coverage computation */
+<i>1455</i>&nbsp;        // inclusive:
+<i>1456</i>&nbsp;        bbox_spminX = pminX &lt;&lt; SUBPIXEL_LG_POSITIONS_X;
+<i>1457</i>&nbsp;        // exclusive:
+<i>1458</i>&nbsp;        bbox_spmaxX = pmaxX &lt;&lt; SUBPIXEL_LG_POSITIONS_X;
+<i>1459</i>&nbsp;        // inclusive:
+<i>1460</i>&nbsp;        bbox_spminY = spminY;
+<b class="nc"><i>1461</i>&nbsp;        // exclusive:</b>
+<i>1462</i>&nbsp;        bbox_spmaxY = spmaxY;
+<b class="nc"><i>1463</i>&nbsp;</b>
+<i>1464</i>&nbsp;        if (DO_LOG_BOUNDS) {
+<b class="nc"><i>1465</i>&nbsp;            MarlinUtils.logInfo(&quot;pXY       = [&quot; + pminX + &quot; ... &quot; + pmaxX</b>
+<i>1466</i>&nbsp;                                + &quot;[ [&quot; + pminY + &quot; ... &quot; + pmaxY + &quot;[&quot;);
+<b class="nc"><i>1467</i>&nbsp;            MarlinUtils.logInfo(&quot;bbox_spXY = [&quot; + bbox_spminX + &quot; ... &quot;</b>
+<i>1468</i>&nbsp;                                + bbox_spmaxX + &quot;[ [&quot; + bbox_spminY + &quot; ... &quot;
+<b class="nc"><i>1469</i>&nbsp;                                + bbox_spmaxY + &quot;[&quot;);</b>
+<b class="nc"><i>1470</i>&nbsp;        }</b>
+<i>1471</i>&nbsp;
+<b class="nc"><i>1472</i>&nbsp;        // Prepare alpha line:</b>
+<i>1473</i>&nbsp;        // add 2 to better deal with the last pixel in a pixel row.
+<i>1474</i>&nbsp;        final int width = (pmaxX - pminX) + 2;
+<i>1475</i>&nbsp;
+<i>1476</i>&nbsp;        // Useful when processing tile line by tile line
+<i>1477</i>&nbsp;        if (width &gt; INITIAL_AA_ARRAY) {
+<i>1478</i>&nbsp;            if (DO_STATS) {
+<b class="nc"><i>1479</i>&nbsp;                rdrCtx.stats.stat_array_renderer_alphaline.add(width);</b>
+<i>1480</i>&nbsp;            }
+<i>1481</i>&nbsp;            alphaLine = alphaLine_ref.getArray(width);
+<b class="nc"><i>1482</i>&nbsp;        }</b>
+<b class="nc"><i>1483</i>&nbsp;</b>
+<b class="nc"><i>1484</i>&nbsp;        // process first tile line:</b>
+<i>1485</i>&nbsp;        endRendering(pminY);
+<b class="nc"><i>1486</i>&nbsp;</b>
+<i>1487</i>&nbsp;        return true;
+<i>1488</i>&nbsp;    }
+<i>1489</i>&nbsp;
+<b class="nc"><i>1490</i>&nbsp;    private int bbox_spminX, bbox_spmaxX, bbox_spminY, bbox_spmaxY;</b>
+<i>1491</i>&nbsp;
+<b class="nc"><i>1492</i>&nbsp;    void endRendering(final int pminY) {</b>
+<i>1493</i>&nbsp;        if (DO_MONITORS) {
+<i>1494</i>&nbsp;            rdrCtx.stats.mon_rdr_endRendering_Y.start();
+<i>1495</i>&nbsp;        }
+<i>1496</i>&nbsp;
+<i>1497</i>&nbsp;        final int spminY       = pminY &lt;&lt; SUBPIXEL_LG_POSITIONS_Y;
+<i>1498</i>&nbsp;        final int fixed_spminY = FloatMath.max(bbox_spminY, spminY);
+<i>1499</i>&nbsp;
+<i>1500</i>&nbsp;        // avoid rendering for last call to nextTile()
+<i>1501</i>&nbsp;        if (fixed_spminY &lt; bbox_spmaxY) {
+<b class="nc"><i>1502</i>&nbsp;            // process a complete tile line ie scanlines for 32 rows</b>
+<b class="nc"><i>1503</i>&nbsp;            final int spmaxY = FloatMath.min(bbox_spmaxY, spminY + SUBPIXEL_TILE);</b>
+<i>1504</i>&nbsp;
+<i>1505</i>&nbsp;            // process tile line [0 - 32]
+<b class="nc"><i>1506</i>&nbsp;            cache.resetTileLine(pminY);</b>
+<i>1507</i>&nbsp;
+<b class="nc"><i>1508</i>&nbsp;            // Process only one tile line:</b>
+<i>1509</i>&nbsp;            _endRendering(fixed_spminY, spmaxY);
+<i>1510</i>&nbsp;        }
+<b class="nc"><i>1511</i>&nbsp;        if (DO_MONITORS) {</b>
+<i>1512</i>&nbsp;            rdrCtx.stats.mon_rdr_endRendering_Y.stop();
+<i>1513</i>&nbsp;        }
+<b class="nc"><i>1514</i>&nbsp;    }</b>
+<i>1515</i>&nbsp;
+<i>1516</i>&nbsp;    void copyAARow(final int[] alphaRow,
+<i>1517</i>&nbsp;                   final int pix_y, final int pix_from, final int pix_to,
+<i>1518</i>&nbsp;                   final boolean useBlockFlags)
+<i>1519</i>&nbsp;    {
+<i>1520</i>&nbsp;        if (DO_MONITORS) {
+<i>1521</i>&nbsp;            rdrCtx.stats.mon_rdr_copyAARow.start();
+<i>1522</i>&nbsp;        }
+<i>1523</i>&nbsp;        if (useBlockFlags) {
+<i>1524</i>&nbsp;            if (DO_STATS) {
+<i>1525</i>&nbsp;                rdrCtx.stats.hist_tile_generator_encoding.add(1);
+<i>1526</i>&nbsp;            }
+<i>1527</i>&nbsp;            cache.copyAARowRLE_WithBlockFlags(blkFlags, alphaRow, pix_y, pix_from, pix_to);
+<b class="nc"><i>1528</i>&nbsp;        } else {</b>
+<b class="nc"><i>1529</i>&nbsp;            if (DO_STATS) {</b>
+<b class="nc"><i>1530</i>&nbsp;                rdrCtx.stats.hist_tile_generator_encoding.add(0);</b>
+<i>1531</i>&nbsp;            }
+<b class="nc"><i>1532</i>&nbsp;            cache.copyAARowNoRLE(alphaRow, pix_y, pix_from, pix_to);</b>
+<i>1533</i>&nbsp;        }
+<b class="nc"><i>1534</i>&nbsp;        if (DO_MONITORS) {</b>
+<b class="nc"><i>1535</i>&nbsp;            rdrCtx.stats.mon_rdr_copyAARow.stop();</b>
+<i>1536</i>&nbsp;        }
+<b class="nc"><i>1537</i>&nbsp;    }</b>
+<i>1538</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

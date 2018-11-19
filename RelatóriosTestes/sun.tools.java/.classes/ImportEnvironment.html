@@ -1,0 +1,586 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ImportEnvironment</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.java</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ImportEnvironment (sun.tools.java)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ImportEnvironment</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1994, 2003, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.java;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.Hashtable;
+<i>29</i>&nbsp;import java.util.Vector;
+<i>30</i>&nbsp;import java.util.Enumeration;
+<i>31</i>&nbsp;import java.util.List;
+<i>32</i>&nbsp;import java.util.Collections;
+<i>33</i>&nbsp;import java.io.IOException;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;/**
+<i>36</i>&nbsp; * This class describes the classes and packages imported
+<i>37</i>&nbsp; * from a source file. A Hashtable called bindings is maintained
+<i>38</i>&nbsp; * to quickly map symbol names to classes. This table is flushed
+<i>39</i>&nbsp; * everytime a new import is added.
+<i>40</i>&nbsp; *
+<i>41</i>&nbsp; * A class name is resolved as follows:
+<i>42</i>&nbsp; *  - if it is a qualified name then return the corresponding class
+<i>43</i>&nbsp; *  - if the name corresponds to an individually imported class then return that class
+<i>44</i>&nbsp; *  - check if the class is defined in any of the imported packages,
+<i>45</i>&nbsp; *    if it is then return it, make sure it is defined in only one package
+<i>46</i>&nbsp; *  - assume that the class is defined in the current package
+<i>47</i>&nbsp; *
+<i>48</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>49</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>50</i>&nbsp; * they are subject to change or removal without notice.
+<i>51</i>&nbsp; */
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;public
+<i>54</i>&nbsp;class Imports implements Constants {
+<i>55</i>&nbsp;    /**
+<i>56</i>&nbsp;     * The current package, which is implicitly imported,
+<i>57</i>&nbsp;     * and has precedence over other imported packages.
+<i>58</i>&nbsp;     */
+<i>59</i>&nbsp;    Identifier currentPackage = idNull;
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;    /**
+<i>62</i>&nbsp;     * A location for the current package declaration.  Used to
+<i>63</i>&nbsp;     * report errors against the current package.
+<i>64</i>&nbsp;     */
+<i>65</i>&nbsp;    long currentPackageWhere = 0;
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;    /**
+<i>68</i>&nbsp;     * The imported classes, including memoized imports from packages.
+<i>69</i>&nbsp;     */
+<i>70</i>&nbsp;    Hashtable&lt;Identifier, Identifier&gt; classes = new Hashtable&lt;&gt;();
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    /**
+<i>73</i>&nbsp;     * The imported package identifiers.  This will not contain duplicate
+<i>74</i>&nbsp;     * imports for the same package.  It will also not contain the
+<i>75</i>&nbsp;     * current package.
+<i>76</i>&nbsp;     */
+<i>77</i>&nbsp;    Vector&lt;IdentifierToken&gt; packages = new Vector&lt;&gt;();
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    /**
+<i>80</i>&nbsp;     * The (originally) imported classes.
+<i>81</i>&nbsp;     * A vector of IdentifierToken.
+<i>82</i>&nbsp;     */
+<i>83</i>&nbsp;    Vector&lt;IdentifierToken&gt; singles = new Vector&lt;&gt;();
+<i>84</i>&nbsp;
+<i>85</i>&nbsp;    /**
+<i>86</i>&nbsp;     * Are the import names checked yet?
+<i>87</i>&nbsp;     */
+<i>88</i>&nbsp;    protected int checked;
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    /**
+<i>91</i>&nbsp;     * Constructor, always import java.lang.
+<i>92</i>&nbsp;     */
+<i>93</i>&nbsp;    public Imports(Environment env) {
+<i>94</i>&nbsp;        addPackage(idJavaLang);
+<i>95</i>&nbsp;    }
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    /**
+<i>98</i>&nbsp;     * Check the names of the imports.
+<i>99</i>&nbsp;     */
+<i>100</i>&nbsp;    public synchronized void resolve(Environment env) {
+<i>101</i>&nbsp;        if (checked != 0) {
+<i>102</i>&nbsp;            return;
+<i>103</i>&nbsp;        }
+<i>104</i>&nbsp;        checked = -1;
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;        // After all class information has been read, now we can
+<i>107</i>&nbsp;        // safely inspect import information for errors.
+<i>108</i>&nbsp;        // If we did this before all parsing was finished,
+<i>109</i>&nbsp;        // we could get vicious circularities, since files can
+<i>110</i>&nbsp;        // import each others&#39; classes.
+<i>111</i>&nbsp;
+<i>112</i>&nbsp;        // A note: the resolution of the package java.lang takes place
+<i>113</i>&nbsp;        // in the sun.tools.javac.BatchEnvironment#setExemptPackages().
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;        // Make sure that the current package&#39;s name does not collide
+<i>116</i>&nbsp;        // with the name of an existing class. (bug 4101529)
+<i>117</i>&nbsp;        //
+<i>118</i>&nbsp;        // This change has been backed out because, on WIN32, it
+<i>119</i>&nbsp;        // failed to distinguish between java.awt.event and
+<i>120</i>&nbsp;        // java.awt.Event when looking for a directory.  We will
+<i>121</i>&nbsp;        // add this back in later.
+<i>122</i>&nbsp;        //
+<i>123</i>&nbsp;        // if (currentPackage != idNull) {
+<i>124</i>&nbsp;        //    Identifier resolvedName =
+<i>125</i>&nbsp;        //      env.resolvePackageQualifiedName(currentPackage);
+<i>126</i>&nbsp;        //
+<i>127</i>&nbsp;        //   Identifier className = resolvedName.getTopName();
+<i>128</i>&nbsp;        //
+<i>129</i>&nbsp;        //   if (importable(className, env)) {
+<i>130</i>&nbsp;        //      // The name of the current package is also the name
+<i>131</i>&nbsp;        //      // of a class.
+<i>132</i>&nbsp;        //      env.error(currentPackageWhere, &quot;package.class.conflict&quot;,
+<i>133</i>&nbsp;        //                currentPackage, className);
+<i>134</i>&nbsp;        //     }
+<i>135</i>&nbsp;        // }
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;        Vector&lt;IdentifierToken&gt; resolvedPackages = new Vector&lt;&gt;();
+<i>138</i>&nbsp;        for (Enumeration&lt;IdentifierToken&gt; e = packages.elements() ; e.hasMoreElements() ;) {
+<i>139</i>&nbsp;            IdentifierToken t = e.nextElement();
+<i>140</i>&nbsp;            Identifier nm = t.getName();
+<i>141</i>&nbsp;            long where = t.getWhere();
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;            // Check to see if this package is exempt from the &quot;exists&quot;
+<i>144</i>&nbsp;            // check.  See the note in
+<i>145</i>&nbsp;            // sun.tools.javac.BatchEnvironment#setExemptPackages()
+<i>146</i>&nbsp;            // for more information.
+<i>147</i>&nbsp;            if (env.isExemptPackage(nm)) {
+<i>148</i>&nbsp;                resolvedPackages.addElement(t);
+<i>149</i>&nbsp;                continue;
+<i>150</i>&nbsp;            }
+<i>151</i>&nbsp;
+<i>152</i>&nbsp;            // (Note: This code is moved from BatchParser.importPackage().)
+<i>153</i>&nbsp;            try {
+<i>154</i>&nbsp;                Identifier rnm = env.resolvePackageQualifiedName(nm);
+<i>155</i>&nbsp;                if (importable(rnm, env)) {
+<i>156</i>&nbsp;                    // This name is a real class; better not be a package too.
+<i>157</i>&nbsp;                    if (env.getPackage(rnm.getTopName()).exists()) {
+<i>158</i>&nbsp;                        env.error(where, &quot;class.and.package&quot;,
+<i>159</i>&nbsp;                                  rnm.getTopName());
+<i>160</i>&nbsp;                    }
+<i>161</i>&nbsp;                    // Pass an &quot;inner&quot; name to the imports.
+<i>162</i>&nbsp;                    if (!rnm.isInner())
+<i>163</i>&nbsp;                        rnm = Identifier.lookupInner(rnm, idNull);
+<i>164</i>&nbsp;                    nm = rnm;
+<i>165</i>&nbsp;                } else if (!env.getPackage(nm).exists()) {
+<i>166</i>&nbsp;                    env.error(where, &quot;package.not.found&quot;, nm, &quot;import&quot;);
+<i>167</i>&nbsp;                } else if (rnm.isInner()) {
+<i>168</i>&nbsp;                    // nm exists, and rnm.getTopName() is a parent package
+<i>169</i>&nbsp;                    env.error(where, &quot;class.and.package&quot;, rnm.getTopName());
+<i>170</i>&nbsp;                }
+<i>171</i>&nbsp;                resolvedPackages.addElement(new IdentifierToken(where, nm));
+<i>172</i>&nbsp;            } catch (IOException ee) {
+<i>173</i>&nbsp;                env.error(where, &quot;io.exception&quot;, &quot;import&quot;);
+<i>174</i>&nbsp;            }
+<i>175</i>&nbsp;        }
+<i>176</i>&nbsp;        packages = resolvedPackages;
+<i>177</i>&nbsp;
+<i>178</i>&nbsp;        for (Enumeration&lt;IdentifierToken&gt; e = singles.elements() ; e.hasMoreElements() ;) {
+<i>179</i>&nbsp;            IdentifierToken t = e.nextElement();
+<i>180</i>&nbsp;            Identifier nm = t.getName();
+<i>181</i>&nbsp;            long where = t.getWhere();
+<i>182</i>&nbsp;            Identifier pkg = nm.getQualifier();
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;            // (Note: This code is moved from BatchParser.importClass().)
+<i>185</i>&nbsp;            nm = env.resolvePackageQualifiedName(nm);
+<i>186</i>&nbsp;            if (!env.classExists(nm.getTopName())) {
+<i>187</i>&nbsp;                env.error(where, &quot;class.not.found&quot;, nm, &quot;import&quot;);
+<i>188</i>&nbsp;            }
+<i>189</i>&nbsp;
+<i>190</i>&nbsp;            // (Note: This code is moved from Imports.addClass().)
+<i>191</i>&nbsp;            Identifier snm = nm.getFlatName().getName();
+<i>192</i>&nbsp;
+<i>193</i>&nbsp;            // make sure it isn&#39;t already imported explicitly
+<i>194</i>&nbsp;            Identifier className = classes.get(snm);
+<i>195</i>&nbsp;            if (className != null) {
+<i>196</i>&nbsp;                Identifier f1 = Identifier.lookup(className.getQualifier(),
+<i>197</i>&nbsp;                                                  className.getFlatName());
+<i>198</i>&nbsp;                Identifier f2 = Identifier.lookup(nm.getQualifier(),
+<i>199</i>&nbsp;                                                  nm.getFlatName());
+<i>200</i>&nbsp;                if (!f1.equals(f2)) {
+<i>201</i>&nbsp;                    env.error(where, &quot;ambig.class&quot;, nm, className);
+<i>202</i>&nbsp;                }
+<i>203</i>&nbsp;            }
+<i>204</i>&nbsp;            classes.put(snm, nm);
+<i>205</i>&nbsp;
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;            // The code here needs to check to see, if we
+<i>208</i>&nbsp;            // are importing an inner class, that all of its
+<i>209</i>&nbsp;            // enclosing classes are visible to us.  To check this,
+<i>210</i>&nbsp;            // we need to construct a definition for the class.
+<i>211</i>&nbsp;            // The code here used to call...
+<i>212</i>&nbsp;            //
+<i>213</i>&nbsp;            //     ClassDefinition def = env.getClassDefinition(nm);
+<i>214</i>&nbsp;            //
+<i>215</i>&nbsp;            // ...but that interfered with the basicCheck()&#39;ing of
+<i>216</i>&nbsp;            // interfaces in certain cases (bug no. 4086139).  Never
+<i>217</i>&nbsp;            // fear.  Instead we load the class with a call to the
+<i>218</i>&nbsp;            // new getClassDefinitionNoCheck() which does no basicCheck() and
+<i>219</i>&nbsp;            // lets us answer the questions we are interested in w/o
+<i>220</i>&nbsp;            // interfering with the demand-driven nature of basicCheck().
+<i>221</i>&nbsp;
+<i>222</i>&nbsp;            try {
+<i>223</i>&nbsp;                // Get a declaration
+<i>224</i>&nbsp;                ClassDeclaration decl = env.getClassDeclaration(nm);
+<i>225</i>&nbsp;
+<i>226</i>&nbsp;                // Get the definition (no env argument)
+<i>227</i>&nbsp;                ClassDefinition def = decl.getClassDefinitionNoCheck(env);
+<i>228</i>&nbsp;
+<i>229</i>&nbsp;                // Get the true name of the package containing this class.
+<i>230</i>&nbsp;                // `pkg&#39; from above is insufficient.  It includes the
+<i>231</i>&nbsp;                // names of our enclosing classes.  Fix for 4086815.
+<i>232</i>&nbsp;                Identifier importedPackage = def.getName().getQualifier();
+<i>233</i>&nbsp;
+<i>234</i>&nbsp;                // Walk out the outerClass chain, ensuring that each level
+<i>235</i>&nbsp;                // is visible from our perspective.
+<i>236</i>&nbsp;                for (; def != null; def = def.getOuterClass()) {
+<i>237</i>&nbsp;                    if (def.isPrivate()
+<i>238</i>&nbsp;                        || !(def.isPublic()
+<i>239</i>&nbsp;                             || importedPackage.equals(currentPackage))) {
+<i>240</i>&nbsp;                        env.error(where, &quot;cant.access.class&quot;, def);
+<i>241</i>&nbsp;                        break;
+<i>242</i>&nbsp;                    }
+<i>243</i>&nbsp;                }
+<i>244</i>&nbsp;            } catch (AmbiguousClass ee) {
+<i>245</i>&nbsp;                env.error(where, &quot;ambig.class&quot;, ee.name1, ee.name2);
+<i>246</i>&nbsp;            } catch (ClassNotFound ee) {
+<i>247</i>&nbsp;                env.error(where, &quot;class.not.found&quot;, ee.name, &quot;import&quot;);
+<i>248</i>&nbsp;            }
+<i>249</i>&nbsp;        }
+<i>250</i>&nbsp;        checked = 1;
+<i>251</i>&nbsp;    }
+<i>252</i>&nbsp;
+<i>253</i>&nbsp;    /**
+<i>254</i>&nbsp;     * Lookup a class, given the current set of imports,
+<i>255</i>&nbsp;     * AmbiguousClass exception is thrown if the name can be
+<i>256</i>&nbsp;     * resolved in more than one way. A ClassNotFound exception
+<i>257</i>&nbsp;     * is thrown if the class is not found in the imported classes
+<i>258</i>&nbsp;     * and packages.
+<i>259</i>&nbsp;     */
+<i>260</i>&nbsp;    public synchronized Identifier resolve(Environment env, Identifier nm) throws ClassNotFound {
+<i>261</i>&nbsp;        if (tracing) env.dtEnter(&quot;Imports.resolve: &quot; + nm);
+<i>262</i>&nbsp;
+<i>263</i>&nbsp;        // If the class has the special ambiguous prefix, then we will
+<i>264</i>&nbsp;        // get the original AmbiguousClass exception by removing the
+<i>265</i>&nbsp;        // prefix and proceeding in the normal fashion.
+<i>266</i>&nbsp;        // (part of solution for 4059855)
+<i>267</i>&nbsp;        if (nm.hasAmbigPrefix()) {
+<i>268</i>&nbsp;            nm = nm.removeAmbigPrefix();
+<i>269</i>&nbsp;        }
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;        if (nm.isQualified()) {
+<i>272</i>&nbsp;            // Don&#39;t bother it is already qualified
+<i>273</i>&nbsp;            if (tracing) env.dtExit(&quot;Imports.resolve: QUALIFIED &quot; + nm);
+<i>274</i>&nbsp;            return nm;
+<i>275</i>&nbsp;        }
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;        if (checked &lt;= 0) {
+<i>278</i>&nbsp;            checked = 0;
+<i>279</i>&nbsp;            resolve(env);
+<i>280</i>&nbsp;        }
+<i>281</i>&nbsp;
+<i>282</i>&nbsp;        // Check if it was imported before
+<i>283</i>&nbsp;        Identifier className = classes.get(nm);
+<i>284</i>&nbsp;        if (className != null) {
+<i>285</i>&nbsp;            if (tracing) env.dtExit(&quot;Imports.resolve: PREVIOUSLY IMPORTED &quot; + nm);
+<i>286</i>&nbsp;            return className;
+<i>287</i>&nbsp;        }
+<i>288</i>&nbsp;
+<i>289</i>&nbsp;        // Note: the section below has changed a bit during the fix
+<i>290</i>&nbsp;        // for bug 4093217.  The current package is no longer grouped
+<i>291</i>&nbsp;        // with the rest of the import-on-demands; it is now checked
+<i>292</i>&nbsp;        // separately.  Also, the list of import-on-demands is now
+<i>293</i>&nbsp;        // guarranteed to be duplicate-free, so the code below can afford
+<i>294</i>&nbsp;        // to be a bit simpler.
+<i>295</i>&nbsp;
+<i>296</i>&nbsp;        // First we look in the current package.  The current package
+<i>297</i>&nbsp;        // is given precedence over the rest of the import-on-demands,
+<i>298</i>&nbsp;        // which means, among other things, that a class in the current
+<i>299</i>&nbsp;        // package cannot be ambiguous.
+<i>300</i>&nbsp;        Identifier id = Identifier.lookup(currentPackage, nm);
+<i>301</i>&nbsp;        if (importable(id, env)) {
+<i>302</i>&nbsp;            className = id;
+<i>303</i>&nbsp;        } else {
+<i>304</i>&nbsp;            // If it isn&#39;t in the current package, try to find it in
+<i>305</i>&nbsp;            // our import-on-demands.
+<i>306</i>&nbsp;            Enumeration&lt;IdentifierToken&gt; e = packages.elements();
+<i>307</i>&nbsp;            while (e.hasMoreElements()) {
+<i>308</i>&nbsp;                IdentifierToken t = e.nextElement();
+<i>309</i>&nbsp;                id = Identifier.lookup(t.getName(), nm);
+<i>310</i>&nbsp;
+<i>311</i>&nbsp;                if (importable(id, env)) {
+<i>312</i>&nbsp;                    if (className == null) {
+<i>313</i>&nbsp;                        // We haven&#39;t found any other matching classes yet.
+<i>314</i>&nbsp;                        // Set className to what we&#39;ve found and continue
+<i>315</i>&nbsp;                        // looking for an ambiguity.
+<i>316</i>&nbsp;                        className = id;
+<i>317</i>&nbsp;                    } else {
+<i>318</i>&nbsp;                        if (tracing)
+<i>319</i>&nbsp;                            env.dtExit(&quot;Imports.resolve: AMBIGUOUS &quot; + nm);
+<i>320</i>&nbsp;
+<i>321</i>&nbsp;                        // We&#39;ve found an ambiguity.
+<i>322</i>&nbsp;                        throw new AmbiguousClass(className, id);
+<i>323</i>&nbsp;                    }
+<i>324</i>&nbsp;                }
+<i>325</i>&nbsp;            }
+<i>326</i>&nbsp;        }
+<i>327</i>&nbsp;
+<i>328</i>&nbsp;        // Make sure a class was found
+<i>329</i>&nbsp;        if (className == null) {
+<i>330</i>&nbsp;            if (tracing) env.dtExit(&quot;Imports.resolve: NOT FOUND &quot; + nm);
+<i>331</i>&nbsp;            throw new ClassNotFound(nm);
+<i>332</i>&nbsp;        }
+<i>333</i>&nbsp;
+<i>334</i>&nbsp;        // Remember the binding
+<i>335</i>&nbsp;        classes.put(nm, className);
+<i>336</i>&nbsp;        if (tracing) env.dtExit(&quot;Imports.resolve: FIRST IMPORT &quot; + nm);
+<i>337</i>&nbsp;        return className;
+<i>338</i>&nbsp;    }
+<i>339</i>&nbsp;
+<i>340</i>&nbsp;    /**
+<i>341</i>&nbsp;     * Check to see if &#39;id&#39; names an importable class in `env&#39;.
+<i>342</i>&nbsp;     * This method was made public and static for utility.
+<i>343</i>&nbsp;     */
+<i>344</i>&nbsp;    static public boolean importable(Identifier id, Environment env) {
+<i>345</i>&nbsp;        if (!id.isInner()) {
+<i>346</i>&nbsp;            return env.classExists(id);
+<i>347</i>&nbsp;        } else if (!env.classExists(id.getTopName())) {
+<i>348</i>&nbsp;            return false;
+<i>349</i>&nbsp;        } else {
+<i>350</i>&nbsp;            // load the top class and look inside it
+<i>351</i>&nbsp;            try {
+<i>352</i>&nbsp;                // There used to be a call to...
+<i>353</i>&nbsp;                //    env.getClassDeclaration(id.getTopName());
+<i>354</i>&nbsp;                // ...here.  It has been replaced with the
+<i>355</i>&nbsp;                // two statements below.  These should be functionally
+<i>356</i>&nbsp;                // the same except for the fact that
+<i>357</i>&nbsp;                // getClassDefinitionNoCheck() does not call
+<i>358</i>&nbsp;                // basicCheck().  This allows us to avoid a circular
+<i>359</i>&nbsp;                // need to do basicChecking that can arise with
+<i>360</i>&nbsp;                // certain patterns of importing and inheritance.
+<i>361</i>&nbsp;                // This is a fix for a variant of bug 4086139.
+<i>362</i>&nbsp;                //
+<i>363</i>&nbsp;                // Note: the special case code in env.getClassDefinition()
+<i>364</i>&nbsp;                // which handles inner class names is not replicated below.
+<i>365</i>&nbsp;                // This should be okay, as we are looking up id.getTopName(),
+<i>366</i>&nbsp;                // not id.
+<i>367</i>&nbsp;                ClassDeclaration decl =
+<i>368</i>&nbsp;                    env.getClassDeclaration(id.getTopName());
+<i>369</i>&nbsp;                ClassDefinition c =
+<i>370</i>&nbsp;                    decl.getClassDefinitionNoCheck(env);
+<i>371</i>&nbsp;
+<i>372</i>&nbsp;                return c.innerClassExists(id.getFlatName().getTail());
+<i>373</i>&nbsp;            } catch (ClassNotFound ee) {
+<i>374</i>&nbsp;                return false;
+<i>375</i>&nbsp;            }
+<i>376</i>&nbsp;        }
+<i>377</i>&nbsp;    }
+<i>378</i>&nbsp;
+<i>379</i>&nbsp;    /**
+<i>380</i>&nbsp;     * Suppose a resolve() call has failed.
+<i>381</i>&nbsp;     * This routine can be used silently to give a reasonable
+<i>382</i>&nbsp;     * default qualification (the current package) to the identifier.
+<i>383</i>&nbsp;     * This decision is recorded for future reference.
+<i>384</i>&nbsp;     */
+<i>385</i>&nbsp;    public synchronized Identifier forceResolve(Environment env, Identifier nm) {
+<i>386</i>&nbsp;        if (nm.isQualified())
+<i>387</i>&nbsp;            return nm;
+<i>388</i>&nbsp;
+<i>389</i>&nbsp;        Identifier className = classes.get(nm);
+<i>390</i>&nbsp;        if (className != null) {
+<i>391</i>&nbsp;            return className;
+<i>392</i>&nbsp;        }
+<i>393</i>&nbsp;
+<i>394</i>&nbsp;        className = Identifier.lookup(currentPackage, nm);
+<i>395</i>&nbsp;
+<i>396</i>&nbsp;        classes.put(nm, className);
+<i>397</i>&nbsp;        return className;
+<i>398</i>&nbsp;    }
+<i>399</i>&nbsp;
+<i>400</i>&nbsp;    /**
+<i>401</i>&nbsp;     * Add a class import
+<i>402</i>&nbsp;     */
+<i>403</i>&nbsp;    public synchronized void addClass(IdentifierToken t) {
+<i>404</i>&nbsp;        singles.addElement(t);
+<i>405</i>&nbsp;    }
+<i>406</i>&nbsp;    // for compatibility
+<i>407</i>&nbsp;    public void addClass(Identifier nm) throws AmbiguousClass {
+<i>408</i>&nbsp;        addClass(new IdentifierToken(nm));
+<i>409</i>&nbsp;    }
+<i>410</i>&nbsp;
+<i>411</i>&nbsp;    /**
+<i>412</i>&nbsp;     * Add a package import, or perhaps an inner class scope.
+<i>413</i>&nbsp;     * Ignore any duplicate imports.
+<i>414</i>&nbsp;     */
+<i>415</i>&nbsp;    public synchronized void addPackage(IdentifierToken t) {
+<i>416</i>&nbsp;        final Identifier name = t.getName();
+<i>417</i>&nbsp;
+<i>418</i>&nbsp;        // If this is a duplicate import for the current package,
+<i>419</i>&nbsp;        // ignore it.
+<i>420</i>&nbsp;        if (name == currentPackage) {
+<i>421</i>&nbsp;            return;
+<i>422</i>&nbsp;        }
+<i>423</i>&nbsp;
+<i>424</i>&nbsp;        // If this is a duplicate of a package which has already been
+<i>425</i>&nbsp;        // added to the list, ignore it.
+<i>426</i>&nbsp;        final int size = packages.size();
+<i>427</i>&nbsp;        for (int i = 0; i &lt; size; i++) {
+<i>428</i>&nbsp;            if (name == (packages.elementAt(i)).getName()) {
+<i>429</i>&nbsp;                return;
+<i>430</i>&nbsp;            }
+<i>431</i>&nbsp;        }
+<i>432</i>&nbsp;
+<i>433</i>&nbsp;        // Add the package to the list.
+<i>434</i>&nbsp;        packages.addElement(t);
+<i>435</i>&nbsp;    }
+<i>436</i>&nbsp;    // for compatibility
+<i>437</i>&nbsp;    public void addPackage(Identifier id) {
+<i>438</i>&nbsp;        addPackage(new IdentifierToken(id));
+<i>439</i>&nbsp;    }
+<i>440</i>&nbsp;
+<i>441</i>&nbsp;    /**
+<i>442</i>&nbsp;     * Specify the current package with an IdentifierToken.
+<i>443</i>&nbsp;     */
+<i>444</i>&nbsp;    public synchronized void setCurrentPackage(IdentifierToken t) {
+<i>445</i>&nbsp;        currentPackage = t.getName();
+<i>446</i>&nbsp;        currentPackageWhere = t.getWhere();
+<i>447</i>&nbsp;    }
+<i>448</i>&nbsp;
+<i>449</i>&nbsp;    /**
+<i>450</i>&nbsp;     * Specify the current package
+<i>451</i>&nbsp;     */
+<i>452</i>&nbsp;    public synchronized void setCurrentPackage(Identifier id) {
+<i>453</i>&nbsp;        currentPackage = id;
+<i>454</i>&nbsp;    }
+<i>455</i>&nbsp;
+<i>456</i>&nbsp;    /**
+<i>457</i>&nbsp;     * Report the current package
+<i>458</i>&nbsp;     */
+<i>459</i>&nbsp;    public Identifier getCurrentPackage() {
+<i>460</i>&nbsp;        return currentPackage;
+<i>461</i>&nbsp;    }
+<i>462</i>&nbsp;
+<i>463</i>&nbsp;    /**
+<i>464</i>&nbsp;     * Return an unmodifiable list of IdentifierToken representing
+<i>465</i>&nbsp;     * packages specified as imports.
+<i>466</i>&nbsp;     */
+<i>467</i>&nbsp;    public List&lt;IdentifierToken&gt; getImportedPackages() {
+<i>468</i>&nbsp;        return Collections.unmodifiableList(packages);
+<i>469</i>&nbsp;    }
+<i>470</i>&nbsp;
+<i>471</i>&nbsp;    /**
+<i>472</i>&nbsp;     * Return an unmodifiable list of IdentifierToken representing
+<i>473</i>&nbsp;     * classes specified as imports.
+<i>474</i>&nbsp;     */
+<i>475</i>&nbsp;    public List&lt;IdentifierToken&gt; getImportedClasses() {
+<i>476</i>&nbsp;        return Collections.unmodifiableList(singles);
+<i>477</i>&nbsp;    }
+<i>478</i>&nbsp;
+<i>479</i>&nbsp;    /**
+<i>480</i>&nbsp;     * Extend an environment with my resolve() method.
+<i>481</i>&nbsp;     */
+<i>482</i>&nbsp;    public Environment newEnvironment(Environment env) {
+<i>483</i>&nbsp;        return new ImportEnvironment(env, this);
+<i>484</i>&nbsp;    }
+<i>485</i>&nbsp;}
+<i>486</i>&nbsp;
+<i>487</i>&nbsp;final
+<i>488</i>&nbsp;class ImportEnvironment extends Environment {
+<i>489</i>&nbsp;    Imports imports;
+<i>490</i>&nbsp;
+<i>491</i>&nbsp;    ImportEnvironment(Environment env, Imports imports) {
+<b class="nc"><i>492</i>&nbsp;        super(env, env.getSource());</b>
+<b class="nc"><i>493</i>&nbsp;        this.imports = imports;</b>
+<i>494</i>&nbsp;    }
+<i>495</i>&nbsp;
+<i>496</i>&nbsp;    public Identifier resolve(Identifier nm) throws ClassNotFound {
+<b class="nc"><i>497</i>&nbsp;        return imports.resolve(this, nm);</b>
+<i>498</i>&nbsp;    }
+<i>499</i>&nbsp;
+<i>500</i>&nbsp;    public Imports getImports() {
+<b class="nc"><i>501</i>&nbsp;        return imports;</b>
+<i>502</i>&nbsp;    }
+<i>503</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

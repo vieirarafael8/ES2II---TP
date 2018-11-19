@@ -1,0 +1,807 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: MultipleGradientPaintContext</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.awt</a> ]
+</div>
+
+<h1>Coverage Summary for Class: MultipleGradientPaintContext (java.awt)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">MultipleGradientPaintContext</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 15)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 201)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2006, 2014, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.awt;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.awt.MultipleGradientPaint.CycleMethod;
+<i>29</i>&nbsp;import java.awt.MultipleGradientPaint.ColorSpaceType;
+<i>30</i>&nbsp;import java.awt.color.ColorSpace;
+<i>31</i>&nbsp;import java.awt.geom.AffineTransform;
+<i>32</i>&nbsp;import java.awt.geom.NoninvertibleTransformException;
+<i>33</i>&nbsp;import java.awt.geom.Rectangle2D;
+<i>34</i>&nbsp;import java.awt.image.ColorModel;
+<i>35</i>&nbsp;import java.awt.image.DataBuffer;
+<i>36</i>&nbsp;import java.awt.image.DataBufferInt;
+<i>37</i>&nbsp;import java.awt.image.DirectColorModel;
+<i>38</i>&nbsp;import java.awt.image.Raster;
+<i>39</i>&nbsp;import java.awt.image.SinglePixelPackedSampleModel;
+<i>40</i>&nbsp;import java.awt.image.WritableRaster;
+<i>41</i>&nbsp;import java.lang.ref.SoftReference;
+<i>42</i>&nbsp;import java.lang.ref.WeakReference;
+<i>43</i>&nbsp;import java.util.Arrays;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;/**
+<i>46</i>&nbsp; * This is the superclass for all PaintContexts which use a multiple color
+<i>47</i>&nbsp; * gradient to fill in their raster.  It provides the actual color
+<i>48</i>&nbsp; * interpolation functionality.  Subclasses only have to deal with using
+<i>49</i>&nbsp; * the gradient to fill pixels in a raster.
+<i>50</i>&nbsp; *
+<i>51</i>&nbsp; * @author Nicholas Talian, Vincent Hardy, Jim Graham, Jerry Evans
+<i>52</i>&nbsp; */
+<i>53</i>&nbsp;abstract class MultipleGradientPaintContext implements PaintContext {
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    /**
+<i>56</i>&nbsp;     * The PaintContext&#39;s ColorModel.  This is ARGB if colors are not all
+<i>57</i>&nbsp;     * opaque, otherwise it is RGB.
+<i>58</i>&nbsp;     */
+<i>59</i>&nbsp;    protected ColorModel model;
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;    /** Color model used if gradient colors are all opaque. */
+<b class="nc"><i>62</i>&nbsp;    private static ColorModel xrgbmodel =</b>
+<i>63</i>&nbsp;        new DirectColorModel(24, 0x00ff0000, 0x0000ff00, 0x000000ff);
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    /** The cached ColorModel. */
+<i>66</i>&nbsp;    protected static ColorModel cachedModel;
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    /** The cached raster, which is reusable among instances. */
+<i>69</i>&nbsp;    protected static WeakReference&lt;Raster&gt; cached;
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;    /** Raster is reused whenever possible. */
+<i>72</i>&nbsp;    protected Raster saved;
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    /** The method to use when painting out of the gradient bounds. */
+<i>75</i>&nbsp;    protected CycleMethod cycleMethod;
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    /** The ColorSpace in which to perform the interpolation */
+<i>78</i>&nbsp;    protected ColorSpaceType colorSpace;
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;    /** Elements of the inverse transform matrix. */
+<i>81</i>&nbsp;    protected float a00, a01, a10, a11, a02, a12;
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;    /**
+<i>84</i>&nbsp;     * This boolean specifies whether we are in simple lookup mode, where an
+<i>85</i>&nbsp;     * input value between 0 and 1 may be used to directly index into a single
+<i>86</i>&nbsp;     * array of gradient colors.  If this boolean value is false, then we have
+<i>87</i>&nbsp;     * to use a 2-step process where we have to determine which gradient array
+<i>88</i>&nbsp;     * we fall into, then determine the index into that array.
+<i>89</i>&nbsp;     */
+<i>90</i>&nbsp;    protected boolean isSimpleLookup;
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    /**
+<i>93</i>&nbsp;     * Size of gradients array for scaling the 0-1 index when looking up
+<i>94</i>&nbsp;     * colors the fast way.
+<i>95</i>&nbsp;     */
+<i>96</i>&nbsp;    protected int fastGradientArraySize;
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    /**
+<i>99</i>&nbsp;     * Array which contains the interpolated color values for each interval,
+<i>100</i>&nbsp;     * used by calculateSingleArrayGradient().  It is protected for possible
+<i>101</i>&nbsp;     * direct access by subclasses.
+<i>102</i>&nbsp;     */
+<i>103</i>&nbsp;    protected int[] gradient;
+<i>104</i>&nbsp;
+<i>105</i>&nbsp;    /**
+<i>106</i>&nbsp;     * Array of gradient arrays, one array for each interval.  Used by
+<i>107</i>&nbsp;     * calculateMultipleArrayGradient().
+<i>108</i>&nbsp;     */
+<i>109</i>&nbsp;    private int[][] gradients;
+<i>110</i>&nbsp;
+<i>111</i>&nbsp;    /** Normalized intervals array. */
+<i>112</i>&nbsp;    private float[] normalizedIntervals;
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    /** Fractions array. */
+<i>115</i>&nbsp;    private float[] fractions;
+<i>116</i>&nbsp;
+<i>117</i>&nbsp;    /** Used to determine if gradient colors are all opaque. */
+<i>118</i>&nbsp;    private int transparencyTest;
+<i>119</i>&nbsp;
+<i>120</i>&nbsp;    /** Color space conversion lookup tables. */
+<b class="nc"><i>121</i>&nbsp;    private static final int SRGBtoLinearRGB[] = new int[256];</b>
+<b class="nc"><i>122</i>&nbsp;    private static final int LinearRGBtoSRGB[] = new int[256];</b>
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    static {
+<i>125</i>&nbsp;        // build the tables
+<b class="nc"><i>126</i>&nbsp;        for (int k = 0; k &lt; 256; k++) {</b>
+<b class="nc"><i>127</i>&nbsp;            SRGBtoLinearRGB[k] = convertSRGBtoLinearRGB(k);</b>
+<b class="nc"><i>128</i>&nbsp;            LinearRGBtoSRGB[k] = convertLinearRGBtoSRGB(k);</b>
+<i>129</i>&nbsp;        }
+<i>130</i>&nbsp;    }
+<i>131</i>&nbsp;
+<i>132</i>&nbsp;    /**
+<i>133</i>&nbsp;     * Constant number of max colors between any 2 arbitrary colors.
+<i>134</i>&nbsp;     * Used for creating and indexing gradients arrays.
+<i>135</i>&nbsp;     */
+<i>136</i>&nbsp;    protected static final int GRADIENT_SIZE = 256;
+<i>137</i>&nbsp;    protected static final int GRADIENT_SIZE_INDEX = GRADIENT_SIZE -1;
+<i>138</i>&nbsp;
+<i>139</i>&nbsp;    /**
+<i>140</i>&nbsp;     * Maximum length of the fast single-array.  If the estimated array size
+<i>141</i>&nbsp;     * is greater than this, switch over to the slow lookup method.
+<i>142</i>&nbsp;     * No particular reason for choosing this number, but it seems to provide
+<i>143</i>&nbsp;     * satisfactory performance for the common case (fast lookup).
+<i>144</i>&nbsp;     */
+<i>145</i>&nbsp;    private static final int MAX_GRADIENT_ARRAY_SIZE = 5000;
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;    /**
+<i>148</i>&nbsp;     * Constructor for MultipleGradientPaintContext superclass.
+<i>149</i>&nbsp;     */
+<i>150</i>&nbsp;    protected MultipleGradientPaintContext(MultipleGradientPaint mgp,
+<i>151</i>&nbsp;                                           ColorModel cm,
+<i>152</i>&nbsp;                                           Rectangle deviceBounds,
+<i>153</i>&nbsp;                                           Rectangle2D userBounds,
+<i>154</i>&nbsp;                                           AffineTransform t,
+<i>155</i>&nbsp;                                           RenderingHints hints,
+<i>156</i>&nbsp;                                           float[] fractions,
+<i>157</i>&nbsp;                                           Color[] colors,
+<i>158</i>&nbsp;                                           CycleMethod cycleMethod,
+<i>159</i>&nbsp;                                           ColorSpaceType colorSpace)
+<b class="nc"><i>160</i>&nbsp;    {</b>
+<b class="nc"><i>161</i>&nbsp;        if (deviceBounds == null) {</b>
+<b class="nc"><i>162</i>&nbsp;            throw new NullPointerException(&quot;Device bounds cannot be null&quot;);</b>
+<i>163</i>&nbsp;        }
+<i>164</i>&nbsp;
+<b class="nc"><i>165</i>&nbsp;        if (userBounds == null) {</b>
+<b class="nc"><i>166</i>&nbsp;            throw new NullPointerException(&quot;User bounds cannot be null&quot;);</b>
+<i>167</i>&nbsp;        }
+<i>168</i>&nbsp;
+<b class="nc"><i>169</i>&nbsp;        if (t == null) {</b>
+<b class="nc"><i>170</i>&nbsp;            throw new NullPointerException(&quot;Transform cannot be null&quot;);</b>
+<i>171</i>&nbsp;        }
+<i>172</i>&nbsp;
+<b class="nc"><i>173</i>&nbsp;        if (hints == null) {</b>
+<b class="nc"><i>174</i>&nbsp;            throw new NullPointerException(&quot;RenderingHints cannot be null&quot;);</b>
+<i>175</i>&nbsp;        }
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;        // The inverse transform is needed to go from device to user space.
+<i>178</i>&nbsp;        // Get all the components of the inverse transform matrix.
+<i>179</i>&nbsp;        AffineTransform tInv;
+<i>180</i>&nbsp;        try {
+<i>181</i>&nbsp;            // the following assumes that the caller has copied the incoming
+<i>182</i>&nbsp;            // transform and is not concerned about it being modified
+<b class="nc"><i>183</i>&nbsp;            t.invert();</b>
+<b class="nc"><i>184</i>&nbsp;            tInv = t;</b>
+<b class="nc"><i>185</i>&nbsp;        } catch (NoninvertibleTransformException e) {</b>
+<i>186</i>&nbsp;            // just use identity transform in this case; better to show
+<i>187</i>&nbsp;            // (incorrect) results than to throw an exception and/or no-op
+<b class="nc"><i>188</i>&nbsp;            tInv = new AffineTransform();</b>
+<b class="nc"><i>189</i>&nbsp;        }</b>
+<b class="nc"><i>190</i>&nbsp;        double m[] = new double[6];</b>
+<b class="nc"><i>191</i>&nbsp;        tInv.getMatrix(m);</b>
+<b class="nc"><i>192</i>&nbsp;        a00 = (float)m[0];</b>
+<b class="nc"><i>193</i>&nbsp;        a10 = (float)m[1];</b>
+<b class="nc"><i>194</i>&nbsp;        a01 = (float)m[2];</b>
+<b class="nc"><i>195</i>&nbsp;        a11 = (float)m[3];</b>
+<b class="nc"><i>196</i>&nbsp;        a02 = (float)m[4];</b>
+<b class="nc"><i>197</i>&nbsp;        a12 = (float)m[5];</b>
+<i>198</i>&nbsp;
+<i>199</i>&nbsp;        // copy some flags
+<b class="nc"><i>200</i>&nbsp;        this.cycleMethod = cycleMethod;</b>
+<b class="nc"><i>201</i>&nbsp;        this.colorSpace = colorSpace;</b>
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;        // we can avoid copying this array since we do not modify its values
+<b class="nc"><i>204</i>&nbsp;        this.fractions = fractions;</b>
+<i>205</i>&nbsp;
+<i>206</i>&nbsp;        // note that only one of these values can ever be non-null (we either
+<i>207</i>&nbsp;        // store the fast gradient array or the slow one, but never both
+<i>208</i>&nbsp;        // at the same time)
+<b class="nc"><i>209</i>&nbsp;        int[] gradient =</b>
+<b class="nc"><i>210</i>&nbsp;            (mgp.gradient != null) ? mgp.gradient.get() : null;</b>
+<b class="nc"><i>211</i>&nbsp;        int[][] gradients =</b>
+<b class="nc"><i>212</i>&nbsp;            (mgp.gradients != null) ? mgp.gradients.get() : null;</b>
+<i>213</i>&nbsp;
+<b class="nc"><i>214</i>&nbsp;        if (gradient == null &amp;&amp; gradients == null) {</b>
+<i>215</i>&nbsp;            // we need to (re)create the appropriate values
+<b class="nc"><i>216</i>&nbsp;            calculateLookupData(colors);</b>
+<i>217</i>&nbsp;
+<i>218</i>&nbsp;            // now cache the calculated values in the
+<i>219</i>&nbsp;            // MultipleGradientPaint instance for future use
+<b class="nc"><i>220</i>&nbsp;            mgp.model               = this.model;</b>
+<b class="nc"><i>221</i>&nbsp;            mgp.normalizedIntervals = this.normalizedIntervals;</b>
+<b class="nc"><i>222</i>&nbsp;            mgp.isSimpleLookup      = this.isSimpleLookup;</b>
+<b class="nc"><i>223</i>&nbsp;            if (isSimpleLookup) {</b>
+<i>224</i>&nbsp;                // only cache the fast array
+<b class="nc"><i>225</i>&nbsp;                mgp.fastGradientArraySize = this.fastGradientArraySize;</b>
+<b class="nc"><i>226</i>&nbsp;                mgp.gradient = new SoftReference&lt;int[]&gt;(this.gradient);</b>
+<i>227</i>&nbsp;            } else {
+<i>228</i>&nbsp;                // only cache the slow array
+<b class="nc"><i>229</i>&nbsp;                mgp.gradients = new SoftReference&lt;int[][]&gt;(this.gradients);</b>
+<i>230</i>&nbsp;            }
+<i>231</i>&nbsp;        } else {
+<i>232</i>&nbsp;            // use the values cached in the MultipleGradientPaint instance
+<b class="nc"><i>233</i>&nbsp;            this.model                 = mgp.model;</b>
+<b class="nc"><i>234</i>&nbsp;            this.normalizedIntervals   = mgp.normalizedIntervals;</b>
+<b class="nc"><i>235</i>&nbsp;            this.isSimpleLookup        = mgp.isSimpleLookup;</b>
+<b class="nc"><i>236</i>&nbsp;            this.gradient              = gradient;</b>
+<b class="nc"><i>237</i>&nbsp;            this.fastGradientArraySize = mgp.fastGradientArraySize;</b>
+<b class="nc"><i>238</i>&nbsp;            this.gradients             = gradients;</b>
+<i>239</i>&nbsp;        }
+<i>240</i>&nbsp;    }
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;    /**
+<i>243</i>&nbsp;     * This function is the meat of this class.  It calculates an array of
+<i>244</i>&nbsp;     * gradient colors based on an array of fractions and color values at
+<i>245</i>&nbsp;     * those fractions.
+<i>246</i>&nbsp;     */
+<i>247</i>&nbsp;    private void calculateLookupData(Color[] colors) {
+<i>248</i>&nbsp;        Color[] normalizedColors;
+<b class="nc"><i>249</i>&nbsp;        if (colorSpace == ColorSpaceType.LINEAR_RGB) {</b>
+<i>250</i>&nbsp;            // create a new colors array
+<b class="nc"><i>251</i>&nbsp;            normalizedColors = new Color[colors.length];</b>
+<i>252</i>&nbsp;            // convert the colors using the lookup table
+<b class="nc"><i>253</i>&nbsp;            for (int i = 0; i &lt; colors.length; i++) {</b>
+<b class="nc"><i>254</i>&nbsp;                int argb = colors[i].getRGB();</b>
+<b class="nc"><i>255</i>&nbsp;                int a = argb &gt;&gt;&gt; 24;</b>
+<b class="nc"><i>256</i>&nbsp;                int r = SRGBtoLinearRGB[(argb &gt;&gt; 16) &amp; 0xff];</b>
+<b class="nc"><i>257</i>&nbsp;                int g = SRGBtoLinearRGB[(argb &gt;&gt;  8) &amp; 0xff];</b>
+<b class="nc"><i>258</i>&nbsp;                int b = SRGBtoLinearRGB[(argb      ) &amp; 0xff];</b>
+<b class="nc"><i>259</i>&nbsp;                normalizedColors[i] = new Color(r, g, b, a);</b>
+<i>260</i>&nbsp;            }
+<i>261</i>&nbsp;        } else {
+<i>262</i>&nbsp;            // we can just use this array by reference since we do not
+<i>263</i>&nbsp;            // modify its values in the case of SRGB
+<b class="nc"><i>264</i>&nbsp;            normalizedColors = colors;</b>
+<i>265</i>&nbsp;        }
+<i>266</i>&nbsp;
+<i>267</i>&nbsp;        // this will store the intervals (distances) between gradient stops
+<b class="nc"><i>268</i>&nbsp;        normalizedIntervals = new float[fractions.length-1];</b>
+<i>269</i>&nbsp;
+<i>270</i>&nbsp;        // convert from fractions into intervals
+<b class="nc"><i>271</i>&nbsp;        for (int i = 0; i &lt; normalizedIntervals.length; i++) {</b>
+<i>272</i>&nbsp;            // interval distance is equal to the difference in positions
+<b class="nc"><i>273</i>&nbsp;            normalizedIntervals[i] = this.fractions[i+1] - this.fractions[i];</b>
+<i>274</i>&nbsp;        }
+<i>275</i>&nbsp;
+<i>276</i>&nbsp;        // initialize to be fully opaque for ANDing with colors
+<b class="nc"><i>277</i>&nbsp;        transparencyTest = 0xff000000;</b>
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;        // array of interpolation arrays
+<b class="nc"><i>280</i>&nbsp;        gradients = new int[normalizedIntervals.length][];</b>
+<i>281</i>&nbsp;
+<i>282</i>&nbsp;        // find smallest interval
+<b class="nc"><i>283</i>&nbsp;        float Imin = 1;</b>
+<b class="nc"><i>284</i>&nbsp;        for (int i = 0; i &lt; normalizedIntervals.length; i++) {</b>
+<b class="nc"><i>285</i>&nbsp;            Imin = (Imin &gt; normalizedIntervals[i]) ?</b>
+<i>286</i>&nbsp;                normalizedIntervals[i] : Imin;
+<i>287</i>&nbsp;        }
+<i>288</i>&nbsp;
+<i>289</i>&nbsp;        // Estimate the size of the entire gradients array.
+<i>290</i>&nbsp;        // This is to prevent a tiny interval from causing the size of array
+<i>291</i>&nbsp;        // to explode.  If the estimated size is too large, break to using
+<i>292</i>&nbsp;        // separate arrays for each interval, and using an indexing scheme at
+<i>293</i>&nbsp;        // look-up time.
+<b class="nc"><i>294</i>&nbsp;        int estimatedSize = 0;</b>
+<b class="nc"><i>295</i>&nbsp;        for (int i = 0; i &lt; normalizedIntervals.length; i++) {</b>
+<b class="nc"><i>296</i>&nbsp;            estimatedSize += (normalizedIntervals[i]/Imin) * GRADIENT_SIZE;</b>
+<i>297</i>&nbsp;        }
+<i>298</i>&nbsp;
+<b class="nc"><i>299</i>&nbsp;        if (estimatedSize &gt; MAX_GRADIENT_ARRAY_SIZE) {</b>
+<i>300</i>&nbsp;            // slow method
+<b class="nc"><i>301</i>&nbsp;            calculateMultipleArrayGradient(normalizedColors);</b>
+<i>302</i>&nbsp;        } else {
+<i>303</i>&nbsp;            // fast method
+<b class="nc"><i>304</i>&nbsp;            calculateSingleArrayGradient(normalizedColors, Imin);</b>
+<i>305</i>&nbsp;        }
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;        // use the most &quot;economical&quot; model
+<b class="nc"><i>308</i>&nbsp;        if ((transparencyTest &gt;&gt;&gt; 24) == 0xff) {</b>
+<b class="nc"><i>309</i>&nbsp;            model = xrgbmodel;</b>
+<i>310</i>&nbsp;        } else {
+<b class="nc"><i>311</i>&nbsp;            model = ColorModel.getRGBdefault();</b>
+<i>312</i>&nbsp;        }
+<i>313</i>&nbsp;    }
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;    /**
+<i>316</i>&nbsp;     * FAST LOOKUP METHOD
+<i>317</i>&nbsp;     *
+<i>318</i>&nbsp;     * This method calculates the gradient color values and places them in a
+<i>319</i>&nbsp;     * single int array, gradient[].  It does this by allocating space for
+<i>320</i>&nbsp;     * each interval based on its size relative to the smallest interval in
+<i>321</i>&nbsp;     * the array.  The smallest interval is allocated 255 interpolated values
+<i>322</i>&nbsp;     * (the maximum number of unique in-between colors in a 24 bit color
+<i>323</i>&nbsp;     * system), and all other intervals are allocated
+<i>324</i>&nbsp;     * size = (255 * the ratio of their size to the smallest interval).
+<i>325</i>&nbsp;     *
+<i>326</i>&nbsp;     * This scheme expedites a speedy retrieval because the colors are
+<i>327</i>&nbsp;     * distributed along the array according to their user-specified
+<i>328</i>&nbsp;     * distribution.  All that is needed is a relative index from 0 to 1.
+<i>329</i>&nbsp;     *
+<i>330</i>&nbsp;     * The only problem with this method is that the possibility exists for
+<i>331</i>&nbsp;     * the array size to balloon in the case where there is a
+<i>332</i>&nbsp;     * disproportionately small gradient interval.  In this case the other
+<i>333</i>&nbsp;     * intervals will be allocated huge space, but much of that data is
+<i>334</i>&nbsp;     * redundant.  We thus need to use the space conserving scheme below.
+<i>335</i>&nbsp;     *
+<i>336</i>&nbsp;     * @param Imin the size of the smallest interval
+<i>337</i>&nbsp;     */
+<i>338</i>&nbsp;    private void calculateSingleArrayGradient(Color[] colors, float Imin) {
+<i>339</i>&nbsp;        // set the flag so we know later it is a simple (fast) lookup
+<b class="nc"><i>340</i>&nbsp;        isSimpleLookup = true;</b>
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;        // 2 colors to interpolate
+<i>343</i>&nbsp;        int rgb1, rgb2;
+<i>344</i>&nbsp;
+<i>345</i>&nbsp;        //the eventual size of the single array
+<b class="nc"><i>346</i>&nbsp;        int gradientsTot = 1;</b>
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;        // for every interval (transition between 2 colors)
+<b class="nc"><i>349</i>&nbsp;        for (int i = 0; i &lt; gradients.length; i++) {</b>
+<i>350</i>&nbsp;            // create an array whose size is based on the ratio to the
+<i>351</i>&nbsp;            // smallest interval
+<b class="nc"><i>352</i>&nbsp;            int nGradients = (int)((normalizedIntervals[i]/Imin)*255f);</b>
+<b class="nc"><i>353</i>&nbsp;            gradientsTot += nGradients;</b>
+<b class="nc"><i>354</i>&nbsp;            gradients[i] = new int[nGradients];</b>
+<i>355</i>&nbsp;
+<i>356</i>&nbsp;            // the 2 colors (keyframes) to interpolate between
+<b class="nc"><i>357</i>&nbsp;            rgb1 = colors[i].getRGB();</b>
+<b class="nc"><i>358</i>&nbsp;            rgb2 = colors[i+1].getRGB();</b>
+<i>359</i>&nbsp;
+<i>360</i>&nbsp;            // fill this array with the colors in between rgb1 and rgb2
+<b class="nc"><i>361</i>&nbsp;            interpolate(rgb1, rgb2, gradients[i]);</b>
+<i>362</i>&nbsp;
+<i>363</i>&nbsp;            // if the colors are opaque, transparency should still
+<i>364</i>&nbsp;            // be 0xff000000
+<b class="nc"><i>365</i>&nbsp;            transparencyTest &amp;= rgb1;</b>
+<b class="nc"><i>366</i>&nbsp;            transparencyTest &amp;= rgb2;</b>
+<i>367</i>&nbsp;        }
+<i>368</i>&nbsp;
+<i>369</i>&nbsp;        // put all gradients in a single array
+<b class="nc"><i>370</i>&nbsp;        gradient = new int[gradientsTot];</b>
+<b class="nc"><i>371</i>&nbsp;        int curOffset = 0;</b>
+<b class="nc"><i>372</i>&nbsp;        for (int i = 0; i &lt; gradients.length; i++){</b>
+<b class="nc"><i>373</i>&nbsp;            System.arraycopy(gradients[i], 0, gradient,</b>
+<i>374</i>&nbsp;                             curOffset, gradients[i].length);
+<b class="nc"><i>375</i>&nbsp;            curOffset += gradients[i].length;</b>
+<i>376</i>&nbsp;        }
+<b class="nc"><i>377</i>&nbsp;        gradient[gradient.length-1] = colors[colors.length-1].getRGB();</b>
+<i>378</i>&nbsp;
+<i>379</i>&nbsp;        // if interpolation occurred in Linear RGB space, convert the
+<i>380</i>&nbsp;        // gradients back to sRGB using the lookup table
+<b class="nc"><i>381</i>&nbsp;        if (colorSpace == ColorSpaceType.LINEAR_RGB) {</b>
+<b class="nc"><i>382</i>&nbsp;            for (int i = 0; i &lt; gradient.length; i++) {</b>
+<b class="nc"><i>383</i>&nbsp;                gradient[i] = convertEntireColorLinearRGBtoSRGB(gradient[i]);</b>
+<i>384</i>&nbsp;            }
+<i>385</i>&nbsp;        }
+<i>386</i>&nbsp;
+<b class="nc"><i>387</i>&nbsp;        fastGradientArraySize = gradient.length - 1;</b>
+<i>388</i>&nbsp;    }
+<i>389</i>&nbsp;
+<i>390</i>&nbsp;    /**
+<i>391</i>&nbsp;     * SLOW LOOKUP METHOD
+<i>392</i>&nbsp;     *
+<i>393</i>&nbsp;     * This method calculates the gradient color values for each interval and
+<i>394</i>&nbsp;     * places each into its own 255 size array.  The arrays are stored in
+<i>395</i>&nbsp;     * gradients[][].  (255 is used because this is the maximum number of
+<i>396</i>&nbsp;     * unique colors between 2 arbitrary colors in a 24 bit color system.)
+<i>397</i>&nbsp;     *
+<i>398</i>&nbsp;     * This method uses the minimum amount of space (only 255 * number of
+<i>399</i>&nbsp;     * intervals), but it aggravates the lookup procedure, because now we
+<i>400</i>&nbsp;     * have to find out which interval to select, then calculate the index
+<i>401</i>&nbsp;     * within that interval.  This causes a significant performance hit,
+<i>402</i>&nbsp;     * because it requires this calculation be done for every point in
+<i>403</i>&nbsp;     * the rendering loop.
+<i>404</i>&nbsp;     *
+<i>405</i>&nbsp;     * For those of you who are interested, this is a classic example of the
+<i>406</i>&nbsp;     * time-space tradeoff.
+<i>407</i>&nbsp;     */
+<i>408</i>&nbsp;    private void calculateMultipleArrayGradient(Color[] colors) {
+<i>409</i>&nbsp;        // set the flag so we know later it is a non-simple lookup
+<b class="nc"><i>410</i>&nbsp;        isSimpleLookup = false;</b>
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;        // 2 colors to interpolate
+<i>413</i>&nbsp;        int rgb1, rgb2;
+<i>414</i>&nbsp;
+<i>415</i>&nbsp;        // for every interval (transition between 2 colors)
+<b class="nc"><i>416</i>&nbsp;        for (int i = 0; i &lt; gradients.length; i++){</b>
+<i>417</i>&nbsp;            // create an array of the maximum theoretical size for
+<i>418</i>&nbsp;            // each interval
+<b class="nc"><i>419</i>&nbsp;            gradients[i] = new int[GRADIENT_SIZE];</b>
+<i>420</i>&nbsp;
+<i>421</i>&nbsp;            // get the 2 colors
+<b class="nc"><i>422</i>&nbsp;            rgb1 = colors[i].getRGB();</b>
+<b class="nc"><i>423</i>&nbsp;            rgb2 = colors[i+1].getRGB();</b>
+<i>424</i>&nbsp;
+<i>425</i>&nbsp;            // fill this array with the colors in between rgb1 and rgb2
+<b class="nc"><i>426</i>&nbsp;            interpolate(rgb1, rgb2, gradients[i]);</b>
+<i>427</i>&nbsp;
+<i>428</i>&nbsp;            // if the colors are opaque, transparency should still
+<i>429</i>&nbsp;            // be 0xff000000
+<b class="nc"><i>430</i>&nbsp;            transparencyTest &amp;= rgb1;</b>
+<b class="nc"><i>431</i>&nbsp;            transparencyTest &amp;= rgb2;</b>
+<i>432</i>&nbsp;        }
+<i>433</i>&nbsp;
+<i>434</i>&nbsp;        // if interpolation occurred in Linear RGB space, convert the
+<i>435</i>&nbsp;        // gradients back to SRGB using the lookup table
+<b class="nc"><i>436</i>&nbsp;        if (colorSpace == ColorSpaceType.LINEAR_RGB) {</b>
+<b class="nc"><i>437</i>&nbsp;            for (int j = 0; j &lt; gradients.length; j++) {</b>
+<b class="nc"><i>438</i>&nbsp;                for (int i = 0; i &lt; gradients[j].length; i++) {</b>
+<b class="nc"><i>439</i>&nbsp;                    gradients[j][i] =</b>
+<b class="nc"><i>440</i>&nbsp;                        convertEntireColorLinearRGBtoSRGB(gradients[j][i]);</b>
+<i>441</i>&nbsp;                }
+<i>442</i>&nbsp;            }
+<i>443</i>&nbsp;        }
+<i>444</i>&nbsp;    }
+<i>445</i>&nbsp;
+<i>446</i>&nbsp;    /**
+<i>447</i>&nbsp;     * Yet another helper function.  This one linearly interpolates between
+<i>448</i>&nbsp;     * 2 colors, filling up the output array.
+<i>449</i>&nbsp;     *
+<i>450</i>&nbsp;     * @param rgb1 the start color
+<i>451</i>&nbsp;     * @param rgb2 the end color
+<i>452</i>&nbsp;     * @param output the output array of colors; must not be null
+<i>453</i>&nbsp;     */
+<i>454</i>&nbsp;    private void interpolate(int rgb1, int rgb2, int[] output) {
+<i>455</i>&nbsp;        // color components
+<i>456</i>&nbsp;        int a1, r1, g1, b1, da, dr, dg, db;
+<i>457</i>&nbsp;
+<i>458</i>&nbsp;        // step between interpolated values
+<b class="nc"><i>459</i>&nbsp;        float stepSize = 1.0f / output.length;</b>
+<i>460</i>&nbsp;
+<i>461</i>&nbsp;        // extract color components from packed integer
+<b class="nc"><i>462</i>&nbsp;        a1 = (rgb1 &gt;&gt; 24) &amp; 0xff;</b>
+<b class="nc"><i>463</i>&nbsp;        r1 = (rgb1 &gt;&gt; 16) &amp; 0xff;</b>
+<b class="nc"><i>464</i>&nbsp;        g1 = (rgb1 &gt;&gt;  8) &amp; 0xff;</b>
+<b class="nc"><i>465</i>&nbsp;        b1 = (rgb1      ) &amp; 0xff;</b>
+<i>466</i>&nbsp;
+<i>467</i>&nbsp;        // calculate the total change in alpha, red, green, blue
+<b class="nc"><i>468</i>&nbsp;        da = ((rgb2 &gt;&gt; 24) &amp; 0xff) - a1;</b>
+<b class="nc"><i>469</i>&nbsp;        dr = ((rgb2 &gt;&gt; 16) &amp; 0xff) - r1;</b>
+<b class="nc"><i>470</i>&nbsp;        dg = ((rgb2 &gt;&gt;  8) &amp; 0xff) - g1;</b>
+<b class="nc"><i>471</i>&nbsp;        db = ((rgb2      ) &amp; 0xff) - b1;</b>
+<i>472</i>&nbsp;
+<i>473</i>&nbsp;        // for each step in the interval calculate the in-between color by
+<i>474</i>&nbsp;        // multiplying the normalized current position by the total color
+<i>475</i>&nbsp;        // change (0.5 is added to prevent truncation round-off error)
+<b class="nc"><i>476</i>&nbsp;        for (int i = 0; i &lt; output.length; i++) {</b>
+<b class="nc"><i>477</i>&nbsp;            output[i] =</b>
+<i>478</i>&nbsp;                (((int) ((a1 + i * da * stepSize) + 0.5) &lt;&lt; 24)) |
+<i>479</i>&nbsp;                (((int) ((r1 + i * dr * stepSize) + 0.5) &lt;&lt; 16)) |
+<i>480</i>&nbsp;                (((int) ((g1 + i * dg * stepSize) + 0.5) &lt;&lt;  8)) |
+<i>481</i>&nbsp;                (((int) ((b1 + i * db * stepSize) + 0.5)      ));
+<i>482</i>&nbsp;        }
+<i>483</i>&nbsp;    }
+<i>484</i>&nbsp;
+<i>485</i>&nbsp;    /**
+<i>486</i>&nbsp;     * Yet another helper function.  This one extracts the color components
+<i>487</i>&nbsp;     * of an integer RGB triple, converts them from LinearRGB to SRGB, then
+<i>488</i>&nbsp;     * recompacts them into an int.
+<i>489</i>&nbsp;     */
+<i>490</i>&nbsp;    private int convertEntireColorLinearRGBtoSRGB(int rgb) {
+<i>491</i>&nbsp;        // color components
+<i>492</i>&nbsp;        int a1, r1, g1, b1;
+<i>493</i>&nbsp;
+<i>494</i>&nbsp;        // extract red, green, blue components
+<b class="nc"><i>495</i>&nbsp;        a1 = (rgb &gt;&gt; 24) &amp; 0xff;</b>
+<b class="nc"><i>496</i>&nbsp;        r1 = (rgb &gt;&gt; 16) &amp; 0xff;</b>
+<b class="nc"><i>497</i>&nbsp;        g1 = (rgb &gt;&gt;  8) &amp; 0xff;</b>
+<b class="nc"><i>498</i>&nbsp;        b1 = (rgb      ) &amp; 0xff;</b>
+<i>499</i>&nbsp;
+<i>500</i>&nbsp;        // use the lookup table
+<b class="nc"><i>501</i>&nbsp;        r1 = LinearRGBtoSRGB[r1];</b>
+<b class="nc"><i>502</i>&nbsp;        g1 = LinearRGBtoSRGB[g1];</b>
+<b class="nc"><i>503</i>&nbsp;        b1 = LinearRGBtoSRGB[b1];</b>
+<i>504</i>&nbsp;
+<i>505</i>&nbsp;        // re-compact the components
+<b class="nc"><i>506</i>&nbsp;        return ((a1 &lt;&lt; 24) |</b>
+<i>507</i>&nbsp;                (r1 &lt;&lt; 16) |
+<i>508</i>&nbsp;                (g1 &lt;&lt;  8) |
+<i>509</i>&nbsp;                (b1      ));
+<i>510</i>&nbsp;    }
+<i>511</i>&nbsp;
+<i>512</i>&nbsp;    /**
+<i>513</i>&nbsp;     * Helper function to index into the gradients array.  This is necessary
+<i>514</i>&nbsp;     * because each interval has an array of colors with uniform size 255.
+<i>515</i>&nbsp;     * However, the color intervals are not necessarily of uniform length, so
+<i>516</i>&nbsp;     * a conversion is required.
+<i>517</i>&nbsp;     *
+<i>518</i>&nbsp;     * @param position the unmanipulated position, which will be mapped
+<i>519</i>&nbsp;     *                 into the range 0 to 1
+<i>520</i>&nbsp;     * @return integer color to display
+<i>521</i>&nbsp;     */
+<i>522</i>&nbsp;    protected final int indexIntoGradientsArrays(float position) {
+<i>523</i>&nbsp;        // first, manipulate position value depending on the cycle method
+<b class="nc"><i>524</i>&nbsp;        if (cycleMethod == CycleMethod.NO_CYCLE) {</b>
+<b class="nc"><i>525</i>&nbsp;            if (position &gt; 1) {</b>
+<i>526</i>&nbsp;                // upper bound is 1
+<b class="nc"><i>527</i>&nbsp;                position = 1;</b>
+<b class="nc"><i>528</i>&nbsp;            } else if (position &lt; 0) {</b>
+<i>529</i>&nbsp;                // lower bound is 0
+<b class="nc"><i>530</i>&nbsp;                position = 0;</b>
+<i>531</i>&nbsp;            }
+<b class="nc"><i>532</i>&nbsp;        } else if (cycleMethod == CycleMethod.REPEAT) {</b>
+<i>533</i>&nbsp;            // get the fractional part
+<i>534</i>&nbsp;            // (modulo behavior discards integer component)
+<b class="nc"><i>535</i>&nbsp;            position = position - (int)position;</b>
+<i>536</i>&nbsp;
+<i>537</i>&nbsp;            //position should now be between -1 and 1
+<b class="nc"><i>538</i>&nbsp;            if (position &lt; 0) {</b>
+<i>539</i>&nbsp;                // force it to be in the range 0-1
+<b class="nc"><i>540</i>&nbsp;                position = position + 1;</b>
+<i>541</i>&nbsp;            }
+<i>542</i>&nbsp;        } else { // cycleMethod == CycleMethod.REFLECT
+<b class="nc"><i>543</i>&nbsp;            if (position &lt; 0) {</b>
+<i>544</i>&nbsp;                // take absolute value
+<b class="nc"><i>545</i>&nbsp;                position = -position;</b>
+<i>546</i>&nbsp;            }
+<i>547</i>&nbsp;
+<i>548</i>&nbsp;            // get the integer part
+<b class="nc"><i>549</i>&nbsp;            int part = (int)position;</b>
+<i>550</i>&nbsp;
+<i>551</i>&nbsp;            // get the fractional part
+<b class="nc"><i>552</i>&nbsp;            position = position - part;</b>
+<i>553</i>&nbsp;
+<b class="nc"><i>554</i>&nbsp;            if ((part &amp; 1) == 1) {</b>
+<i>555</i>&nbsp;                // integer part is odd, get reflected color instead
+<b class="nc"><i>556</i>&nbsp;                position = 1 - position;</b>
+<i>557</i>&nbsp;            }
+<i>558</i>&nbsp;        }
+<i>559</i>&nbsp;
+<i>560</i>&nbsp;        // now, get the color based on this 0-1 position...
+<i>561</i>&nbsp;
+<b class="nc"><i>562</i>&nbsp;        if (isSimpleLookup) {</b>
+<i>563</i>&nbsp;            // easy to compute: just scale index by array size
+<b class="nc"><i>564</i>&nbsp;            return gradient[(int)(position * fastGradientArraySize)];</b>
+<i>565</i>&nbsp;        } else {
+<i>566</i>&nbsp;            // more complicated computation, to save space
+<i>567</i>&nbsp;
+<i>568</i>&nbsp;            // for all the gradient interval arrays
+<b class="nc"><i>569</i>&nbsp;            for (int i = 0; i &lt; gradients.length; i++) {</b>
+<b class="nc"><i>570</i>&nbsp;                if (position &lt; fractions[i+1]) {</b>
+<i>571</i>&nbsp;                    // this is the array we want
+<b class="nc"><i>572</i>&nbsp;                    float delta = position - fractions[i];</b>
+<i>573</i>&nbsp;
+<i>574</i>&nbsp;                    // this is the interval we want
+<b class="nc"><i>575</i>&nbsp;                    int index = (int)((delta / normalizedIntervals[i])</b>
+<i>576</i>&nbsp;                                      * (GRADIENT_SIZE_INDEX));
+<i>577</i>&nbsp;
+<b class="nc"><i>578</i>&nbsp;                    return gradients[i][index];</b>
+<i>579</i>&nbsp;                }
+<i>580</i>&nbsp;            }
+<i>581</i>&nbsp;        }
+<i>582</i>&nbsp;
+<b class="nc"><i>583</i>&nbsp;        return gradients[gradients.length - 1][GRADIENT_SIZE_INDEX];</b>
+<i>584</i>&nbsp;    }
+<i>585</i>&nbsp;
+<i>586</i>&nbsp;    /**
+<i>587</i>&nbsp;     * Helper function to convert a color component in sRGB space to linear
+<i>588</i>&nbsp;     * RGB space.  Used to build a static lookup table.
+<i>589</i>&nbsp;     */
+<i>590</i>&nbsp;    private static int convertSRGBtoLinearRGB(int color) {
+<i>591</i>&nbsp;        float input, output;
+<i>592</i>&nbsp;
+<b class="nc"><i>593</i>&nbsp;        input = color / 255.0f;</b>
+<b class="nc"><i>594</i>&nbsp;        if (input &lt;= 0.04045f) {</b>
+<b class="nc"><i>595</i>&nbsp;            output = input / 12.92f;</b>
+<i>596</i>&nbsp;        } else {
+<b class="nc"><i>597</i>&nbsp;            output = (float)Math.pow((input + 0.055) / 1.055, 2.4);</b>
+<i>598</i>&nbsp;        }
+<i>599</i>&nbsp;
+<b class="nc"><i>600</i>&nbsp;        return Math.round(output * 255.0f);</b>
+<i>601</i>&nbsp;    }
+<i>602</i>&nbsp;
+<i>603</i>&nbsp;    /**
+<i>604</i>&nbsp;     * Helper function to convert a color component in linear RGB space to
+<i>605</i>&nbsp;     * SRGB space.  Used to build a static lookup table.
+<i>606</i>&nbsp;     */
+<i>607</i>&nbsp;    private static int convertLinearRGBtoSRGB(int color) {
+<i>608</i>&nbsp;        float input, output;
+<i>609</i>&nbsp;
+<b class="nc"><i>610</i>&nbsp;        input = color/255.0f;</b>
+<b class="nc"><i>611</i>&nbsp;        if (input &lt;= 0.0031308) {</b>
+<b class="nc"><i>612</i>&nbsp;            output = input * 12.92f;</b>
+<i>613</i>&nbsp;        } else {
+<b class="nc"><i>614</i>&nbsp;            output = (1.055f *</b>
+<b class="nc"><i>615</i>&nbsp;                ((float) Math.pow(input, (1.0 / 2.4)))) - 0.055f;</b>
+<i>616</i>&nbsp;        }
+<i>617</i>&nbsp;
+<b class="nc"><i>618</i>&nbsp;        return Math.round(output * 255.0f);</b>
+<i>619</i>&nbsp;    }
+<i>620</i>&nbsp;
+<i>621</i>&nbsp;    /**
+<i>622</i>&nbsp;     * {@inheritDoc}
+<i>623</i>&nbsp;     */
+<i>624</i>&nbsp;    public final Raster getRaster(int x, int y, int w, int h) {
+<i>625</i>&nbsp;        // If working raster is big enough, reuse it. Otherwise,
+<i>626</i>&nbsp;        // build a large enough new one.
+<b class="nc"><i>627</i>&nbsp;        Raster raster = saved;</b>
+<b class="nc"><i>628</i>&nbsp;        if (raster == null ||</b>
+<b class="nc"><i>629</i>&nbsp;            raster.getWidth() &lt; w || raster.getHeight() &lt; h)</b>
+<i>630</i>&nbsp;        {
+<b class="nc"><i>631</i>&nbsp;            raster = getCachedRaster(model, w, h);</b>
+<b class="nc"><i>632</i>&nbsp;            saved = raster;</b>
+<i>633</i>&nbsp;        }
+<i>634</i>&nbsp;
+<i>635</i>&nbsp;        // Access raster internal int array. Because we use a DirectColorModel,
+<i>636</i>&nbsp;        // we know the DataBuffer is of type DataBufferInt and the SampleModel
+<i>637</i>&nbsp;        // is SinglePixelPackedSampleModel.
+<i>638</i>&nbsp;        // Adjust for initial offset in DataBuffer and also for the scanline
+<i>639</i>&nbsp;        // stride.
+<i>640</i>&nbsp;        // These calls make the DataBuffer non-acceleratable, but the
+<i>641</i>&nbsp;        // Raster is never Stable long enough to accelerate anyway...
+<b class="nc"><i>642</i>&nbsp;        DataBufferInt rasterDB = (DataBufferInt)raster.getDataBuffer();</b>
+<b class="nc"><i>643</i>&nbsp;        int[] pixels = rasterDB.getData(0);</b>
+<b class="nc"><i>644</i>&nbsp;        int off = rasterDB.getOffset();</b>
+<b class="nc"><i>645</i>&nbsp;        int scanlineStride = ((SinglePixelPackedSampleModel)</b>
+<b class="nc"><i>646</i>&nbsp;                              raster.getSampleModel()).getScanlineStride();</b>
+<b class="nc"><i>647</i>&nbsp;        int adjust = scanlineStride - w;</b>
+<i>648</i>&nbsp;
+<b class="nc"><i>649</i>&nbsp;        fillRaster(pixels, off, adjust, x, y, w, h); // delegate to subclass</b>
+<i>650</i>&nbsp;
+<b class="nc"><i>651</i>&nbsp;        return raster;</b>
+<i>652</i>&nbsp;    }
+<i>653</i>&nbsp;
+<i>654</i>&nbsp;    protected abstract void fillRaster(int pixels[], int off, int adjust,
+<i>655</i>&nbsp;                                       int x, int y, int w, int h);
+<i>656</i>&nbsp;
+<i>657</i>&nbsp;
+<i>658</i>&nbsp;    /**
+<i>659</i>&nbsp;     * Took this cacheRaster code from GradientPaint. It appears to recycle
+<i>660</i>&nbsp;     * rasters for use by any other instance, as long as they are sufficiently
+<i>661</i>&nbsp;     * large.
+<i>662</i>&nbsp;     */
+<i>663</i>&nbsp;    private static synchronized Raster getCachedRaster(ColorModel cm,
+<i>664</i>&nbsp;                                                       int w, int h)
+<i>665</i>&nbsp;    {
+<b class="nc"><i>666</i>&nbsp;        if (cm == cachedModel) {</b>
+<b class="nc"><i>667</i>&nbsp;            if (cached != null) {</b>
+<b class="nc"><i>668</i>&nbsp;                Raster ras = cached.get();</b>
+<b class="nc"><i>669</i>&nbsp;                if (ras != null &amp;&amp;</b>
+<b class="nc"><i>670</i>&nbsp;                    ras.getWidth() &gt;= w &amp;&amp;</b>
+<b class="nc"><i>671</i>&nbsp;                    ras.getHeight() &gt;= h)</b>
+<i>672</i>&nbsp;                {
+<b class="nc"><i>673</i>&nbsp;                    cached = null;</b>
+<b class="nc"><i>674</i>&nbsp;                    return ras;</b>
+<i>675</i>&nbsp;                }
+<i>676</i>&nbsp;            }
+<i>677</i>&nbsp;        }
+<b class="nc"><i>678</i>&nbsp;        return cm.createCompatibleWritableRaster(w, h);</b>
+<i>679</i>&nbsp;    }
+<i>680</i>&nbsp;
+<i>681</i>&nbsp;    /**
+<i>682</i>&nbsp;     * Took this cacheRaster code from GradientPaint. It appears to recycle
+<i>683</i>&nbsp;     * rasters for use by any other instance, as long as they are sufficiently
+<i>684</i>&nbsp;     * large.
+<i>685</i>&nbsp;     */
+<i>686</i>&nbsp;    private static synchronized void putCachedRaster(ColorModel cm,
+<i>687</i>&nbsp;                                                     Raster ras)
+<i>688</i>&nbsp;    {
+<b class="nc"><i>689</i>&nbsp;        if (cached != null) {</b>
+<b class="nc"><i>690</i>&nbsp;            Raster cras = cached.get();</b>
+<b class="nc"><i>691</i>&nbsp;            if (cras != null) {</b>
+<b class="nc"><i>692</i>&nbsp;                int cw = cras.getWidth();</b>
+<b class="nc"><i>693</i>&nbsp;                int ch = cras.getHeight();</b>
+<b class="nc"><i>694</i>&nbsp;                int iw = ras.getWidth();</b>
+<b class="nc"><i>695</i>&nbsp;                int ih = ras.getHeight();</b>
+<b class="nc"><i>696</i>&nbsp;                if (cw &gt;= iw &amp;&amp; ch &gt;= ih) {</b>
+<i>697</i>&nbsp;                    return;
+<i>698</i>&nbsp;                }
+<b class="nc"><i>699</i>&nbsp;                if (cw * ch &gt;= iw * ih) {</b>
+<i>700</i>&nbsp;                    return;
+<i>701</i>&nbsp;                }
+<i>702</i>&nbsp;            }
+<i>703</i>&nbsp;        }
+<b class="nc"><i>704</i>&nbsp;        cachedModel = cm;</b>
+<b class="nc"><i>705</i>&nbsp;        cached = new WeakReference&lt;Raster&gt;(ras);</b>
+<i>706</i>&nbsp;    }
+<i>707</i>&nbsp;
+<i>708</i>&nbsp;    /**
+<i>709</i>&nbsp;     * {@inheritDoc}
+<i>710</i>&nbsp;     */
+<i>711</i>&nbsp;    public final void dispose() {
+<b class="nc"><i>712</i>&nbsp;        if (saved != null) {</b>
+<b class="nc"><i>713</i>&nbsp;            putCachedRaster(model, saved);</b>
+<b class="nc"><i>714</i>&nbsp;            saved = null;</b>
+<i>715</i>&nbsp;        }
+<i>716</i>&nbsp;    }
+<i>717</i>&nbsp;
+<i>718</i>&nbsp;    /**
+<i>719</i>&nbsp;     * {@inheritDoc}
+<i>720</i>&nbsp;     */
+<i>721</i>&nbsp;    public final ColorModel getColorModel() {
+<b class="nc"><i>722</i>&nbsp;        return model;</b>
+<i>723</i>&nbsp;    }
+<i>724</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

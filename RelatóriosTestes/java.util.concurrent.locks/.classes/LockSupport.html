@@ -1,0 +1,514 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: LockSupport</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.concurrent.locks</a> ]
+</div>
+
+<h1>Coverage Summary for Class: LockSupport (java.util.concurrent.locks)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">LockSupport</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 12)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 44)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; */
+<i>24</i>&nbsp;
+<i>25</i>&nbsp;/*
+<i>26</i>&nbsp; *
+<i>27</i>&nbsp; *
+<i>28</i>&nbsp; *
+<i>29</i>&nbsp; *
+<i>30</i>&nbsp; *
+<i>31</i>&nbsp; * Written by Doug Lea with assistance from members of JCP JSR-166
+<i>32</i>&nbsp; * Expert Group and released to the public domain, as explained at
+<i>33</i>&nbsp; * http://creativecommons.org/publicdomain/zero/1.0/
+<i>34</i>&nbsp; */
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;package java.util.concurrent.locks;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import jdk.internal.misc.Unsafe;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;/**
+<i>41</i>&nbsp; * Basic thread blocking primitives for creating locks and other
+<i>42</i>&nbsp; * synchronization classes.
+<i>43</i>&nbsp; *
+<i>44</i>&nbsp; * &lt;p&gt;This class associates, with each thread that uses it, a permit
+<i>45</i>&nbsp; * (in the sense of the {@link java.util.concurrent.Semaphore
+<i>46</i>&nbsp; * Semaphore} class). A call to {@code park} will return immediately
+<i>47</i>&nbsp; * if the permit is available, consuming it in the process; otherwise
+<i>48</i>&nbsp; * it &lt;em&gt;may&lt;/em&gt; block.  A call to {@code unpark} makes the permit
+<i>49</i>&nbsp; * available, if it was not already available. (Unlike with Semaphores
+<i>50</i>&nbsp; * though, permits do not accumulate. There is at most one.)
+<i>51</i>&nbsp; * Reliable usage requires the use of volatile (or atomic) variables
+<i>52</i>&nbsp; * to control when to park or unpark.  Orderings of calls to these
+<i>53</i>&nbsp; * methods are maintained with respect to volatile variable accesses,
+<i>54</i>&nbsp; * but not necessarily non-volatile variable accesses.
+<i>55</i>&nbsp; *
+<i>56</i>&nbsp; * &lt;p&gt;Methods {@code park} and {@code unpark} provide efficient
+<i>57</i>&nbsp; * means of blocking and unblocking threads that do not encounter the
+<i>58</i>&nbsp; * problems that cause the deprecated methods {@code Thread.suspend}
+<i>59</i>&nbsp; * and {@code Thread.resume} to be unusable for such purposes: Races
+<i>60</i>&nbsp; * between one thread invoking {@code park} and another thread trying
+<i>61</i>&nbsp; * to {@code unpark} it will preserve liveness, due to the
+<i>62</i>&nbsp; * permit. Additionally, {@code park} will return if the caller&#39;s
+<i>63</i>&nbsp; * thread was interrupted, and timeout versions are supported. The
+<i>64</i>&nbsp; * {@code park} method may also return at any other time, for &quot;no
+<i>65</i>&nbsp; * reason&quot;, so in general must be invoked within a loop that rechecks
+<i>66</i>&nbsp; * conditions upon return. In this sense {@code park} serves as an
+<i>67</i>&nbsp; * optimization of a &quot;busy wait&quot; that does not waste as much time
+<i>68</i>&nbsp; * spinning, but must be paired with an {@code unpark} to be
+<i>69</i>&nbsp; * effective.
+<i>70</i>&nbsp; *
+<i>71</i>&nbsp; * &lt;p&gt;The three forms of {@code park} each also support a
+<i>72</i>&nbsp; * {@code blocker} object parameter. This object is recorded while
+<i>73</i>&nbsp; * the thread is blocked to permit monitoring and diagnostic tools to
+<i>74</i>&nbsp; * identify the reasons that threads are blocked. (Such tools may
+<i>75</i>&nbsp; * access blockers using method {@link #getBlocker(Thread)}.)
+<i>76</i>&nbsp; * The use of these forms rather than the original forms without this
+<i>77</i>&nbsp; * parameter is strongly encouraged. The normal argument to supply as
+<i>78</i>&nbsp; * a {@code blocker} within a lock implementation is {@code this}.
+<i>79</i>&nbsp; *
+<i>80</i>&nbsp; * &lt;p&gt;These methods are designed to be used as tools for creating
+<i>81</i>&nbsp; * higher-level synchronization utilities, and are not in themselves
+<i>82</i>&nbsp; * useful for most concurrency control applications.  The {@code park}
+<i>83</i>&nbsp; * method is designed for use only in constructions of the form:
+<i>84</i>&nbsp; *
+<i>85</i>&nbsp; * &lt;pre&gt; {@code
+<i>86</i>&nbsp; * while (!canProceed()) {
+<i>87</i>&nbsp; *   // ensure request to unpark is visible to other threads
+<i>88</i>&nbsp; *   ...
+<i>89</i>&nbsp; *   LockSupport.park(this);
+<i>90</i>&nbsp; * }}&lt;/pre&gt;
+<i>91</i>&nbsp; *
+<i>92</i>&nbsp; * where no actions by the thread publishing a request to unpark,
+<i>93</i>&nbsp; * prior to the call to {@code park}, entail locking or blocking.
+<i>94</i>&nbsp; * Because only one permit is associated with each thread, any
+<i>95</i>&nbsp; * intermediary uses of {@code park}, including implicitly via class
+<i>96</i>&nbsp; * loading, could lead to an unresponsive thread (a &quot;lost unpark&quot;).
+<i>97</i>&nbsp; *
+<i>98</i>&nbsp; * &lt;p&gt;&lt;b&gt;Sample Usage.&lt;/b&gt; Here is a sketch of a first-in-first-out
+<i>99</i>&nbsp; * non-reentrant lock class:
+<i>100</i>&nbsp; * &lt;pre&gt; {@code
+<i>101</i>&nbsp; * class FIFOMutex {
+<i>102</i>&nbsp; *   private final AtomicBoolean locked = new AtomicBoolean(false);
+<i>103</i>&nbsp; *   private final Queue&lt;Thread&gt; waiters
+<i>104</i>&nbsp; *     = new ConcurrentLinkedQueue&lt;&gt;();
+<i>105</i>&nbsp; *
+<i>106</i>&nbsp; *   public void lock() {
+<i>107</i>&nbsp; *     boolean wasInterrupted = false;
+<i>108</i>&nbsp; *     // publish current thread for unparkers
+<i>109</i>&nbsp; *     waiters.add(Thread.currentThread());
+<i>110</i>&nbsp; *
+<i>111</i>&nbsp; *     // Block while not first in queue or cannot acquire lock
+<i>112</i>&nbsp; *     while (waiters.peek() != Thread.currentThread() ||
+<i>113</i>&nbsp; *            !locked.compareAndSet(false, true)) {
+<i>114</i>&nbsp; *       LockSupport.park(this);
+<i>115</i>&nbsp; *       // ignore interrupts while waiting
+<i>116</i>&nbsp; *       if (Thread.interrupted())
+<i>117</i>&nbsp; *         wasInterrupted = true;
+<i>118</i>&nbsp; *     }
+<i>119</i>&nbsp; *
+<i>120</i>&nbsp; *     waiters.remove();
+<b class="nc"><i>121</i>&nbsp; *     // ensure correct interrupt status on return</b>
+<i>122</i>&nbsp; *     if (wasInterrupted)
+<i>123</i>&nbsp; *       Thread.currentThread().interrupt();
+<i>124</i>&nbsp; *   }
+<b class="nc"><i>125</i>&nbsp; *</b>
+<i>126</i>&nbsp; *   public void unlock() {
+<i>127</i>&nbsp; *     locked.set(false);
+<i>128</i>&nbsp; *     LockSupport.unpark(waiters.peek());
+<i>129</i>&nbsp; *   }
+<i>130</i>&nbsp; *
+<i>131</i>&nbsp; *   static {
+<i>132</i>&nbsp; *     // Reduce the risk of &quot;lost unpark&quot; due to classloading
+<i>133</i>&nbsp; *     Class&lt;?&gt; ensureLoaded = LockSupport.class;
+<i>134</i>&nbsp; *   }
+<i>135</i>&nbsp; * }}&lt;/pre&gt;
+<i>136</i>&nbsp; *
+<i>137</i>&nbsp; * @since 1.5
+<i>138</i>&nbsp; */
+<i>139</i>&nbsp;public class LockSupport {
+<b class="nc"><i>140</i>&nbsp;    private LockSupport() {} // Cannot be instantiated.</b>
+<b class="nc"><i>141</i>&nbsp;</b>
+<i>142</i>&nbsp;    private static void setBlocker(Thread t, Object arg) {
+<i>143</i>&nbsp;        // Even though volatile, hotspot doesn&#39;t need a write barrier here.
+<i>144</i>&nbsp;        U.putObject(t, PARKBLOCKER, arg);
+<i>145</i>&nbsp;    }
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;    /**
+<i>148</i>&nbsp;     * Makes available the permit for the given thread, if it
+<i>149</i>&nbsp;     * was not already available.  If the thread was blocked on
+<i>150</i>&nbsp;     * {@code park} then it will unblock.  Otherwise, its next call
+<i>151</i>&nbsp;     * to {@code park} is guaranteed not to block. This operation
+<i>152</i>&nbsp;     * is not guaranteed to have any effect at all if the given
+<i>153</i>&nbsp;     * thread has not been started.
+<i>154</i>&nbsp;     *
+<i>155</i>&nbsp;     * @param thread the thread to unpark, or {@code null}, in which case
+<i>156</i>&nbsp;     *        this operation has no effect
+<i>157</i>&nbsp;     */
+<i>158</i>&nbsp;    public static void unpark(Thread thread) {
+<i>159</i>&nbsp;        if (thread != null)
+<i>160</i>&nbsp;            U.unpark(thread);
+<i>161</i>&nbsp;    }
+<i>162</i>&nbsp;
+<i>163</i>&nbsp;    /**
+<i>164</i>&nbsp;     * Disables the current thread for thread scheduling purposes unless the
+<i>165</i>&nbsp;     * permit is available.
+<i>166</i>&nbsp;     *
+<i>167</i>&nbsp;     * &lt;p&gt;If the permit is available then it is consumed and the call returns
+<i>168</i>&nbsp;     * immediately; otherwise
+<i>169</i>&nbsp;     * the current thread becomes disabled for thread scheduling
+<i>170</i>&nbsp;     * purposes and lies dormant until one of three things happens:
+<i>171</i>&nbsp;     *
+<i>172</i>&nbsp;     * &lt;ul&gt;
+<b class="nc"><i>173</i>&nbsp;     * &lt;li&gt;Some other thread invokes {@link #unpark unpark} with the</b>
+<b class="nc"><i>174</i>&nbsp;     * current thread as the target; or</b>
+<b class="nc"><i>175</i>&nbsp;     *</b>
+<b class="nc"><i>176</i>&nbsp;     * &lt;li&gt;Some other thread {@linkplain Thread#interrupt interrupts}</b>
+<i>177</i>&nbsp;     * the current thread; or
+<i>178</i>&nbsp;     *
+<i>179</i>&nbsp;     * &lt;li&gt;The call spuriously (that is, for no reason) returns.
+<i>180</i>&nbsp;     * &lt;/ul&gt;
+<i>181</i>&nbsp;     *
+<i>182</i>&nbsp;     * &lt;p&gt;This method does &lt;em&gt;not&lt;/em&gt; report which of these caused the
+<i>183</i>&nbsp;     * method to return. Callers should re-check the conditions which caused
+<i>184</i>&nbsp;     * the thread to park in the first place. Callers may also determine,
+<i>185</i>&nbsp;     * for example, the interrupt status of the thread upon return.
+<i>186</i>&nbsp;     *
+<i>187</i>&nbsp;     * @param blocker the synchronization object responsible for this
+<i>188</i>&nbsp;     *        thread parking
+<i>189</i>&nbsp;     * @since 1.6
+<i>190</i>&nbsp;     */
+<i>191</i>&nbsp;    public static void park(Object blocker) {
+<i>192</i>&nbsp;        Thread t = Thread.currentThread();
+<i>193</i>&nbsp;        setBlocker(t, blocker);
+<i>194</i>&nbsp;        U.park(false, 0L);
+<i>195</i>&nbsp;        setBlocker(t, null);
+<i>196</i>&nbsp;    }
+<i>197</i>&nbsp;
+<i>198</i>&nbsp;    /**
+<i>199</i>&nbsp;     * Disables the current thread for thread scheduling purposes, for up to
+<i>200</i>&nbsp;     * the specified waiting time, unless the permit is available.
+<i>201</i>&nbsp;     *
+<i>202</i>&nbsp;     * &lt;p&gt;If the permit is available then it is consumed and the call
+<i>203</i>&nbsp;     * returns immediately; otherwise the current thread becomes disabled
+<i>204</i>&nbsp;     * for thread scheduling purposes and lies dormant until one of four
+<i>205</i>&nbsp;     * things happens:
+<i>206</i>&nbsp;     *
+<i>207</i>&nbsp;     * &lt;ul&gt;
+<i>208</i>&nbsp;     * &lt;li&gt;Some other thread invokes {@link #unpark unpark} with the
+<i>209</i>&nbsp;     * current thread as the target; or
+<i>210</i>&nbsp;     *
+<i>211</i>&nbsp;     * &lt;li&gt;Some other thread {@linkplain Thread#interrupt interrupts}
+<b class="nc"><i>212</i>&nbsp;     * the current thread; or</b>
+<b class="nc"><i>213</i>&nbsp;     *</b>
+<b class="nc"><i>214</i>&nbsp;     * &lt;li&gt;The specified waiting time elapses; or</b>
+<b class="nc"><i>215</i>&nbsp;     *</b>
+<b class="nc"><i>216</i>&nbsp;     * &lt;li&gt;The call spuriously (that is, for no reason) returns.</b>
+<i>217</i>&nbsp;     * &lt;/ul&gt;
+<i>218</i>&nbsp;     *
+<i>219</i>&nbsp;     * &lt;p&gt;This method does &lt;em&gt;not&lt;/em&gt; report which of these caused the
+<i>220</i>&nbsp;     * method to return. Callers should re-check the conditions which caused
+<i>221</i>&nbsp;     * the thread to park in the first place. Callers may also determine,
+<i>222</i>&nbsp;     * for example, the interrupt status of the thread, or the elapsed time
+<i>223</i>&nbsp;     * upon return.
+<i>224</i>&nbsp;     *
+<i>225</i>&nbsp;     * @param blocker the synchronization object responsible for this
+<i>226</i>&nbsp;     *        thread parking
+<i>227</i>&nbsp;     * @param nanos the maximum number of nanoseconds to wait
+<i>228</i>&nbsp;     * @since 1.6
+<i>229</i>&nbsp;     */
+<i>230</i>&nbsp;    public static void parkNanos(Object blocker, long nanos) {
+<i>231</i>&nbsp;        if (nanos &gt; 0) {
+<i>232</i>&nbsp;            Thread t = Thread.currentThread();
+<i>233</i>&nbsp;            setBlocker(t, blocker);
+<i>234</i>&nbsp;            U.park(false, nanos);
+<i>235</i>&nbsp;            setBlocker(t, null);
+<i>236</i>&nbsp;        }
+<i>237</i>&nbsp;    }
+<i>238</i>&nbsp;
+<i>239</i>&nbsp;    /**
+<i>240</i>&nbsp;     * Disables the current thread for thread scheduling purposes, until
+<i>241</i>&nbsp;     * the specified deadline, unless the permit is available.
+<i>242</i>&nbsp;     *
+<i>243</i>&nbsp;     * &lt;p&gt;If the permit is available then it is consumed and the call
+<i>244</i>&nbsp;     * returns immediately; otherwise the current thread becomes disabled
+<i>245</i>&nbsp;     * for thread scheduling purposes and lies dormant until one of four
+<i>246</i>&nbsp;     * things happens:
+<i>247</i>&nbsp;     *
+<i>248</i>&nbsp;     * &lt;ul&gt;
+<i>249</i>&nbsp;     * &lt;li&gt;Some other thread invokes {@link #unpark unpark} with the
+<i>250</i>&nbsp;     * current thread as the target; or
+<i>251</i>&nbsp;     *
+<i>252</i>&nbsp;     * &lt;li&gt;Some other thread {@linkplain Thread#interrupt interrupts} the
+<i>253</i>&nbsp;     * current thread; or
+<b class="nc"><i>254</i>&nbsp;     *</b>
+<b class="nc"><i>255</i>&nbsp;     * &lt;li&gt;The specified deadline passes; or</b>
+<b class="nc"><i>256</i>&nbsp;     *</b>
+<b class="nc"><i>257</i>&nbsp;     * &lt;li&gt;The call spuriously (that is, for no reason) returns.</b>
+<i>258</i>&nbsp;     * &lt;/ul&gt;
+<i>259</i>&nbsp;     *
+<i>260</i>&nbsp;     * &lt;p&gt;This method does &lt;em&gt;not&lt;/em&gt; report which of these caused the
+<i>261</i>&nbsp;     * method to return. Callers should re-check the conditions which caused
+<i>262</i>&nbsp;     * the thread to park in the first place. Callers may also determine,
+<i>263</i>&nbsp;     * for example, the interrupt status of the thread, or the current time
+<i>264</i>&nbsp;     * upon return.
+<i>265</i>&nbsp;     *
+<i>266</i>&nbsp;     * @param blocker the synchronization object responsible for this
+<i>267</i>&nbsp;     *        thread parking
+<i>268</i>&nbsp;     * @param deadline the absolute time, in milliseconds from the Epoch,
+<i>269</i>&nbsp;     *        to wait until
+<i>270</i>&nbsp;     * @since 1.6
+<i>271</i>&nbsp;     */
+<i>272</i>&nbsp;    public static void parkUntil(Object blocker, long deadline) {
+<b class="nc"><i>273</i>&nbsp;        Thread t = Thread.currentThread();</b>
+<b class="nc"><i>274</i>&nbsp;        setBlocker(t, blocker);</b>
+<b class="nc"><i>275</i>&nbsp;        U.park(true, deadline);</b>
+<i>276</i>&nbsp;        setBlocker(t, null);
+<i>277</i>&nbsp;    }
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;    /**
+<i>280</i>&nbsp;     * Returns the blocker object supplied to the most recent
+<i>281</i>&nbsp;     * invocation of a park method that has not yet unblocked, or null
+<i>282</i>&nbsp;     * if not blocked.  The value returned is just a momentary
+<i>283</i>&nbsp;     * snapshot -- the thread may have since unblocked or blocked on a
+<i>284</i>&nbsp;     * different blocker object.
+<i>285</i>&nbsp;     *
+<i>286</i>&nbsp;     * @param t the thread
+<i>287</i>&nbsp;     * @return the blocker
+<i>288</i>&nbsp;     * @throws NullPointerException if argument is null
+<i>289</i>&nbsp;     * @since 1.6
+<i>290</i>&nbsp;     */
+<i>291</i>&nbsp;    public static Object getBlocker(Thread t) {
+<i>292</i>&nbsp;        if (t == null)
+<i>293</i>&nbsp;            throw new NullPointerException();
+<i>294</i>&nbsp;        return U.getObjectVolatile(t, PARKBLOCKER);
+<i>295</i>&nbsp;    }
+<i>296</i>&nbsp;
+<i>297</i>&nbsp;    /**
+<i>298</i>&nbsp;     * Disables the current thread for thread scheduling purposes unless the
+<i>299</i>&nbsp;     * permit is available.
+<i>300</i>&nbsp;     *
+<i>301</i>&nbsp;     * &lt;p&gt;If the permit is available then it is consumed and the call
+<i>302</i>&nbsp;     * returns immediately; otherwise the current thread becomes disabled
+<i>303</i>&nbsp;     * for thread scheduling purposes and lies dormant until one of three
+<b class="nc"><i>304</i>&nbsp;     * things happens:</b>
+<i>305</i>&nbsp;     *
+<i>306</i>&nbsp;     * &lt;ul&gt;
+<i>307</i>&nbsp;     *
+<i>308</i>&nbsp;     * &lt;li&gt;Some other thread invokes {@link #unpark unpark} with the
+<i>309</i>&nbsp;     * current thread as the target; or
+<i>310</i>&nbsp;     *
+<i>311</i>&nbsp;     * &lt;li&gt;Some other thread {@linkplain Thread#interrupt interrupts}
+<i>312</i>&nbsp;     * the current thread; or
+<i>313</i>&nbsp;     *
+<i>314</i>&nbsp;     * &lt;li&gt;The call spuriously (that is, for no reason) returns.
+<i>315</i>&nbsp;     * &lt;/ul&gt;
+<i>316</i>&nbsp;     *
+<i>317</i>&nbsp;     * &lt;p&gt;This method does &lt;em&gt;not&lt;/em&gt; report which of these caused the
+<i>318</i>&nbsp;     * method to return. Callers should re-check the conditions which caused
+<i>319</i>&nbsp;     * the thread to park in the first place. Callers may also determine,
+<i>320</i>&nbsp;     * for example, the interrupt status of the thread upon return.
+<i>321</i>&nbsp;     */
+<i>322</i>&nbsp;    public static void park() {
+<i>323</i>&nbsp;        U.park(false, 0L);
+<i>324</i>&nbsp;    }
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;    /**
+<i>327</i>&nbsp;     * Disables the current thread for thread scheduling purposes, for up to
+<i>328</i>&nbsp;     * the specified waiting time, unless the permit is available.
+<i>329</i>&nbsp;     *
+<i>330</i>&nbsp;     * &lt;p&gt;If the permit is available then it is consumed and the call
+<i>331</i>&nbsp;     * returns immediately; otherwise the current thread becomes disabled
+<i>332</i>&nbsp;     * for thread scheduling purposes and lies dormant until one of four
+<i>333</i>&nbsp;     * things happens:
+<i>334</i>&nbsp;     *
+<i>335</i>&nbsp;     * &lt;ul&gt;
+<i>336</i>&nbsp;     * &lt;li&gt;Some other thread invokes {@link #unpark unpark} with the
+<b class="nc"><i>337</i>&nbsp;     * current thread as the target; or</b>
+<b class="nc"><i>338</i>&nbsp;     *</b>
+<i>339</i>&nbsp;     * &lt;li&gt;Some other thread {@linkplain Thread#interrupt interrupts}
+<i>340</i>&nbsp;     * the current thread; or
+<i>341</i>&nbsp;     *
+<i>342</i>&nbsp;     * &lt;li&gt;The specified waiting time elapses; or
+<i>343</i>&nbsp;     *
+<i>344</i>&nbsp;     * &lt;li&gt;The call spuriously (that is, for no reason) returns.
+<i>345</i>&nbsp;     * &lt;/ul&gt;
+<i>346</i>&nbsp;     *
+<i>347</i>&nbsp;     * &lt;p&gt;This method does &lt;em&gt;not&lt;/em&gt; report which of these caused the
+<i>348</i>&nbsp;     * method to return. Callers should re-check the conditions which caused
+<i>349</i>&nbsp;     * the thread to park in the first place. Callers may also determine,
+<i>350</i>&nbsp;     * for example, the interrupt status of the thread, or the elapsed time
+<i>351</i>&nbsp;     * upon return.
+<i>352</i>&nbsp;     *
+<i>353</i>&nbsp;     * @param nanos the maximum number of nanoseconds to wait
+<i>354</i>&nbsp;     */
+<i>355</i>&nbsp;    public static void parkNanos(long nanos) {
+<i>356</i>&nbsp;        if (nanos &gt; 0)
+<i>357</i>&nbsp;            U.park(false, nanos);
+<i>358</i>&nbsp;    }
+<i>359</i>&nbsp;
+<i>360</i>&nbsp;    /**
+<i>361</i>&nbsp;     * Disables the current thread for thread scheduling purposes, until
+<i>362</i>&nbsp;     * the specified deadline, unless the permit is available.
+<i>363</i>&nbsp;     *
+<i>364</i>&nbsp;     * &lt;p&gt;If the permit is available then it is consumed and the call
+<i>365</i>&nbsp;     * returns immediately; otherwise the current thread becomes disabled
+<i>366</i>&nbsp;     * for thread scheduling purposes and lies dormant until one of four
+<i>367</i>&nbsp;     * things happens:
+<i>368</i>&nbsp;     *
+<i>369</i>&nbsp;     * &lt;ul&gt;
+<i>370</i>&nbsp;     * &lt;li&gt;Some other thread invokes {@link #unpark unpark} with the
+<i>371</i>&nbsp;     * current thread as the target; or
+<b class="nc"><i>372</i>&nbsp;     *</b>
+<i>373</i>&nbsp;     * &lt;li&gt;Some other thread {@linkplain Thread#interrupt interrupts}
+<i>374</i>&nbsp;     * the current thread; or
+<i>375</i>&nbsp;     *
+<i>376</i>&nbsp;     * &lt;li&gt;The specified deadline passes; or
+<i>377</i>&nbsp;     *
+<i>378</i>&nbsp;     * &lt;li&gt;The call spuriously (that is, for no reason) returns.
+<i>379</i>&nbsp;     * &lt;/ul&gt;
+<i>380</i>&nbsp;     *
+<b class="nc"><i>381</i>&nbsp;     * &lt;p&gt;This method does &lt;em&gt;not&lt;/em&gt; report which of these caused the</b>
+<b class="nc"><i>382</i>&nbsp;     * method to return. Callers should re-check the conditions which caused</b>
+<b class="nc"><i>383</i>&nbsp;     * the thread to park in the first place. Callers may also determine,</b>
+<b class="nc"><i>384</i>&nbsp;     * for example, the interrupt status of the thread, or the current time</b>
+<b class="nc"><i>385</i>&nbsp;     * upon return.</b>
+<i>386</i>&nbsp;     *
+<b class="nc"><i>387</i>&nbsp;     * @param deadline the absolute time, in milliseconds from the Epoch,</b>
+<b class="nc"><i>388</i>&nbsp;     *        to wait until</b>
+<b class="nc"><i>389</i>&nbsp;     */</b>
+<b class="nc"><i>390</i>&nbsp;    public static void parkUntil(long deadline) {</b>
+<i>391</i>&nbsp;        U.park(true, deadline);
+<i>392</i>&nbsp;    }
+<i>393</i>&nbsp;
+<i>394</i>&nbsp;    /**
+<i>395</i>&nbsp;     * Returns the pseudo-randomly initialized or updated secondary seed.
+<i>396</i>&nbsp;     * Copied from ThreadLocalRandom due to package access restrictions.
+<i>397</i>&nbsp;     */
+<i>398</i>&nbsp;    static final int nextSecondarySeed() {
+<i>399</i>&nbsp;        int r;
+<i>400</i>&nbsp;        Thread t = Thread.currentThread();
+<b class="nc"><i>401</i>&nbsp;        if ((r = U.getInt(t, SECONDARY)) != 0) {</b>
+<b class="nc"><i>402</i>&nbsp;            r ^= r &lt;&lt; 13;   // xorshift</b>
+<b class="nc"><i>403</i>&nbsp;            r ^= r &gt;&gt;&gt; 17;</b>
+<b class="nc"><i>404</i>&nbsp;            r ^= r &lt;&lt; 5;</b>
+<b class="nc"><i>405</i>&nbsp;        }</b>
+<b class="nc"><i>406</i>&nbsp;        else if ((r = java.util.concurrent.ThreadLocalRandom.current().nextInt()) == 0)</b>
+<b class="nc"><i>407</i>&nbsp;            r = 1; // avoid zero</b>
+<b class="nc"><i>408</i>&nbsp;        U.putInt(t, SECONDARY, r);</b>
+<b class="nc"><i>409</i>&nbsp;        return r;</b>
+<b class="nc"><i>410</i>&nbsp;    }</b>
+<b class="nc"><i>411</i>&nbsp;</b>
+<i>412</i>&nbsp;    /**
+<i>413</i>&nbsp;     * Returns the thread id for the given thread.  We must access
+<i>414</i>&nbsp;     * this directly rather than via method Thread.getId() because
+<i>415</i>&nbsp;     * getId() has been known to be overridden in ways that do not
+<i>416</i>&nbsp;     * preserve unique mappings.
+<i>417</i>&nbsp;     */
+<i>418</i>&nbsp;    static final long getThreadId(Thread thread) {
+<i>419</i>&nbsp;        return U.getLong(thread, TID);
+<i>420</i>&nbsp;    }
+<i>421</i>&nbsp;
+<i>422</i>&nbsp;    // Hotspot implementation via intrinsics API
+<i>423</i>&nbsp;    private static final Unsafe U = Unsafe.getUnsafe();
+<i>424</i>&nbsp;    private static final long PARKBLOCKER = U.objectFieldOffset
+<i>425</i>&nbsp;            (Thread.class, &quot;parkBlocker&quot;);
+<i>426</i>&nbsp;    private static final long SECONDARY = U.objectFieldOffset
+<i>427</i>&nbsp;            (Thread.class, &quot;threadLocalRandomSecondarySeed&quot;);
+<i>428</i>&nbsp;    private static final long TID = U.objectFieldOffset
+<i>429</i>&nbsp;            (Thread.class, &quot;tid&quot;);
+<i>430</i>&nbsp;
+<i>431</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

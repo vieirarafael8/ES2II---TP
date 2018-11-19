@@ -1,0 +1,566 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ExchangeImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.net.httpserver</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ExchangeImpl (sun.net.httpserver)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ExchangeImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 29)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 160)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">ExchangeImpl$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 31)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 164)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.net.httpserver;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.*;
+<i>29</i>&nbsp;import java.net.*;
+<i>30</i>&nbsp;import javax.net.ssl.*;
+<i>31</i>&nbsp;import java.util.*;
+<i>32</i>&nbsp;import java.lang.System.Logger;
+<i>33</i>&nbsp;import java.lang.System.Logger.Level;
+<i>34</i>&nbsp;import java.text.*;
+<i>35</i>&nbsp;import com.sun.net.httpserver.*;
+<b class="nc"><i>36</i>&nbsp;</b>
+<i>37</i>&nbsp;class ExchangeImpl {
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;    Headers reqHdrs, rspHdrs;
+<i>40</i>&nbsp;    Request req;
+<i>41</i>&nbsp;    String method;
+<i>42</i>&nbsp;    boolean writefinished;
+<i>43</i>&nbsp;    URI uri;
+<i>44</i>&nbsp;    HttpConnection connection;
+<i>45</i>&nbsp;    long reqContentLen;
+<i>46</i>&nbsp;    long rspContentLen;
+<i>47</i>&nbsp;    /* raw streams which access the socket directly */
+<i>48</i>&nbsp;    InputStream ris;
+<i>49</i>&nbsp;    OutputStream ros;
+<i>50</i>&nbsp;    Thread thread;
+<i>51</i>&nbsp;    /* close the underlying connection when this exchange finished */
+<i>52</i>&nbsp;    boolean close;
+<b class="nc"><i>53</i>&nbsp;    boolean closed;</b>
+<i>54</i>&nbsp;    boolean http10 = false;
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;    /* for formatting the Date: header */
+<b class="nc"><i>57</i>&nbsp;    private static final String pattern = &quot;EEE, dd MMM yyyy HH:mm:ss zzz&quot;;</b>
+<b class="nc"><i>58</i>&nbsp;    private static final TimeZone gmtTZ = TimeZone.getTimeZone(&quot;GMT&quot;);</b>
+<b class="nc"><i>59</i>&nbsp;    private static final ThreadLocal&lt;DateFormat&gt; dateFormat =</b>
+<i>60</i>&nbsp;         new ThreadLocal&lt;DateFormat&gt;() {
+<b class="nc"><i>61</i>&nbsp;             @Override protected DateFormat initialValue() {</b>
+<b class="nc"><i>62</i>&nbsp;                 DateFormat df = new SimpleDateFormat(pattern, Locale.US);</b>
+<b class="nc"><i>63</i>&nbsp;                 df.setTimeZone(gmtTZ);</b>
+<i>64</i>&nbsp;                 return df;
+<i>65</i>&nbsp;         }
+<i>66</i>&nbsp;     };
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    private static final String HEAD = &quot;HEAD&quot;;
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    /* streams which take care of the HTTP protocol framing
+<i>71</i>&nbsp;     * and are passed up to higher layers
+<i>72</i>&nbsp;     */
+<i>73</i>&nbsp;    InputStream uis;
+<i>74</i>&nbsp;    OutputStream uos;
+<i>75</i>&nbsp;    LeftOverInputStream uis_orig; // uis may have be a user supplied wrapper
+<i>76</i>&nbsp;    PlaceholderOutputStream uos_orig;
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    boolean sentHeaders; /* true after response headers sent */
+<b class="nc"><i>79</i>&nbsp;    Map&lt;String,Object&gt; attributes;</b>
+<i>80</i>&nbsp;    int rcode = -1;
+<i>81</i>&nbsp;    HttpPrincipal principal;
+<i>82</i>&nbsp;    ServerImpl server;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    ExchangeImpl (
+<b class="nc"><i>85</i>&nbsp;        String m, URI u, Request req, long len, HttpConnection connection</b>
+<b class="nc"><i>86</i>&nbsp;    ) throws IOException {</b>
+<b class="nc"><i>87</i>&nbsp;        this.req = req;</b>
+<b class="nc"><i>88</i>&nbsp;        this.reqHdrs = req.headers();</b>
+<b class="nc"><i>89</i>&nbsp;        this.rspHdrs = new Headers();</b>
+<b class="nc"><i>90</i>&nbsp;        this.method = m;</b>
+<b class="nc"><i>91</i>&nbsp;        this.uri = u;</b>
+<b class="nc"><i>92</i>&nbsp;        this.connection = connection;</b>
+<i>93</i>&nbsp;        this.reqContentLen = len;
+<b class="nc"><i>94</i>&nbsp;        /* ros only used for headers, body written directly to stream */</b>
+<b class="nc"><i>95</i>&nbsp;        this.ros = req.outputStream();</b>
+<b class="nc"><i>96</i>&nbsp;        this.ris = req.inputStream();</b>
+<b class="nc"><i>97</i>&nbsp;        server = getServerImpl();</b>
+<i>98</i>&nbsp;        server.startExchange();
+<i>99</i>&nbsp;    }
+<i>100</i>&nbsp;
+<b class="nc"><i>101</i>&nbsp;    public Headers getRequestHeaders () {</b>
+<i>102</i>&nbsp;        return new UnmodifiableHeaders (reqHdrs);
+<i>103</i>&nbsp;    }
+<i>104</i>&nbsp;
+<b class="nc"><i>105</i>&nbsp;    public Headers getResponseHeaders () {</b>
+<i>106</i>&nbsp;        return rspHdrs;
+<i>107</i>&nbsp;    }
+<i>108</i>&nbsp;
+<b class="nc"><i>109</i>&nbsp;    public URI getRequestURI () {</b>
+<i>110</i>&nbsp;        return uri;
+<i>111</i>&nbsp;    }
+<i>112</i>&nbsp;
+<b class="nc"><i>113</i>&nbsp;    public String getRequestMethod (){</b>
+<i>114</i>&nbsp;        return method;
+<i>115</i>&nbsp;    }
+<i>116</i>&nbsp;
+<b class="nc"><i>117</i>&nbsp;    public HttpContextImpl getHttpContext (){</b>
+<i>118</i>&nbsp;        return connection.getHttpContext();
+<i>119</i>&nbsp;    }
+<i>120</i>&nbsp;
+<b class="nc"><i>121</i>&nbsp;    private boolean isHeadRequest() {</b>
+<i>122</i>&nbsp;        return HEAD.equals(getRequestMethod());
+<i>123</i>&nbsp;    }
+<i>124</i>&nbsp;
+<b class="nc"><i>125</i>&nbsp;    public void close () {</b>
+<i>126</i>&nbsp;        if (closed) {
+<i>127</i>&nbsp;            return;
+<b class="nc"><i>128</i>&nbsp;        }</b>
+<i>129</i>&nbsp;        closed = true;
+<i>130</i>&nbsp;
+<i>131</i>&nbsp;        /* close the underlying connection if,
+<i>132</i>&nbsp;         * a) the streams not set up yet, no response can be sent, or
+<i>133</i>&nbsp;         * b) if the wrapper output stream is not set up, or
+<i>134</i>&nbsp;         * c) if the close of the input/outpu stream fails
+<i>135</i>&nbsp;         */
+<b class="nc"><i>136</i>&nbsp;        try {</b>
+<b class="nc"><i>137</i>&nbsp;            if (uis_orig == null || uos == null) {</b>
+<i>138</i>&nbsp;                connection.close();
+<i>139</i>&nbsp;                return;
+<b class="nc"><i>140</i>&nbsp;            }</b>
+<b class="nc"><i>141</i>&nbsp;            if (!uos_orig.isWrapped()) {</b>
+<i>142</i>&nbsp;                connection.close();
+<i>143</i>&nbsp;                return;
+<b class="nc"><i>144</i>&nbsp;            }</b>
+<b class="nc"><i>145</i>&nbsp;            if (!uis_orig.isClosed()) {</b>
+<i>146</i>&nbsp;                uis_orig.close();
+<b class="nc"><i>147</i>&nbsp;            }</b>
+<b class="nc"><i>148</i>&nbsp;            uos.close();</b>
+<b class="nc"><i>149</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>150</i>&nbsp;            connection.close();</b>
+<i>151</i>&nbsp;        }
+<i>152</i>&nbsp;    }
+<i>153</i>&nbsp;
+<b class="nc"><i>154</i>&nbsp;    public InputStream getRequestBody () {</b>
+<b class="nc"><i>155</i>&nbsp;        if (uis != null) {</b>
+<i>156</i>&nbsp;            return uis;
+<b class="nc"><i>157</i>&nbsp;        }</b>
+<b class="nc"><i>158</i>&nbsp;        if (reqContentLen == -1L) {</b>
+<b class="nc"><i>159</i>&nbsp;            uis_orig = new ChunkedInputStream (this, ris);</b>
+<i>160</i>&nbsp;            uis = uis_orig;
+<b class="nc"><i>161</i>&nbsp;        } else {</b>
+<b class="nc"><i>162</i>&nbsp;            uis_orig = new FixedLengthInputStream (this, ris, reqContentLen);</b>
+<i>163</i>&nbsp;            uis = uis_orig;
+<b class="nc"><i>164</i>&nbsp;        }</b>
+<i>165</i>&nbsp;        return uis;
+<i>166</i>&nbsp;    }
+<i>167</i>&nbsp;
+<b class="nc"><i>168</i>&nbsp;    LeftOverInputStream getOriginalInputStream () {</b>
+<i>169</i>&nbsp;        return uis_orig;
+<i>170</i>&nbsp;    }
+<i>171</i>&nbsp;
+<b class="nc"><i>172</i>&nbsp;    public int getResponseCode () {</b>
+<i>173</i>&nbsp;        return rcode;
+<i>174</i>&nbsp;    }
+<i>175</i>&nbsp;
+<i>176</i>&nbsp;    public OutputStream getResponseBody () {
+<i>177</i>&nbsp;        /* TODO. Change spec to remove restriction below. Filters
+<i>178</i>&nbsp;         * cannot work with this restriction
+<i>179</i>&nbsp;         *
+<i>180</i>&nbsp;         * if (!sentHeaders) {
+<i>181</i>&nbsp;         *    throw new IllegalStateException (&quot;headers not sent&quot;);
+<i>182</i>&nbsp;         * }
+<b class="nc"><i>183</i>&nbsp;         */</b>
+<b class="nc"><i>184</i>&nbsp;        if (uos == null) {</b>
+<b class="nc"><i>185</i>&nbsp;            uos_orig = new PlaceholderOutputStream (null);</b>
+<i>186</i>&nbsp;            uos = uos_orig;
+<b class="nc"><i>187</i>&nbsp;        }</b>
+<i>188</i>&nbsp;        return uos;
+<i>189</i>&nbsp;    }
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;
+<i>192</i>&nbsp;    /* returns the place holder stream, which is the stream
+<i>193</i>&nbsp;     * returned from the 1st call to getResponseBody()
+<i>194</i>&nbsp;     * The &quot;real&quot; ouputstream is then placed inside this
+<i>195</i>&nbsp;     */
+<b class="nc"><i>196</i>&nbsp;    PlaceholderOutputStream getPlaceholderResponseBody () {</b>
+<b class="nc"><i>197</i>&nbsp;        getResponseBody();</b>
+<i>198</i>&nbsp;        return uos_orig;
+<i>199</i>&nbsp;    }
+<i>200</i>&nbsp;
+<i>201</i>&nbsp;    public void sendResponseHeaders (int rCode, long contentLen)
+<i>202</i>&nbsp;    throws IOException
+<b class="nc"><i>203</i>&nbsp;    {</b>
+<b class="nc"><i>204</i>&nbsp;        if (sentHeaders) {</b>
+<i>205</i>&nbsp;            throw new IOException (&quot;headers already sent&quot;);
+<b class="nc"><i>206</i>&nbsp;        }</b>
+<b class="nc"><i>207</i>&nbsp;        this.rcode = rCode;</b>
+<b class="nc"><i>208</i>&nbsp;        String statusLine = &quot;HTTP/1.1 &quot;+rCode+Code.msg(rCode)+&quot;\r\n&quot;;</b>
+<b class="nc"><i>209</i>&nbsp;        OutputStream tmpout = new BufferedOutputStream (ros);</b>
+<b class="nc"><i>210</i>&nbsp;        PlaceholderOutputStream o = getPlaceholderResponseBody();</b>
+<b class="nc"><i>211</i>&nbsp;        tmpout.write (bytes(statusLine, 0), 0, statusLine.length());</b>
+<b class="nc"><i>212</i>&nbsp;        boolean noContentToSend = false; // assume there is content</b>
+<i>213</i>&nbsp;        rspHdrs.set (&quot;Date&quot;, dateFormat.get().format (new Date()));
+<i>214</i>&nbsp;
+<i>215</i>&nbsp;        /* check for response type that is not allowed to send a body */
+<b class="nc"><i>216</i>&nbsp;</b>
+<i>217</i>&nbsp;        if ((rCode&gt;=100 &amp;&amp; rCode &lt;200) /* informational */
+<i>218</i>&nbsp;            ||(rCode == 204)           /* no content */
+<i>219</i>&nbsp;            ||(rCode == 304))          /* not modified */
+<b class="nc"><i>220</i>&nbsp;        {</b>
+<b class="nc"><i>221</i>&nbsp;            if (contentLen != -1) {</b>
+<b class="nc"><i>222</i>&nbsp;                Logger logger = server.getLogger();</b>
+<i>223</i>&nbsp;                String msg = &quot;sendResponseHeaders: rCode = &quot;+ rCode
+<b class="nc"><i>224</i>&nbsp;                    + &quot;: forcing contentLen = -1&quot;;</b>
+<i>225</i>&nbsp;                logger.log (Level.WARNING, msg);
+<b class="nc"><i>226</i>&nbsp;            }</b>
+<i>227</i>&nbsp;            contentLen = -1;
+<i>228</i>&nbsp;        }
+<b class="nc"><i>229</i>&nbsp;</b>
+<i>230</i>&nbsp;        if (isHeadRequest() || rCode == 304) {
+<i>231</i>&nbsp;            /* HEAD requests or 304 responses should not set a content length by passing it
+<i>232</i>&nbsp;             * through this API, but should instead manually set the required
+<b class="nc"><i>233</i>&nbsp;             * headers.*/</b>
+<b class="nc"><i>234</i>&nbsp;            if (contentLen &gt;= 0) {</b>
+<b class="nc"><i>235</i>&nbsp;                final Logger logger = server.getLogger();</b>
+<i>236</i>&nbsp;                String msg =
+<b class="nc"><i>237</i>&nbsp;                    &quot;sendResponseHeaders: being invoked with a content length for a HEAD request&quot;;</b>
+<i>238</i>&nbsp;                logger.log (Level.WARNING, msg);
+<b class="nc"><i>239</i>&nbsp;            }</b>
+<b class="nc"><i>240</i>&nbsp;            noContentToSend = true;</b>
+<i>241</i>&nbsp;            contentLen = 0;
+<b class="nc"><i>242</i>&nbsp;        } else { /* not a HEAD request or 304 response */</b>
+<b class="nc"><i>243</i>&nbsp;            if (contentLen == 0) {</b>
+<b class="nc"><i>244</i>&nbsp;                if (http10) {</b>
+<b class="nc"><i>245</i>&nbsp;                    o.setWrappedStream (new UndefLengthOutputStream (this, ros));</b>
+<i>246</i>&nbsp;                    close = true;
+<b class="nc"><i>247</i>&nbsp;                } else {</b>
+<b class="nc"><i>248</i>&nbsp;                    rspHdrs.set (&quot;Transfer-encoding&quot;, &quot;chunked&quot;);</b>
+<i>249</i>&nbsp;                    o.setWrappedStream (new ChunkedOutputStream (this, ros));
+<i>250</i>&nbsp;                }
+<b class="nc"><i>251</i>&nbsp;            } else {</b>
+<b class="nc"><i>252</i>&nbsp;                if (contentLen == -1) {</b>
+<b class="nc"><i>253</i>&nbsp;                    noContentToSend = true;</b>
+<i>254</i>&nbsp;                    contentLen = 0;
+<b class="nc"><i>255</i>&nbsp;                }</b>
+<b class="nc"><i>256</i>&nbsp;                rspHdrs.set(&quot;Content-length&quot;, Long.toString(contentLen));</b>
+<i>257</i>&nbsp;                o.setWrappedStream (new FixedLengthOutputStream (this, ros, contentLen));
+<i>258</i>&nbsp;            }
+<b class="nc"><i>259</i>&nbsp;        }</b>
+<b class="nc"><i>260</i>&nbsp;        write (rspHdrs, tmpout);</b>
+<b class="nc"><i>261</i>&nbsp;        this.rspContentLen = contentLen;</b>
+<b class="nc"><i>262</i>&nbsp;        tmpout.flush() ;</b>
+<b class="nc"><i>263</i>&nbsp;        tmpout = null;</b>
+<b class="nc"><i>264</i>&nbsp;        sentHeaders = true;</b>
+<b class="nc"><i>265</i>&nbsp;        if (noContentToSend) {</b>
+<b class="nc"><i>266</i>&nbsp;            WriteFinishedEvent e = new WriteFinishedEvent (this);</b>
+<b class="nc"><i>267</i>&nbsp;            server.addEvent (e);</b>
+<i>268</i>&nbsp;            closed = true;
+<b class="nc"><i>269</i>&nbsp;        }</b>
+<i>270</i>&nbsp;        server.logReply (rCode, req.requestLine(), null);
+<i>271</i>&nbsp;    }
+<i>272</i>&nbsp;
+<b class="nc"><i>273</i>&nbsp;    void write (Headers map, OutputStream os) throws IOException {</b>
+<b class="nc"><i>274</i>&nbsp;        Set&lt;Map.Entry&lt;String,List&lt;String&gt;&gt;&gt; entries = map.entrySet();</b>
+<b class="nc"><i>275</i>&nbsp;        for (Map.Entry&lt;String,List&lt;String&gt;&gt; entry : entries) {</b>
+<i>276</i>&nbsp;            String key = entry.getKey();
+<b class="nc"><i>277</i>&nbsp;            byte[] buf;</b>
+<b class="nc"><i>278</i>&nbsp;            List&lt;String&gt; values = entry.getValue();</b>
+<b class="nc"><i>279</i>&nbsp;            for (String val : values) {</b>
+<b class="nc"><i>280</i>&nbsp;                int i = key.length();</b>
+<b class="nc"><i>281</i>&nbsp;                buf = bytes (key, 2);</b>
+<b class="nc"><i>282</i>&nbsp;                buf[i++] = &#39;:&#39;;</b>
+<b class="nc"><i>283</i>&nbsp;                buf[i++] = &#39; &#39;;</b>
+<b class="nc"><i>284</i>&nbsp;                os.write (buf, 0, i);</b>
+<b class="nc"><i>285</i>&nbsp;                buf = bytes (val, 2);</b>
+<b class="nc"><i>286</i>&nbsp;                i = val.length();</b>
+<b class="nc"><i>287</i>&nbsp;                buf[i++] = &#39;\r&#39;;</b>
+<b class="nc"><i>288</i>&nbsp;                buf[i++] = &#39;\n&#39;;</b>
+<b class="nc"><i>289</i>&nbsp;                os.write (buf, 0, i);</b>
+<b class="nc"><i>290</i>&nbsp;            }</b>
+<b class="nc"><i>291</i>&nbsp;        }</b>
+<b class="nc"><i>292</i>&nbsp;        os.write (&#39;\r&#39;);</b>
+<i>293</i>&nbsp;        os.write (&#39;\n&#39;);
+<i>294</i>&nbsp;    }
+<b class="nc"><i>295</i>&nbsp;</b>
+<i>296</i>&nbsp;    private byte[] rspbuf = new byte [128]; // used by bytes()
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;    /**
+<i>299</i>&nbsp;     * convert string to byte[], using rspbuf
+<i>300</i>&nbsp;     * Make sure that at least &quot;extra&quot; bytes are free at end
+<i>301</i>&nbsp;     * of rspbuf. Reallocate rspbuf if not big enough.
+<i>302</i>&nbsp;     * caller must check return value to see if rspbuf moved
+<i>303</i>&nbsp;     */
+<b class="nc"><i>304</i>&nbsp;    private byte[] bytes (String s, int extra) {</b>
+<b class="nc"><i>305</i>&nbsp;        int slen = s.length();</b>
+<b class="nc"><i>306</i>&nbsp;        if (slen+extra &gt; rspbuf.length) {</b>
+<b class="nc"><i>307</i>&nbsp;            int diff = slen + extra - rspbuf.length;</b>
+<i>308</i>&nbsp;            rspbuf = new byte [2* (rspbuf.length + diff)];
+<b class="nc"><i>309</i>&nbsp;        }</b>
+<b class="nc"><i>310</i>&nbsp;        char c[] = s.toCharArray();</b>
+<b class="nc"><i>311</i>&nbsp;        for (int i=0; i&lt;c.length; i++) {</b>
+<i>312</i>&nbsp;            rspbuf[i] = (byte)c[i];
+<b class="nc"><i>313</i>&nbsp;        }</b>
+<i>314</i>&nbsp;        return rspbuf;
+<i>315</i>&nbsp;    }
+<i>316</i>&nbsp;
+<b class="nc"><i>317</i>&nbsp;    public InetSocketAddress getRemoteAddress (){</b>
+<b class="nc"><i>318</i>&nbsp;        Socket s = connection.getChannel().socket();</b>
+<b class="nc"><i>319</i>&nbsp;        InetAddress ia = s.getInetAddress();</b>
+<b class="nc"><i>320</i>&nbsp;        int port = s.getPort();</b>
+<i>321</i>&nbsp;        return new InetSocketAddress (ia, port);
+<i>322</i>&nbsp;    }
+<i>323</i>&nbsp;
+<b class="nc"><i>324</i>&nbsp;    public InetSocketAddress getLocalAddress (){</b>
+<b class="nc"><i>325</i>&nbsp;        Socket s = connection.getChannel().socket();</b>
+<b class="nc"><i>326</i>&nbsp;        InetAddress ia = s.getLocalAddress();</b>
+<b class="nc"><i>327</i>&nbsp;        int port = s.getLocalPort();</b>
+<i>328</i>&nbsp;        return new InetSocketAddress (ia, port);
+<i>329</i>&nbsp;    }
+<i>330</i>&nbsp;
+<b class="nc"><i>331</i>&nbsp;    public String getProtocol (){</b>
+<b class="nc"><i>332</i>&nbsp;        String reqline = req.requestLine();</b>
+<b class="nc"><i>333</i>&nbsp;        int index = reqline.lastIndexOf (&#39; &#39;);</b>
+<i>334</i>&nbsp;        return reqline.substring (index+1);
+<i>335</i>&nbsp;    }
+<i>336</i>&nbsp;
+<b class="nc"><i>337</i>&nbsp;    public SSLSession getSSLSession () {</b>
+<b class="nc"><i>338</i>&nbsp;        SSLEngine e = connection.getSSLEngine();</b>
+<b class="nc"><i>339</i>&nbsp;        if (e == null) {</b>
+<i>340</i>&nbsp;            return null;
+<b class="nc"><i>341</i>&nbsp;        }</b>
+<i>342</i>&nbsp;        return e.getSession();
+<i>343</i>&nbsp;    }
+<i>344</i>&nbsp;
+<b class="nc"><i>345</i>&nbsp;    public Object getAttribute (String name) {</b>
+<b class="nc"><i>346</i>&nbsp;        if (name == null) {</b>
+<i>347</i>&nbsp;            throw new NullPointerException (&quot;null name parameter&quot;);
+<b class="nc"><i>348</i>&nbsp;        }</b>
+<b class="nc"><i>349</i>&nbsp;        if (attributes == null) {</b>
+<i>350</i>&nbsp;            attributes = getHttpContext().getAttributes();
+<b class="nc"><i>351</i>&nbsp;        }</b>
+<i>352</i>&nbsp;        return attributes.get (name);
+<i>353</i>&nbsp;    }
+<i>354</i>&nbsp;
+<b class="nc"><i>355</i>&nbsp;    public void setAttribute (String name, Object value) {</b>
+<b class="nc"><i>356</i>&nbsp;        if (name == null) {</b>
+<i>357</i>&nbsp;            throw new NullPointerException (&quot;null name parameter&quot;);
+<b class="nc"><i>358</i>&nbsp;        }</b>
+<b class="nc"><i>359</i>&nbsp;        if (attributes == null) {</b>
+<i>360</i>&nbsp;            attributes = getHttpContext().getAttributes();
+<b class="nc"><i>361</i>&nbsp;        }</b>
+<i>362</i>&nbsp;        attributes.put (name, value);
+<i>363</i>&nbsp;    }
+<i>364</i>&nbsp;
+<b class="nc"><i>365</i>&nbsp;    public void setStreams (InputStream i, OutputStream o) {</b>
+<b class="nc"><i>366</i>&nbsp;        assert uis != null;</b>
+<b class="nc"><i>367</i>&nbsp;        if (i != null) {</b>
+<i>368</i>&nbsp;            uis = i;
+<b class="nc"><i>369</i>&nbsp;        }</b>
+<b class="nc"><i>370</i>&nbsp;        if (o != null) {</b>
+<i>371</i>&nbsp;            uos = o;
+<i>372</i>&nbsp;        }
+<i>373</i>&nbsp;    }
+<i>374</i>&nbsp;
+<i>375</i>&nbsp;    /**
+<i>376</i>&nbsp;     * PP
+<i>377</i>&nbsp;     */
+<b class="nc"><i>378</i>&nbsp;    HttpConnection getConnection () {</b>
+<i>379</i>&nbsp;        return connection;
+<i>380</i>&nbsp;    }
+<i>381</i>&nbsp;
+<b class="nc"><i>382</i>&nbsp;    ServerImpl getServerImpl () {</b>
+<i>383</i>&nbsp;        return getHttpContext().getServerImpl();
+<i>384</i>&nbsp;    }
+<i>385</i>&nbsp;
+<b class="nc"><i>386</i>&nbsp;    public HttpPrincipal getPrincipal () {</b>
+<i>387</i>&nbsp;        return principal;
+<i>388</i>&nbsp;    }
+<i>389</i>&nbsp;
+<b class="nc"><i>390</i>&nbsp;    void setPrincipal (HttpPrincipal principal) {</b>
+<i>391</i>&nbsp;        this.principal = principal;
+<i>392</i>&nbsp;    }
+<i>393</i>&nbsp;
+<b class="nc"><i>394</i>&nbsp;    static ExchangeImpl get (HttpExchange t) {</b>
+<b class="nc"><i>395</i>&nbsp;        if (t instanceof HttpExchangeImpl) {</b>
+<i>396</i>&nbsp;            return ((HttpExchangeImpl)t).getExchangeImpl();
+<b class="nc"><i>397</i>&nbsp;        } else {</b>
+<b class="nc"><i>398</i>&nbsp;            assert t instanceof HttpsExchangeImpl;</b>
+<i>399</i>&nbsp;            return ((HttpsExchangeImpl)t).getExchangeImpl();
+<i>400</i>&nbsp;        }
+<i>401</i>&nbsp;    }
+<i>402</i>&nbsp;}
+<i>403</i>&nbsp;
+<i>404</i>&nbsp;/**
+<i>405</i>&nbsp; * An OutputStream which wraps another stream
+<i>406</i>&nbsp; * which is supplied either at creation time, or sometime later.
+<i>407</i>&nbsp; * If a caller/user tries to write to this stream before
+<i>408</i>&nbsp; * the wrapped stream has been provided, then an IOException will
+<i>409</i>&nbsp; * be thrown.
+<i>410</i>&nbsp; */
+<i>411</i>&nbsp;class PlaceholderOutputStream extends java.io.OutputStream {
+<i>412</i>&nbsp;
+<i>413</i>&nbsp;    OutputStream wrapped;
+<i>414</i>&nbsp;
+<i>415</i>&nbsp;    PlaceholderOutputStream (OutputStream os) {
+<i>416</i>&nbsp;        wrapped = os;
+<i>417</i>&nbsp;    }
+<i>418</i>&nbsp;
+<i>419</i>&nbsp;    void setWrappedStream (OutputStream os) {
+<i>420</i>&nbsp;        wrapped = os;
+<i>421</i>&nbsp;    }
+<i>422</i>&nbsp;
+<i>423</i>&nbsp;    boolean isWrapped () {
+<i>424</i>&nbsp;        return wrapped != null;
+<i>425</i>&nbsp;    }
+<i>426</i>&nbsp;
+<i>427</i>&nbsp;    private void checkWrap () throws IOException {
+<i>428</i>&nbsp;        if (wrapped == null) {
+<i>429</i>&nbsp;            throw new IOException (&quot;response headers not sent yet&quot;);
+<i>430</i>&nbsp;        }
+<i>431</i>&nbsp;    }
+<i>432</i>&nbsp;
+<i>433</i>&nbsp;    public void write(int b) throws IOException {
+<i>434</i>&nbsp;        checkWrap();
+<i>435</i>&nbsp;        wrapped.write (b);
+<i>436</i>&nbsp;    }
+<i>437</i>&nbsp;
+<i>438</i>&nbsp;    public void write(byte b[]) throws IOException {
+<i>439</i>&nbsp;        checkWrap();
+<i>440</i>&nbsp;        wrapped.write (b);
+<i>441</i>&nbsp;    }
+<i>442</i>&nbsp;
+<i>443</i>&nbsp;    public void write(byte b[], int off, int len) throws IOException {
+<i>444</i>&nbsp;        checkWrap();
+<i>445</i>&nbsp;        wrapped.write (b, off, len);
+<i>446</i>&nbsp;    }
+<i>447</i>&nbsp;
+<i>448</i>&nbsp;    public void flush() throws IOException {
+<i>449</i>&nbsp;        checkWrap();
+<i>450</i>&nbsp;        wrapped.flush();
+<i>451</i>&nbsp;    }
+<i>452</i>&nbsp;
+<i>453</i>&nbsp;    public void close() throws IOException {
+<i>454</i>&nbsp;        checkWrap();
+<i>455</i>&nbsp;        wrapped.close();
+<i>456</i>&nbsp;    }
+<i>457</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

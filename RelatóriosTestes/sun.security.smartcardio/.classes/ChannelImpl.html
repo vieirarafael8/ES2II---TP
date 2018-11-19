@@ -1,0 +1,375 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ChannelImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.smartcardio</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ChannelImpl (sun.security.smartcardio)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ChannelImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 16)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 130)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2005, 2006, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.smartcardio;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.*;
+<i>29</i>&nbsp;import java.security.AccessController;
+<i>30</i>&nbsp;import java.security.PrivilegedAction;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;import javax.smartcardio.*;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import static sun.security.smartcardio.PCSC.*;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;/**
+<i>37</i>&nbsp; * CardChannel implementation.
+<i>38</i>&nbsp; *
+<i>39</i>&nbsp; * @since   1.6
+<i>40</i>&nbsp; * @author  Andreas Sterbenz
+<i>41</i>&nbsp; */
+<i>42</i>&nbsp;final class ChannelImpl extends CardChannel {
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;    // the card this channel is associated with
+<i>45</i>&nbsp;    private final CardImpl card;
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;    // the channel number, 0 for the basic logical channel
+<i>48</i>&nbsp;    private final int channel;
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;    // whether this channel has been closed. only logical channels can be closed
+<i>51</i>&nbsp;    private volatile boolean isClosed;
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;    ChannelImpl(CardImpl card, int channel) {
+<b class="nc"><i>54</i>&nbsp;        this.card = card;</b>
+<b class="nc"><i>55</i>&nbsp;        this.channel = channel;</b>
+<b class="nc"><i>56</i>&nbsp;    }</b>
+<i>57</i>&nbsp;
+<i>58</i>&nbsp;    void checkClosed() {
+<i>59</i>&nbsp;        card.checkState();
+<b class="nc"><i>60</i>&nbsp;        if (isClosed) {</b>
+<b class="nc"><i>61</i>&nbsp;            throw new IllegalStateException(&quot;Logical channel has been closed&quot;);</b>
+<b class="nc"><i>62</i>&nbsp;        }</b>
+<i>63</i>&nbsp;    }
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    public Card getCard() {
+<i>66</i>&nbsp;        return card;
+<b class="nc"><i>67</i>&nbsp;    }</b>
+<i>68</i>&nbsp;
+<i>69</i>&nbsp;    public int getChannelNumber() {
+<i>70</i>&nbsp;        checkClosed();
+<b class="nc"><i>71</i>&nbsp;        return channel;</b>
+<b class="nc"><i>72</i>&nbsp;    }</b>
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    private static void checkManageChannel(byte[] b) {
+<i>75</i>&nbsp;        if (b.length &lt; 4) {
+<b class="nc"><i>76</i>&nbsp;            throw new IllegalArgumentException</b>
+<b class="nc"><i>77</i>&nbsp;                (&quot;Command APDU must be at least 4 bytes long&quot;);</b>
+<i>78</i>&nbsp;        }
+<i>79</i>&nbsp;        if ((b[0] &gt;= 0) &amp;&amp; (b[1] == 0x70)) {
+<b class="nc"><i>80</i>&nbsp;            throw new IllegalArgumentException</b>
+<b class="nc"><i>81</i>&nbsp;                (&quot;Manage channel command not allowed, use openLogicalChannel()&quot;);</b>
+<i>82</i>&nbsp;        }
+<i>83</i>&nbsp;    }
+<i>84</i>&nbsp;
+<i>85</i>&nbsp;    public ResponseAPDU transmit(CommandAPDU command) throws CardException {
+<i>86</i>&nbsp;        checkClosed();
+<b class="nc"><i>87</i>&nbsp;        card.checkExclusive();</b>
+<b class="nc"><i>88</i>&nbsp;        byte[] commandBytes = command.getBytes();</b>
+<b class="nc"><i>89</i>&nbsp;        byte[] responseBytes = doTransmit(commandBytes);</b>
+<b class="nc"><i>90</i>&nbsp;        return new ResponseAPDU(responseBytes);</b>
+<b class="nc"><i>91</i>&nbsp;    }</b>
+<i>92</i>&nbsp;
+<i>93</i>&nbsp;    public int transmit(ByteBuffer command, ByteBuffer response) throws CardException {
+<i>94</i>&nbsp;        checkClosed();
+<b class="nc"><i>95</i>&nbsp;        card.checkExclusive();</b>
+<b class="nc"><i>96</i>&nbsp;        if ((command == null) || (response == null)) {</b>
+<b class="nc"><i>97</i>&nbsp;            throw new NullPointerException();</b>
+<b class="nc"><i>98</i>&nbsp;        }</b>
+<i>99</i>&nbsp;        if (response.isReadOnly()) {
+<b class="nc"><i>100</i>&nbsp;            throw new ReadOnlyBufferException();</b>
+<b class="nc"><i>101</i>&nbsp;        }</b>
+<i>102</i>&nbsp;        if (command == response) {
+<b class="nc"><i>103</i>&nbsp;            throw new IllegalArgumentException</b>
+<b class="nc"><i>104</i>&nbsp;                    (&quot;command and response must not be the same object&quot;);</b>
+<i>105</i>&nbsp;        }
+<i>106</i>&nbsp;        if (response.remaining() &lt; 258) {
+<b class="nc"><i>107</i>&nbsp;            throw new IllegalArgumentException</b>
+<b class="nc"><i>108</i>&nbsp;                    (&quot;Insufficient space in response buffer&quot;);</b>
+<i>109</i>&nbsp;        }
+<i>110</i>&nbsp;        byte[] commandBytes = new byte[command.remaining()];
+<b class="nc"><i>111</i>&nbsp;        command.get(commandBytes);</b>
+<b class="nc"><i>112</i>&nbsp;        byte[] responseBytes = doTransmit(commandBytes);</b>
+<b class="nc"><i>113</i>&nbsp;        response.put(responseBytes);</b>
+<b class="nc"><i>114</i>&nbsp;        return responseBytes.length;</b>
+<b class="nc"><i>115</i>&nbsp;    }</b>
+<i>116</i>&nbsp;
+<i>117</i>&nbsp;    private final static boolean t0GetResponse =
+<b class="nc"><i>118</i>&nbsp;        getBooleanProperty(&quot;sun.security.smartcardio.t0GetResponse&quot;, true);</b>
+<b class="nc"><i>119</i>&nbsp;</b>
+<i>120</i>&nbsp;    private final static boolean t1GetResponse =
+<b class="nc"><i>121</i>&nbsp;        getBooleanProperty(&quot;sun.security.smartcardio.t1GetResponse&quot;, true);</b>
+<b class="nc"><i>122</i>&nbsp;</b>
+<i>123</i>&nbsp;    private final static boolean t1StripLe =
+<b class="nc"><i>124</i>&nbsp;        getBooleanProperty(&quot;sun.security.smartcardio.t1StripLe&quot;, false);</b>
+<b class="nc"><i>125</i>&nbsp;</b>
+<i>126</i>&nbsp;    private static boolean getBooleanProperty(String name, boolean def) {
+<i>127</i>&nbsp;        String val = AccessController.doPrivileged(
+<b class="nc"><i>128</i>&nbsp;            (PrivilegedAction&lt;String&gt;) () -&gt; System.getProperty(name));</b>
+<b class="nc"><i>129</i>&nbsp;        if (val == null) {</b>
+<b class="nc"><i>130</i>&nbsp;            return def;</b>
+<i>131</i>&nbsp;        }
+<b class="nc"><i>132</i>&nbsp;        if (val.equalsIgnoreCase(&quot;true&quot;)) {</b>
+<b class="nc"><i>133</i>&nbsp;            return true;</b>
+<b class="nc"><i>134</i>&nbsp;        } else if (val.equalsIgnoreCase(&quot;false&quot;)) {</b>
+<b class="nc"><i>135</i>&nbsp;            return false;</b>
+<i>136</i>&nbsp;        } else {
+<b class="nc"><i>137</i>&nbsp;            throw new IllegalArgumentException</b>
+<i>138</i>&nbsp;                (name + &quot; must be either &#39;true&#39; or &#39;false&#39;&quot;);
+<i>139</i>&nbsp;        }
+<i>140</i>&nbsp;    }
+<i>141</i>&nbsp;
+<i>142</i>&nbsp;    private byte[] concat(byte[] b1, byte[] b2, int n2) {
+<b class="nc"><i>143</i>&nbsp;        int n1 = b1.length;</b>
+<b class="nc"><i>144</i>&nbsp;        if ((n1 == 0) &amp;&amp; (n2 == b2.length)) {</b>
+<b class="nc"><i>145</i>&nbsp;            return b2;</b>
+<i>146</i>&nbsp;        }
+<b class="nc"><i>147</i>&nbsp;        byte[] res = new byte[n1 + n2];</b>
+<b class="nc"><i>148</i>&nbsp;        System.arraycopy(b1, 0, res, 0, n1);</b>
+<b class="nc"><i>149</i>&nbsp;        System.arraycopy(b2, 0, res, n1, n2);</b>
+<b class="nc"><i>150</i>&nbsp;        return res;</b>
+<i>151</i>&nbsp;    }
+<i>152</i>&nbsp;
+<b class="nc"><i>153</i>&nbsp;    private final static byte[] B0 = new byte[0];</b>
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    private byte[] doTransmit(byte[] command) throws CardException {
+<i>156</i>&nbsp;        // note that we modify the &#39;command&#39; array in some cases, so it must
+<i>157</i>&nbsp;        // be a copy of the application provided data.
+<i>158</i>&nbsp;        try {
+<b class="nc"><i>159</i>&nbsp;            checkManageChannel(command);</b>
+<b class="nc"><i>160</i>&nbsp;            setChannel(command);</b>
+<b class="nc"><i>161</i>&nbsp;            int n = command.length;</b>
+<b class="nc"><i>162</i>&nbsp;            boolean t0 = card.protocol == SCARD_PROTOCOL_T0;</b>
+<b class="nc"><i>163</i>&nbsp;            boolean t1 = card.protocol == SCARD_PROTOCOL_T1;</b>
+<b class="nc"><i>164</i>&nbsp;            if (t0 &amp;&amp; (n &gt;= 7) &amp;&amp; (command[4] == 0)) {</b>
+<b class="nc"><i>165</i>&nbsp;                throw new CardException</b>
+<i>166</i>&nbsp;                        (&quot;Extended length forms not supported for T=0&quot;);
+<i>167</i>&nbsp;            }
+<b class="nc"><i>168</i>&nbsp;            if ((t0 || (t1 &amp;&amp; t1StripLe)) &amp;&amp; (n &gt;= 7)) {</b>
+<b class="nc"><i>169</i>&nbsp;                int lc = command[4] &amp; 0xff;</b>
+<b class="nc"><i>170</i>&nbsp;                if (lc != 0) {</b>
+<b class="nc"><i>171</i>&nbsp;                    if (n == lc + 6) {</b>
+<b class="nc"><i>172</i>&nbsp;                        n--;</b>
+<i>173</i>&nbsp;                    }
+<i>174</i>&nbsp;                } else {
+<b class="nc"><i>175</i>&nbsp;                    lc = ((command[5] &amp; 0xff) &lt;&lt; 8) | (command[6] &amp; 0xff);</b>
+<b class="nc"><i>176</i>&nbsp;                    if (n == lc + 9) {</b>
+<b class="nc"><i>177</i>&nbsp;                        n -= 2;</b>
+<i>178</i>&nbsp;                    }
+<i>179</i>&nbsp;                }
+<i>180</i>&nbsp;            }
+<b class="nc"><i>181</i>&nbsp;            boolean getresponse = (t0 &amp;&amp; t0GetResponse) || (t1 &amp;&amp; t1GetResponse);</b>
+<b class="nc"><i>182</i>&nbsp;            int k = 0;</b>
+<b class="nc"><i>183</i>&nbsp;            byte[] result = B0;</b>
+<i>184</i>&nbsp;            while (true) {
+<b class="nc"><i>185</i>&nbsp;                if (++k &gt;= 32) {</b>
+<b class="nc"><i>186</i>&nbsp;                    throw new CardException(&quot;Could not obtain response&quot;);</b>
+<i>187</i>&nbsp;                }
+<b class="nc"><i>188</i>&nbsp;                byte[] response = SCardTransmit</b>
+<b class="nc"><i>189</i>&nbsp;                    (card.cardId, card.protocol, command, 0, n);</b>
+<b class="nc"><i>190</i>&nbsp;                int rn = response.length;</b>
+<b class="nc"><i>191</i>&nbsp;                if (getresponse &amp;&amp; (rn &gt;= 2)) {</b>
+<i>192</i>&nbsp;                    // see ISO 7816/2005, 5.1.3
+<b class="nc"><i>193</i>&nbsp;                    if ((rn == 2) &amp;&amp; (response[0] == 0x6c)) {</b>
+<i>194</i>&nbsp;                        // Resend command using SW2 as short Le field
+<b class="nc"><i>195</i>&nbsp;                        command[n - 1] = response[1];</b>
+<b class="nc"><i>196</i>&nbsp;                        continue;</b>
+<i>197</i>&nbsp;                    }
+<b class="nc"><i>198</i>&nbsp;                    if (response[rn - 2] == 0x61) {</b>
+<i>199</i>&nbsp;                        // Issue a GET RESPONSE command with the same CLA
+<i>200</i>&nbsp;                        // using SW2 as short Le field
+<b class="nc"><i>201</i>&nbsp;                        if (rn &gt; 2) {</b>
+<b class="nc"><i>202</i>&nbsp;                            result = concat(result, response, rn - 2);</b>
+<i>203</i>&nbsp;                        }
+<b class="nc"><i>204</i>&nbsp;                        command[1] = (byte)0xC0;</b>
+<b class="nc"><i>205</i>&nbsp;                        command[2] = 0;</b>
+<b class="nc"><i>206</i>&nbsp;                        command[3] = 0;</b>
+<b class="nc"><i>207</i>&nbsp;                        command[4] = response[rn - 1];</b>
+<b class="nc"><i>208</i>&nbsp;                        n = 5;</b>
+<b class="nc"><i>209</i>&nbsp;                        continue;</b>
+<i>210</i>&nbsp;                    }
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;                }
+<b class="nc"><i>213</i>&nbsp;                result = concat(result, response, rn);</b>
+<b class="nc"><i>214</i>&nbsp;                break;</b>
+<i>215</i>&nbsp;            }
+<b class="nc"><i>216</i>&nbsp;            return result;</b>
+<b class="nc"><i>217</i>&nbsp;        } catch (PCSCException e) {</b>
+<b class="nc"><i>218</i>&nbsp;            card.handleError(e);</b>
+<b class="nc"><i>219</i>&nbsp;            throw new CardException(e);</b>
+<i>220</i>&nbsp;        }
+<i>221</i>&nbsp;    }
+<i>222</i>&nbsp;
+<i>223</i>&nbsp;    private static int getSW(byte[] res) throws CardException {
+<b class="nc"><i>224</i>&nbsp;        if (res.length &lt; 2) {</b>
+<b class="nc"><i>225</i>&nbsp;            throw new CardException(&quot;Invalid response length: &quot; + res.length);</b>
+<i>226</i>&nbsp;        }
+<b class="nc"><i>227</i>&nbsp;        int sw1 = res[res.length - 2] &amp; 0xff;</b>
+<b class="nc"><i>228</i>&nbsp;        int sw2 = res[res.length - 1] &amp; 0xff;</b>
+<b class="nc"><i>229</i>&nbsp;        return (sw1 &lt;&lt; 8) | sw2;</b>
+<i>230</i>&nbsp;    }
+<i>231</i>&nbsp;
+<i>232</i>&nbsp;    private static boolean isOK(byte[] res) throws CardException {
+<b class="nc"><i>233</i>&nbsp;        return (res.length == 2) &amp;&amp; (getSW(res) == 0x9000);</b>
+<i>234</i>&nbsp;    }
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;    private void setChannel(byte[] com) {
+<b class="nc"><i>237</i>&nbsp;        int cla = com[0];</b>
+<b class="nc"><i>238</i>&nbsp;        if (cla &lt; 0) {</b>
+<i>239</i>&nbsp;            // proprietary class format, cannot set or check logical channel
+<i>240</i>&nbsp;            // for now, just return
+<i>241</i>&nbsp;            return;
+<i>242</i>&nbsp;        }
+<i>243</i>&nbsp;        // classes 001x xxxx is reserved for future use in ISO, ignore
+<b class="nc"><i>244</i>&nbsp;        if ((cla &amp; 0xe0) == 0x20) {</b>
+<i>245</i>&nbsp;            return;
+<i>246</i>&nbsp;        }
+<i>247</i>&nbsp;        // see ISO 7816/2005, table 2 and 3
+<b class="nc"><i>248</i>&nbsp;        if (channel &lt;= 3) {</b>
+<i>249</i>&nbsp;            // mask of bits 7, 1, 0 (channel number)
+<i>250</i>&nbsp;            // 0xbc == 1011 1100
+<b class="nc"><i>251</i>&nbsp;            com[0] &amp;= 0xbc;</b>
+<b class="nc"><i>252</i>&nbsp;            com[0] |= channel;</b>
+<b class="nc"><i>253</i>&nbsp;        } else if (channel &lt;= 19) {</b>
+<i>254</i>&nbsp;            // mask of bits 7, 3, 2, 1, 0 (channel number)
+<i>255</i>&nbsp;            // 0xbc == 1011 0000
+<b class="nc"><i>256</i>&nbsp;            com[0] &amp;= 0xb0;</b>
+<b class="nc"><i>257</i>&nbsp;            com[0] |= 0x40;</b>
+<b class="nc"><i>258</i>&nbsp;            com[0] |= (channel - 4);</b>
+<i>259</i>&nbsp;        } else {
+<b class="nc"><i>260</i>&nbsp;            throw new RuntimeException(&quot;Unsupported channel number: &quot; + channel);</b>
+<i>261</i>&nbsp;        }
+<i>262</i>&nbsp;    }
+<i>263</i>&nbsp;
+<i>264</i>&nbsp;    public void close() throws CardException {
+<b class="nc"><i>265</i>&nbsp;        if (getChannelNumber() == 0) {</b>
+<b class="nc"><i>266</i>&nbsp;            throw new IllegalStateException(&quot;Cannot close basic logical channel&quot;);</b>
+<i>267</i>&nbsp;        }
+<b class="nc"><i>268</i>&nbsp;        if (isClosed) {</b>
+<i>269</i>&nbsp;            return;
+<i>270</i>&nbsp;        }
+<b class="nc"><i>271</i>&nbsp;        card.checkExclusive();</b>
+<i>272</i>&nbsp;        try {
+<b class="nc"><i>273</i>&nbsp;            byte[] com = new byte[] {0x00, 0x70, (byte)0x80, 0};</b>
+<b class="nc"><i>274</i>&nbsp;            com[3] = (byte)getChannelNumber();</b>
+<b class="nc"><i>275</i>&nbsp;            setChannel(com);</b>
+<b class="nc"><i>276</i>&nbsp;            byte[] res = SCardTransmit(card.cardId, card.protocol, com, 0, com.length);</b>
+<b class="nc"><i>277</i>&nbsp;            if (isOK(res) == false) {</b>
+<b class="nc"><i>278</i>&nbsp;                throw new CardException(&quot;close() failed: &quot; + PCSC.toString(res));</b>
+<i>279</i>&nbsp;            }
+<b class="nc"><i>280</i>&nbsp;        } catch (PCSCException e) {</b>
+<b class="nc"><i>281</i>&nbsp;            card.handleError(e);</b>
+<b class="nc"><i>282</i>&nbsp;            throw new CardException(&quot;Could not close channel&quot;, e);</b>
+<i>283</i>&nbsp;        } finally {
+<b class="nc"><i>284</i>&nbsp;            isClosed = true;</b>
+<b class="nc"><i>285</i>&nbsp;        }</b>
+<i>286</i>&nbsp;    }
+<i>287</i>&nbsp;
+<i>288</i>&nbsp;    public String toString() {
+<b class="nc"><i>289</i>&nbsp;        return &quot;PC/SC channel &quot; + channel;</b>
+<i>290</i>&nbsp;    }
+<i>291</i>&nbsp;
+<i>292</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

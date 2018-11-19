@@ -1,0 +1,453 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: FetcherInfo</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.awt.image</a> ]
+</div>
+
+<h1>Coverage Summary for Class: FetcherInfo (sun.awt.image)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FetcherInfo</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1995, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.awt.image;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.Vector;
+<i>29</i>&nbsp;import sun.awt.AppContext;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;/**
+<i>32</i>&nbsp;  * An ImageFetcher is a thread used to fetch ImageFetchable objects.
+<i>33</i>&nbsp;  * Once an ImageFetchable object has been fetched, the ImageFetcher
+<i>34</i>&nbsp;  * thread may also be used to animate it if necessary, via the
+<i>35</i>&nbsp;  * startingAnimation() / stoppingAnimation() methods.
+<i>36</i>&nbsp;  *
+<i>37</i>&nbsp;  * There can be up to FetcherInfo.MAX_NUM_FETCHERS_PER_APPCONTEXT
+<i>38</i>&nbsp;  * ImageFetcher threads for each AppContext.  A per-AppContext queue
+<i>39</i>&nbsp;  * of ImageFetchables is used to track objects to fetch.
+<i>40</i>&nbsp;  *
+<i>41</i>&nbsp;  * @author Jim Graham
+<i>42</i>&nbsp;  * @author Fred Ecks
+<i>43</i>&nbsp;  */
+<i>44</i>&nbsp;class ImageFetcher extends Thread {
+<i>45</i>&nbsp;    static final int HIGH_PRIORITY = 8;
+<i>46</i>&nbsp;    static final int LOW_PRIORITY = 3;
+<i>47</i>&nbsp;    static final int ANIM_PRIORITY = 2;
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;    static final int TIMEOUT = 5000; // Time in milliseconds to wait for an
+<i>50</i>&nbsp;                                     // ImageFetchable to be added to the
+<i>51</i>&nbsp;                                     // queue before an ImageFetcher dies
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;    /**
+<i>54</i>&nbsp;     * We must only call the 5 args super() constructor passing
+<i>55</i>&nbsp;     * in &quot;false&quot; to indicate to not inherit locals.
+<i>56</i>&nbsp;     */
+<i>57</i>&nbsp;    private ImageFetcher() {
+<i>58</i>&nbsp;        throw new UnsupportedOperationException(&quot;Must erase locals&quot;);
+<i>59</i>&nbsp;    }
+<i>60</i>&nbsp;    /**
+<i>61</i>&nbsp;      * Constructor for ImageFetcher -- only called by add() below.
+<i>62</i>&nbsp;      */
+<i>63</i>&nbsp;    private ImageFetcher(ThreadGroup threadGroup, int index) {
+<i>64</i>&nbsp;        super(threadGroup, null, &quot;Image Fetcher &quot; + index, 0, false);
+<i>65</i>&nbsp;        setDaemon(true);
+<i>66</i>&nbsp;    }
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    /**
+<i>69</i>&nbsp;      * Adds an ImageFetchable to the queue of items to fetch.  Instantiates
+<i>70</i>&nbsp;      * a new ImageFetcher if it&#39;s reasonable to do so.
+<i>71</i>&nbsp;      * If there is no available fetcher to process an ImageFetchable, then
+<i>72</i>&nbsp;      * reports failure to caller.
+<i>73</i>&nbsp;      */
+<i>74</i>&nbsp;    public static boolean add(ImageFetchable src) {
+<i>75</i>&nbsp;        final FetcherInfo info = FetcherInfo.getFetcherInfo();
+<i>76</i>&nbsp;        synchronized(info.waitList) {
+<i>77</i>&nbsp;            if (!info.waitList.contains(src)) {
+<i>78</i>&nbsp;                info.waitList.addElement(src);
+<i>79</i>&nbsp;                if (info.numWaiting == 0 &amp;&amp;
+<i>80</i>&nbsp;                            info.numFetchers &lt; info.fetchers.length) {
+<i>81</i>&nbsp;                    createFetchers(info);
+<i>82</i>&nbsp;                }
+<i>83</i>&nbsp;                /* Creation of new fetcher may fail due to high vm load
+<i>84</i>&nbsp;                 * or some other reason.
+<i>85</i>&nbsp;                 * If there is already exist, but busy, fetcher, we leave
+<i>86</i>&nbsp;                 * the src in queue (it will be handled by existing
+<i>87</i>&nbsp;                 * fetcher later).
+<i>88</i>&nbsp;                 * Otherwise, we report failure: there is no fetcher
+<i>89</i>&nbsp;                 * to handle the src.
+<i>90</i>&nbsp;                 */
+<i>91</i>&nbsp;                if (info.numFetchers &gt; 0) {
+<i>92</i>&nbsp;                    info.waitList.notify();
+<i>93</i>&nbsp;                } else {
+<i>94</i>&nbsp;                    info.waitList.removeElement(src);
+<i>95</i>&nbsp;                    return false;
+<i>96</i>&nbsp;                }
+<i>97</i>&nbsp;            }
+<i>98</i>&nbsp;        }
+<i>99</i>&nbsp;        return true;
+<i>100</i>&nbsp;    }
+<i>101</i>&nbsp;
+<i>102</i>&nbsp;    /**
+<i>103</i>&nbsp;      * Removes an ImageFetchable from the queue of items to fetch.
+<i>104</i>&nbsp;      */
+<i>105</i>&nbsp;    public static void remove(ImageFetchable src) {
+<i>106</i>&nbsp;        final FetcherInfo info = FetcherInfo.getFetcherInfo();
+<i>107</i>&nbsp;        synchronized(info.waitList) {
+<i>108</i>&nbsp;            if (info.waitList.contains(src)) {
+<i>109</i>&nbsp;                info.waitList.removeElement(src);
+<i>110</i>&nbsp;            }
+<i>111</i>&nbsp;        }
+<i>112</i>&nbsp;    }
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    /**
+<i>115</i>&nbsp;      * Checks to see if the given thread is one of the ImageFetchers.
+<i>116</i>&nbsp;      */
+<i>117</i>&nbsp;    public static boolean isFetcher(Thread t) {
+<i>118</i>&nbsp;        final FetcherInfo info = FetcherInfo.getFetcherInfo();
+<i>119</i>&nbsp;        synchronized(info.waitList) {
+<i>120</i>&nbsp;            for (int i = 0; i &lt; info.fetchers.length; i++) {
+<i>121</i>&nbsp;                if (info.fetchers[i] == t) {
+<i>122</i>&nbsp;                    return true;
+<i>123</i>&nbsp;                }
+<i>124</i>&nbsp;            }
+<i>125</i>&nbsp;        }
+<i>126</i>&nbsp;        return false;
+<i>127</i>&nbsp;    }
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    /**
+<i>130</i>&nbsp;      * Checks to see if the current thread is one of the ImageFetchers.
+<i>131</i>&nbsp;      */
+<i>132</i>&nbsp;    public static boolean amFetcher() {
+<i>133</i>&nbsp;        return isFetcher(Thread.currentThread());
+<i>134</i>&nbsp;    }
+<i>135</i>&nbsp;
+<i>136</i>&nbsp;    /**
+<i>137</i>&nbsp;      * Returns the next ImageFetchable to be processed.  If TIMEOUT
+<i>138</i>&nbsp;      * elapses in the mean time, or if the ImageFetcher is interrupted,
+<i>139</i>&nbsp;      * null is returned.
+<i>140</i>&nbsp;      */
+<i>141</i>&nbsp;    private static ImageFetchable nextImage() {
+<i>142</i>&nbsp;        final FetcherInfo info = FetcherInfo.getFetcherInfo();
+<i>143</i>&nbsp;        synchronized(info.waitList) {
+<i>144</i>&nbsp;            ImageFetchable src = null;
+<i>145</i>&nbsp;            long end = System.currentTimeMillis() + TIMEOUT;
+<i>146</i>&nbsp;            while (src == null) {
+<i>147</i>&nbsp;                while (info.waitList.size() == 0) {
+<i>148</i>&nbsp;                    long now = System.currentTimeMillis();
+<i>149</i>&nbsp;                    if (now &gt;= end) {
+<i>150</i>&nbsp;                        return null;
+<i>151</i>&nbsp;                    }
+<i>152</i>&nbsp;                    try {
+<i>153</i>&nbsp;                        info.numWaiting++;
+<i>154</i>&nbsp;                        info.waitList.wait(end - now);
+<i>155</i>&nbsp;                    } catch (InterruptedException e) {
+<i>156</i>&nbsp;                        // A normal occurrence as an AppContext is disposed
+<i>157</i>&nbsp;                        return null;
+<i>158</i>&nbsp;                    } finally {
+<i>159</i>&nbsp;                        info.numWaiting--;
+<i>160</i>&nbsp;                    }
+<i>161</i>&nbsp;                }
+<i>162</i>&nbsp;                src = info.waitList.elementAt(0);
+<i>163</i>&nbsp;                info.waitList.removeElement(src);
+<i>164</i>&nbsp;            }
+<i>165</i>&nbsp;            return src;
+<i>166</i>&nbsp;        }
+<i>167</i>&nbsp;    }
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;    /**
+<i>170</i>&nbsp;      * The main run() method of an ImageFetcher Thread.  Calls fetchloop()
+<i>171</i>&nbsp;      * to do the work, then removes itself from the array of ImageFetchers.
+<i>172</i>&nbsp;      */
+<i>173</i>&nbsp;    public void run() {
+<i>174</i>&nbsp;        final FetcherInfo info = FetcherInfo.getFetcherInfo();
+<i>175</i>&nbsp;        try {
+<i>176</i>&nbsp;            fetchloop();
+<i>177</i>&nbsp;        } catch (Exception e) {
+<i>178</i>&nbsp;            e.printStackTrace();
+<i>179</i>&nbsp;        } finally {
+<i>180</i>&nbsp;            synchronized(info.waitList) {
+<i>181</i>&nbsp;                Thread me = Thread.currentThread();
+<i>182</i>&nbsp;                for (int i = 0; i &lt; info.fetchers.length; i++) {
+<i>183</i>&nbsp;                    if (info.fetchers[i] == me) {
+<i>184</i>&nbsp;                        info.fetchers[i] = null;
+<i>185</i>&nbsp;                        info.numFetchers--;
+<i>186</i>&nbsp;                    }
+<i>187</i>&nbsp;                }
+<i>188</i>&nbsp;            }
+<i>189</i>&nbsp;        }
+<i>190</i>&nbsp;    }
+<i>191</i>&nbsp;
+<i>192</i>&nbsp;    /**
+<i>193</i>&nbsp;      * The main ImageFetcher loop.  Repeatedly calls nextImage(), and
+<i>194</i>&nbsp;      * fetches the returned ImageFetchable objects until nextImage()
+<i>195</i>&nbsp;      * returns null.
+<i>196</i>&nbsp;      */
+<i>197</i>&nbsp;    private void fetchloop() {
+<i>198</i>&nbsp;        Thread me = Thread.currentThread();
+<i>199</i>&nbsp;        while (isFetcher(me)) {
+<i>200</i>&nbsp;            // we&#39;re ignoring the return value and just clearing
+<i>201</i>&nbsp;            // the interrupted flag, instead of bailing out if
+<i>202</i>&nbsp;            // the fetcher was interrupted, as we used to,
+<i>203</i>&nbsp;            // because there may be other images waiting
+<i>204</i>&nbsp;            // to be fetched (see 4789067)
+<i>205</i>&nbsp;            Thread.interrupted();
+<i>206</i>&nbsp;            me.setPriority(HIGH_PRIORITY);
+<i>207</i>&nbsp;            ImageFetchable src = nextImage();
+<i>208</i>&nbsp;            if (src == null) {
+<i>209</i>&nbsp;                return;
+<i>210</i>&nbsp;            }
+<i>211</i>&nbsp;            try {
+<i>212</i>&nbsp;                src.doFetch();
+<i>213</i>&nbsp;            } catch (Exception e) {
+<i>214</i>&nbsp;                System.err.println(&quot;Uncaught error fetching image:&quot;);
+<i>215</i>&nbsp;                e.printStackTrace();
+<i>216</i>&nbsp;            }
+<i>217</i>&nbsp;            stoppingAnimation(me);
+<i>218</i>&nbsp;        }
+<i>219</i>&nbsp;    }
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;
+<i>222</i>&nbsp;    /**
+<i>223</i>&nbsp;      * Recycles this ImageFetcher thread as an image animator thread.
+<i>224</i>&nbsp;      * Removes this ImageFetcher from the array of ImageFetchers, and
+<i>225</i>&nbsp;      * resets the thread name to &quot;ImageAnimator&quot;.
+<i>226</i>&nbsp;      */
+<i>227</i>&nbsp;    static void startingAnimation() {
+<i>228</i>&nbsp;        final FetcherInfo info = FetcherInfo.getFetcherInfo();
+<i>229</i>&nbsp;        Thread me = Thread.currentThread();
+<i>230</i>&nbsp;        synchronized(info.waitList) {
+<i>231</i>&nbsp;            for (int i = 0; i &lt; info.fetchers.length; i++) {
+<i>232</i>&nbsp;                if (info.fetchers[i] == me) {
+<i>233</i>&nbsp;                    info.fetchers[i] = null;
+<i>234</i>&nbsp;                    info.numFetchers--;
+<i>235</i>&nbsp;                    me.setName(&quot;Image Animator &quot; + i);
+<i>236</i>&nbsp;                    if(info.waitList.size() &gt; info.numWaiting) {
+<i>237</i>&nbsp;                       createFetchers(info);
+<i>238</i>&nbsp;                    }
+<i>239</i>&nbsp;                    return;
+<i>240</i>&nbsp;                }
+<i>241</i>&nbsp;            }
+<i>242</i>&nbsp;        }
+<i>243</i>&nbsp;        me.setPriority(ANIM_PRIORITY);
+<i>244</i>&nbsp;        me.setName(&quot;Image Animator&quot;);
+<i>245</i>&nbsp;    }
+<i>246</i>&nbsp;
+<i>247</i>&nbsp;    /**
+<i>248</i>&nbsp;      * Returns this image animator thread back to service as an ImageFetcher
+<i>249</i>&nbsp;      * if possible.  Puts it back into the array of ImageFetchers and sets
+<i>250</i>&nbsp;      * the thread name back to &quot;Image Fetcher&quot;.  If there are already the
+<i>251</i>&nbsp;      * maximum number of ImageFetchers, this method simply returns, and
+<i>252</i>&nbsp;      * fetchloop() will drop out when it sees that this thread isn&#39;t one of
+<i>253</i>&nbsp;      * the ImageFetchers, and this thread will die.
+<i>254</i>&nbsp;      */
+<i>255</i>&nbsp;    private static void stoppingAnimation(Thread me) {
+<i>256</i>&nbsp;        final FetcherInfo info = FetcherInfo.getFetcherInfo();
+<i>257</i>&nbsp;        synchronized(info.waitList) {
+<i>258</i>&nbsp;            int index = -1;
+<i>259</i>&nbsp;            for (int i = 0; i &lt; info.fetchers.length; i++) {
+<i>260</i>&nbsp;                if (info.fetchers[i] == me) {
+<i>261</i>&nbsp;                    return;
+<i>262</i>&nbsp;                }
+<i>263</i>&nbsp;                if (info.fetchers[i] == null) {
+<i>264</i>&nbsp;                    index = i;
+<i>265</i>&nbsp;                }
+<i>266</i>&nbsp;            }
+<i>267</i>&nbsp;            if (index &gt;= 0) {
+<i>268</i>&nbsp;                info.fetchers[index] = me;
+<i>269</i>&nbsp;                info.numFetchers++;
+<i>270</i>&nbsp;                me.setName(&quot;Image Fetcher &quot; + index);
+<i>271</i>&nbsp;                return;
+<i>272</i>&nbsp;            }
+<i>273</i>&nbsp;        }
+<i>274</i>&nbsp;    }
+<i>275</i>&nbsp;
+<i>276</i>&nbsp;    /**
+<i>277</i>&nbsp;      * Create and start ImageFetcher threads in the appropriate ThreadGroup.
+<i>278</i>&nbsp;      */
+<i>279</i>&nbsp;    private static void createFetchers(final FetcherInfo info) {
+<i>280</i>&nbsp;       // We need to instantiate a new ImageFetcher thread.
+<i>281</i>&nbsp;       // First, figure out which ThreadGroup we&#39;ll put the
+<i>282</i>&nbsp;       // new ImageFetcher into
+<i>283</i>&nbsp;       final AppContext appContext = AppContext.getAppContext();
+<i>284</i>&nbsp;       ThreadGroup threadGroup = appContext.getThreadGroup();
+<i>285</i>&nbsp;       ThreadGroup fetcherThreadGroup;
+<i>286</i>&nbsp;       try {
+<i>287</i>&nbsp;          if (threadGroup.getParent() != null) {
+<i>288</i>&nbsp;             // threadGroup is not the root, so we proceed
+<i>289</i>&nbsp;             fetcherThreadGroup = threadGroup;
+<i>290</i>&nbsp;          } else {
+<i>291</i>&nbsp;             // threadGroup is the root (&quot;system&quot;) ThreadGroup.
+<i>292</i>&nbsp;             // We instead want to use its child: the &quot;main&quot;
+<i>293</i>&nbsp;             // ThreadGroup.  Thus, we start with the current
+<i>294</i>&nbsp;             // ThreadGroup, and go up the tree until
+<i>295</i>&nbsp;             // threadGroup.getParent().getParent() == null.
+<i>296</i>&nbsp;             threadGroup = Thread.currentThread().getThreadGroup();
+<i>297</i>&nbsp;             ThreadGroup parent = threadGroup.getParent();
+<i>298</i>&nbsp;             while ((parent != null)
+<i>299</i>&nbsp;                  &amp;&amp; (parent.getParent() != null)) {
+<i>300</i>&nbsp;                  threadGroup = parent;
+<i>301</i>&nbsp;                  parent = threadGroup.getParent();
+<i>302</i>&nbsp;             }
+<i>303</i>&nbsp;             fetcherThreadGroup = threadGroup;
+<i>304</i>&nbsp;         }
+<i>305</i>&nbsp;       } catch (SecurityException e) {
+<i>306</i>&nbsp;         // Not allowed access to parent ThreadGroup -- just use
+<i>307</i>&nbsp;         // the AppContext&#39;s ThreadGroup
+<i>308</i>&nbsp;         fetcherThreadGroup = appContext.getThreadGroup();
+<i>309</i>&nbsp;       }
+<i>310</i>&nbsp;       final ThreadGroup fetcherGroup = fetcherThreadGroup;
+<i>311</i>&nbsp;
+<i>312</i>&nbsp;       java.security.AccessController.doPrivileged(
+<i>313</i>&nbsp;           new java.security.PrivilegedAction&lt;Object&gt;() {
+<i>314</i>&nbsp;               public Object run() {
+<i>315</i>&nbsp;                   for (int i = 0; i &lt; info.fetchers.length; i++) {
+<i>316</i>&nbsp;                       if (info.fetchers[i] == null) {
+<i>317</i>&nbsp;                           ImageFetcher f = new ImageFetcher(fetcherGroup, i);
+<i>318</i>&nbsp;                       try {
+<i>319</i>&nbsp;                           f.start();
+<i>320</i>&nbsp;                           info.fetchers[i] = f;
+<i>321</i>&nbsp;                           info.numFetchers++;
+<i>322</i>&nbsp;                           break;
+<i>323</i>&nbsp;                       } catch (Error e) {
+<i>324</i>&nbsp;                       }
+<i>325</i>&nbsp;                   }
+<i>326</i>&nbsp;                 }
+<i>327</i>&nbsp;                 return null;
+<i>328</i>&nbsp;               }
+<i>329</i>&nbsp;           });
+<i>330</i>&nbsp;       return;
+<i>331</i>&nbsp;   }
+<i>332</i>&nbsp;
+<i>333</i>&nbsp;}
+<i>334</i>&nbsp;
+<i>335</i>&nbsp;/**
+<i>336</i>&nbsp;  * The FetcherInfo class encapsulates the per-AppContext ImageFetcher
+<i>337</i>&nbsp;  * information.  This includes the array of ImageFetchers, as well as
+<i>338</i>&nbsp;  * the queue of ImageFetchable objects.
+<i>339</i>&nbsp;  */
+<i>340</i>&nbsp;class FetcherInfo {
+<i>341</i>&nbsp;    static final int MAX_NUM_FETCHERS_PER_APPCONTEXT = 4;
+<b class="nc"><i>342</i>&nbsp;</b>
+<b class="nc"><i>343</i>&nbsp;    Thread[] fetchers;</b>
+<b class="nc"><i>344</i>&nbsp;    int numFetchers;</b>
+<b class="nc"><i>345</i>&nbsp;    int numWaiting;</b>
+<b class="nc"><i>346</i>&nbsp;    Vector&lt;ImageFetchable&gt; waitList;</b>
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;    private FetcherInfo() {
+<i>349</i>&nbsp;        fetchers = new Thread[MAX_NUM_FETCHERS_PER_APPCONTEXT];
+<b class="nc"><i>350</i>&nbsp;        numFetchers = 0;</b>
+<i>351</i>&nbsp;        numWaiting = 0;
+<i>352</i>&nbsp;        waitList = new Vector&lt;&gt;();
+<i>353</i>&nbsp;    }
+<b class="nc"><i>354</i>&nbsp;</b>
+<b class="nc"><i>355</i>&nbsp;    /* The key to put()/get() the FetcherInfo into/from the AppContext. */</b>
+<b class="nc"><i>356</i>&nbsp;    private static final Object FETCHER_INFO_KEY =</b>
+<b class="nc"><i>357</i>&nbsp;                                        new StringBuffer(&quot;FetcherInfo&quot;);</b>
+<b class="nc"><i>358</i>&nbsp;</b>
+<b class="nc"><i>359</i>&nbsp;    static FetcherInfo getFetcherInfo() {</b>
+<i>360</i>&nbsp;        AppContext appContext = AppContext.getAppContext();
+<b class="nc"><i>361</i>&nbsp;        synchronized(appContext) {</b>
+<b class="nc"><i>362</i>&nbsp;            FetcherInfo info = (FetcherInfo)appContext.get(FETCHER_INFO_KEY);</b>
+<i>363</i>&nbsp;            if (info == null) {
+<i>364</i>&nbsp;                info = new FetcherInfo();
+<i>365</i>&nbsp;                appContext.put(FETCHER_INFO_KEY, info);
+<i>366</i>&nbsp;            }
+<i>367</i>&nbsp;            return info;
+<i>368</i>&nbsp;        }
+<i>369</i>&nbsp;    }
+<i>370</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,582 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: SuballocatedByteVector</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.org.apache.xml.internal.utils</a> ]
+</div>
+
+<h1>Coverage Summary for Class: SuballocatedByteVector (com.sun.org.apache.xml.internal.utils)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SuballocatedByteVector</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 18)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 162)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; */
+<i>5</i>&nbsp;/*
+<i>6</i>&nbsp; * Licensed to the Apache Software Foundation (ASF) under one or more
+<i>7</i>&nbsp; * contributor license agreements.  See the NOTICE file distributed with
+<i>8</i>&nbsp; * this work for additional information regarding copyright ownership.
+<i>9</i>&nbsp; * The ASF licenses this file to You under the Apache License, Version 2.0
+<i>10</i>&nbsp; * (the &quot;License&quot;); you may not use this file except in compliance with
+<i>11</i>&nbsp; * the License.  You may obtain a copy of the License at
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *      http://www.apache.org/licenses/LICENSE-2.0
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; * Unless required by applicable law or agreed to in writing, software
+<i>16</i>&nbsp; * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+<i>17</i>&nbsp; * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+<i>18</i>&nbsp; * See the License for the specific language governing permissions and
+<i>19</i>&nbsp; * limitations under the License.
+<i>20</i>&nbsp; */
+<i>21</i>&nbsp;
+<i>22</i>&nbsp;package com.sun.org.apache.xml.internal.utils;
+<i>23</i>&nbsp;
+<i>24</i>&nbsp;/**
+<i>25</i>&nbsp; * A very simple table that stores a list of byte. Very similar API to our
+<i>26</i>&nbsp; * IntVector class (same API); different internal storage.
+<i>27</i>&nbsp; *
+<i>28</i>&nbsp; * This version uses an array-of-arrays solution. Read/write access is thus
+<i>29</i>&nbsp; * a bit slower than the simple IntVector, and basic storage is a trifle
+<i>30</i>&nbsp; * higher due to the top-level array -- but appending is O(1) fast rather
+<i>31</i>&nbsp; * than O(N**2) slow, which will swamp those costs in situations where
+<i>32</i>&nbsp; * long vectors are being built up.
+<i>33</i>&nbsp; *
+<i>34</i>&nbsp; * Known issues:
+<i>35</i>&nbsp; *
+<i>36</i>&nbsp; * Some methods are private because they haven&#39;t yet been tested properly.
+<i>37</i>&nbsp; *
+<i>38</i>&nbsp; * If an element has not been set (because we skipped it), its value will
+<i>39</i>&nbsp; * initially be 0. Shortening the vector does not clear old storage; if you
+<i>40</i>&nbsp; * then skip values and setElementAt a higher index again, you may see old data
+<i>41</i>&nbsp; * reappear in the truncated-and-restored section. Doing anything else would
+<i>42</i>&nbsp; * have performance costs.
+<i>43</i>&nbsp; * @xsl.usage internal
+<i>44</i>&nbsp; */
+<i>45</i>&nbsp;public class SuballocatedByteVector
+<i>46</i>&nbsp;{
+<i>47</i>&nbsp;  /** Size of blocks to allocate          */
+<i>48</i>&nbsp;  protected int m_blocksize;
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;  /** Number of blocks to (over)allocate by */
+<i>51</i>&nbsp;  protected  int m_numblocks=32;
+<b class="nc"><i>52</i>&nbsp;</b>
+<i>53</i>&nbsp;  /** Array of arrays of bytes          */
+<i>54</i>&nbsp;  protected byte m_map[][];
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;  /** Number of bytes in array          */
+<i>57</i>&nbsp;  protected int m_firstFree = 0;
+<b class="nc"><i>58</i>&nbsp;</b>
+<i>59</i>&nbsp;  /** &quot;Shortcut&quot; handle to m_map[0] */
+<i>60</i>&nbsp;  protected byte m_map0[];
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;  /**
+<i>63</i>&nbsp;   * Default constructor.  Note that the default
+<i>64</i>&nbsp;   * block size is very small, for small lists.
+<i>65</i>&nbsp;   */
+<i>66</i>&nbsp;  public SuballocatedByteVector()
+<i>67</i>&nbsp;  {
+<i>68</i>&nbsp;    this(2048);
+<b class="nc"><i>69</i>&nbsp;  }</b>
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;  /**
+<i>72</i>&nbsp;   * Construct a ByteVector, using the given block size.
+<i>73</i>&nbsp;   *
+<i>74</i>&nbsp;   * @param blocksize Size of block to allocate
+<i>75</i>&nbsp;   */
+<i>76</i>&nbsp;  public SuballocatedByteVector(int blocksize)
+<i>77</i>&nbsp;  {
+<b class="nc"><i>78</i>&nbsp;    m_blocksize = blocksize;</b>
+<b class="nc"><i>79</i>&nbsp;    m_map0=new byte[blocksize];</b>
+<b class="nc"><i>80</i>&nbsp;    m_map = new byte[m_numblocks][];</b>
+<b class="nc"><i>81</i>&nbsp;    m_map[0]=m_map0;</b>
+<b class="nc"><i>82</i>&nbsp;  }</b>
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;  /**
+<i>85</i>&nbsp;   * Construct a ByteVector, using the given block size.
+<i>86</i>&nbsp;   *
+<i>87</i>&nbsp;   * @param blocksize Size of block to allocate
+<i>88</i>&nbsp;   */
+<i>89</i>&nbsp;  public SuballocatedByteVector(int blocksize, int increaseSize)
+<i>90</i>&nbsp;  {
+<i>91</i>&nbsp;    // increaseSize not currently used.
+<i>92</i>&nbsp;    this(blocksize);
+<b class="nc"><i>93</i>&nbsp;  }</b>
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;
+<i>96</i>&nbsp;  /**
+<i>97</i>&nbsp;   * Get the length of the list.
+<i>98</i>&nbsp;   *
+<i>99</i>&nbsp;   * @return length of the list
+<i>100</i>&nbsp;   */
+<i>101</i>&nbsp;  public int size()
+<i>102</i>&nbsp;  {
+<i>103</i>&nbsp;    return m_firstFree;
+<b class="nc"><i>104</i>&nbsp;  }</b>
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;  /**
+<i>107</i>&nbsp;   * Set the length of the list.
+<i>108</i>&nbsp;   *
+<i>109</i>&nbsp;   * @return length of the list
+<i>110</i>&nbsp;   */
+<i>111</i>&nbsp;  private  void setSize(int sz)
+<i>112</i>&nbsp;  {
+<i>113</i>&nbsp;    if(m_firstFree&lt;sz)
+<b class="nc"><i>114</i>&nbsp;      m_firstFree = sz;</b>
+<b class="nc"><i>115</i>&nbsp;  }</b>
+<i>116</i>&nbsp;
+<i>117</i>&nbsp;  /**
+<i>118</i>&nbsp;   * Append a byte onto the vector.
+<i>119</i>&nbsp;   *
+<i>120</i>&nbsp;   * @param value Byte to add to the list
+<i>121</i>&nbsp;   */
+<i>122</i>&nbsp;  public  void addElement(byte value)
+<i>123</i>&nbsp;  {
+<i>124</i>&nbsp;    if(m_firstFree&lt;m_blocksize)
+<b class="nc"><i>125</i>&nbsp;      m_map0[m_firstFree++]=value;</b>
+<b class="nc"><i>126</i>&nbsp;    else</b>
+<i>127</i>&nbsp;    {
+<i>128</i>&nbsp;      int index=m_firstFree/m_blocksize;
+<b class="nc"><i>129</i>&nbsp;      int offset=m_firstFree%m_blocksize;</b>
+<b class="nc"><i>130</i>&nbsp;      ++m_firstFree;</b>
+<b class="nc"><i>131</i>&nbsp;</b>
+<i>132</i>&nbsp;      if(index&gt;=m_map.length)
+<b class="nc"><i>133</i>&nbsp;      {</b>
+<i>134</i>&nbsp;        int newsize=index+m_numblocks;
+<b class="nc"><i>135</i>&nbsp;        byte[][] newMap=new byte[newsize][];</b>
+<b class="nc"><i>136</i>&nbsp;        System.arraycopy(m_map, 0, newMap, 0, m_map.length);</b>
+<b class="nc"><i>137</i>&nbsp;        m_map=newMap;</b>
+<b class="nc"><i>138</i>&nbsp;      }</b>
+<i>139</i>&nbsp;      byte[] block=m_map[index];
+<b class="nc"><i>140</i>&nbsp;      if(null==block)</b>
+<b class="nc"><i>141</i>&nbsp;        block=m_map[index]=new byte[m_blocksize];</b>
+<b class="nc"><i>142</i>&nbsp;      block[offset]=value;</b>
+<b class="nc"><i>143</i>&nbsp;    }</b>
+<i>144</i>&nbsp;  }
+<i>145</i>&nbsp;
+<i>146</i>&nbsp;  /**
+<i>147</i>&nbsp;   * Append several byte values onto the vector.
+<i>148</i>&nbsp;   *
+<i>149</i>&nbsp;   * @param value Byte to add to the list
+<i>150</i>&nbsp;   */
+<i>151</i>&nbsp;  private  void addElements(byte value, int numberOfElements)
+<i>152</i>&nbsp;  {
+<i>153</i>&nbsp;    if(m_firstFree+numberOfElements&lt;m_blocksize)
+<b class="nc"><i>154</i>&nbsp;      for (int i = 0; i &lt; numberOfElements; i++)</b>
+<b class="nc"><i>155</i>&nbsp;      {</b>
+<i>156</i>&nbsp;        m_map0[m_firstFree++]=value;
+<b class="nc"><i>157</i>&nbsp;      }</b>
+<i>158</i>&nbsp;    else
+<i>159</i>&nbsp;    {
+<i>160</i>&nbsp;      int index=m_firstFree/m_blocksize;
+<b class="nc"><i>161</i>&nbsp;      int offset=m_firstFree%m_blocksize;</b>
+<b class="nc"><i>162</i>&nbsp;      m_firstFree+=numberOfElements;</b>
+<b class="nc"><i>163</i>&nbsp;      while( numberOfElements&gt;0)</b>
+<b class="nc"><i>164</i>&nbsp;      {</b>
+<i>165</i>&nbsp;        if(index&gt;=m_map.length)
+<b class="nc"><i>166</i>&nbsp;        {</b>
+<i>167</i>&nbsp;          int newsize=index+m_numblocks;
+<b class="nc"><i>168</i>&nbsp;          byte[][] newMap=new byte[newsize][];</b>
+<b class="nc"><i>169</i>&nbsp;          System.arraycopy(m_map, 0, newMap, 0, m_map.length);</b>
+<b class="nc"><i>170</i>&nbsp;          m_map=newMap;</b>
+<b class="nc"><i>171</i>&nbsp;        }</b>
+<i>172</i>&nbsp;        byte[] block=m_map[index];
+<b class="nc"><i>173</i>&nbsp;        if(null==block)</b>
+<b class="nc"><i>174</i>&nbsp;          block=m_map[index]=new byte[m_blocksize];</b>
+<b class="nc"><i>175</i>&nbsp;        int copied=(m_blocksize-offset &lt; numberOfElements)</b>
+<b class="nc"><i>176</i>&nbsp;          ? m_blocksize-offset : numberOfElements;</b>
+<i>177</i>&nbsp;        numberOfElements-=copied;
+<b class="nc"><i>178</i>&nbsp;        while(copied-- &gt; 0)</b>
+<b class="nc"><i>179</i>&nbsp;          block[offset++]=value;</b>
+<b class="nc"><i>180</i>&nbsp;</b>
+<i>181</i>&nbsp;        ++index;offset=0;
+<b class="nc"><i>182</i>&nbsp;      }</b>
+<b class="nc"><i>183</i>&nbsp;    }</b>
+<i>184</i>&nbsp;  }
+<i>185</i>&nbsp;
+<i>186</i>&nbsp;  /**
+<i>187</i>&nbsp;   * Append several slots onto the vector, but do not set the values.
+<i>188</i>&nbsp;   * Note: &quot;Not Set&quot; means the value is unspecified.
+<i>189</i>&nbsp;   *
+<i>190</i>&nbsp;   * @param numberOfElements
+<i>191</i>&nbsp;   */
+<i>192</i>&nbsp;  private  void addElements(int numberOfElements)
+<i>193</i>&nbsp;  {
+<i>194</i>&nbsp;    int newlen=m_firstFree+numberOfElements;
+<b class="nc"><i>195</i>&nbsp;    if(newlen&gt;m_blocksize)</b>
+<b class="nc"><i>196</i>&nbsp;    {</b>
+<i>197</i>&nbsp;      int index=m_firstFree%m_blocksize;
+<b class="nc"><i>198</i>&nbsp;      int newindex=(m_firstFree+numberOfElements)%m_blocksize;</b>
+<b class="nc"><i>199</i>&nbsp;      for(int i=index+1;i&lt;=newindex;++i)</b>
+<b class="nc"><i>200</i>&nbsp;        m_map[i]=new byte[m_blocksize];</b>
+<b class="nc"><i>201</i>&nbsp;    }</b>
+<i>202</i>&nbsp;    m_firstFree=newlen;
+<b class="nc"><i>203</i>&nbsp;  }</b>
+<i>204</i>&nbsp;
+<i>205</i>&nbsp;  /**
+<i>206</i>&nbsp;   * Inserts the specified node in this vector at the specified index.
+<i>207</i>&nbsp;   * Each component in this vector with an index greater or equal to
+<i>208</i>&nbsp;   * the specified index is shifted upward to have an index one greater
+<i>209</i>&nbsp;   * than the value it had previously.
+<i>210</i>&nbsp;   *
+<i>211</i>&nbsp;   * Insertion may be an EXPENSIVE operation!
+<i>212</i>&nbsp;   *
+<i>213</i>&nbsp;   * @param value Byte to insert
+<i>214</i>&nbsp;   * @param at Index of where to insert
+<i>215</i>&nbsp;   */
+<i>216</i>&nbsp;  private  void insertElementAt(byte value, int at)
+<i>217</i>&nbsp;  {
+<i>218</i>&nbsp;    if(at==m_firstFree)
+<b class="nc"><i>219</i>&nbsp;      addElement(value);</b>
+<b class="nc"><i>220</i>&nbsp;    else if (at&gt;m_firstFree)</b>
+<b class="nc"><i>221</i>&nbsp;    {</b>
+<i>222</i>&nbsp;      int index=at/m_blocksize;
+<b class="nc"><i>223</i>&nbsp;      if(index&gt;=m_map.length)</b>
+<b class="nc"><i>224</i>&nbsp;      {</b>
+<i>225</i>&nbsp;        int newsize=index+m_numblocks;
+<b class="nc"><i>226</i>&nbsp;        byte[][] newMap=new byte[newsize][];</b>
+<b class="nc"><i>227</i>&nbsp;        System.arraycopy(m_map, 0, newMap, 0, m_map.length);</b>
+<b class="nc"><i>228</i>&nbsp;        m_map=newMap;</b>
+<b class="nc"><i>229</i>&nbsp;      }</b>
+<i>230</i>&nbsp;      byte[] block=m_map[index];
+<b class="nc"><i>231</i>&nbsp;      if(null==block)</b>
+<b class="nc"><i>232</i>&nbsp;        block=m_map[index]=new byte[m_blocksize];</b>
+<b class="nc"><i>233</i>&nbsp;      int offset=at%m_blocksize;</b>
+<b class="nc"><i>234</i>&nbsp;      block[offset]=value;</b>
+<b class="nc"><i>235</i>&nbsp;      m_firstFree=offset+1;</b>
+<b class="nc"><i>236</i>&nbsp;    }</b>
+<b class="nc"><i>237</i>&nbsp;    else</b>
+<i>238</i>&nbsp;    {
+<i>239</i>&nbsp;      int index=at/m_blocksize;
+<b class="nc"><i>240</i>&nbsp;      int maxindex=m_firstFree+1/m_blocksize;</b>
+<b class="nc"><i>241</i>&nbsp;      ++m_firstFree;</b>
+<b class="nc"><i>242</i>&nbsp;      int offset=at%m_blocksize;</b>
+<b class="nc"><i>243</i>&nbsp;      byte push;</b>
+<i>244</i>&nbsp;
+<i>245</i>&nbsp;      // ***** Easier to work down from top?
+<i>246</i>&nbsp;      while(index&lt;=maxindex)
+<b class="nc"><i>247</i>&nbsp;      {</b>
+<i>248</i>&nbsp;        int copylen=m_blocksize-offset-1;
+<b class="nc"><i>249</i>&nbsp;        byte[] block=m_map[index];</b>
+<b class="nc"><i>250</i>&nbsp;        if(null==block)</b>
+<b class="nc"><i>251</i>&nbsp;        {</b>
+<i>252</i>&nbsp;          push=0;
+<b class="nc"><i>253</i>&nbsp;          block=m_map[index]=new byte[m_blocksize];</b>
+<b class="nc"><i>254</i>&nbsp;        }</b>
+<i>255</i>&nbsp;        else
+<i>256</i>&nbsp;        {
+<i>257</i>&nbsp;          push=block[m_blocksize-1];
+<b class="nc"><i>258</i>&nbsp;          System.arraycopy(block, offset , block, offset+1, copylen);</b>
+<b class="nc"><i>259</i>&nbsp;        }</b>
+<i>260</i>&nbsp;        block[offset]=value;
+<b class="nc"><i>261</i>&nbsp;        value=push;</b>
+<b class="nc"><i>262</i>&nbsp;        offset=0;</b>
+<b class="nc"><i>263</i>&nbsp;        ++index;</b>
+<b class="nc"><i>264</i>&nbsp;      }</b>
+<b class="nc"><i>265</i>&nbsp;    }</b>
+<i>266</i>&nbsp;  }
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;  /**
+<i>269</i>&nbsp;   * Wipe it out.
+<i>270</i>&nbsp;   */
+<i>271</i>&nbsp;  public void removeAllElements()
+<i>272</i>&nbsp;  {
+<i>273</i>&nbsp;    m_firstFree = 0;
+<b class="nc"><i>274</i>&nbsp;  }</b>
+<i>275</i>&nbsp;
+<i>276</i>&nbsp;  /**
+<i>277</i>&nbsp;   * Removes the first occurrence of the argument from this vector.
+<i>278</i>&nbsp;   * If the object is found in this vector, each component in the vector
+<i>279</i>&nbsp;   * with an index greater or equal to the object&#39;s index is shifted
+<i>280</i>&nbsp;   * downward to have an index one smaller than the value it had
+<i>281</i>&nbsp;   * previously.
+<i>282</i>&nbsp;   *
+<i>283</i>&nbsp;   * @param s Byte to remove from array
+<i>284</i>&nbsp;   *
+<i>285</i>&nbsp;   * @return True if the byte was removed, false if it was not found
+<i>286</i>&nbsp;   */
+<i>287</i>&nbsp;  private  boolean removeElement(byte s)
+<i>288</i>&nbsp;  {
+<i>289</i>&nbsp;    int at=indexOf(s,0);
+<b class="nc"><i>290</i>&nbsp;    if(at&lt;0)</b>
+<b class="nc"><i>291</i>&nbsp;      return false;</b>
+<b class="nc"><i>292</i>&nbsp;    removeElementAt(at);</b>
+<b class="nc"><i>293</i>&nbsp;    return true;</b>
+<b class="nc"><i>294</i>&nbsp;  }</b>
+<i>295</i>&nbsp;
+<i>296</i>&nbsp;  /**
+<i>297</i>&nbsp;   * Deletes the component at the specified index. Each component in
+<i>298</i>&nbsp;   * this vector with an index greater or equal to the specified
+<i>299</i>&nbsp;   * index is shifted downward to have an index one smaller than
+<i>300</i>&nbsp;   * the value it had previously.
+<i>301</i>&nbsp;   *
+<i>302</i>&nbsp;   * @param at index of where to remove a byte
+<i>303</i>&nbsp;   */
+<i>304</i>&nbsp;  private  void removeElementAt(int at)
+<i>305</i>&nbsp;  {
+<i>306</i>&nbsp;    // No point in removing elements that &quot;don&#39;t exist&quot;...
+<i>307</i>&nbsp;    if(at&lt;m_firstFree)
+<b class="nc"><i>308</i>&nbsp;    {</b>
+<i>309</i>&nbsp;      int index=at/m_blocksize;
+<b class="nc"><i>310</i>&nbsp;      int maxindex=m_firstFree/m_blocksize;</b>
+<b class="nc"><i>311</i>&nbsp;      int offset=at%m_blocksize;</b>
+<b class="nc"><i>312</i>&nbsp;</b>
+<i>313</i>&nbsp;      while(index&lt;=maxindex)
+<b class="nc"><i>314</i>&nbsp;      {</b>
+<i>315</i>&nbsp;        int copylen=m_blocksize-offset-1;
+<b class="nc"><i>316</i>&nbsp;        byte[] block=m_map[index];</b>
+<b class="nc"><i>317</i>&nbsp;        if(null==block)</b>
+<b class="nc"><i>318</i>&nbsp;          block=m_map[index]=new byte[m_blocksize];</b>
+<b class="nc"><i>319</i>&nbsp;        else</b>
+<i>320</i>&nbsp;          System.arraycopy(block, offset+1, block, offset, copylen);
+<b class="nc"><i>321</i>&nbsp;        if(index&lt;maxindex)</b>
+<b class="nc"><i>322</i>&nbsp;        {</b>
+<i>323</i>&nbsp;          byte[] next=m_map[index+1];
+<b class="nc"><i>324</i>&nbsp;          if(next!=null)</b>
+<b class="nc"><i>325</i>&nbsp;            block[m_blocksize-1]=(next!=null) ? next[0] : 0;</b>
+<b class="nc"><i>326</i>&nbsp;        }</b>
+<b class="nc"><i>327</i>&nbsp;        else</b>
+<i>328</i>&nbsp;          block[m_blocksize-1]=0;
+<b class="nc"><i>329</i>&nbsp;        offset=0;</b>
+<b class="nc"><i>330</i>&nbsp;        ++index;</b>
+<b class="nc"><i>331</i>&nbsp;      }</b>
+<b class="nc"><i>332</i>&nbsp;    }</b>
+<i>333</i>&nbsp;    --m_firstFree;
+<b class="nc"><i>334</i>&nbsp;  }</b>
+<i>335</i>&nbsp;
+<i>336</i>&nbsp;  /**
+<i>337</i>&nbsp;   * Sets the component at the specified index of this vector to be the
+<i>338</i>&nbsp;   * specified object. The previous component at that position is discarded.
+<i>339</i>&nbsp;   *
+<i>340</i>&nbsp;   * The index must be a value greater than or equal to 0 and less
+<i>341</i>&nbsp;   * than the current size of the vector.
+<i>342</i>&nbsp;   *
+<i>343</i>&nbsp;   * @param value
+<i>344</i>&nbsp;   * @param at     Index of where to set the object
+<i>345</i>&nbsp;   */
+<i>346</i>&nbsp;  public void setElementAt(byte value, int at)
+<i>347</i>&nbsp;  {
+<i>348</i>&nbsp;    if(at&lt;m_blocksize)
+<b class="nc"><i>349</i>&nbsp;    {</b>
+<i>350</i>&nbsp;      m_map0[at]=value;
+<b class="nc"><i>351</i>&nbsp;      return;</b>
+<i>352</i>&nbsp;    }
+<i>353</i>&nbsp;
+<i>354</i>&nbsp;    int index=at/m_blocksize;
+<b class="nc"><i>355</i>&nbsp;    int offset=at%m_blocksize;</b>
+<b class="nc"><i>356</i>&nbsp;</b>
+<i>357</i>&nbsp;    if(index&gt;=m_map.length)
+<b class="nc"><i>358</i>&nbsp;    {</b>
+<i>359</i>&nbsp;      int newsize=index+m_numblocks;
+<b class="nc"><i>360</i>&nbsp;      byte[][] newMap=new byte[newsize][];</b>
+<b class="nc"><i>361</i>&nbsp;      System.arraycopy(m_map, 0, newMap, 0, m_map.length);</b>
+<b class="nc"><i>362</i>&nbsp;      m_map=newMap;</b>
+<b class="nc"><i>363</i>&nbsp;    }</b>
+<i>364</i>&nbsp;
+<i>365</i>&nbsp;    byte[] block=m_map[index];
+<b class="nc"><i>366</i>&nbsp;    if(null==block)</b>
+<b class="nc"><i>367</i>&nbsp;      block=m_map[index]=new byte[m_blocksize];</b>
+<b class="nc"><i>368</i>&nbsp;    block[offset]=value;</b>
+<b class="nc"><i>369</i>&nbsp;</b>
+<i>370</i>&nbsp;    if(at&gt;=m_firstFree)
+<b class="nc"><i>371</i>&nbsp;      m_firstFree=at+1;</b>
+<b class="nc"><i>372</i>&nbsp;  }</b>
+<i>373</i>&nbsp;
+<i>374</i>&nbsp;  /**
+<i>375</i>&nbsp;   * Get the nth element. This is often at the innermost loop of an
+<i>376</i>&nbsp;   * application, so performance is critical.
+<i>377</i>&nbsp;   *
+<i>378</i>&nbsp;   * @param i index of value to get
+<i>379</i>&nbsp;   *
+<i>380</i>&nbsp;   * @return value at given index. If that value wasn&#39;t previously set,
+<i>381</i>&nbsp;   * the result is undefined for performance reasons. It may throw an
+<i>382</i>&nbsp;   * exception (see below), may return zero, or (if setSize has previously
+<i>383</i>&nbsp;   * been used) may return stale data.
+<i>384</i>&nbsp;   *
+<i>385</i>&nbsp;   * @throws ArrayIndexOutOfBoundsException if the index was _clearly_
+<i>386</i>&nbsp;   * unreasonable (negative, or past the highest block).
+<i>387</i>&nbsp;   *
+<i>388</i>&nbsp;   * @throws NullPointerException if the index points to a block that could
+<i>389</i>&nbsp;   * have existed (based on the highest index used) but has never had anything
+<i>390</i>&nbsp;   * set into it.
+<i>391</i>&nbsp;   * %REVIEW% Could add a catch to create the block in that case, or return 0.
+<i>392</i>&nbsp;   * Try/Catch is _supposed_ to be nearly free when not thrown to. Do we
+<i>393</i>&nbsp;   * believe that? Should we have a separate safeElementAt?
+<i>394</i>&nbsp;   */
+<i>395</i>&nbsp;  public byte elementAt(int i)
+<i>396</i>&nbsp;  {
+<i>397</i>&nbsp;    // %OPT% Does this really buy us anything? Test versus division for small,
+<i>398</i>&nbsp;    // test _plus_ division for big docs.
+<i>399</i>&nbsp;    if(i&lt;m_blocksize)
+<b class="nc"><i>400</i>&nbsp;      return m_map0[i];</b>
+<b class="nc"><i>401</i>&nbsp;</b>
+<i>402</i>&nbsp;    return m_map[i/m_blocksize][i%m_blocksize];
+<b class="nc"><i>403</i>&nbsp;  }</b>
+<i>404</i>&nbsp;
+<i>405</i>&nbsp;  /**
+<i>406</i>&nbsp;   * Tell if the table contains the given node.
+<i>407</i>&nbsp;   *
+<i>408</i>&nbsp;   * @param s object to look for
+<i>409</i>&nbsp;   *
+<i>410</i>&nbsp;   * @return true if the object is in the list
+<i>411</i>&nbsp;   */
+<i>412</i>&nbsp;  private  boolean contains(byte s)
+<i>413</i>&nbsp;  {
+<i>414</i>&nbsp;    return (indexOf(s,0) &gt;= 0);
+<b class="nc"><i>415</i>&nbsp;  }</b>
+<i>416</i>&nbsp;
+<i>417</i>&nbsp;  /**
+<i>418</i>&nbsp;   * Searches for the first occurence of the given argument,
+<i>419</i>&nbsp;   * beginning the search at index, and testing for equality
+<i>420</i>&nbsp;   * using the equals method.
+<i>421</i>&nbsp;   *
+<i>422</i>&nbsp;   * @param elem object to look for
+<i>423</i>&nbsp;   * @param index Index of where to begin search
+<i>424</i>&nbsp;   * @return the index of the first occurrence of the object
+<i>425</i>&nbsp;   * argument in this vector at position index or later in the
+<i>426</i>&nbsp;   * vector; returns -1 if the object is not found.
+<i>427</i>&nbsp;   */
+<i>428</i>&nbsp;  public int indexOf(byte elem, int index)
+<i>429</i>&nbsp;  {
+<i>430</i>&nbsp;    if(index&gt;=m_firstFree)
+<b class="nc"><i>431</i>&nbsp;      return -1;</b>
+<b class="nc"><i>432</i>&nbsp;</b>
+<i>433</i>&nbsp;    int bindex=index/m_blocksize;
+<b class="nc"><i>434</i>&nbsp;    int boffset=index%m_blocksize;</b>
+<b class="nc"><i>435</i>&nbsp;    int maxindex=m_firstFree/m_blocksize;</b>
+<b class="nc"><i>436</i>&nbsp;    byte[] block;</b>
+<i>437</i>&nbsp;
+<i>438</i>&nbsp;    for(;bindex&lt;maxindex;++bindex)
+<b class="nc"><i>439</i>&nbsp;    {</b>
+<i>440</i>&nbsp;      block=m_map[bindex];
+<b class="nc"><i>441</i>&nbsp;      if(block!=null)</b>
+<b class="nc"><i>442</i>&nbsp;        for(int offset=boffset;offset&lt;m_blocksize;++offset)</b>
+<b class="nc"><i>443</i>&nbsp;          if(block[offset]==elem)</b>
+<b class="nc"><i>444</i>&nbsp;            return offset+bindex*m_blocksize;</b>
+<b class="nc"><i>445</i>&nbsp;      boffset=0; // after first</b>
+<b class="nc"><i>446</i>&nbsp;    }</b>
+<i>447</i>&nbsp;    // Last block may need to stop before end
+<i>448</i>&nbsp;    int maxoffset=m_firstFree%m_blocksize;
+<b class="nc"><i>449</i>&nbsp;    block=m_map[maxindex];</b>
+<b class="nc"><i>450</i>&nbsp;    for(int offset=boffset;offset&lt;maxoffset;++offset)</b>
+<b class="nc"><i>451</i>&nbsp;      if(block[offset]==elem)</b>
+<b class="nc"><i>452</i>&nbsp;        return offset+maxindex*m_blocksize;</b>
+<b class="nc"><i>453</i>&nbsp;</b>
+<i>454</i>&nbsp;    return -1;
+<b class="nc"><i>455</i>&nbsp;  }</b>
+<i>456</i>&nbsp;
+<i>457</i>&nbsp;  /**
+<i>458</i>&nbsp;   * Searches for the first occurence of the given argument,
+<i>459</i>&nbsp;   * beginning the search at index, and testing for equality
+<i>460</i>&nbsp;   * using the equals method.
+<i>461</i>&nbsp;   *
+<i>462</i>&nbsp;   * @param elem object to look for
+<i>463</i>&nbsp;   * @return the index of the first occurrence of the object
+<i>464</i>&nbsp;   * argument in this vector at position index or later in the
+<i>465</i>&nbsp;   * vector; returns -1 if the object is not found.
+<i>466</i>&nbsp;   */
+<i>467</i>&nbsp;  public int indexOf(byte elem)
+<i>468</i>&nbsp;  {
+<i>469</i>&nbsp;    return indexOf(elem,0);
+<b class="nc"><i>470</i>&nbsp;  }</b>
+<i>471</i>&nbsp;
+<i>472</i>&nbsp;  /**
+<i>473</i>&nbsp;   * Searches for the first occurence of the given argument,
+<i>474</i>&nbsp;   * beginning the search at index, and testing for equality
+<i>475</i>&nbsp;   * using the equals method.
+<i>476</i>&nbsp;   *
+<i>477</i>&nbsp;   * @param elem Object to look for
+<i>478</i>&nbsp;   * @return the index of the first occurrence of the object
+<i>479</i>&nbsp;   * argument in this vector at position index or later in the
+<i>480</i>&nbsp;   * vector; returns -1 if the object is not found.
+<i>481</i>&nbsp;   */
+<i>482</i>&nbsp;  private  int lastIndexOf(byte elem)
+<i>483</i>&nbsp;  {
+<i>484</i>&nbsp;    int boffset=m_firstFree%m_blocksize;
+<b class="nc"><i>485</i>&nbsp;    for(int index=m_firstFree/m_blocksize;</b>
+<b class="nc"><i>486</i>&nbsp;        index&gt;=0;</b>
+<b class="nc"><i>487</i>&nbsp;        --index)</b>
+<b class="nc"><i>488</i>&nbsp;    {</b>
+<i>489</i>&nbsp;      byte[] block=m_map[index];
+<b class="nc"><i>490</i>&nbsp;      if(block!=null)</b>
+<b class="nc"><i>491</i>&nbsp;        for(int offset=boffset; offset&gt;=0; --offset)</b>
+<b class="nc"><i>492</i>&nbsp;          if(block[offset]==elem)</b>
+<b class="nc"><i>493</i>&nbsp;            return offset+index*m_blocksize;</b>
+<b class="nc"><i>494</i>&nbsp;      boffset=0; // after first</b>
+<b class="nc"><i>495</i>&nbsp;    }</b>
+<i>496</i>&nbsp;    return -1;
+<b class="nc"><i>497</i>&nbsp;  }</b>
+<i>498</i>&nbsp;
+<i>499</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

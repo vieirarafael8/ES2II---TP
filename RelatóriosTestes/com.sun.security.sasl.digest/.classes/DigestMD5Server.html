@@ -1,0 +1,807 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: DigestMD5Server</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.security.sasl.digest</a> ]
+</div>
+
+<h1>Coverage Summary for Class: DigestMD5Server (com.sun.security.sasl.digest)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">DigestMD5Server</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 217)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2003, 2012, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.security.sasl.digest;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.security.NoSuchAlgorithmException;
+<i>29</i>&nbsp;import java.io.ByteArrayOutputStream;
+<i>30</i>&nbsp;import java.io.IOException;
+<i>31</i>&nbsp;import java.io.UnsupportedEncodingException;
+<i>32</i>&nbsp;import java.util.StringTokenizer;
+<i>33</i>&nbsp;import java.util.ArrayList;
+<i>34</i>&nbsp;import java.util.List;
+<i>35</i>&nbsp;import java.util.Map;
+<i>36</i>&nbsp;import java.util.Arrays;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import java.util.logging.Level;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;import javax.security.sasl.*;
+<i>41</i>&nbsp;import javax.security.auth.callback.*;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;/**
+<i>44</i>&nbsp;  * An implementation of the DIGEST-MD5 server SASL mechanism.
+<i>45</i>&nbsp;  * (&lt;a href=&quot;http://www.ietf.org/rfc/rfc2831.txt&quot;&gt;RFC 2831&lt;/a&gt;)
+<i>46</i>&nbsp;  * &lt;p&gt;
+<i>47</i>&nbsp;  * The DIGEST-MD5 SASL mechanism specifies two modes of authentication.
+<i>48</i>&nbsp;  * &lt;ul&gt;&lt;li&gt;Initial Authentication
+<i>49</i>&nbsp;  * &lt;li&gt;Subsequent Authentication - optional, (currently not supported)
+<i>50</i>&nbsp;  * &lt;/ul&gt;
+<i>51</i>&nbsp;  *
+<i>52</i>&nbsp;  * Required callbacks:
+<i>53</i>&nbsp;  * - RealmCallback
+<i>54</i>&nbsp;  *      used as key by handler to fetch password
+<i>55</i>&nbsp;  * - NameCallback
+<i>56</i>&nbsp;  *      used as key by handler to fetch password
+<i>57</i>&nbsp;  * - PasswordCallback
+<i>58</i>&nbsp;  *      handler must enter password for username/realm supplied
+<i>59</i>&nbsp;  * - AuthorizeCallback
+<i>60</i>&nbsp;  *      handler must verify that authid/authzids are allowed and set
+<i>61</i>&nbsp;  *      authorized ID to be the canonicalized authzid (if applicable).
+<i>62</i>&nbsp;  *
+<i>63</i>&nbsp;  * Environment properties that affect the implementation:
+<i>64</i>&nbsp;  * javax.security.sasl.qop:
+<i>65</i>&nbsp;  *    specifies list of qops; default is &quot;auth&quot;; typically, caller should set
+<i>66</i>&nbsp;  *    this to &quot;auth, auth-int, auth-conf&quot;.
+<i>67</i>&nbsp;  * javax.security.sasl.strength
+<i>68</i>&nbsp;  *    specifies low/medium/high strength of encryption; default is all available
+<i>69</i>&nbsp;  *    ciphers [high,medium,low]; high means des3 or rc4 (128); medium des or
+<i>70</i>&nbsp;  *    rc4-56; low is rc4-40.
+<i>71</i>&nbsp;  * javax.security.sasl.maxbuf
+<i>72</i>&nbsp;  *    specifies max receive buf size; default is 65536
+<i>73</i>&nbsp;  * javax.security.sasl.sendmaxbuffer
+<i>74</i>&nbsp;  *    specifies max send buf size; default is 65536 (min of this and client&#39;s max
+<i>75</i>&nbsp;  *    recv size)
+<i>76</i>&nbsp;  *
+<i>77</i>&nbsp;  * com.sun.security.sasl.digest.utf8:
+<i>78</i>&nbsp;  *    &quot;true&quot; means to use UTF-8 charset; &quot;false&quot; to use ISO-8859-1 encoding;
+<i>79</i>&nbsp;  *    default is &quot;true&quot;.
+<i>80</i>&nbsp;  * com.sun.security.sasl.digest.realm:
+<i>81</i>&nbsp;  *    space-separated list of realms; default is server name (fqdn parameter)
+<i>82</i>&nbsp;  *
+<i>83</i>&nbsp;  * @author Rosanna Lee
+<i>84</i>&nbsp;  */
+<i>85</i>&nbsp;
+<i>86</i>&nbsp;final class DigestMD5Server extends DigestMD5Base implements SaslServer {
+<b class="nc"><i>87</i>&nbsp;    private static final String MY_CLASS_NAME = DigestMD5Server.class.getName();</b>
+<i>88</i>&nbsp;
+<i>89</i>&nbsp;    private static final String UTF8_DIRECTIVE = &quot;charset=utf-8,&quot;;
+<i>90</i>&nbsp;    private static final String ALGORITHM_DIRECTIVE = &quot;algorithm=md5-sess&quot;;
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    /*
+<i>93</i>&nbsp;     * Always expect nonce count value to be 1 because we support only
+<i>94</i>&nbsp;     * initial authentication.
+<i>95</i>&nbsp;     */
+<i>96</i>&nbsp;    private static final int NONCE_COUNT_VALUE = 1;
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    /* &quot;true&quot; means use UTF8; &quot;false&quot; ISO 8859-1; default is &quot;true&quot; */
+<i>99</i>&nbsp;    private static final String UTF8_PROPERTY =
+<i>100</i>&nbsp;        &quot;com.sun.security.sasl.digest.utf8&quot;;
+<i>101</i>&nbsp;
+<i>102</i>&nbsp;    /* List of space-separated realms used for authentication */
+<i>103</i>&nbsp;    private static final String REALM_PROPERTY =
+<i>104</i>&nbsp;        &quot;com.sun.security.sasl.digest.realm&quot;;
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;    /* Directives encountered in responses sent by the client. */
+<b class="nc"><i>107</i>&nbsp;    private static final String[] DIRECTIVE_KEY = {</b>
+<i>108</i>&nbsp;        &quot;username&quot;,    // exactly once
+<i>109</i>&nbsp;        &quot;realm&quot;,       // exactly once if sent by server
+<i>110</i>&nbsp;        &quot;nonce&quot;,       // exactly once
+<i>111</i>&nbsp;        &quot;cnonce&quot;,      // exactly once
+<i>112</i>&nbsp;        &quot;nonce-count&quot;, // atmost once; default is 00000001
+<i>113</i>&nbsp;        &quot;qop&quot;,         // atmost once; default is &quot;auth&quot;
+<i>114</i>&nbsp;        &quot;digest-uri&quot;,  // atmost once; (default?)
+<i>115</i>&nbsp;        &quot;response&quot;,    // exactly once
+<i>116</i>&nbsp;        &quot;maxbuf&quot;,      // atmost once; default is 65536
+<i>117</i>&nbsp;        &quot;charset&quot;,     // atmost once; default is ISO-8859-1
+<i>118</i>&nbsp;        &quot;cipher&quot;,      // exactly once if qop is &quot;auth-conf&quot;
+<i>119</i>&nbsp;        &quot;authzid&quot;,     // atmost once; default is none
+<i>120</i>&nbsp;        &quot;auth-param&quot;,  // &gt;= 0 times (ignored)
+<i>121</i>&nbsp;    };
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;    /* Indices into DIRECTIVE_KEY */
+<i>124</i>&nbsp;    private static final int USERNAME = 0;
+<i>125</i>&nbsp;    private static final int REALM = 1;
+<i>126</i>&nbsp;    private static final int NONCE = 2;
+<i>127</i>&nbsp;    private static final int CNONCE = 3;
+<i>128</i>&nbsp;    private static final int NONCE_COUNT = 4;
+<i>129</i>&nbsp;    private static final int QOP = 5;
+<i>130</i>&nbsp;    private static final int DIGEST_URI = 6;
+<i>131</i>&nbsp;    private static final int RESPONSE = 7;
+<i>132</i>&nbsp;    private static final int MAXBUF = 8;
+<i>133</i>&nbsp;    private static final int CHARSET = 9;
+<i>134</i>&nbsp;    private static final int CIPHER = 10;
+<i>135</i>&nbsp;    private static final int AUTHZID = 11;
+<i>136</i>&nbsp;    private static final int AUTH_PARAM = 12;
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    /* Server-generated/supplied information */
+<i>139</i>&nbsp;    private String specifiedQops;
+<i>140</i>&nbsp;    private byte[] myCiphers;
+<i>141</i>&nbsp;    private List&lt;String&gt; serverRealms;
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;    DigestMD5Server(String protocol, String serverName, Map&lt;String, ?&gt; props,
+<i>144</i>&nbsp;            CallbackHandler cbh) throws SaslException {
+<b class="nc"><i>145</i>&nbsp;        super(props, MY_CLASS_NAME, 1,</b>
+<i>146</i>&nbsp;                protocol + &quot;/&quot; + (serverName==null?&quot;*&quot;:serverName),
+<i>147</i>&nbsp;                cbh);
+<i>148</i>&nbsp;
+<b class="nc"><i>149</i>&nbsp;        serverRealms = new ArrayList&lt;String&gt;();</b>
+<i>150</i>&nbsp;
+<b class="nc"><i>151</i>&nbsp;        useUTF8 = true;  // default</b>
+<i>152</i>&nbsp;
+<b class="nc"><i>153</i>&nbsp;        if (props != null) {</b>
+<b class="nc"><i>154</i>&nbsp;            specifiedQops = (String) props.get(Sasl.QOP);</b>
+<b class="nc"><i>155</i>&nbsp;            if (&quot;false&quot;.equals((String) props.get(UTF8_PROPERTY))) {</b>
+<b class="nc"><i>156</i>&nbsp;                useUTF8 = false;</b>
+<b class="nc"><i>157</i>&nbsp;                logger.log(Level.FINE, &quot;DIGEST80:Server supports ISO-Latin-1&quot;);</b>
+<i>158</i>&nbsp;            }
+<i>159</i>&nbsp;
+<b class="nc"><i>160</i>&nbsp;            String realms = (String) props.get(REALM_PROPERTY);</b>
+<b class="nc"><i>161</i>&nbsp;            if (realms != null) {</b>
+<b class="nc"><i>162</i>&nbsp;                StringTokenizer parser = new StringTokenizer(realms, &quot;, \t\n&quot;);</b>
+<b class="nc"><i>163</i>&nbsp;                int tokenCount = parser.countTokens();</b>
+<b class="nc"><i>164</i>&nbsp;                String token = null;</b>
+<b class="nc"><i>165</i>&nbsp;                for (int i = 0; i &lt; tokenCount; i++) {</b>
+<b class="nc"><i>166</i>&nbsp;                    token = parser.nextToken();</b>
+<b class="nc"><i>167</i>&nbsp;                    logger.log(Level.FINE, &quot;DIGEST81:Server supports realm {0}&quot;,</b>
+<i>168</i>&nbsp;                        token);
+<b class="nc"><i>169</i>&nbsp;                    serverRealms.add(token);</b>
+<i>170</i>&nbsp;                }
+<i>171</i>&nbsp;            }
+<i>172</i>&nbsp;        }
+<i>173</i>&nbsp;
+<b class="nc"><i>174</i>&nbsp;        encoding = (useUTF8 ? &quot;UTF8&quot; : &quot;8859_1&quot;);</b>
+<i>175</i>&nbsp;
+<i>176</i>&nbsp;        // By default, use server name as realm
+<b class="nc"><i>177</i>&nbsp;        if (serverRealms.isEmpty()) {</b>
+<b class="nc"><i>178</i>&nbsp;            if (serverName == null) {</b>
+<b class="nc"><i>179</i>&nbsp;                throw new SaslException(</b>
+<i>180</i>&nbsp;                        &quot;A realm must be provided in props or serverName&quot;);
+<i>181</i>&nbsp;            } else {
+<b class="nc"><i>182</i>&nbsp;                serverRealms.add(serverName);</b>
+<i>183</i>&nbsp;            }
+<i>184</i>&nbsp;        }
+<i>185</i>&nbsp;    }
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;    public  byte[] evaluateResponse(byte[] response) throws SaslException {
+<b class="nc"><i>188</i>&nbsp;        if (response.length &gt; MAX_RESPONSE_LENGTH) {</b>
+<b class="nc"><i>189</i>&nbsp;            throw new SaslException(</b>
+<i>190</i>&nbsp;                &quot;DIGEST-MD5: Invalid digest response length. Got:  &quot; +
+<i>191</i>&nbsp;                response.length + &quot; Expected &lt; &quot; + MAX_RESPONSE_LENGTH);
+<i>192</i>&nbsp;        }
+<i>193</i>&nbsp;
+<i>194</i>&nbsp;        byte[] challenge;
+<b class="nc"><i>195</i>&nbsp;        switch (step) {</b>
+<i>196</i>&nbsp;        case 1:
+<b class="nc"><i>197</i>&nbsp;            if (response.length != 0) {</b>
+<b class="nc"><i>198</i>&nbsp;                throw new SaslException(</b>
+<i>199</i>&nbsp;                    &quot;DIGEST-MD5 must not have an initial response&quot;);
+<i>200</i>&nbsp;            }
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;            /* Generate first challenge */
+<b class="nc"><i>203</i>&nbsp;            String supportedCiphers = null;</b>
+<b class="nc"><i>204</i>&nbsp;            if ((allQop&amp;PRIVACY_PROTECTION) != 0) {</b>
+<b class="nc"><i>205</i>&nbsp;                myCiphers = getPlatformCiphers();</b>
+<b class="nc"><i>206</i>&nbsp;                StringBuilder sb = new StringBuilder();</b>
+<i>207</i>&nbsp;
+<i>208</i>&nbsp;                // myCipher[i] is a byte that indicates whether CIPHER_TOKENS[i]
+<i>209</i>&nbsp;                // is supported
+<b class="nc"><i>210</i>&nbsp;                for (int i = 0; i &lt; CIPHER_TOKENS.length; i++) {</b>
+<b class="nc"><i>211</i>&nbsp;                    if (myCiphers[i] != 0) {</b>
+<b class="nc"><i>212</i>&nbsp;                        if (sb.length() &gt; 0) {</b>
+<b class="nc"><i>213</i>&nbsp;                            sb.append(&#39;,&#39;);</b>
+<i>214</i>&nbsp;                        }
+<b class="nc"><i>215</i>&nbsp;                        sb.append(CIPHER_TOKENS[i]);</b>
+<i>216</i>&nbsp;                    }
+<i>217</i>&nbsp;                }
+<b class="nc"><i>218</i>&nbsp;                supportedCiphers = sb.toString();</b>
+<i>219</i>&nbsp;            }
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;            try {
+<b class="nc"><i>222</i>&nbsp;                challenge = generateChallenge(serverRealms, specifiedQops,</b>
+<i>223</i>&nbsp;                    supportedCiphers);
+<i>224</i>&nbsp;
+<b class="nc"><i>225</i>&nbsp;                step = 3;</b>
+<b class="nc"><i>226</i>&nbsp;                return challenge;</b>
+<b class="nc"><i>227</i>&nbsp;            } catch (UnsupportedEncodingException e) {</b>
+<b class="nc"><i>228</i>&nbsp;                throw new SaslException(</b>
+<i>229</i>&nbsp;                    &quot;DIGEST-MD5: Error encoding challenge&quot;, e);
+<b class="nc"><i>230</i>&nbsp;            } catch (IOException e) {</b>
+<b class="nc"><i>231</i>&nbsp;                throw new SaslException(</b>
+<i>232</i>&nbsp;                    &quot;DIGEST-MD5: Error generating challenge&quot;, e);
+<i>233</i>&nbsp;            }
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;            // Step 2 is performed by client
+<i>236</i>&nbsp;
+<i>237</i>&nbsp;        case 3:
+<i>238</i>&nbsp;            /* Validates client&#39;s response and generate challenge:
+<i>239</i>&nbsp;             *    response-auth = &quot;rspauth&quot; &quot;=&quot; response-value
+<i>240</i>&nbsp;             */
+<i>241</i>&nbsp;            try {
+<b class="nc"><i>242</i>&nbsp;                byte[][] responseVal = parseDirectives(response, DIRECTIVE_KEY,</b>
+<i>243</i>&nbsp;                    null, REALM);
+<b class="nc"><i>244</i>&nbsp;                challenge = validateClientResponse(responseVal);</b>
+<b class="nc"><i>245</i>&nbsp;            } catch (SaslException e) {</b>
+<b class="nc"><i>246</i>&nbsp;                throw e;</b>
+<b class="nc"><i>247</i>&nbsp;            } catch (UnsupportedEncodingException e) {</b>
+<b class="nc"><i>248</i>&nbsp;                throw new SaslException(</b>
+<i>249</i>&nbsp;                    &quot;DIGEST-MD5: Error validating client response&quot;, e);
+<i>250</i>&nbsp;            } finally {
+<b class="nc"><i>251</i>&nbsp;                step = 0;  // Set to invalid state</b>
+<b class="nc"><i>252</i>&nbsp;            }</b>
+<i>253</i>&nbsp;
+<b class="nc"><i>254</i>&nbsp;            completed = true;</b>
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;            /* Initialize SecurityCtx implementation */
+<b class="nc"><i>257</i>&nbsp;            if (integrity &amp;&amp; privacy) {</b>
+<b class="nc"><i>258</i>&nbsp;                secCtx = new DigestPrivacy(false /* not client */);</b>
+<b class="nc"><i>259</i>&nbsp;            } else if (integrity) {</b>
+<b class="nc"><i>260</i>&nbsp;                secCtx = new DigestIntegrity(false /* not client */);</b>
+<i>261</i>&nbsp;            }
+<i>262</i>&nbsp;
+<b class="nc"><i>263</i>&nbsp;            return challenge;</b>
+<i>264</i>&nbsp;
+<i>265</i>&nbsp;        default:
+<i>266</i>&nbsp;            // No other possible state
+<b class="nc"><i>267</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: Server at illegal state&quot;);</b>
+<i>268</i>&nbsp;        }
+<i>269</i>&nbsp;    }
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;    /**
+<i>272</i>&nbsp;     * Generates challenge to be sent to client.
+<i>273</i>&nbsp;     *  digest-challenge  =
+<i>274</i>&nbsp;     *    1#( realm | nonce | qop-options | stale | maxbuf | charset
+<i>275</i>&nbsp;     *               algorithm | cipher-opts | auth-param )
+<i>276</i>&nbsp;     *
+<i>277</i>&nbsp;     *        realm             = &quot;realm&quot; &quot;=&quot; &lt;&quot;&gt; realm-value &lt;&quot;&gt;
+<i>278</i>&nbsp;     *        realm-value       = qdstr-val
+<i>279</i>&nbsp;     *        nonce             = &quot;nonce&quot; &quot;=&quot; &lt;&quot;&gt; nonce-value &lt;&quot;&gt;
+<i>280</i>&nbsp;     *        nonce-value       = qdstr-val
+<i>281</i>&nbsp;     *        qop-options       = &quot;qop&quot; &quot;=&quot; &lt;&quot;&gt; qop-list &lt;&quot;&gt;
+<i>282</i>&nbsp;     *        qop-list          = 1#qop-value
+<i>283</i>&nbsp;     *        qop-value         = &quot;auth&quot; | &quot;auth-int&quot; | &quot;auth-conf&quot; |
+<i>284</i>&nbsp;     *                             token
+<i>285</i>&nbsp;     *        stale             = &quot;stale&quot; &quot;=&quot; &quot;true&quot;
+<i>286</i>&nbsp;     *        maxbuf            = &quot;maxbuf&quot; &quot;=&quot; maxbuf-value
+<i>287</i>&nbsp;     *        maxbuf-value      = 1*DIGIT
+<i>288</i>&nbsp;     *        charset           = &quot;charset&quot; &quot;=&quot; &quot;utf-8&quot;
+<i>289</i>&nbsp;     *        algorithm         = &quot;algorithm&quot; &quot;=&quot; &quot;md5-sess&quot;
+<i>290</i>&nbsp;     *        cipher-opts       = &quot;cipher&quot; &quot;=&quot; &lt;&quot;&gt; 1#cipher-value &lt;&quot;&gt;
+<i>291</i>&nbsp;     *        cipher-value      = &quot;3des&quot; | &quot;des&quot; | &quot;rc4-40&quot; | &quot;rc4&quot; |
+<i>292</i>&nbsp;     *                            &quot;rc4-56&quot; | token
+<i>293</i>&nbsp;     *        auth-param        = token &quot;=&quot; ( token | quoted-string )
+<i>294</i>&nbsp;     */
+<i>295</i>&nbsp;    private byte[] generateChallenge(List&lt;String&gt; realms, String qopStr,
+<i>296</i>&nbsp;        String cipherStr) throws UnsupportedEncodingException, IOException {
+<b class="nc"><i>297</i>&nbsp;        ByteArrayOutputStream out = new ByteArrayOutputStream();</b>
+<i>298</i>&nbsp;
+<i>299</i>&nbsp;        // Realms (&gt;= 0)
+<b class="nc"><i>300</i>&nbsp;        for (int i = 0; realms != null &amp;&amp; i &lt; realms.size(); i++) {</b>
+<b class="nc"><i>301</i>&nbsp;            out.write(&quot;realm=\&quot;&quot;.getBytes(encoding));</b>
+<b class="nc"><i>302</i>&nbsp;            writeQuotedStringValue(out, realms.get(i).getBytes(encoding));</b>
+<b class="nc"><i>303</i>&nbsp;            out.write(&#39;&quot;&#39;);</b>
+<b class="nc"><i>304</i>&nbsp;            out.write(&#39;,&#39;);</b>
+<i>305</i>&nbsp;        }
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;        // Nonce - required (1)
+<b class="nc"><i>308</i>&nbsp;        out.write((&quot;nonce=\&quot;&quot;).getBytes(encoding));</b>
+<b class="nc"><i>309</i>&nbsp;        nonce = generateNonce();</b>
+<b class="nc"><i>310</i>&nbsp;        writeQuotedStringValue(out, nonce);</b>
+<b class="nc"><i>311</i>&nbsp;        out.write(&#39;&quot;&#39;);</b>
+<b class="nc"><i>312</i>&nbsp;        out.write(&#39;,&#39;);</b>
+<i>313</i>&nbsp;
+<i>314</i>&nbsp;        // QOP - optional (1) [default: auth]
+<i>315</i>&nbsp;        // qop=&quot;auth,auth-conf,auth-int&quot;
+<b class="nc"><i>316</i>&nbsp;        if (qopStr != null) {</b>
+<b class="nc"><i>317</i>&nbsp;            out.write((&quot;qop=\&quot;&quot;).getBytes(encoding));</b>
+<i>318</i>&nbsp;            // Check for quotes in case of non-standard qop options
+<b class="nc"><i>319</i>&nbsp;            writeQuotedStringValue(out, qopStr.getBytes(encoding));</b>
+<b class="nc"><i>320</i>&nbsp;            out.write(&#39;&quot;&#39;);</b>
+<b class="nc"><i>321</i>&nbsp;            out.write(&#39;,&#39;);</b>
+<i>322</i>&nbsp;        }
+<i>323</i>&nbsp;
+<i>324</i>&nbsp;        // maxbuf - optional (1) [default: 65536]
+<b class="nc"><i>325</i>&nbsp;        if (recvMaxBufSize != DEFAULT_MAXBUF) {</b>
+<b class="nc"><i>326</i>&nbsp;            out.write((&quot;maxbuf=\&quot;&quot; + recvMaxBufSize + &quot;\&quot;,&quot;).getBytes(encoding));</b>
+<i>327</i>&nbsp;        }
+<i>328</i>&nbsp;
+<i>329</i>&nbsp;        // charset - optional (1) [default: ISO 8859_1]
+<b class="nc"><i>330</i>&nbsp;        if (useUTF8) {</b>
+<b class="nc"><i>331</i>&nbsp;            out.write(UTF8_DIRECTIVE.getBytes(encoding));</b>
+<i>332</i>&nbsp;        }
+<i>333</i>&nbsp;
+<b class="nc"><i>334</i>&nbsp;        if (cipherStr != null) {</b>
+<b class="nc"><i>335</i>&nbsp;            out.write(&quot;cipher=\&quot;&quot;.getBytes(encoding));</b>
+<i>336</i>&nbsp;            // Check for quotes in case of custom ciphers
+<b class="nc"><i>337</i>&nbsp;            writeQuotedStringValue(out, cipherStr.getBytes(encoding));</b>
+<b class="nc"><i>338</i>&nbsp;            out.write(&#39;&quot;&#39;);</b>
+<b class="nc"><i>339</i>&nbsp;            out.write(&#39;,&#39;);</b>
+<i>340</i>&nbsp;        }
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;        // algorithm - required (1)
+<b class="nc"><i>343</i>&nbsp;        out.write(ALGORITHM_DIRECTIVE.getBytes(encoding));</b>
+<i>344</i>&nbsp;
+<b class="nc"><i>345</i>&nbsp;        return out.toByteArray();</b>
+<i>346</i>&nbsp;    }
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;    /**
+<i>349</i>&nbsp;     * Validates client&#39;s response.
+<i>350</i>&nbsp;     *   digest-response  = 1#( username | realm | nonce | cnonce |
+<i>351</i>&nbsp;     *                          nonce-count | qop | digest-uri | response |
+<i>352</i>&nbsp;     *                          maxbuf | charset | cipher | authzid |
+<i>353</i>&nbsp;     *                          auth-param )
+<i>354</i>&nbsp;     *
+<i>355</i>&nbsp;     *       username         = &quot;username&quot; &quot;=&quot; &lt;&quot;&gt; username-value &lt;&quot;&gt;
+<i>356</i>&nbsp;     *       username-value   = qdstr-val
+<i>357</i>&nbsp;     *       cnonce           = &quot;cnonce&quot; &quot;=&quot; &lt;&quot;&gt; cnonce-value &lt;&quot;&gt;
+<i>358</i>&nbsp;     *       cnonce-value     = qdstr-val
+<i>359</i>&nbsp;     *       nonce-count      = &quot;nc&quot; &quot;=&quot; nc-value
+<i>360</i>&nbsp;     *       nc-value         = 8LHEX
+<i>361</i>&nbsp;     *       qop              = &quot;qop&quot; &quot;=&quot; qop-value
+<i>362</i>&nbsp;     *       digest-uri       = &quot;digest-uri&quot; &quot;=&quot; &lt;&quot;&gt; digest-uri-value &lt;&quot;&gt;
+<i>363</i>&nbsp;     *       digest-uri-value  = serv-type &quot;/&quot; host [ &quot;/&quot; serv-name ]
+<i>364</i>&nbsp;     *       serv-type        = 1*ALPHA
+<i>365</i>&nbsp;     *       host             = 1*( ALPHA | DIGIT | &quot;-&quot; | &quot;.&quot; )
+<i>366</i>&nbsp;     *       serv-name        = host
+<i>367</i>&nbsp;     *       response         = &quot;response&quot; &quot;=&quot; response-value
+<i>368</i>&nbsp;     *       response-value   = 32LHEX
+<i>369</i>&nbsp;     *       LHEX             = &quot;0&quot; | &quot;1&quot; | &quot;2&quot; | &quot;3&quot; |
+<i>370</i>&nbsp;     *                          &quot;4&quot; | &quot;5&quot; | &quot;6&quot; | &quot;7&quot; |
+<i>371</i>&nbsp;     *                          &quot;8&quot; | &quot;9&quot; | &quot;a&quot; | &quot;b&quot; |
+<i>372</i>&nbsp;     *                          &quot;c&quot; | &quot;d&quot; | &quot;e&quot; | &quot;f&quot;
+<i>373</i>&nbsp;     *       cipher           = &quot;cipher&quot; &quot;=&quot; cipher-value
+<i>374</i>&nbsp;     *       authzid          = &quot;authzid&quot; &quot;=&quot; &lt;&quot;&gt; authzid-value &lt;&quot;&gt;
+<i>375</i>&nbsp;     *       authzid-value    = qdstr-val
+<i>376</i>&nbsp;     * sets:
+<i>377</i>&nbsp;     *   negotiatedQop
+<i>378</i>&nbsp;     *   negotiatedCipher
+<i>379</i>&nbsp;     *   negotiatedRealm
+<i>380</i>&nbsp;     *   negotiatedStrength
+<i>381</i>&nbsp;     *   digestUri (checked and set to clients to account for case diffs)
+<i>382</i>&nbsp;     *   sendMaxBufSize
+<i>383</i>&nbsp;     *   authzid (gotten from callback)
+<i>384</i>&nbsp;     * @return response-value (&#39;rspauth&#39;) for client to validate
+<i>385</i>&nbsp;     */
+<i>386</i>&nbsp;    private byte[] validateClientResponse(byte[][] responseVal)
+<i>387</i>&nbsp;        throws SaslException, UnsupportedEncodingException {
+<i>388</i>&nbsp;
+<i>389</i>&nbsp;        /* CHARSET: optional atmost once */
+<b class="nc"><i>390</i>&nbsp;        if (responseVal[CHARSET] != null) {</b>
+<i>391</i>&nbsp;            // The client should send this directive only if the server has
+<i>392</i>&nbsp;            // indicated it supports UTF-8.
+<b class="nc"><i>393</i>&nbsp;            if (!useUTF8 ||</b>
+<b class="nc"><i>394</i>&nbsp;                !&quot;utf-8&quot;.equals(new String(responseVal[CHARSET], encoding))) {</b>
+<b class="nc"><i>395</i>&nbsp;                throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>396</i>&nbsp;                    &quot;violation. Incompatible charset value: &quot; +
+<i>397</i>&nbsp;                    new String(responseVal[CHARSET]));
+<i>398</i>&nbsp;            }
+<i>399</i>&nbsp;        }
+<i>400</i>&nbsp;
+<i>401</i>&nbsp;        // maxbuf: atmost once
+<b class="nc"><i>402</i>&nbsp;        int clntMaxBufSize =</b>
+<i>403</i>&nbsp;            (responseVal[MAXBUF] == null) ? DEFAULT_MAXBUF
+<b class="nc"><i>404</i>&nbsp;            : Integer.parseInt(new String(responseVal[MAXBUF], encoding));</b>
+<i>405</i>&nbsp;
+<i>406</i>&nbsp;        // Max send buf size is min of client&#39;s max recv buf size and
+<i>407</i>&nbsp;        // server&#39;s max send buf size
+<b class="nc"><i>408</i>&nbsp;        sendMaxBufSize = ((sendMaxBufSize == 0) ? clntMaxBufSize :</b>
+<b class="nc"><i>409</i>&nbsp;            Math.min(sendMaxBufSize, clntMaxBufSize));</b>
+<i>410</i>&nbsp;
+<i>411</i>&nbsp;        /* username: exactly once */
+<i>412</i>&nbsp;        String username;
+<b class="nc"><i>413</i>&nbsp;        if (responseVal[USERNAME] != null) {</b>
+<b class="nc"><i>414</i>&nbsp;            username = new String(responseVal[USERNAME], encoding);</b>
+<b class="nc"><i>415</i>&nbsp;            logger.log(Level.FINE, &quot;DIGEST82:Username: {0}&quot;, username);</b>
+<i>416</i>&nbsp;        } else {
+<b class="nc"><i>417</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>418</i>&nbsp;                &quot;violation. Missing username.&quot;);
+<i>419</i>&nbsp;        }
+<i>420</i>&nbsp;
+<i>421</i>&nbsp;        /* realm: exactly once if sent by server */
+<b class="nc"><i>422</i>&nbsp;        negotiatedRealm = ((responseVal[REALM] != null) ?</b>
+<i>423</i>&nbsp;            new String(responseVal[REALM], encoding) : &quot;&quot;);
+<b class="nc"><i>424</i>&nbsp;        logger.log(Level.FINE, &quot;DIGEST83:Client negotiated realm: {0}&quot;,</b>
+<i>425</i>&nbsp;            negotiatedRealm);
+<i>426</i>&nbsp;
+<b class="nc"><i>427</i>&nbsp;        if (!serverRealms.contains(negotiatedRealm)) {</b>
+<i>428</i>&nbsp;            // Server had sent at least one realm
+<i>429</i>&nbsp;            // Check that response is one of these
+<b class="nc"><i>430</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>431</i>&nbsp;                &quot;violation. Nonexistent realm: &quot; + negotiatedRealm);
+<i>432</i>&nbsp;        }
+<i>433</i>&nbsp;        // Else, client specified realm was one of server&#39;s or server had none
+<i>434</i>&nbsp;
+<i>435</i>&nbsp;        /* nonce: exactly once */
+<b class="nc"><i>436</i>&nbsp;        if (responseVal[NONCE] == null) {</b>
+<b class="nc"><i>437</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>438</i>&nbsp;                &quot;violation. Missing nonce.&quot;);
+<i>439</i>&nbsp;        }
+<b class="nc"><i>440</i>&nbsp;        byte[] nonceFromClient = responseVal[NONCE];</b>
+<b class="nc"><i>441</i>&nbsp;        if (!Arrays.equals(nonceFromClient, nonce)) {</b>
+<b class="nc"><i>442</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>443</i>&nbsp;                &quot;violation. Mismatched nonce.&quot;);
+<i>444</i>&nbsp;        }
+<i>445</i>&nbsp;
+<i>446</i>&nbsp;        /* cnonce: exactly once */
+<b class="nc"><i>447</i>&nbsp;        if (responseVal[CNONCE] == null) {</b>
+<b class="nc"><i>448</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>449</i>&nbsp;                &quot;violation. Missing cnonce.&quot;);
+<i>450</i>&nbsp;        }
+<b class="nc"><i>451</i>&nbsp;        byte[] cnonce = responseVal[CNONCE];</b>
+<i>452</i>&nbsp;
+<i>453</i>&nbsp;        /* nonce-count: atmost once */
+<b class="nc"><i>454</i>&nbsp;        if (responseVal[NONCE_COUNT] != null &amp;&amp;</b>
+<b class="nc"><i>455</i>&nbsp;            NONCE_COUNT_VALUE != Integer.parseInt(</b>
+<i>456</i>&nbsp;                new String(responseVal[NONCE_COUNT], encoding), 16)) {
+<b class="nc"><i>457</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>458</i>&nbsp;                &quot;violation. Nonce count does not match: &quot; +
+<i>459</i>&nbsp;                new String(responseVal[NONCE_COUNT]));
+<i>460</i>&nbsp;        }
+<i>461</i>&nbsp;
+<i>462</i>&nbsp;        /* qop: atmost once; default is &quot;auth&quot; */
+<b class="nc"><i>463</i>&nbsp;        negotiatedQop = ((responseVal[QOP] != null) ?</b>
+<i>464</i>&nbsp;            new String(responseVal[QOP], encoding) : &quot;auth&quot;);
+<i>465</i>&nbsp;
+<b class="nc"><i>466</i>&nbsp;        logger.log(Level.FINE, &quot;DIGEST84:Client negotiated qop: {0}&quot;,</b>
+<i>467</i>&nbsp;            negotiatedQop);
+<i>468</i>&nbsp;
+<i>469</i>&nbsp;        // Check that QOP is one sent by server
+<i>470</i>&nbsp;        byte cQop;
+<b class="nc"><i>471</i>&nbsp;        switch (negotiatedQop) {</b>
+<i>472</i>&nbsp;            case &quot;auth&quot;:
+<b class="nc"><i>473</i>&nbsp;                cQop = NO_PROTECTION;</b>
+<b class="nc"><i>474</i>&nbsp;                break;</b>
+<i>475</i>&nbsp;            case &quot;auth-int&quot;:
+<b class="nc"><i>476</i>&nbsp;                cQop = INTEGRITY_ONLY_PROTECTION;</b>
+<b class="nc"><i>477</i>&nbsp;                integrity = true;</b>
+<b class="nc"><i>478</i>&nbsp;                rawSendSize = sendMaxBufSize - 16;</b>
+<b class="nc"><i>479</i>&nbsp;                break;</b>
+<i>480</i>&nbsp;            case &quot;auth-conf&quot;:
+<b class="nc"><i>481</i>&nbsp;                cQop = PRIVACY_PROTECTION;</b>
+<b class="nc"><i>482</i>&nbsp;                integrity = privacy = true;</b>
+<b class="nc"><i>483</i>&nbsp;                rawSendSize = sendMaxBufSize - 26;</b>
+<b class="nc"><i>484</i>&nbsp;                break;</b>
+<i>485</i>&nbsp;            default:
+<b class="nc"><i>486</i>&nbsp;                throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>487</i>&nbsp;                    &quot;violation. Invalid QOP: &quot; + negotiatedQop);
+<i>488</i>&nbsp;        }
+<b class="nc"><i>489</i>&nbsp;        if ((cQop&amp;allQop) == 0) {</b>
+<b class="nc"><i>490</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: server does not support &quot; +</b>
+<i>491</i>&nbsp;                &quot; qop: &quot; + negotiatedQop);
+<i>492</i>&nbsp;        }
+<i>493</i>&nbsp;
+<b class="nc"><i>494</i>&nbsp;        if (privacy) {</b>
+<b class="nc"><i>495</i>&nbsp;            negotiatedCipher = ((responseVal[CIPHER] != null) ?</b>
+<i>496</i>&nbsp;                new String(responseVal[CIPHER], encoding) : null);
+<b class="nc"><i>497</i>&nbsp;            if (negotiatedCipher == null) {</b>
+<b class="nc"><i>498</i>&nbsp;                throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>499</i>&nbsp;                    &quot;violation. No cipher specified.&quot;);
+<i>500</i>&nbsp;            }
+<i>501</i>&nbsp;
+<b class="nc"><i>502</i>&nbsp;            int foundCipher = -1;</b>
+<b class="nc"><i>503</i>&nbsp;            logger.log(Level.FINE, &quot;DIGEST85:Client negotiated cipher: {0}&quot;,</b>
+<i>504</i>&nbsp;                negotiatedCipher);
+<i>505</i>&nbsp;
+<i>506</i>&nbsp;            // Check that cipher is one that we offered
+<b class="nc"><i>507</i>&nbsp;            for (int j = 0; j &lt; CIPHER_TOKENS.length; j++) {</b>
+<b class="nc"><i>508</i>&nbsp;                if (negotiatedCipher.equals(CIPHER_TOKENS[j]) &amp;&amp;</b>
+<i>509</i>&nbsp;                    myCiphers[j] != 0) {
+<b class="nc"><i>510</i>&nbsp;                    foundCipher = j;</b>
+<b class="nc"><i>511</i>&nbsp;                    break;</b>
+<i>512</i>&nbsp;                }
+<i>513</i>&nbsp;            }
+<b class="nc"><i>514</i>&nbsp;            if (foundCipher == -1) {</b>
+<b class="nc"><i>515</i>&nbsp;                throw new SaslException(&quot;DIGEST-MD5: server does not &quot; +</b>
+<i>516</i>&nbsp;                    &quot;support cipher: &quot; + negotiatedCipher);
+<i>517</i>&nbsp;            }
+<i>518</i>&nbsp;            // Set negotiatedStrength
+<b class="nc"><i>519</i>&nbsp;            if ((CIPHER_MASKS[foundCipher]&amp;HIGH_STRENGTH) != 0) {</b>
+<b class="nc"><i>520</i>&nbsp;                negotiatedStrength = &quot;high&quot;;</b>
+<b class="nc"><i>521</i>&nbsp;            } else if ((CIPHER_MASKS[foundCipher]&amp;MEDIUM_STRENGTH) != 0) {</b>
+<b class="nc"><i>522</i>&nbsp;                negotiatedStrength = &quot;medium&quot;;</b>
+<i>523</i>&nbsp;            } else {
+<i>524</i>&nbsp;                // assume default low
+<b class="nc"><i>525</i>&nbsp;                negotiatedStrength = &quot;low&quot;;</b>
+<i>526</i>&nbsp;            }
+<i>527</i>&nbsp;
+<b class="nc"><i>528</i>&nbsp;            logger.log(Level.FINE, &quot;DIGEST86:Negotiated strength: {0}&quot;,</b>
+<i>529</i>&nbsp;                negotiatedStrength);
+<i>530</i>&nbsp;        }
+<i>531</i>&nbsp;
+<i>532</i>&nbsp;        // atmost once
+<b class="nc"><i>533</i>&nbsp;        String digestUriFromResponse = ((responseVal[DIGEST_URI]) != null ?</b>
+<i>534</i>&nbsp;            new String(responseVal[DIGEST_URI], encoding) : null);
+<i>535</i>&nbsp;
+<b class="nc"><i>536</i>&nbsp;        if (digestUriFromResponse != null) {</b>
+<b class="nc"><i>537</i>&nbsp;            logger.log(Level.FINE, &quot;DIGEST87:digest URI: {0}&quot;,</b>
+<i>538</i>&nbsp;                digestUriFromResponse);
+<i>539</i>&nbsp;        }
+<i>540</i>&nbsp;
+<i>541</i>&nbsp;        // serv-type &quot;/&quot; host [ &quot;/&quot; serv-name ]
+<i>542</i>&nbsp;        // e.g.: smtp/mail3.example.com/example.com
+<i>543</i>&nbsp;        // e.g.: ftp/ftp.example.com
+<i>544</i>&nbsp;        // e.g.: ldap/ldapserver.example.com
+<i>545</i>&nbsp;
+<i>546</i>&nbsp;        // host should match one of service&#39;s configured service names
+<i>547</i>&nbsp;        // Check against digest URI that mech was created with
+<i>548</i>&nbsp;
+<b class="nc"><i>549</i>&nbsp;        if (uriMatches(digestUri, digestUriFromResponse)) {</b>
+<b class="nc"><i>550</i>&nbsp;            digestUri = digestUriFromResponse; // account for case-sensitive diffs</b>
+<i>551</i>&nbsp;        } else {
+<b class="nc"><i>552</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>553</i>&nbsp;                &quot;violation. Mismatched URI: &quot; + digestUriFromResponse +
+<i>554</i>&nbsp;                &quot;; expecting: &quot; + digestUri);
+<i>555</i>&nbsp;        }
+<i>556</i>&nbsp;
+<i>557</i>&nbsp;        // response: exactly once
+<b class="nc"><i>558</i>&nbsp;        byte[] responseFromClient = responseVal[RESPONSE];</b>
+<b class="nc"><i>559</i>&nbsp;        if (responseFromClient == null) {</b>
+<b class="nc"><i>560</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>561</i>&nbsp;                &quot; violation. Missing response.&quot;);
+<i>562</i>&nbsp;        }
+<i>563</i>&nbsp;
+<i>564</i>&nbsp;        // authzid: atmost once
+<i>565</i>&nbsp;        byte[] authzidBytes;
+<b class="nc"><i>566</i>&nbsp;        String authzidFromClient = ((authzidBytes=responseVal[AUTHZID]) != null?</b>
+<i>567</i>&nbsp;            new String(authzidBytes, encoding) : username);
+<i>568</i>&nbsp;
+<b class="nc"><i>569</i>&nbsp;        if (authzidBytes != null) {</b>
+<b class="nc"><i>570</i>&nbsp;            logger.log(Level.FINE, &quot;DIGEST88:Authzid: {0}&quot;,</b>
+<i>571</i>&nbsp;                new String(authzidBytes));
+<i>572</i>&nbsp;        }
+<i>573</i>&nbsp;
+<i>574</i>&nbsp;        // Ignore auth-param
+<i>575</i>&nbsp;
+<i>576</i>&nbsp;        // Get password need to generate verifying response
+<i>577</i>&nbsp;        char[] passwd;
+<i>578</i>&nbsp;        try {
+<i>579</i>&nbsp;            // Realm and Name callbacks are used to provide info
+<b class="nc"><i>580</i>&nbsp;            RealmCallback rcb = new RealmCallback(&quot;DIGEST-MD5 realm: &quot;,</b>
+<i>581</i>&nbsp;                negotiatedRealm);
+<b class="nc"><i>582</i>&nbsp;            NameCallback ncb = new NameCallback(&quot;DIGEST-MD5 authentication ID: &quot;,</b>
+<i>583</i>&nbsp;                username);
+<i>584</i>&nbsp;
+<i>585</i>&nbsp;            // PasswordCallback is used to collect info
+<b class="nc"><i>586</i>&nbsp;            PasswordCallback pcb =</b>
+<i>587</i>&nbsp;                new PasswordCallback(&quot;DIGEST-MD5 password: &quot;, false);
+<i>588</i>&nbsp;
+<b class="nc"><i>589</i>&nbsp;            cbh.handle(new Callback[] {rcb, ncb, pcb});</b>
+<b class="nc"><i>590</i>&nbsp;            passwd = pcb.getPassword();</b>
+<b class="nc"><i>591</i>&nbsp;            pcb.clearPassword();</b>
+<i>592</i>&nbsp;
+<b class="nc"><i>593</i>&nbsp;        } catch (UnsupportedCallbackException e) {</b>
+<b class="nc"><i>594</i>&nbsp;            throw new SaslException(</b>
+<i>595</i>&nbsp;                &quot;DIGEST-MD5: Cannot perform callback to acquire password&quot;, e);
+<i>596</i>&nbsp;
+<b class="nc"><i>597</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>598</i>&nbsp;            throw new SaslException(</b>
+<i>599</i>&nbsp;                &quot;DIGEST-MD5: IO error acquiring password&quot;, e);
+<b class="nc"><i>600</i>&nbsp;        }</b>
+<i>601</i>&nbsp;
+<b class="nc"><i>602</i>&nbsp;        if (passwd == null) {</b>
+<b class="nc"><i>603</i>&nbsp;            throw new SaslException(</b>
+<i>604</i>&nbsp;                &quot;DIGEST-MD5: cannot acquire password for &quot; + username +
+<i>605</i>&nbsp;                &quot; in realm : &quot; + negotiatedRealm);
+<i>606</i>&nbsp;        }
+<i>607</i>&nbsp;
+<i>608</i>&nbsp;        try {
+<i>609</i>&nbsp;            // Validate response value sent by client
+<i>610</i>&nbsp;            byte[] expectedResponse;
+<i>611</i>&nbsp;
+<i>612</i>&nbsp;            try {
+<b class="nc"><i>613</i>&nbsp;                expectedResponse = generateResponseValue(&quot;AUTHENTICATE&quot;,</b>
+<i>614</i>&nbsp;                    digestUri, negotiatedQop, username, negotiatedRealm,
+<i>615</i>&nbsp;                    passwd, nonce /* use own nonce */,
+<i>616</i>&nbsp;                    cnonce, NONCE_COUNT_VALUE, authzidBytes);
+<i>617</i>&nbsp;
+<b class="nc"><i>618</i>&nbsp;            } catch (NoSuchAlgorithmException e) {</b>
+<b class="nc"><i>619</i>&nbsp;                throw new SaslException(</b>
+<i>620</i>&nbsp;                    &quot;DIGEST-MD5: problem duplicating client response&quot;, e);
+<b class="nc"><i>621</i>&nbsp;            } catch (IOException e) {</b>
+<b class="nc"><i>622</i>&nbsp;                throw new SaslException(</b>
+<i>623</i>&nbsp;                    &quot;DIGEST-MD5: problem duplicating client response&quot;, e);
+<b class="nc"><i>624</i>&nbsp;            }</b>
+<i>625</i>&nbsp;
+<b class="nc"><i>626</i>&nbsp;            if (!Arrays.equals(responseFromClient, expectedResponse)) {</b>
+<b class="nc"><i>627</i>&nbsp;                throw new SaslException(&quot;DIGEST-MD5: digest response format &quot; +</b>
+<i>628</i>&nbsp;                    &quot;violation. Mismatched response.&quot;);
+<i>629</i>&nbsp;            }
+<i>630</i>&nbsp;
+<i>631</i>&nbsp;            // Ensure that authzid mapping is OK
+<i>632</i>&nbsp;            try {
+<b class="nc"><i>633</i>&nbsp;                AuthorizeCallback acb =</b>
+<i>634</i>&nbsp;                    new AuthorizeCallback(username, authzidFromClient);
+<b class="nc"><i>635</i>&nbsp;                cbh.handle(new Callback[]{acb});</b>
+<i>636</i>&nbsp;
+<b class="nc"><i>637</i>&nbsp;                if (acb.isAuthorized()) {</b>
+<b class="nc"><i>638</i>&nbsp;                    authzid = acb.getAuthorizedID();</b>
+<i>639</i>&nbsp;                } else {
+<b class="nc"><i>640</i>&nbsp;                    throw new SaslException(&quot;DIGEST-MD5: &quot; + username +</b>
+<i>641</i>&nbsp;                        &quot; is not authorized to act as &quot; + authzidFromClient);
+<i>642</i>&nbsp;                }
+<b class="nc"><i>643</i>&nbsp;            } catch (SaslException e) {</b>
+<b class="nc"><i>644</i>&nbsp;                throw e;</b>
+<b class="nc"><i>645</i>&nbsp;            } catch (UnsupportedCallbackException e) {</b>
+<b class="nc"><i>646</i>&nbsp;                throw new SaslException(</b>
+<i>647</i>&nbsp;                    &quot;DIGEST-MD5: Cannot perform callback to check authzid&quot;, e);
+<b class="nc"><i>648</i>&nbsp;            } catch (IOException e) {</b>
+<b class="nc"><i>649</i>&nbsp;                throw new SaslException(</b>
+<i>650</i>&nbsp;                    &quot;DIGEST-MD5: IO error checking authzid&quot;, e);
+<b class="nc"><i>651</i>&nbsp;            }</b>
+<i>652</i>&nbsp;
+<b class="nc"><i>653</i>&nbsp;            return generateResponseAuth(username, passwd, cnonce,</b>
+<i>654</i>&nbsp;                NONCE_COUNT_VALUE, authzidBytes);
+<i>655</i>&nbsp;        } finally {
+<i>656</i>&nbsp;            // Clear password
+<b class="nc"><i>657</i>&nbsp;            for (int i = 0; i &lt; passwd.length; i++) {</b>
+<b class="nc"><i>658</i>&nbsp;                passwd[i] = 0;</b>
+<i>659</i>&nbsp;            }
+<i>660</i>&nbsp;        }
+<i>661</i>&nbsp;    }
+<i>662</i>&nbsp;
+<i>663</i>&nbsp;    private static boolean uriMatches(String thisUri, String incomingUri) {
+<i>664</i>&nbsp;        // Full match
+<b class="nc"><i>665</i>&nbsp;        if (thisUri.equalsIgnoreCase(incomingUri)) {</b>
+<b class="nc"><i>666</i>&nbsp;            return true;</b>
+<i>667</i>&nbsp;        }
+<i>668</i>&nbsp;        // Unbound match
+<b class="nc"><i>669</i>&nbsp;        if (thisUri.endsWith(&quot;/*&quot;)) {</b>
+<b class="nc"><i>670</i>&nbsp;            int protoAndSlash = thisUri.length() - 1;</b>
+<b class="nc"><i>671</i>&nbsp;            String thisProtoAndSlash = thisUri.substring(0, protoAndSlash);</b>
+<b class="nc"><i>672</i>&nbsp;            String incomingProtoAndSlash = incomingUri.substring(0, protoAndSlash);</b>
+<b class="nc"><i>673</i>&nbsp;            return thisProtoAndSlash.equalsIgnoreCase(incomingProtoAndSlash);</b>
+<i>674</i>&nbsp;        }
+<b class="nc"><i>675</i>&nbsp;        return false;</b>
+<i>676</i>&nbsp;    }
+<i>677</i>&nbsp;
+<i>678</i>&nbsp;    /**
+<i>679</i>&nbsp;     * Server sends a message formatted as follows:
+<i>680</i>&nbsp;     *    response-auth = &quot;rspauth&quot; &quot;=&quot; response-value
+<i>681</i>&nbsp;     *   where response-value is calculated as above, using the values sent in
+<i>682</i>&nbsp;     *   step two, except that if qop is &quot;auth&quot;, then A2 is
+<i>683</i>&nbsp;     *
+<i>684</i>&nbsp;     *       A2 = { &quot;:&quot;, digest-uri-value }
+<i>685</i>&nbsp;     *
+<i>686</i>&nbsp;     *   And if qop is &quot;auth-int&quot; or &quot;auth-conf&quot; then A2 is
+<i>687</i>&nbsp;     *
+<i>688</i>&nbsp;     *       A2 = { &quot;:&quot;, digest-uri-value, &quot;:00000000000000000000000000000000&quot; }
+<i>689</i>&nbsp;     *
+<i>690</i>&nbsp;     * Clears password afterwards.
+<i>691</i>&nbsp;     */
+<i>692</i>&nbsp;    private byte[] generateResponseAuth(String username, char[] passwd,
+<i>693</i>&nbsp;        byte[] cnonce, int nonceCount, byte[] authzidBytes) throws SaslException {
+<i>694</i>&nbsp;
+<i>695</i>&nbsp;        // Construct response value
+<i>696</i>&nbsp;
+<i>697</i>&nbsp;        try {
+<b class="nc"><i>698</i>&nbsp;            byte[] responseValue = generateResponseValue(&quot;&quot;,</b>
+<i>699</i>&nbsp;                digestUri, negotiatedQop, username, negotiatedRealm,
+<i>700</i>&nbsp;                passwd, nonce, cnonce, nonceCount, authzidBytes);
+<i>701</i>&nbsp;
+<b class="nc"><i>702</i>&nbsp;            byte[] challenge = new byte[responseValue.length + 8];</b>
+<b class="nc"><i>703</i>&nbsp;            System.arraycopy(&quot;rspauth=&quot;.getBytes(encoding), 0, challenge, 0, 8);</b>
+<b class="nc"><i>704</i>&nbsp;            System.arraycopy(responseValue, 0, challenge, 8,</b>
+<i>705</i>&nbsp;                responseValue.length );
+<i>706</i>&nbsp;
+<b class="nc"><i>707</i>&nbsp;            return challenge;</b>
+<i>708</i>&nbsp;
+<b class="nc"><i>709</i>&nbsp;        } catch (NoSuchAlgorithmException e) {</b>
+<b class="nc"><i>710</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: problem generating response&quot;, e);</b>
+<b class="nc"><i>711</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>712</i>&nbsp;            throw new SaslException(&quot;DIGEST-MD5: problem generating response&quot;, e);</b>
+<i>713</i>&nbsp;        }
+<i>714</i>&nbsp;    }
+<i>715</i>&nbsp;
+<i>716</i>&nbsp;    public String getAuthorizationID() {
+<b class="nc"><i>717</i>&nbsp;        if (completed) {</b>
+<b class="nc"><i>718</i>&nbsp;            return authzid;</b>
+<i>719</i>&nbsp;        } else {
+<b class="nc"><i>720</i>&nbsp;            throw new IllegalStateException(</b>
+<i>721</i>&nbsp;                &quot;DIGEST-MD5 server negotiation not complete&quot;);
+<i>722</i>&nbsp;        }
+<i>723</i>&nbsp;    }
+<i>724</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

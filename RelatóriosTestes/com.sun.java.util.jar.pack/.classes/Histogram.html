@@ -1,0 +1,927 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Histogram</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.java.util.jar.pack</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Histogram (com.sun.java.util.jar.pack)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Histogram</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 35)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 285)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">Histogram$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 37)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 287)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.java.util.jar.pack;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.io.InputStream;
+<i>30</i>&nbsp;import java.io.PrintStream;
+<i>31</i>&nbsp;import java.util.Arrays;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;/**
+<i>34</i>&nbsp; * Histogram derived from an integer array of events (int[]).
+<i>35</i>&nbsp; * @author John Rose
+<i>36</i>&nbsp; */
+<b class="nc"><i>37</i>&nbsp;final class Histogram {</b>
+<i>38</i>&nbsp;    // Compact histogram representation:  4 bytes per distinct value,
+<i>39</i>&nbsp;    // plus 5 words per distinct count.
+<i>40</i>&nbsp;    protected final int[][] matrix;  // multi-row matrix {{counti,valueij...}}
+<i>41</i>&nbsp;    protected final int     totalWeight;  // sum of all counts
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;    // These are created eagerly also, since that saves work.
+<i>44</i>&nbsp;    // They cost another 8 bytes per distinct value.
+<i>45</i>&nbsp;    protected final int[]   values;  // unique values, sorted by value
+<i>46</i>&nbsp;    protected final int[]   counts;  // counts, same order as values
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;    private static final long LOW32 = (long)-1 &gt;&gt;&gt; 32;
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;    /** Build a histogram given a sequence of values.
+<i>51</i>&nbsp;     *  To save work, the input should be sorted, but need not be.
+<i>52</i>&nbsp;     */
+<i>53</i>&nbsp;    public
+<b class="nc"><i>54</i>&nbsp;    Histogram(int[] valueSequence) {</b>
+<b class="nc"><i>55</i>&nbsp;        long[] hist2col = computeHistogram2Col(maybeSort(valueSequence));</b>
+<b class="nc"><i>56</i>&nbsp;        int[][] table = makeTable(hist2col);</b>
+<b class="nc"><i>57</i>&nbsp;        values = table[0];</b>
+<b class="nc"><i>58</i>&nbsp;        counts = table[1];</b>
+<b class="nc"><i>59</i>&nbsp;        this.matrix = makeMatrix(hist2col);</b>
+<b class="nc"><i>60</i>&nbsp;        this.totalWeight = valueSequence.length;</b>
+<b class="nc"><i>61</i>&nbsp;        assert(assertWellFormed(valueSequence));</b>
+<i>62</i>&nbsp;    }
+<i>63</i>&nbsp;    public
+<i>64</i>&nbsp;    Histogram(int[] valueSequence, int start, int end) {
+<b class="nc"><i>65</i>&nbsp;        this(sortedSlice(valueSequence, start, end));</b>
+<i>66</i>&nbsp;    }
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    /** Build a histogram given a compact matrix of counts and values. */
+<i>69</i>&nbsp;    public
+<b class="nc"><i>70</i>&nbsp;    Histogram(int[][] matrix) {</b>
+<i>71</i>&nbsp;        // sort the rows
+<b class="nc"><i>72</i>&nbsp;        matrix = normalizeMatrix(matrix);  // clone and sort</b>
+<b class="nc"><i>73</i>&nbsp;        this.matrix = matrix;</b>
+<b class="nc"><i>74</i>&nbsp;        int length = 0;</b>
+<b class="nc"><i>75</i>&nbsp;        int weight = 0;</b>
+<b class="nc"><i>76</i>&nbsp;        for (int i = 0; i &lt; matrix.length; i++) {</b>
+<b class="nc"><i>77</i>&nbsp;            int rowLength = matrix[i].length-1;</b>
+<b class="nc"><i>78</i>&nbsp;            length += rowLength;</b>
+<b class="nc"><i>79</i>&nbsp;            weight += matrix[i][0] * rowLength;</b>
+<i>80</i>&nbsp;        }
+<b class="nc"><i>81</i>&nbsp;        this.totalWeight = weight;</b>
+<b class="nc"><i>82</i>&nbsp;        long[] hist2col = new long[length];</b>
+<b class="nc"><i>83</i>&nbsp;        int fillp = 0;</b>
+<b class="nc"><i>84</i>&nbsp;        for (int i = 0; i &lt; matrix.length; i++) {</b>
+<b class="nc"><i>85</i>&nbsp;            for (int j = 1; j &lt; matrix[i].length; j++) {</b>
+<i>86</i>&nbsp;                // sort key is value, so put it in the high 32!
+<b class="nc"><i>87</i>&nbsp;                hist2col[fillp++] = ((long) matrix[i][j] &lt;&lt; 32)</b>
+<i>88</i>&nbsp;                                  | (LOW32 &amp; matrix[i][0]);
+<i>89</i>&nbsp;            }
+<i>90</i>&nbsp;        }
+<b class="nc"><i>91</i>&nbsp;        assert(fillp == hist2col.length);</b>
+<b class="nc"><i>92</i>&nbsp;        Arrays.sort(hist2col);</b>
+<b class="nc"><i>93</i>&nbsp;        int[][] table = makeTable(hist2col);</b>
+<b class="nc"><i>94</i>&nbsp;        values = table[1]; //backwards</b>
+<b class="nc"><i>95</i>&nbsp;        counts = table[0]; //backwards</b>
+<b class="nc"><i>96</i>&nbsp;        assert(assertWellFormed(null));</b>
+<i>97</i>&nbsp;    }
+<i>98</i>&nbsp;
+<i>99</i>&nbsp;    /** Histogram of int values, reported compactly as a ragged matrix,
+<i>100</i>&nbsp;     *  indexed by descending frequency rank.
+<i>101</i>&nbsp;     *  &lt;p&gt;
+<i>102</i>&nbsp;     *  Format of matrix:
+<i>103</i>&nbsp;     *  Each row in the matrix begins with an occurrence count,
+<i>104</i>&nbsp;     *  and continues with all int values that occur at that frequency.
+<i>105</i>&nbsp;     *  &lt;pre&gt;
+<i>106</i>&nbsp;     *  int[][] matrix = {
+<i>107</i>&nbsp;     *    { count1, value11, value12, value13, ...  },
+<i>108</i>&nbsp;     *    { count2, value21, value22, ... },
+<i>109</i>&nbsp;     *    ...
+<i>110</i>&nbsp;     *  }
+<i>111</i>&nbsp;     *  &lt;/pre&gt;
+<i>112</i>&nbsp;     *  The first column of the matrix { count1, count2, ... }
+<i>113</i>&nbsp;     *  is sorted in descending order, and contains no duplicates.
+<i>114</i>&nbsp;     *  Each row of the matrix (apart from its first element)
+<i>115</i>&nbsp;     *  is sorted in ascending order, and contains no duplicates.
+<i>116</i>&nbsp;     *  That is, each sequence { valuei1, valuei2, ... } is sorted.
+<i>117</i>&nbsp;     */
+<i>118</i>&nbsp;    public
+<b class="nc"><i>119</i>&nbsp;    int[][] getMatrix() { return matrix; }</b>
+<i>120</i>&nbsp;
+<i>121</i>&nbsp;    public
+<b class="nc"><i>122</i>&nbsp;    int getRowCount() { return matrix.length; }</b>
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    public
+<b class="nc"><i>125</i>&nbsp;    int getRowFrequency(int rn) { return matrix[rn][0]; }</b>
+<i>126</i>&nbsp;
+<i>127</i>&nbsp;    public
+<b class="nc"><i>128</i>&nbsp;    int getRowLength(int rn) { return matrix[rn].length-1; }</b>
+<i>129</i>&nbsp;
+<i>130</i>&nbsp;    public
+<b class="nc"><i>131</i>&nbsp;    int getRowValue(int rn, int vn) { return matrix[rn][vn+1]; }</b>
+<i>132</i>&nbsp;
+<i>133</i>&nbsp;    public
+<i>134</i>&nbsp;    int getRowWeight(int rn) {
+<b class="nc"><i>135</i>&nbsp;        return getRowFrequency(rn) * getRowLength(rn);</b>
+<i>136</i>&nbsp;    }
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    public
+<i>139</i>&nbsp;    int getTotalWeight() {
+<b class="nc"><i>140</i>&nbsp;        return totalWeight;</b>
+<i>141</i>&nbsp;    }
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;    public
+<i>144</i>&nbsp;    int getTotalLength() {
+<b class="nc"><i>145</i>&nbsp;        return values.length;</b>
+<i>146</i>&nbsp;    }
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;    /** Returns an array of all values, sorted. */
+<i>149</i>&nbsp;    public
+<i>150</i>&nbsp;    int[] getAllValues() {
+<i>151</i>&nbsp;
+<b class="nc"><i>152</i>&nbsp;        return values;</b>
+<i>153</i>&nbsp;    }
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    /** Returns an array parallel with {@link #getValues},
+<i>156</i>&nbsp;     *  with a frequency for each value.
+<i>157</i>&nbsp;     */
+<i>158</i>&nbsp;    public
+<i>159</i>&nbsp;    int[] getAllFrequencies() {
+<b class="nc"><i>160</i>&nbsp;        return counts;</b>
+<i>161</i>&nbsp;    }
+<i>162</i>&nbsp;
+<b class="nc"><i>163</i>&nbsp;    private static double log2 = Math.log(2);</b>
+<i>164</i>&nbsp;
+<i>165</i>&nbsp;    public
+<i>166</i>&nbsp;    int getFrequency(int value) {
+<b class="nc"><i>167</i>&nbsp;        int pos = Arrays.binarySearch(values, value);</b>
+<b class="nc"><i>168</i>&nbsp;        if (pos &lt; 0)  return 0;</b>
+<b class="nc"><i>169</i>&nbsp;        assert(values[pos] == value);</b>
+<b class="nc"><i>170</i>&nbsp;        return counts[pos];</b>
+<i>171</i>&nbsp;    }
+<i>172</i>&nbsp;
+<i>173</i>&nbsp;    public
+<i>174</i>&nbsp;    double getBitLength(int value) {
+<b class="nc"><i>175</i>&nbsp;        double prob = (double) getFrequency(value) / getTotalWeight();</b>
+<b class="nc"><i>176</i>&nbsp;        return - Math.log(prob) / log2;</b>
+<i>177</i>&nbsp;    }
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;    public
+<i>180</i>&nbsp;    double getRowBitLength(int rn) {
+<b class="nc"><i>181</i>&nbsp;        double prob = (double) getRowFrequency(rn) / getTotalWeight();</b>
+<b class="nc"><i>182</i>&nbsp;        return - Math.log(prob) / log2;</b>
+<i>183</i>&nbsp;    }
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;    public
+<i>186</i>&nbsp;    interface BitMetric {
+<i>187</i>&nbsp;        public double getBitLength(int value);
+<i>188</i>&nbsp;    }
+<b class="nc"><i>189</i>&nbsp;    private final BitMetric bitMetric = new BitMetric() {</b>
+<i>190</i>&nbsp;        public double getBitLength(int value) {
+<b class="nc"><i>191</i>&nbsp;            return Histogram.this.getBitLength(value);</b>
+<i>192</i>&nbsp;        }
+<i>193</i>&nbsp;    };
+<i>194</i>&nbsp;    public BitMetric getBitMetric() {
+<b class="nc"><i>195</i>&nbsp;        return bitMetric;</b>
+<i>196</i>&nbsp;    }
+<i>197</i>&nbsp;
+<i>198</i>&nbsp;    /** bit-length is negative entropy:  -H(matrix). */
+<i>199</i>&nbsp;    public
+<i>200</i>&nbsp;    double getBitLength() {
+<b class="nc"><i>201</i>&nbsp;        double sum = 0;</b>
+<b class="nc"><i>202</i>&nbsp;        for (int i = 0; i &lt; matrix.length; i++) {</b>
+<b class="nc"><i>203</i>&nbsp;            sum += getRowBitLength(i) * getRowWeight(i);</b>
+<i>204</i>&nbsp;        }
+<b class="nc"><i>205</i>&nbsp;        assert(0.1 &gt; Math.abs(sum - getBitLength(bitMetric)));</b>
+<b class="nc"><i>206</i>&nbsp;        return sum;</b>
+<i>207</i>&nbsp;    }
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    /** bit-length in to another coding (cross-entropy) */
+<i>210</i>&nbsp;    public
+<i>211</i>&nbsp;    double getBitLength(BitMetric len) {
+<b class="nc"><i>212</i>&nbsp;        double sum = 0;</b>
+<b class="nc"><i>213</i>&nbsp;        for (int i = 0; i &lt; matrix.length; i++) {</b>
+<b class="nc"><i>214</i>&nbsp;            for (int j = 1; j &lt; matrix[i].length; j++) {</b>
+<b class="nc"><i>215</i>&nbsp;                sum += matrix[i][0] * len.getBitLength(matrix[i][j]);</b>
+<i>216</i>&nbsp;            }
+<i>217</i>&nbsp;        }
+<b class="nc"><i>218</i>&nbsp;        return sum;</b>
+<i>219</i>&nbsp;    }
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;    private static
+<i>222</i>&nbsp;    double round(double x, double scale) {
+<b class="nc"><i>223</i>&nbsp;        return Math.round(x * scale) / scale;</b>
+<i>224</i>&nbsp;    }
+<i>225</i>&nbsp;
+<i>226</i>&nbsp;    /** Sort rows and columns.
+<i>227</i>&nbsp;     *  Merge adjacent rows with the same key element [0].
+<i>228</i>&nbsp;     *  Make a fresh copy of all of it.
+<i>229</i>&nbsp;     */
+<i>230</i>&nbsp;    public int[][] normalizeMatrix(int[][] matrix) {
+<b class="nc"><i>231</i>&nbsp;        long[] rowMap = new long[matrix.length];</b>
+<b class="nc"><i>232</i>&nbsp;        for (int i = 0; i &lt; matrix.length; i++) {</b>
+<b class="nc"><i>233</i>&nbsp;            if (matrix[i].length &lt;= 1)  continue;</b>
+<b class="nc"><i>234</i>&nbsp;            int count = matrix[i][0];</b>
+<b class="nc"><i>235</i>&nbsp;            if (count &lt;= 0)  continue;</b>
+<b class="nc"><i>236</i>&nbsp;            rowMap[i] = (long) count &lt;&lt; 32 | i;</b>
+<i>237</i>&nbsp;        }
+<b class="nc"><i>238</i>&nbsp;        Arrays.sort(rowMap);</b>
+<b class="nc"><i>239</i>&nbsp;        int[][] newMatrix = new int[matrix.length][];</b>
+<b class="nc"><i>240</i>&nbsp;        int prevCount = -1;</b>
+<b class="nc"><i>241</i>&nbsp;        int fillp1 = 0;</b>
+<b class="nc"><i>242</i>&nbsp;        int fillp2 = 0;</b>
+<b class="nc"><i>243</i>&nbsp;        for (int i = 0; ; i++) {</b>
+<i>244</i>&nbsp;            int[] row;
+<b class="nc"><i>245</i>&nbsp;            if (i &lt; matrix.length) {</b>
+<b class="nc"><i>246</i>&nbsp;                long rowMapEntry = rowMap[rowMap.length-i-1];</b>
+<b class="nc"><i>247</i>&nbsp;                if (rowMapEntry == 0)  continue;</b>
+<b class="nc"><i>248</i>&nbsp;                row = matrix[(int)rowMapEntry];</b>
+<b class="nc"><i>249</i>&nbsp;                assert(rowMapEntry&gt;&gt;&gt;32 == row[0]);</b>
+<b class="nc"><i>250</i>&nbsp;            } else {</b>
+<b class="nc"><i>251</i>&nbsp;                row = new int[]{ -1 };  // close it off</b>
+<i>252</i>&nbsp;            }
+<b class="nc"><i>253</i>&nbsp;            if (row[0] != prevCount &amp;&amp; fillp2 &gt; fillp1) {</b>
+<i>254</i>&nbsp;                // Close off previous run.
+<b class="nc"><i>255</i>&nbsp;                int length = 0;</b>
+<b class="nc"><i>256</i>&nbsp;                for (int p = fillp1; p &lt; fillp2; p++) {</b>
+<b class="nc"><i>257</i>&nbsp;                    int[] row0 = newMatrix[p];  // previously visited row</b>
+<b class="nc"><i>258</i>&nbsp;                    assert(row0[0] == prevCount);</b>
+<b class="nc"><i>259</i>&nbsp;                    length += row0.length-1;</b>
+<i>260</i>&nbsp;                }
+<b class="nc"><i>261</i>&nbsp;                int[] row1 = new int[1+length];  // cloned &amp; consolidated row</b>
+<b class="nc"><i>262</i>&nbsp;                row1[0] = prevCount;</b>
+<b class="nc"><i>263</i>&nbsp;                int rfillp = 1;</b>
+<b class="nc"><i>264</i>&nbsp;                for (int p = fillp1; p &lt; fillp2; p++) {</b>
+<b class="nc"><i>265</i>&nbsp;                    int[] row0 = newMatrix[p];  // previously visited row</b>
+<b class="nc"><i>266</i>&nbsp;                    assert(row0[0] == prevCount);</b>
+<b class="nc"><i>267</i>&nbsp;                    System.arraycopy(row0, 1, row1, rfillp, row0.length-1);</b>
+<b class="nc"><i>268</i>&nbsp;                    rfillp += row0.length-1;</b>
+<i>269</i>&nbsp;                }
+<b class="nc"><i>270</i>&nbsp;                if (!isSorted(row1, 1, true)) {</b>
+<b class="nc"><i>271</i>&nbsp;                    Arrays.sort(row1, 1, row1.length);</b>
+<b class="nc"><i>272</i>&nbsp;                    int jfillp = 2;</b>
+<i>273</i>&nbsp;                    // Detect and squeeze out duplicates.
+<b class="nc"><i>274</i>&nbsp;                    for (int j = 2; j &lt; row1.length; j++) {</b>
+<b class="nc"><i>275</i>&nbsp;                        if (row1[j] != row1[j-1])</b>
+<b class="nc"><i>276</i>&nbsp;                            row1[jfillp++] = row1[j];</b>
+<i>277</i>&nbsp;                    }
+<b class="nc"><i>278</i>&nbsp;                    if (jfillp &lt; row1.length) {</b>
+<i>279</i>&nbsp;                        // Reallocate because of lost duplicates.
+<b class="nc"><i>280</i>&nbsp;                        int[] newRow1 = new int[jfillp];</b>
+<b class="nc"><i>281</i>&nbsp;                        System.arraycopy(row1, 0, newRow1, 0, jfillp);</b>
+<b class="nc"><i>282</i>&nbsp;                        row1 = newRow1;</b>
+<i>283</i>&nbsp;                    }
+<i>284</i>&nbsp;                }
+<b class="nc"><i>285</i>&nbsp;                newMatrix[fillp1++] = row1;</b>
+<b class="nc"><i>286</i>&nbsp;                fillp2 = fillp1;</b>
+<i>287</i>&nbsp;            }
+<b class="nc"><i>288</i>&nbsp;            if (i == matrix.length)</b>
+<b class="nc"><i>289</i>&nbsp;                break;</b>
+<b class="nc"><i>290</i>&nbsp;            prevCount = row[0];</b>
+<b class="nc"><i>291</i>&nbsp;            newMatrix[fillp2++] = row;</b>
+<i>292</i>&nbsp;        }
+<b class="nc"><i>293</i>&nbsp;        assert(fillp1 == fillp2);  // no unfinished business</b>
+<i>294</i>&nbsp;        // Now drop missing rows.
+<b class="nc"><i>295</i>&nbsp;        matrix = newMatrix;</b>
+<b class="nc"><i>296</i>&nbsp;        if (fillp1 &lt; matrix.length) {</b>
+<b class="nc"><i>297</i>&nbsp;            newMatrix = new int[fillp1][];</b>
+<b class="nc"><i>298</i>&nbsp;            System.arraycopy(matrix, 0, newMatrix, 0, fillp1);</b>
+<b class="nc"><i>299</i>&nbsp;            matrix = newMatrix;</b>
+<i>300</i>&nbsp;        }
+<b class="nc"><i>301</i>&nbsp;        return matrix;</b>
+<i>302</i>&nbsp;    }
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;    public
+<i>305</i>&nbsp;    String[] getRowTitles(String name) {
+<b class="nc"><i>306</i>&nbsp;        int totalUnique = getTotalLength();</b>
+<b class="nc"><i>307</i>&nbsp;        int ltotalWeight = getTotalWeight();</b>
+<b class="nc"><i>308</i>&nbsp;        String[] histTitles = new String[matrix.length];</b>
+<b class="nc"><i>309</i>&nbsp;        int cumWeight = 0;</b>
+<b class="nc"><i>310</i>&nbsp;        int cumUnique = 0;</b>
+<b class="nc"><i>311</i>&nbsp;        for (int i = 0; i &lt; matrix.length; i++) {</b>
+<b class="nc"><i>312</i>&nbsp;            int count  = getRowFrequency(i);</b>
+<b class="nc"><i>313</i>&nbsp;            int unique = getRowLength(i);</b>
+<b class="nc"><i>314</i>&nbsp;            int weight = getRowWeight(i);</b>
+<b class="nc"><i>315</i>&nbsp;            cumWeight += weight;</b>
+<b class="nc"><i>316</i>&nbsp;            cumUnique += unique;</b>
+<b class="nc"><i>317</i>&nbsp;            long wpct = ((long)cumWeight * 100 + ltotalWeight/2) / ltotalWeight;</b>
+<b class="nc"><i>318</i>&nbsp;            long upct = ((long)cumUnique * 100 + totalUnique/2) / totalUnique;</b>
+<b class="nc"><i>319</i>&nbsp;            double len = getRowBitLength(i);</b>
+<b class="nc"><i>320</i>&nbsp;            assert(0.1 &gt; Math.abs(len - getBitLength(matrix[i][1])));</b>
+<b class="nc"><i>321</i>&nbsp;            histTitles[i] = name+&quot;[&quot;+i+&quot;]&quot;</b>
+<b class="nc"><i>322</i>&nbsp;                +&quot; len=&quot;+round(len,10)</b>
+<i>323</i>&nbsp;                +&quot; (&quot;+count+&quot;*[&quot;+unique+&quot;])&quot;
+<i>324</i>&nbsp;                +&quot; (&quot;+cumWeight+&quot;:&quot;+wpct+&quot;%)&quot;
+<i>325</i>&nbsp;                +&quot; [&quot;+cumUnique+&quot;:&quot;+upct+&quot;%]&quot;;
+<i>326</i>&nbsp;        }
+<b class="nc"><i>327</i>&nbsp;        return histTitles;</b>
+<i>328</i>&nbsp;    }
+<i>329</i>&nbsp;
+<i>330</i>&nbsp;    /** Print a report of this histogram.
+<i>331</i>&nbsp;     */
+<i>332</i>&nbsp;    public
+<i>333</i>&nbsp;    void print(PrintStream out) {
+<b class="nc"><i>334</i>&nbsp;        print(&quot;hist&quot;, out);</b>
+<i>335</i>&nbsp;    }
+<i>336</i>&nbsp;
+<i>337</i>&nbsp;    /** Print a report of this histogram.
+<i>338</i>&nbsp;     */
+<i>339</i>&nbsp;    public
+<i>340</i>&nbsp;    void print(String name, PrintStream out) {
+<b class="nc"><i>341</i>&nbsp;        print(name, getRowTitles(name), out);</b>
+<i>342</i>&nbsp;    }
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;    /** Print a report of this histogram.
+<i>345</i>&nbsp;     */
+<i>346</i>&nbsp;    public
+<i>347</i>&nbsp;    void print(String name, String[] histTitles, PrintStream out) {
+<b class="nc"><i>348</i>&nbsp;        int totalUnique = getTotalLength();</b>
+<b class="nc"><i>349</i>&nbsp;        int ltotalWeight = getTotalWeight();</b>
+<b class="nc"><i>350</i>&nbsp;        double tlen = getBitLength();</b>
+<b class="nc"><i>351</i>&nbsp;        double avgLen = tlen / ltotalWeight;</b>
+<b class="nc"><i>352</i>&nbsp;        double avg = (double) ltotalWeight / totalUnique;</b>
+<b class="nc"><i>353</i>&nbsp;        String title = (name</b>
+<b class="nc"><i>354</i>&nbsp;                        +&quot; len=&quot;+round(tlen,10)</b>
+<b class="nc"><i>355</i>&nbsp;                        +&quot; avgLen=&quot;+round(avgLen,10)</b>
+<i>356</i>&nbsp;                        +&quot; weight(&quot;+ltotalWeight+&quot;)&quot;
+<i>357</i>&nbsp;                        +&quot; unique[&quot;+totalUnique+&quot;]&quot;
+<b class="nc"><i>358</i>&nbsp;                        +&quot; avgWeight(&quot;+round(avg,100)+&quot;)&quot;);</b>
+<b class="nc"><i>359</i>&nbsp;        if (histTitles == null) {</b>
+<b class="nc"><i>360</i>&nbsp;            out.println(title);</b>
+<i>361</i>&nbsp;        } else {
+<b class="nc"><i>362</i>&nbsp;            out.println(title+&quot; {&quot;);</b>
+<b class="nc"><i>363</i>&nbsp;            StringBuffer buf = new StringBuffer();</b>
+<b class="nc"><i>364</i>&nbsp;            for (int i = 0; i &lt; matrix.length; i++) {</b>
+<b class="nc"><i>365</i>&nbsp;                buf.setLength(0);</b>
+<b class="nc"><i>366</i>&nbsp;                buf.append(&quot;  &quot;).append(histTitles[i]).append(&quot; {&quot;);</b>
+<b class="nc"><i>367</i>&nbsp;                for (int j = 1; j &lt; matrix[i].length; j++) {</b>
+<b class="nc"><i>368</i>&nbsp;                    buf.append(&quot; &quot;).append(matrix[i][j]);</b>
+<i>369</i>&nbsp;                }
+<b class="nc"><i>370</i>&nbsp;                buf.append(&quot; }&quot;);</b>
+<b class="nc"><i>371</i>&nbsp;                out.println(buf);</b>
+<i>372</i>&nbsp;            }
+<b class="nc"><i>373</i>&nbsp;            out.println(&quot;}&quot;);</b>
+<i>374</i>&nbsp;        }
+<i>375</i>&nbsp;    }
+<i>376</i>&nbsp;
+<i>377</i>&nbsp;/*
+<i>378</i>&nbsp;    public static
+<i>379</i>&nbsp;    int[][] makeHistogramMatrix(int[] values) {
+<i>380</i>&nbsp;        // Make sure they are sorted.
+<i>381</i>&nbsp;        values = maybeSort(values);
+<i>382</i>&nbsp;        long[] hist2col = computeHistogram2Col(values);
+<i>383</i>&nbsp;        int[][] matrix = makeMatrix(hist2col);
+<i>384</i>&nbsp;        return matrix;
+<i>385</i>&nbsp;    }
+<i>386</i>&nbsp;*/
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;    private static
+<i>389</i>&nbsp;    int[][] makeMatrix(long[] hist2col) {
+<i>390</i>&nbsp;        // Sort by increasing count, then by increasing value.
+<b class="nc"><i>391</i>&nbsp;        Arrays.sort(hist2col);</b>
+<b class="nc"><i>392</i>&nbsp;        int[] counts = new int[hist2col.length];</b>
+<b class="nc"><i>393</i>&nbsp;        for (int i = 0; i &lt; counts.length; i++) {</b>
+<b class="nc"><i>394</i>&nbsp;            counts[i] = (int)( hist2col[i] &gt;&gt;&gt; 32 );</b>
+<i>395</i>&nbsp;        }
+<b class="nc"><i>396</i>&nbsp;        long[] countHist = computeHistogram2Col(counts);</b>
+<b class="nc"><i>397</i>&nbsp;        int[][] matrix = new int[countHist.length][];</b>
+<b class="nc"><i>398</i>&nbsp;        int histp = 0;  // cursor into hist2col (increasing count, value)</b>
+<b class="nc"><i>399</i>&nbsp;        int countp = 0; // cursor into countHist (increasing count)</b>
+<i>400</i>&nbsp;        // Do a join between hist2col (resorted) and countHist.
+<b class="nc"><i>401</i>&nbsp;        for (int i = matrix.length; --i &gt;= 0; ) {</b>
+<b class="nc"><i>402</i>&nbsp;            long countAndRep = countHist[countp++];</b>
+<b class="nc"><i>403</i>&nbsp;            int count  = (int) (countAndRep);  // what is the value count?</b>
+<b class="nc"><i>404</i>&nbsp;            int repeat = (int) (countAndRep &gt;&gt;&gt; 32);  // # times repeated?</b>
+<b class="nc"><i>405</i>&nbsp;            int[] row = new int[1+repeat];</b>
+<b class="nc"><i>406</i>&nbsp;            row[0] = count;</b>
+<b class="nc"><i>407</i>&nbsp;            for (int j = 0; j &lt; repeat; j++) {</b>
+<b class="nc"><i>408</i>&nbsp;                long countAndValue = hist2col[histp++];</b>
+<b class="nc"><i>409</i>&nbsp;                assert(countAndValue &gt;&gt;&gt; 32 == count);</b>
+<b class="nc"><i>410</i>&nbsp;                row[1+j] = (int) countAndValue;</b>
+<i>411</i>&nbsp;            }
+<b class="nc"><i>412</i>&nbsp;            matrix[i] = row;</b>
+<b class="nc"><i>413</i>&nbsp;        }</b>
+<b class="nc"><i>414</i>&nbsp;        assert(histp == hist2col.length);</b>
+<b class="nc"><i>415</i>&nbsp;        return matrix;</b>
+<i>416</i>&nbsp;    }
+<i>417</i>&nbsp;
+<i>418</i>&nbsp;    private static
+<i>419</i>&nbsp;    int[][] makeTable(long[] hist2col) {
+<b class="nc"><i>420</i>&nbsp;        int[][] table = new int[2][hist2col.length];</b>
+<i>421</i>&nbsp;        // Break apart the entries in hist2col.
+<i>422</i>&nbsp;        // table[0] gets values, table[1] gets entries.
+<b class="nc"><i>423</i>&nbsp;        for (int i = 0; i &lt; hist2col.length; i++) {</b>
+<b class="nc"><i>424</i>&nbsp;            table[0][i] = (int)( hist2col[i] );</b>
+<b class="nc"><i>425</i>&nbsp;            table[1][i] = (int)( hist2col[i] &gt;&gt;&gt; 32 );</b>
+<i>426</i>&nbsp;        }
+<b class="nc"><i>427</i>&nbsp;        return table;</b>
+<i>428</i>&nbsp;    }
+<i>429</i>&nbsp;
+<i>430</i>&nbsp;    /** Simple two-column histogram.  Contains repeated counts.
+<i>431</i>&nbsp;     *  Assumes input is sorted.  Does not sort output columns.
+<i>432</i>&nbsp;     *  &lt;p&gt;
+<i>433</i>&nbsp;     *  Format of result:
+<i>434</i>&nbsp;     *  &lt;pre&gt;
+<i>435</i>&nbsp;     *  long[] hist = {
+<i>436</i>&nbsp;     *    (count1 &lt;&lt; 32) | (value1),
+<i>437</i>&nbsp;     *    (count2 &lt;&lt; 32) | (value2),
+<i>438</i>&nbsp;     *    ...
+<i>439</i>&nbsp;     *  }
+<i>440</i>&nbsp;     *  &lt;/pre&gt;
+<i>441</i>&nbsp;     *  In addition, the sequence {valuei...} is guaranteed to be sorted.
+<i>442</i>&nbsp;     *  Note that resorting this using Arrays.sort() will reorder the
+<i>443</i>&nbsp;     *  entries by increasing count.
+<i>444</i>&nbsp;     */
+<i>445</i>&nbsp;    private static
+<i>446</i>&nbsp;    long[] computeHistogram2Col(int[] sortedValues) {
+<b class="nc"><i>447</i>&nbsp;        switch (sortedValues.length) {</b>
+<i>448</i>&nbsp;        case 0:
+<b class="nc"><i>449</i>&nbsp;            return new long[]{ };</b>
+<i>450</i>&nbsp;        case 1:
+<b class="nc"><i>451</i>&nbsp;            return new long[]{ ((long)1 &lt;&lt; 32) | (LOW32 &amp; sortedValues[0]) };</b>
+<i>452</i>&nbsp;        }
+<b class="nc"><i>453</i>&nbsp;        long[] hist = null;</b>
+<b class="nc"><i>454</i>&nbsp;        for (boolean sizeOnly = true; ; sizeOnly = false) {</b>
+<b class="nc"><i>455</i>&nbsp;            int prevIndex = -1;</b>
+<b class="nc"><i>456</i>&nbsp;            int prevValue = sortedValues[0] ^ -1;  // force a difference</b>
+<b class="nc"><i>457</i>&nbsp;            int prevCount = 0;</b>
+<b class="nc"><i>458</i>&nbsp;            for (int i = 0; i &lt;= sortedValues.length; i++) {</b>
+<i>459</i>&nbsp;                int thisValue;
+<b class="nc"><i>460</i>&nbsp;                if (i &lt; sortedValues.length)</b>
+<b class="nc"><i>461</i>&nbsp;                    thisValue = sortedValues[i];</b>
+<i>462</i>&nbsp;                else
+<b class="nc"><i>463</i>&nbsp;                    thisValue = prevValue ^ -1;  // force a difference at end</b>
+<b class="nc"><i>464</i>&nbsp;                if (thisValue == prevValue) {</b>
+<b class="nc"><i>465</i>&nbsp;                    prevCount += 1;</b>
+<i>466</i>&nbsp;                } else {
+<i>467</i>&nbsp;                    // Found a new value.
+<b class="nc"><i>468</i>&nbsp;                    if (!sizeOnly &amp;&amp; prevCount != 0) {</b>
+<i>469</i>&nbsp;                        // Save away previous value.
+<b class="nc"><i>470</i>&nbsp;                        hist[prevIndex] = ((long)prevCount &lt;&lt; 32)</b>
+<i>471</i>&nbsp;                                        | (LOW32 &amp; prevValue);
+<i>472</i>&nbsp;                    }
+<b class="nc"><i>473</i>&nbsp;                    prevValue = thisValue;</b>
+<b class="nc"><i>474</i>&nbsp;                    prevCount = 1;</b>
+<b class="nc"><i>475</i>&nbsp;                    prevIndex += 1;</b>
+<i>476</i>&nbsp;                }
+<i>477</i>&nbsp;            }
+<b class="nc"><i>478</i>&nbsp;            if (sizeOnly) {</b>
+<i>479</i>&nbsp;                // Finished the sizing pass.  Allocate the histogram.
+<b class="nc"><i>480</i>&nbsp;                hist = new long[prevIndex];</b>
+<i>481</i>&nbsp;            } else {
+<i>482</i>&nbsp;                break;  // done
+<i>483</i>&nbsp;            }
+<i>484</i>&nbsp;        }
+<b class="nc"><i>485</i>&nbsp;        return hist;</b>
+<i>486</i>&nbsp;    }
+<i>487</i>&nbsp;
+<i>488</i>&nbsp;    /** Regroup the histogram, so that it becomes an approximate histogram
+<i>489</i>&nbsp;     *  whose rows are of the given lengths.
+<i>490</i>&nbsp;     *  If matrix rows must be split, the latter parts (larger values)
+<i>491</i>&nbsp;     *  are placed earlier in the new matrix.
+<i>492</i>&nbsp;     *  If matrix rows are joined, they are resorted into ascending order.
+<i>493</i>&nbsp;     *  In the new histogram, the counts are averaged over row entries.
+<i>494</i>&nbsp;     */
+<i>495</i>&nbsp;    private static
+<i>496</i>&nbsp;    int[][] regroupHistogram(int[][] matrix, int[] groups) {
+<b class="nc"><i>497</i>&nbsp;        long oldEntries = 0;</b>
+<b class="nc"><i>498</i>&nbsp;        for (int i = 0; i &lt; matrix.length; i++) {</b>
+<b class="nc"><i>499</i>&nbsp;            oldEntries += matrix[i].length-1;</b>
+<i>500</i>&nbsp;        }
+<b class="nc"><i>501</i>&nbsp;        long newEntries = 0;</b>
+<b class="nc"><i>502</i>&nbsp;        for (int ni = 0; ni &lt; groups.length; ni++) {</b>
+<b class="nc"><i>503</i>&nbsp;            newEntries += groups[ni];</b>
+<i>504</i>&nbsp;        }
+<b class="nc"><i>505</i>&nbsp;        if (newEntries &gt; oldEntries) {</b>
+<b class="nc"><i>506</i>&nbsp;            int newlen = groups.length;</b>
+<b class="nc"><i>507</i>&nbsp;            long ok = oldEntries;</b>
+<b class="nc"><i>508</i>&nbsp;            for (int ni = 0; ni &lt; groups.length; ni++) {</b>
+<b class="nc"><i>509</i>&nbsp;                if (ok &lt; groups[ni]) {</b>
+<b class="nc"><i>510</i>&nbsp;                    int[] newGroups = new int[ni+1];</b>
+<b class="nc"><i>511</i>&nbsp;                    System.arraycopy(groups, 0, newGroups, 0, ni+1);</b>
+<b class="nc"><i>512</i>&nbsp;                    groups = newGroups;</b>
+<b class="nc"><i>513</i>&nbsp;                    groups[ni] = (int) ok;</b>
+<b class="nc"><i>514</i>&nbsp;                    ok = 0;</b>
+<b class="nc"><i>515</i>&nbsp;                    break;</b>
+<i>516</i>&nbsp;                }
+<b class="nc"><i>517</i>&nbsp;                ok -= groups[ni];</b>
+<i>518</i>&nbsp;            }
+<b class="nc"><i>519</i>&nbsp;        } else {</b>
+<b class="nc"><i>520</i>&nbsp;            long excess = oldEntries - newEntries;</b>
+<b class="nc"><i>521</i>&nbsp;            int[] newGroups = new int[groups.length+1];</b>
+<b class="nc"><i>522</i>&nbsp;            System.arraycopy(groups, 0, newGroups, 0, groups.length);</b>
+<b class="nc"><i>523</i>&nbsp;            newGroups[groups.length] = (int) excess;</b>
+<b class="nc"><i>524</i>&nbsp;            groups = newGroups;</b>
+<i>525</i>&nbsp;        }
+<b class="nc"><i>526</i>&nbsp;        int[][] newMatrix = new int[groups.length][];</b>
+<i>527</i>&nbsp;        // Fill pointers.
+<b class="nc"><i>528</i>&nbsp;        int i = 0;  // into matrix</b>
+<b class="nc"><i>529</i>&nbsp;        int jMin = 1;</b>
+<b class="nc"><i>530</i>&nbsp;        int jMax = matrix[i].length;</b>
+<b class="nc"><i>531</i>&nbsp;        for (int ni = 0; ni &lt; groups.length; ni++) {</b>
+<b class="nc"><i>532</i>&nbsp;            int groupLength = groups[ni];</b>
+<b class="nc"><i>533</i>&nbsp;            int[] group = new int[1+groupLength];</b>
+<b class="nc"><i>534</i>&nbsp;            long groupWeight = 0;  // count of all in new group</b>
+<b class="nc"><i>535</i>&nbsp;            newMatrix[ni] = group;</b>
+<b class="nc"><i>536</i>&nbsp;            int njFill = 1;</b>
+<b class="nc"><i>537</i>&nbsp;            while (njFill &lt; group.length) {</b>
+<b class="nc"><i>538</i>&nbsp;                int len = group.length - njFill;</b>
+<b class="nc"><i>539</i>&nbsp;                while (jMin == jMax) {</b>
+<b class="nc"><i>540</i>&nbsp;                    jMin = 1;</b>
+<b class="nc"><i>541</i>&nbsp;                    jMax = matrix[++i].length;</b>
+<i>542</i>&nbsp;                }
+<b class="nc"><i>543</i>&nbsp;                if (len &gt; jMax - jMin)  len = jMax - jMin;</b>
+<b class="nc"><i>544</i>&nbsp;                groupWeight += (long) matrix[i][0] * len;</b>
+<b class="nc"><i>545</i>&nbsp;                System.arraycopy(matrix[i], jMax - len, group, njFill, len);</b>
+<b class="nc"><i>546</i>&nbsp;                jMax -= len;</b>
+<b class="nc"><i>547</i>&nbsp;                njFill += len;</b>
+<b class="nc"><i>548</i>&nbsp;            }</b>
+<b class="nc"><i>549</i>&nbsp;            Arrays.sort(group, 1, group.length);</b>
+<i>550</i>&nbsp;            // compute average count of new group:
+<b class="nc"><i>551</i>&nbsp;            group[0] = (int) ((groupWeight + groupLength/2) / groupLength);</b>
+<i>552</i>&nbsp;        }
+<b class="nc"><i>553</i>&nbsp;        assert(jMin == jMax);</b>
+<b class="nc"><i>554</i>&nbsp;        assert(i == matrix.length-1);</b>
+<b class="nc"><i>555</i>&nbsp;        return newMatrix;</b>
+<i>556</i>&nbsp;    }
+<i>557</i>&nbsp;
+<i>558</i>&nbsp;    public static
+<i>559</i>&nbsp;    Histogram makeByteHistogram(InputStream bytes) throws IOException {
+<b class="nc"><i>560</i>&nbsp;        byte[] buf = new byte[1&lt;&lt;12];</b>
+<b class="nc"><i>561</i>&nbsp;        int[] tally = new int[1&lt;&lt;8];</b>
+<b class="nc"><i>562</i>&nbsp;        for (int nr; (nr = bytes.read(buf)) &gt; 0; ) {</b>
+<b class="nc"><i>563</i>&nbsp;            for (int i = 0; i &lt; nr; i++) {</b>
+<b class="nc"><i>564</i>&nbsp;                tally[buf[i] &amp; 0xFF] += 1;</b>
+<i>565</i>&nbsp;            }
+<i>566</i>&nbsp;        }
+<i>567</i>&nbsp;        // Build a matrix.
+<b class="nc"><i>568</i>&nbsp;        int[][] matrix = new int[1&lt;&lt;8][2];</b>
+<b class="nc"><i>569</i>&nbsp;        for (int i = 0; i &lt; tally.length; i++) {</b>
+<b class="nc"><i>570</i>&nbsp;            matrix[i][0] = tally[i];</b>
+<b class="nc"><i>571</i>&nbsp;            matrix[i][1] = i;</b>
+<i>572</i>&nbsp;        }
+<b class="nc"><i>573</i>&nbsp;        return new Histogram(matrix);</b>
+<i>574</i>&nbsp;    }
+<i>575</i>&nbsp;
+<i>576</i>&nbsp;    /** Slice and sort the given input array. */
+<i>577</i>&nbsp;    private static
+<i>578</i>&nbsp;    int[] sortedSlice(int[] valueSequence, int start, int end) {
+<b class="nc"><i>579</i>&nbsp;        if (start == 0 &amp;&amp; end == valueSequence.length &amp;&amp;</b>
+<b class="nc"><i>580</i>&nbsp;            isSorted(valueSequence, 0, false)) {</b>
+<b class="nc"><i>581</i>&nbsp;            return valueSequence;</b>
+<i>582</i>&nbsp;        } else {
+<b class="nc"><i>583</i>&nbsp;            int[] slice = new int[end-start];</b>
+<b class="nc"><i>584</i>&nbsp;            System.arraycopy(valueSequence, start, slice, 0, slice.length);</b>
+<b class="nc"><i>585</i>&nbsp;            Arrays.sort(slice);</b>
+<b class="nc"><i>586</i>&nbsp;            return slice;</b>
+<i>587</i>&nbsp;        }
+<i>588</i>&nbsp;    }
+<i>589</i>&nbsp;
+<i>590</i>&nbsp;    /** Tell if an array is sorted. */
+<i>591</i>&nbsp;    private static
+<i>592</i>&nbsp;    boolean isSorted(int[] values, int from, boolean strict) {
+<b class="nc"><i>593</i>&nbsp;        for (int i = from+1; i &lt; values.length; i++) {</b>
+<b class="nc"><i>594</i>&nbsp;            if (strict ? !(values[i-1] &lt; values[i])</b>
+<i>595</i>&nbsp;                       : !(values[i-1] &lt;= values[i])) {
+<b class="nc"><i>596</i>&nbsp;                return false;  // found witness to disorder</b>
+<i>597</i>&nbsp;            }
+<i>598</i>&nbsp;        }
+<b class="nc"><i>599</i>&nbsp;        return true;  // no witness =&gt; sorted</b>
+<i>600</i>&nbsp;    }
+<i>601</i>&nbsp;
+<i>602</i>&nbsp;    /** Clone and sort the array, if not already sorted. */
+<i>603</i>&nbsp;    private static
+<i>604</i>&nbsp;    int[] maybeSort(int[] values) {
+<b class="nc"><i>605</i>&nbsp;        if (!isSorted(values, 0, false)) {</b>
+<b class="nc"><i>606</i>&nbsp;            values = values.clone();</b>
+<b class="nc"><i>607</i>&nbsp;            Arrays.sort(values);</b>
+<i>608</i>&nbsp;        }
+<b class="nc"><i>609</i>&nbsp;        return values;</b>
+<i>610</i>&nbsp;    }
+<i>611</i>&nbsp;
+<i>612</i>&nbsp;
+<i>613</i>&nbsp;    /// Debug stuff follows.
+<i>614</i>&nbsp;
+<i>615</i>&nbsp;    private boolean assertWellFormed(int[] valueSequence) {
+<i>616</i>&nbsp;/*
+<i>617</i>&nbsp;        // Sanity check.
+<i>618</i>&nbsp;        int weight = 0;
+<i>619</i>&nbsp;        int vlength = 0;
+<i>620</i>&nbsp;        for (int i = 0; i &lt; matrix.length; i++) {
+<i>621</i>&nbsp;            int vlengthi = (matrix[i].length-1);
+<i>622</i>&nbsp;            int count = matrix[i][0];
+<i>623</i>&nbsp;            assert(vlengthi &gt; 0);  // no empty rows
+<i>624</i>&nbsp;            assert(count &gt; 0);  // no impossible rows
+<i>625</i>&nbsp;            vlength += vlengthi;
+<i>626</i>&nbsp;            weight += count * vlengthi;
+<i>627</i>&nbsp;        }
+<i>628</i>&nbsp;        assert(isSorted(values, 0, true));
+<i>629</i>&nbsp;        // make sure the counts all add up
+<i>630</i>&nbsp;        assert(totalWeight == weight);
+<i>631</i>&nbsp;        assert(vlength == values.length);
+<i>632</i>&nbsp;        assert(vlength == counts.length);
+<i>633</i>&nbsp;        int weight2 = 0;
+<i>634</i>&nbsp;        for (int i = 0; i &lt; counts.length; i++) {
+<i>635</i>&nbsp;            weight2 += counts[i];
+<i>636</i>&nbsp;        }
+<i>637</i>&nbsp;        assert(weight2 == weight);
+<i>638</i>&nbsp;        int[] revcol1 = new int[matrix.length];  //1st matrix colunm
+<i>639</i>&nbsp;        for (int i = 0; i &lt; matrix.length; i++) {
+<i>640</i>&nbsp;            // spot checking:  try a random query on each matrix row
+<i>641</i>&nbsp;            assert(matrix[i].length &gt; 1);
+<i>642</i>&nbsp;            revcol1[matrix.length-i-1] = matrix[i][0];
+<i>643</i>&nbsp;            assert(isSorted(matrix[i], 1, true));
+<i>644</i>&nbsp;            int rand = (matrix[i].length+1) / 2;
+<i>645</i>&nbsp;            int val = matrix[i][rand];
+<i>646</i>&nbsp;            int count = matrix[i][0];
+<i>647</i>&nbsp;            int pos = Arrays.binarySearch(values, val);
+<i>648</i>&nbsp;            assert(values[pos] == val);
+<i>649</i>&nbsp;            assert(counts[pos] == matrix[i][0]);
+<i>650</i>&nbsp;            if (valueSequence != null) {
+<i>651</i>&nbsp;                int count2 = 0;
+<i>652</i>&nbsp;                for (int j = 0; j &lt; valueSequence.length; j++) {
+<i>653</i>&nbsp;                    if (valueSequence[j] == val)  count2++;
+<i>654</i>&nbsp;                }
+<i>655</i>&nbsp;                assert(count2 == count);
+<i>656</i>&nbsp;            }
+<i>657</i>&nbsp;        }
+<i>658</i>&nbsp;        assert(isSorted(revcol1, 0, true));
+<i>659</i>&nbsp;//*/
+<b class="nc"><i>660</i>&nbsp;        return true;</b>
+<i>661</i>&nbsp;    }
+<i>662</i>&nbsp;
+<i>663</i>&nbsp;/*
+<i>664</i>&nbsp;    public static
+<i>665</i>&nbsp;    int[] readValuesFrom(InputStream instr) {
+<i>666</i>&nbsp;        return readValuesFrom(new InputStreamReader(instr));
+<i>667</i>&nbsp;    }
+<i>668</i>&nbsp;    public static
+<i>669</i>&nbsp;    int[] readValuesFrom(Reader inrdr) {
+<i>670</i>&nbsp;        inrdr = new BufferedReader(inrdr);
+<i>671</i>&nbsp;        final StreamTokenizer in = new StreamTokenizer(inrdr);
+<i>672</i>&nbsp;        final int TT_NOTHING = -99;
+<i>673</i>&nbsp;        in.commentChar(&#39;#&#39;);
+<i>674</i>&nbsp;        return readValuesFrom(new Iterator() {
+<i>675</i>&nbsp;            int token = TT_NOTHING;
+<i>676</i>&nbsp;            private int getToken() {
+<i>677</i>&nbsp;                if (token == TT_NOTHING) {
+<i>678</i>&nbsp;                    try {
+<i>679</i>&nbsp;                        token = in.nextToken();
+<i>680</i>&nbsp;                        assert(token != TT_NOTHING);
+<i>681</i>&nbsp;                    } catch (IOException ee) {
+<i>682</i>&nbsp;                        throw new RuntimeException(ee);
+<i>683</i>&nbsp;                    }
+<i>684</i>&nbsp;                }
+<i>685</i>&nbsp;                return token;
+<i>686</i>&nbsp;            }
+<i>687</i>&nbsp;            public boolean hasNext() {
+<i>688</i>&nbsp;                return getToken() != StreamTokenizer.TT_EOF;
+<i>689</i>&nbsp;            }
+<i>690</i>&nbsp;            public Object next() {
+<i>691</i>&nbsp;                int ntok = getToken();
+<i>692</i>&nbsp;                token = TT_NOTHING;
+<i>693</i>&nbsp;                switch (ntok) {
+<i>694</i>&nbsp;                case StreamTokenizer.TT_EOF:
+<i>695</i>&nbsp;                    throw new NoSuchElementException();
+<i>696</i>&nbsp;                case StreamTokenizer.TT_NUMBER:
+<i>697</i>&nbsp;                    return new Integer((int) in.nval);
+<i>698</i>&nbsp;                default:
+<i>699</i>&nbsp;                    assert(false);
+<i>700</i>&nbsp;                    return null;
+<i>701</i>&nbsp;                }
+<i>702</i>&nbsp;            }
+<i>703</i>&nbsp;            public void remove() {
+<i>704</i>&nbsp;                throw new UnsupportedOperationException();
+<i>705</i>&nbsp;            }
+<i>706</i>&nbsp;        });
+<i>707</i>&nbsp;    }
+<i>708</i>&nbsp;    public static
+<i>709</i>&nbsp;    int[] readValuesFrom(Iterator iter) {
+<i>710</i>&nbsp;        return readValuesFrom(iter, 0);
+<i>711</i>&nbsp;    }
+<i>712</i>&nbsp;    public static
+<i>713</i>&nbsp;    int[] readValuesFrom(Iterator iter, int initSize) {
+<i>714</i>&nbsp;        int[] na = new int[Math.max(10, initSize)];
+<i>715</i>&nbsp;        int np = 0;
+<i>716</i>&nbsp;        while (iter.hasNext()) {
+<i>717</i>&nbsp;            Integer val = (Integer) iter.next();
+<i>718</i>&nbsp;            if (np == na.length) {
+<i>719</i>&nbsp;                int[] na2 = new int[np*2];
+<i>720</i>&nbsp;                System.arraycopy(na, 0, na2, 0, np);
+<i>721</i>&nbsp;                na = na2;
+<i>722</i>&nbsp;            }
+<i>723</i>&nbsp;            na[np++] = val.intValue();
+<i>724</i>&nbsp;        }
+<i>725</i>&nbsp;        if (np != na.length) {
+<i>726</i>&nbsp;            int[] na2 = new int[np];
+<i>727</i>&nbsp;            System.arraycopy(na, 0, na2, 0, np);
+<i>728</i>&nbsp;            na = na2;
+<i>729</i>&nbsp;        }
+<i>730</i>&nbsp;        return na;
+<i>731</i>&nbsp;    }
+<i>732</i>&nbsp;
+<i>733</i>&nbsp;    public static
+<i>734</i>&nbsp;    Histogram makeByteHistogram(byte[] bytes) {
+<i>735</i>&nbsp;        try {
+<i>736</i>&nbsp;            return makeByteHistogram(new ByteArrayInputStream(bytes));
+<i>737</i>&nbsp;        } catch (IOException ee) {
+<i>738</i>&nbsp;            throw new RuntimeException(ee);
+<i>739</i>&nbsp;        }
+<i>740</i>&nbsp;    }
+<i>741</i>&nbsp;
+<i>742</i>&nbsp;    public static
+<i>743</i>&nbsp;    void main(String[] av) throws IOException {
+<i>744</i>&nbsp;        if (av.length &gt; 0 &amp;&amp; av[0].equals(&quot;-r&quot;)) {
+<i>745</i>&nbsp;            int[] values = new int[Integer.parseInt(av[1])];
+<i>746</i>&nbsp;            int limit = values.length;
+<i>747</i>&nbsp;            if (av.length &gt;= 3) {
+<i>748</i>&nbsp;                limit  = (int)( limit * Double.parseDouble(av[2]) );
+<i>749</i>&nbsp;            }
+<i>750</i>&nbsp;            Random rnd = new Random();
+<i>751</i>&nbsp;            for (int i = 0; i &lt; values.length; i++) {
+<i>752</i>&nbsp;                values[i] = rnd.nextInt(limit);;
+<i>753</i>&nbsp;            }
+<i>754</i>&nbsp;            Histogram rh = new Histogram(values);
+<i>755</i>&nbsp;            rh.print(&quot;random&quot;, System.out);
+<i>756</i>&nbsp;            return;
+<i>757</i>&nbsp;        }
+<i>758</i>&nbsp;        if (av.length &gt; 0 &amp;&amp; av[0].equals(&quot;-s&quot;)) {
+<i>759</i>&nbsp;            int[] values = readValuesFrom(System.in);
+<i>760</i>&nbsp;            Random rnd = new Random();
+<i>761</i>&nbsp;            for (int i = values.length; --i &gt; 0; ) {
+<i>762</i>&nbsp;                int j = rnd.nextInt(i+1);
+<i>763</i>&nbsp;                if (j &lt; i) {
+<i>764</i>&nbsp;                    int tem = values[i];
+<i>765</i>&nbsp;                    values[i] = values[j];
+<i>766</i>&nbsp;                    values[j] = tem;
+<i>767</i>&nbsp;                }
+<i>768</i>&nbsp;            }
+<i>769</i>&nbsp;            for (int i = 0; i &lt; values.length; i++)
+<i>770</i>&nbsp;                System.out.println(values[i]);
+<i>771</i>&nbsp;            return;
+<i>772</i>&nbsp;        }
+<i>773</i>&nbsp;        if (av.length &gt; 0 &amp;&amp; av[0].equals(&quot;-e&quot;)) {
+<i>774</i>&nbsp;            // edge cases
+<i>775</i>&nbsp;            new Histogram(new int[][] {
+<i>776</i>&nbsp;                {1, 11, 111},
+<i>777</i>&nbsp;                {0, 123, 456},
+<i>778</i>&nbsp;                {1, 111, 1111},
+<i>779</i>&nbsp;                {0, 456, 123},
+<i>780</i>&nbsp;                {3},
+<i>781</i>&nbsp;                {},
+<i>782</i>&nbsp;                {3},
+<i>783</i>&nbsp;                {2, 22},
+<i>784</i>&nbsp;                {4}
+<i>785</i>&nbsp;            }).print(System.out);
+<i>786</i>&nbsp;            return;
+<i>787</i>&nbsp;        }
+<i>788</i>&nbsp;        if (av.length &gt; 0 &amp;&amp; av[0].equals(&quot;-b&quot;)) {
+<i>789</i>&nbsp;            // edge cases
+<i>790</i>&nbsp;            Histogram bh = makeByteHistogram(System.in);
+<i>791</i>&nbsp;            bh.print(&quot;bytes&quot;, System.out);
+<i>792</i>&nbsp;            return;
+<i>793</i>&nbsp;        }
+<i>794</i>&nbsp;        boolean regroup = false;
+<i>795</i>&nbsp;        if (av.length &gt; 0 &amp;&amp; av[0].equals(&quot;-g&quot;)) {
+<i>796</i>&nbsp;            regroup = true;
+<i>797</i>&nbsp;        }
+<i>798</i>&nbsp;
+<i>799</i>&nbsp;        int[] values = readValuesFrom(System.in);
+<i>800</i>&nbsp;        Histogram h = new Histogram(values);
+<i>801</i>&nbsp;        if (!regroup)
+<i>802</i>&nbsp;            h.print(System.out);
+<i>803</i>&nbsp;        if (regroup) {
+<i>804</i>&nbsp;            int[] groups = new int[12];
+<i>805</i>&nbsp;            for (int i = 0; i &lt; groups.length; i++) {
+<i>806</i>&nbsp;                groups[i] = 1&lt;&lt;i;
+<i>807</i>&nbsp;            }
+<i>808</i>&nbsp;            int[][] gm = regroupHistogram(h.getMatrix(), groups);
+<i>809</i>&nbsp;            Histogram g = new Histogram(gm);
+<i>810</i>&nbsp;            System.out.println(&quot;h.getBitLength(g) = &quot;+
+<i>811</i>&nbsp;                               h.getBitLength(g.getBitMetric()));
+<i>812</i>&nbsp;            System.out.println(&quot;g.getBitLength(h) = &quot;+
+<i>813</i>&nbsp;                               g.getBitLength(h.getBitMetric()));
+<i>814</i>&nbsp;            g.print(&quot;regrouped&quot;, System.out);
+<i>815</i>&nbsp;        }
+<i>816</i>&nbsp;    }
+<i>817</i>&nbsp;//*/
+<i>818</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

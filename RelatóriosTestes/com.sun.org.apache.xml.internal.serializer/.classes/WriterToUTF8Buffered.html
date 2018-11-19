@@ -1,0 +1,590 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: WriterToUTF8Buffered</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.org.apache.xml.internal.serializer</a> ]
+</div>
+
+<h1>Coverage Summary for Class: WriterToUTF8Buffered (com.sun.org.apache.xml.internal.serializer)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WriterToUTF8Buffered</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 9)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 125)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; */
+<i>5</i>&nbsp;/*
+<i>6</i>&nbsp; * Licensed to the Apache Software Foundation (ASF) under one
+<i>7</i>&nbsp; * or more contributor license agreements. See the NOTICE file
+<i>8</i>&nbsp; * distributed with this work for additional information
+<i>9</i>&nbsp; * regarding copyright ownership. The ASF licenses this file
+<i>10</i>&nbsp; * to you under the Apache License, Version 2.0 (the  &quot;License&quot;);
+<i>11</i>&nbsp; * you may not use this file except in compliance with the License.
+<i>12</i>&nbsp; * You may obtain a copy of the License at
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *     http://www.apache.org/licenses/LICENSE-2.0
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; * Unless required by applicable law or agreed to in writing, software
+<i>17</i>&nbsp; * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+<i>18</i>&nbsp; * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+<i>19</i>&nbsp; * See the License for the specific language governing permissions and
+<i>20</i>&nbsp; * limitations under the License.
+<i>21</i>&nbsp; */
+<i>22</i>&nbsp;/*
+<i>23</i>&nbsp; * $Id: WriterToUTF8Buffered.java,v 1.2.4.1 2005/09/15 08:15:31 suresh_emailid Exp $
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;package com.sun.org.apache.xml.internal.serializer;
+<i>26</i>&nbsp;
+<i>27</i>&nbsp;import java.io.IOException;
+<i>28</i>&nbsp;import java.io.OutputStream;
+<i>29</i>&nbsp;import java.io.UnsupportedEncodingException;
+<i>30</i>&nbsp;import java.io.Writer;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;/**
+<i>34</i>&nbsp; * This class writes unicode characters to a byte stream (java.io.OutputStream)
+<i>35</i>&nbsp; * as quickly as possible. It buffers the output in an internal
+<i>36</i>&nbsp; * buffer which must be flushed to the OutputStream when done. This flushing
+<i>37</i>&nbsp; * is done via the close() flush() or flushBuffer() method.
+<i>38</i>&nbsp; *
+<i>39</i>&nbsp; * This class is only used internally within Xalan.
+<i>40</i>&nbsp; *
+<i>41</i>&nbsp; * @xsl.usage internal
+<i>42</i>&nbsp; */
+<i>43</i>&nbsp;final class WriterToUTF8Buffered extends Writer implements WriterChain
+<i>44</i>&nbsp;{
+<i>45</i>&nbsp;
+<i>46</i>&nbsp;  /** number of bytes that the byte buffer can hold.
+<i>47</i>&nbsp;   * This is a fixed constant is used rather than m_outputBytes.lenght for performance.
+<i>48</i>&nbsp;   */
+<i>49</i>&nbsp;  private static final int BYTES_MAX=16*1024;
+<i>50</i>&nbsp;  /** number of characters that the character buffer can hold.
+<i>51</i>&nbsp;   * This is 1/3 of the number of bytes because UTF-8 encoding
+<i>52</i>&nbsp;   * can expand one unicode character by up to 3 bytes.
+<i>53</i>&nbsp;   */
+<i>54</i>&nbsp;  private static final int CHARS_MAX=(BYTES_MAX/3);
+<i>55</i>&nbsp;
+<i>56</i>&nbsp; // private static final int
+<i>57</i>&nbsp;
+<i>58</i>&nbsp;  /** The byte stream to write to. (sc &amp; sb remove final to compile in JDK 1.1.8) */
+<i>59</i>&nbsp;  private final OutputStream m_os;
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;  /**
+<i>62</i>&nbsp;   * The internal buffer where data is stored.
+<i>63</i>&nbsp;   * (sc &amp; sb remove final to compile in JDK 1.1.8)
+<i>64</i>&nbsp;   */
+<i>65</i>&nbsp;  private final byte m_outputBytes[];
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;  private final char m_inputChars[];
+<i>68</i>&nbsp;
+<i>69</i>&nbsp;  /**
+<i>70</i>&nbsp;   * The number of valid bytes in the buffer. This value is always
+<i>71</i>&nbsp;   * in the range &lt;tt&gt;0&lt;/tt&gt; through &lt;tt&gt;m_outputBytes.length&lt;/tt&gt;; elements
+<i>72</i>&nbsp;   * &lt;tt&gt;m_outputBytes[0]&lt;/tt&gt; through &lt;tt&gt;m_outputBytes[count-1]&lt;/tt&gt; contain valid
+<i>73</i>&nbsp;   * byte data.
+<i>74</i>&nbsp;   */
+<i>75</i>&nbsp;  private int count;
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;  /**
+<i>78</i>&nbsp;   * Create an buffered UTF-8 writer.
+<i>79</i>&nbsp;   *
+<i>80</i>&nbsp;   *
+<i>81</i>&nbsp;   * @param   out    the underlying output stream.
+<i>82</i>&nbsp;   *
+<i>83</i>&nbsp;   * @throws UnsupportedEncodingException
+<i>84</i>&nbsp;   */
+<b class="nc"><i>85</i>&nbsp;  public WriterToUTF8Buffered(OutputStream out)</b>
+<b class="nc"><i>86</i>&nbsp;          throws UnsupportedEncodingException</b>
+<i>87</i>&nbsp;  {
+<i>88</i>&nbsp;      m_os = out;
+<b class="nc"><i>89</i>&nbsp;      // get 3 extra bytes to make buffer overflow checking simpler and faster</b>
+<i>90</i>&nbsp;      // we won&#39;t have to keep checking for a few extra characters
+<i>91</i>&nbsp;      m_outputBytes = new byte[BYTES_MAX + 3];
+<i>92</i>&nbsp;
+<b class="nc"><i>93</i>&nbsp;      // Big enough to hold the input chars that will be transformed</b>
+<b class="nc"><i>94</i>&nbsp;      // into output bytes in m_ouputBytes.</b>
+<i>95</i>&nbsp;      m_inputChars = new char[CHARS_MAX + 2];
+<i>96</i>&nbsp;      count = 0;
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;//      the old body of this constructor, before the buffersize was changed to a constant
+<i>99</i>&nbsp;//      this(out, 8*1024);
+<i>100</i>&nbsp;  }
+<i>101</i>&nbsp;
+<i>102</i>&nbsp;  /**
+<i>103</i>&nbsp;   * Create an buffered UTF-8 writer to write data to the
+<i>104</i>&nbsp;   * specified underlying output stream with the specified buffer
+<i>105</i>&nbsp;   * size.
+<i>106</i>&nbsp;   *
+<i>107</i>&nbsp;   * @param   out    the underlying output stream.
+<i>108</i>&nbsp;   * @param   size   the buffer size.
+<i>109</i>&nbsp;   * @exception IllegalArgumentException if size &lt;= 0.
+<i>110</i>&nbsp;   */
+<i>111</i>&nbsp;//  public WriterToUTF8Buffered(final OutputStream out, final int size)
+<i>112</i>&nbsp;//  {
+<i>113</i>&nbsp;//
+<i>114</i>&nbsp;//    m_os = out;
+<i>115</i>&nbsp;//
+<i>116</i>&nbsp;//    if (size &lt;= 0)
+<i>117</i>&nbsp;//    {
+<i>118</i>&nbsp;//      throw new IllegalArgumentException(
+<i>119</i>&nbsp;//        SerializerMessages.createMessage(SerializerErrorResources.ER_BUFFER_SIZE_LESSTHAN_ZERO, null)); //&quot;Buffer size &lt;= 0&quot;);
+<i>120</i>&nbsp;//    }
+<i>121</i>&nbsp;//
+<i>122</i>&nbsp;//    m_outputBytes = new byte[size];
+<i>123</i>&nbsp;//    count = 0;
+<i>124</i>&nbsp;//  }
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;  /**
+<i>127</i>&nbsp;   * Write a single character.  The character to be written is contained in
+<i>128</i>&nbsp;   * the 16 low-order bits of the given integer value; the 16 high-order bits
+<i>129</i>&nbsp;   * are ignored.
+<i>130</i>&nbsp;   *
+<i>131</i>&nbsp;   * &lt;p&gt; Subclasses that intend to support efficient single-character output
+<i>132</i>&nbsp;   * should override this method.
+<i>133</i>&nbsp;   *
+<i>134</i>&nbsp;   * @param c  int specifying a character to be written.
+<i>135</i>&nbsp;   * @exception  IOException  If an I/O error occurs
+<i>136</i>&nbsp;   */
+<i>137</i>&nbsp;  public void write(final int c) throws IOException
+<i>138</i>&nbsp;  {
+<i>139</i>&nbsp;
+<i>140</i>&nbsp;    /* If we are close to the end of the buffer then flush it.
+<b class="nc"><i>141</i>&nbsp;     * Remember the buffer can hold a few more bytes than BYTES_MAX</b>
+<b class="nc"><i>142</i>&nbsp;     */</b>
+<i>143</i>&nbsp;    if (count &gt;= BYTES_MAX)
+<b class="nc"><i>144</i>&nbsp;        flushBuffer();</b>
+<i>145</i>&nbsp;
+<b class="nc"><i>146</i>&nbsp;    if (c &lt; 0x80)</b>
+<i>147</i>&nbsp;    {
+<b class="nc"><i>148</i>&nbsp;       m_outputBytes[count++] = (byte) (c);</b>
+<i>149</i>&nbsp;    }
+<b class="nc"><i>150</i>&nbsp;    else if (c &lt; 0x800)</b>
+<b class="nc"><i>151</i>&nbsp;    {</b>
+<i>152</i>&nbsp;      m_outputBytes[count++] = (byte) (0xc0 + (c &gt;&gt; 6));
+<b class="nc"><i>153</i>&nbsp;      m_outputBytes[count++] = (byte) (0x80 + (c &amp; 0x3f));</b>
+<i>154</i>&nbsp;    }
+<b class="nc"><i>155</i>&nbsp;    else if (c &lt; 0x10000)</b>
+<b class="nc"><i>156</i>&nbsp;    {</b>
+<b class="nc"><i>157</i>&nbsp;      m_outputBytes[count++] = (byte) (0xe0 + (c &gt;&gt; 12));</b>
+<i>158</i>&nbsp;      m_outputBytes[count++] = (byte) (0x80 + ((c &gt;&gt; 6) &amp; 0x3f));
+<i>159</i>&nbsp;      m_outputBytes[count++] = (byte) (0x80 + (c &amp; 0x3f));
+<i>160</i>&nbsp;    }
+<b class="nc"><i>161</i>&nbsp;        else</b>
+<b class="nc"><i>162</i>&nbsp;        {</b>
+<b class="nc"><i>163</i>&nbsp;          m_outputBytes[count++] = (byte) (0xf0 + (c &gt;&gt; 18));</b>
+<b class="nc"><i>164</i>&nbsp;          m_outputBytes[count++] = (byte) (0x80 + ((c &gt;&gt; 12) &amp; 0x3f));</b>
+<i>165</i>&nbsp;          m_outputBytes[count++] = (byte) (0x80 + ((c &gt;&gt; 6) &amp; 0x3f));
+<i>166</i>&nbsp;          m_outputBytes[count++] = (byte) (0x80 + (c &amp; 0x3f));
+<i>167</i>&nbsp;        }
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;  }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;  /**
+<i>173</i>&nbsp;   * Write a portion of an array of characters.
+<i>174</i>&nbsp;   *
+<i>175</i>&nbsp;   * @param  chars  Array of characters
+<i>176</i>&nbsp;   * @param  start   Offset from which to start writing characters
+<i>177</i>&nbsp;   * @param  length   Number of characters to write
+<i>178</i>&nbsp;   *
+<i>179</i>&nbsp;   * @exception  IOException  If an I/O error occurs
+<i>180</i>&nbsp;   *
+<i>181</i>&nbsp;   * @throws java.io.IOException
+<i>182</i>&nbsp;   */
+<i>183</i>&nbsp;  public void write(final char chars[], final int start, final int length)
+<i>184</i>&nbsp;          throws java.io.IOException
+<i>185</i>&nbsp;  {
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;    // We multiply the length by three since this is the maximum length
+<i>188</i>&nbsp;    // of the characters that we can put into the buffer.  It is possible
+<b class="nc"><i>189</i>&nbsp;    // for each Unicode character to expand to three bytes.</b>
+<i>190</i>&nbsp;
+<b class="nc"><i>191</i>&nbsp;    int lengthx3 = 3*length;</b>
+<i>192</i>&nbsp;
+<i>193</i>&nbsp;    if (lengthx3 &gt;= BYTES_MAX - count)
+<b class="nc"><i>194</i>&nbsp;    {</b>
+<i>195</i>&nbsp;      // The requested length is greater than the unused part of the buffer
+<b class="nc"><i>196</i>&nbsp;      flushBuffer();</b>
+<i>197</i>&nbsp;
+<i>198</i>&nbsp;      if (lengthx3 &gt; BYTES_MAX)
+<i>199</i>&nbsp;      {
+<i>200</i>&nbsp;        /*
+<i>201</i>&nbsp;         * The requested length exceeds the size of the buffer.
+<i>202</i>&nbsp;         * Cut the buffer up into chunks, each of which will
+<i>203</i>&nbsp;         * not cause an overflow to the output buffer m_outputBytes,
+<i>204</i>&nbsp;         * and make multiple recursive calls.
+<b class="nc"><i>205</i>&nbsp;         * Be careful about integer overflows in multiplication.</b>
+<i>206</i>&nbsp;         */
+<b class="nc"><i>207</i>&nbsp;        int split = length/CHARS_MAX;</b>
+<b class="nc"><i>208</i>&nbsp;        final int chunks;</b>
+<i>209</i>&nbsp;        if (length % CHARS_MAX &gt; 0)
+<b class="nc"><i>210</i>&nbsp;            chunks = split + 1;</b>
+<b class="nc"><i>211</i>&nbsp;        else</b>
+<b class="nc"><i>212</i>&nbsp;            chunks = split;</b>
+<i>213</i>&nbsp;        int end_chunk = start;
+<b class="nc"><i>214</i>&nbsp;        for (int chunk = 1; chunk &lt;= chunks; chunk++)</b>
+<b class="nc"><i>215</i>&nbsp;        {</b>
+<i>216</i>&nbsp;            int start_chunk = end_chunk;
+<i>217</i>&nbsp;            end_chunk = start + (int) ((((long) length) * chunk) / chunks);
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;            // Adjust the end of the chunk if it ends on a high char
+<b class="nc"><i>220</i>&nbsp;            // of a Unicode surrogate pair and low char of the pair</b>
+<b class="nc"><i>221</i>&nbsp;            // is not going to be in the same chunk</b>
+<b class="nc"><i>222</i>&nbsp;            final char c = chars[end_chunk - 1];</b>
+<i>223</i>&nbsp;            int ic = chars[end_chunk - 1];
+<i>224</i>&nbsp;            if (c &gt;= 0xD800 &amp;&amp; c &lt;= 0xDBFF) {
+<i>225</i>&nbsp;                // The last Java char that we were going
+<i>226</i>&nbsp;                // to process is the first of a
+<i>227</i>&nbsp;                // Java surrogate char pair that
+<b class="nc"><i>228</i>&nbsp;                // represent a Unicode character.</b>
+<i>229</i>&nbsp;
+<i>230</i>&nbsp;                if (end_chunk &lt; start + length) {
+<b class="nc"><i>231</i>&nbsp;                    // Avoid spanning by including the low</b>
+<i>232</i>&nbsp;                    // char in the current chunk of chars.
+<i>233</i>&nbsp;                    end_chunk++;
+<i>234</i>&nbsp;                } else {
+<i>235</i>&nbsp;                    /* This is the last char of the last chunk,
+<i>236</i>&nbsp;                     * and it is the high char of a high/low pair with
+<i>237</i>&nbsp;                     * no low char provided.
+<i>238</i>&nbsp;                     * TODO: error message needed.
+<i>239</i>&nbsp;                     * The char array incorrectly ends in a high char
+<i>240</i>&nbsp;                     * of a high/low surrogate pair, but there is
+<b class="nc"><i>241</i>&nbsp;                     * no corresponding low as the high is the last char</b>
+<i>242</i>&nbsp;                     */
+<i>243</i>&nbsp;                    end_chunk--;
+<i>244</i>&nbsp;                }
+<i>245</i>&nbsp;            }
+<b class="nc"><i>246</i>&nbsp;</b>
+<b class="nc"><i>247</i>&nbsp;</b>
+<i>248</i>&nbsp;            int len_chunk = (end_chunk - start_chunk);
+<i>249</i>&nbsp;            this.write(chars,start_chunk, len_chunk);
+<i>250</i>&nbsp;        }
+<i>251</i>&nbsp;        return;
+<i>252</i>&nbsp;      }
+<i>253</i>&nbsp;    }
+<i>254</i>&nbsp;
+<b class="nc"><i>255</i>&nbsp;</b>
+<b class="nc"><i>256</i>&nbsp;</b>
+<b class="nc"><i>257</i>&nbsp;    final int n = length+start;</b>
+<b class="nc"><i>258</i>&nbsp;    final byte[] buf_loc = m_outputBytes; // local reference for faster access</b>
+<i>259</i>&nbsp;    int count_loc = count;      // local integer for faster access
+<i>260</i>&nbsp;    int i = start;
+<i>261</i>&nbsp;    {
+<i>262</i>&nbsp;        /* This block could be omitted and the code would produce
+<i>263</i>&nbsp;         * the same result. But this block exists to give the JIT
+<i>264</i>&nbsp;         * a better chance of optimizing a tight and common loop which
+<i>265</i>&nbsp;         * occurs when writing out ASCII characters.
+<b class="nc"><i>266</i>&nbsp;         */</b>
+<b class="nc"><i>267</i>&nbsp;        char c;</b>
+<i>268</i>&nbsp;        for(; i &lt; n &amp;&amp; (c = chars[i])&lt; 0x80 ; i++ )
+<b class="nc"><i>269</i>&nbsp;            buf_loc[count_loc++] = (byte)c;</b>
+<i>270</i>&nbsp;    }
+<i>271</i>&nbsp;    for (; i &lt; n; i++)
+<b class="nc"><i>272</i>&nbsp;    {</b>
+<i>273</i>&nbsp;
+<b class="nc"><i>274</i>&nbsp;      final char c = chars[i];</b>
+<b class="nc"><i>275</i>&nbsp;</b>
+<b class="nc"><i>276</i>&nbsp;      if (c &lt; 0x80)</b>
+<i>277</i>&nbsp;        buf_loc[count_loc++] = (byte) (c);
+<b class="nc"><i>278</i>&nbsp;      else if (c &lt; 0x800)</b>
+<b class="nc"><i>279</i>&nbsp;      {</b>
+<i>280</i>&nbsp;        buf_loc[count_loc++] = (byte) (0xc0 + (c &gt;&gt; 6));
+<i>281</i>&nbsp;        buf_loc[count_loc++] = (byte) (0x80 + (c &amp; 0x3f));
+<i>282</i>&nbsp;      }
+<i>283</i>&nbsp;      /**
+<i>284</i>&nbsp;        * The following else if condition is added to support XML 1.1 Characters for
+<i>285</i>&nbsp;        * UTF-8:   [1111 0uuu] [10uu zzzz] [10yy yyyy] [10xx xxxx]*
+<i>286</i>&nbsp;        * Unicode: [1101 10ww] [wwzz zzyy] (high surrogate)
+<i>287</i>&nbsp;        *          [1101 11yy] [yyxx xxxx] (low surrogate)
+<b class="nc"><i>288</i>&nbsp;        *          * uuuuu = wwww + 1</b>
+<i>289</i>&nbsp;        */
+<i>290</i>&nbsp;      else if (c &gt;= 0xD800 &amp;&amp; c &lt;= 0xDBFF)
+<b class="nc"><i>291</i>&nbsp;      {</b>
+<b class="nc"><i>292</i>&nbsp;          char high, low;</b>
+<b class="nc"><i>293</i>&nbsp;          high = c;</b>
+<i>294</i>&nbsp;          i++;
+<b class="nc"><i>295</i>&nbsp;          low = chars[i];</b>
+<b class="nc"><i>296</i>&nbsp;</b>
+<b class="nc"><i>297</i>&nbsp;          buf_loc[count_loc++] = (byte) (0xF0 | (((high + 0x40) &gt;&gt; 8) &amp; 0xf0));</b>
+<b class="nc"><i>298</i>&nbsp;          buf_loc[count_loc++] = (byte) (0x80 | (((high + 0x40) &gt;&gt; 2) &amp; 0x3f));</b>
+<b class="nc"><i>299</i>&nbsp;          buf_loc[count_loc++] = (byte) (0x80 | ((low &gt;&gt; 6) &amp; 0x0f) + ((high &lt;&lt; 4) &amp; 0x30));</b>
+<i>300</i>&nbsp;          buf_loc[count_loc++] = (byte) (0x80 | (low &amp; 0x3f));
+<i>301</i>&nbsp;      }
+<b class="nc"><i>302</i>&nbsp;      else</b>
+<b class="nc"><i>303</i>&nbsp;      {</b>
+<b class="nc"><i>304</i>&nbsp;        buf_loc[count_loc++] = (byte) (0xe0 + (c &gt;&gt; 12));</b>
+<i>305</i>&nbsp;        buf_loc[count_loc++] = (byte) (0x80 + ((c &gt;&gt; 6) &amp; 0x3f));
+<i>306</i>&nbsp;        buf_loc[count_loc++] = (byte) (0x80 + (c &amp; 0x3f));
+<i>307</i>&nbsp;      }
+<b class="nc"><i>308</i>&nbsp;    }</b>
+<i>309</i>&nbsp;    // Store the local integer back into the instance variable
+<i>310</i>&nbsp;    count = count_loc;
+<i>311</i>&nbsp;
+<i>312</i>&nbsp;  }
+<i>313</i>&nbsp;
+<i>314</i>&nbsp;  /**
+<i>315</i>&nbsp;   * Write a string.
+<i>316</i>&nbsp;   *
+<i>317</i>&nbsp;   * @param  s  String to be written
+<i>318</i>&nbsp;   *
+<i>319</i>&nbsp;   * @exception  IOException  If an I/O error occurs
+<i>320</i>&nbsp;   */
+<i>321</i>&nbsp;  public void write(final String s) throws IOException
+<i>322</i>&nbsp;  {
+<i>323</i>&nbsp;
+<i>324</i>&nbsp;    // We multiply the length by three since this is the maximum length
+<b class="nc"><i>325</i>&nbsp;    // of the characters that we can put into the buffer.  It is possible</b>
+<b class="nc"><i>326</i>&nbsp;    // for each Unicode character to expand to three bytes.</b>
+<i>327</i>&nbsp;    final int length = s.length();
+<b class="nc"><i>328</i>&nbsp;    int lengthx3 = 3*length;</b>
+<i>329</i>&nbsp;
+<i>330</i>&nbsp;    if (lengthx3 &gt;= BYTES_MAX - count)
+<b class="nc"><i>331</i>&nbsp;    {</b>
+<i>332</i>&nbsp;      // The requested length is greater than the unused part of the buffer
+<b class="nc"><i>333</i>&nbsp;      flushBuffer();</b>
+<i>334</i>&nbsp;
+<i>335</i>&nbsp;      if (lengthx3 &gt; BYTES_MAX)
+<i>336</i>&nbsp;      {
+<i>337</i>&nbsp;        /*
+<i>338</i>&nbsp;         * The requested length exceeds the size of the buffer,
+<b class="nc"><i>339</i>&nbsp;         * so break it up in chunks that don&#39;t exceed the buffer size.</b>
+<b class="nc"><i>340</i>&nbsp;         */</b>
+<i>341</i>&nbsp;         final int start = 0;
+<b class="nc"><i>342</i>&nbsp;         int split = length/CHARS_MAX;</b>
+<b class="nc"><i>343</i>&nbsp;         final int chunks;</b>
+<i>344</i>&nbsp;         if (length % CHARS_MAX &gt; 0)
+<b class="nc"><i>345</i>&nbsp;             chunks = split + 1;</b>
+<b class="nc"><i>346</i>&nbsp;         else</b>
+<b class="nc"><i>347</i>&nbsp;             chunks = split;</b>
+<i>348</i>&nbsp;         int end_chunk = 0;
+<b class="nc"><i>349</i>&nbsp;         for (int chunk = 1; chunk &lt;= chunks; chunk++)</b>
+<b class="nc"><i>350</i>&nbsp;         {</b>
+<b class="nc"><i>351</i>&nbsp;             int start_chunk = end_chunk;</b>
+<b class="nc"><i>352</i>&nbsp;             end_chunk = start + (int) ((((long) length) * chunk) / chunks);</b>
+<i>353</i>&nbsp;             s.getChars(start_chunk,end_chunk, m_inputChars,0);
+<i>354</i>&nbsp;             int len_chunk = (end_chunk - start_chunk);
+<i>355</i>&nbsp;
+<i>356</i>&nbsp;             // Adjust the end of the chunk if it ends on a high char
+<b class="nc"><i>357</i>&nbsp;             // of a Unicode surrogate pair and low char of the pair</b>
+<b class="nc"><i>358</i>&nbsp;             // is not going to be in the same chunk</b>
+<i>359</i>&nbsp;             final char c = m_inputChars[len_chunk - 1];
+<i>360</i>&nbsp;             if (c &gt;= 0xD800 &amp;&amp; c &lt;= 0xDBFF) {
+<i>361</i>&nbsp;                 // Exclude char in this chunk,
+<b class="nc"><i>362</i>&nbsp;                 // to avoid spanning a Unicode character</b>
+<b class="nc"><i>363</i>&nbsp;                 // that is in two Java chars as a high/low surrogate</b>
+<b class="nc"><i>364</i>&nbsp;                 end_chunk--;</b>
+<i>365</i>&nbsp;                 len_chunk--;
+<i>366</i>&nbsp;                 if (chunk == chunks) {
+<i>367</i>&nbsp;                     /* TODO: error message needed.
+<i>368</i>&nbsp;                      * The String incorrectly ends in a high char
+<i>369</i>&nbsp;                      * of a high/low surrogate pair, but there is
+<i>370</i>&nbsp;                      * no corresponding low as the high is the last char
+<i>371</i>&nbsp;                      * Recover by ignoring this last char.
+<i>372</i>&nbsp;                      */
+<i>373</i>&nbsp;                 }
+<b class="nc"><i>374</i>&nbsp;             }</b>
+<i>375</i>&nbsp;
+<i>376</i>&nbsp;             this.write(m_inputChars,0, len_chunk);
+<i>377</i>&nbsp;         }
+<i>378</i>&nbsp;         return;
+<i>379</i>&nbsp;      }
+<i>380</i>&nbsp;    }
+<b class="nc"><i>381</i>&nbsp;</b>
+<b class="nc"><i>382</i>&nbsp;</b>
+<b class="nc"><i>383</i>&nbsp;    s.getChars(0, length , m_inputChars, 0);</b>
+<b class="nc"><i>384</i>&nbsp;    final char[] chars = m_inputChars;</b>
+<b class="nc"><i>385</i>&nbsp;    final int n = length;</b>
+<b class="nc"><i>386</i>&nbsp;    final byte[] buf_loc = m_outputBytes; // local reference for faster access</b>
+<i>387</i>&nbsp;    int count_loc = count;      // local integer for faster access
+<i>388</i>&nbsp;    int i = 0;
+<i>389</i>&nbsp;    {
+<i>390</i>&nbsp;        /* This block could be omitted and the code would produce
+<i>391</i>&nbsp;         * the same result. But this block exists to give the JIT
+<i>392</i>&nbsp;         * a better chance of optimizing a tight and common loop which
+<i>393</i>&nbsp;         * occurs when writing out ASCII characters.
+<b class="nc"><i>394</i>&nbsp;         */</b>
+<b class="nc"><i>395</i>&nbsp;        char c;</b>
+<i>396</i>&nbsp;        for(; i &lt; n &amp;&amp; (c = chars[i])&lt; 0x80 ; i++ )
+<b class="nc"><i>397</i>&nbsp;            buf_loc[count_loc++] = (byte)c;</b>
+<i>398</i>&nbsp;    }
+<i>399</i>&nbsp;    for (; i &lt; n; i++)
+<b class="nc"><i>400</i>&nbsp;    {</b>
+<i>401</i>&nbsp;
+<b class="nc"><i>402</i>&nbsp;      final char c = chars[i];</b>
+<b class="nc"><i>403</i>&nbsp;</b>
+<b class="nc"><i>404</i>&nbsp;      if (c &lt; 0x80)</b>
+<i>405</i>&nbsp;        buf_loc[count_loc++] = (byte) (c);
+<b class="nc"><i>406</i>&nbsp;      else if (c &lt; 0x800)</b>
+<b class="nc"><i>407</i>&nbsp;      {</b>
+<i>408</i>&nbsp;        buf_loc[count_loc++] = (byte) (0xc0 + (c &gt;&gt; 6));
+<i>409</i>&nbsp;        buf_loc[count_loc++] = (byte) (0x80 + (c &amp; 0x3f));
+<i>410</i>&nbsp;      }
+<i>411</i>&nbsp;    /**
+<i>412</i>&nbsp;      * The following else if condition is added to support XML 1.1 Characters for
+<i>413</i>&nbsp;      * UTF-8:   [1111 0uuu] [10uu zzzz] [10yy yyyy] [10xx xxxx]*
+<i>414</i>&nbsp;      * Unicode: [1101 10ww] [wwzz zzyy] (high surrogate)
+<i>415</i>&nbsp;      *          [1101 11yy] [yyxx xxxx] (low surrogate)
+<b class="nc"><i>416</i>&nbsp;      *          * uuuuu = wwww + 1</b>
+<i>417</i>&nbsp;      */
+<i>418</i>&nbsp;    else if (c &gt;= 0xD800 &amp;&amp; c &lt;= 0xDBFF)
+<b class="nc"><i>419</i>&nbsp;    {</b>
+<b class="nc"><i>420</i>&nbsp;        char high, low;</b>
+<b class="nc"><i>421</i>&nbsp;        high = c;</b>
+<i>422</i>&nbsp;        i++;
+<b class="nc"><i>423</i>&nbsp;        low = chars[i];</b>
+<b class="nc"><i>424</i>&nbsp;</b>
+<b class="nc"><i>425</i>&nbsp;        buf_loc[count_loc++] = (byte) (0xF0 | (((high + 0x40) &gt;&gt; 8) &amp; 0xf0));</b>
+<b class="nc"><i>426</i>&nbsp;        buf_loc[count_loc++] = (byte) (0x80 | (((high + 0x40) &gt;&gt; 2) &amp; 0x3f));</b>
+<b class="nc"><i>427</i>&nbsp;        buf_loc[count_loc++] = (byte) (0x80 | ((low &gt;&gt; 6) &amp; 0x0f) + ((high &lt;&lt; 4) &amp; 0x30));</b>
+<i>428</i>&nbsp;        buf_loc[count_loc++] = (byte) (0x80 | (low &amp; 0x3f));
+<i>429</i>&nbsp;    }
+<b class="nc"><i>430</i>&nbsp;      else</b>
+<b class="nc"><i>431</i>&nbsp;      {</b>
+<b class="nc"><i>432</i>&nbsp;        buf_loc[count_loc++] = (byte) (0xe0 + (c &gt;&gt; 12));</b>
+<i>433</i>&nbsp;        buf_loc[count_loc++] = (byte) (0x80 + ((c &gt;&gt; 6) &amp; 0x3f));
+<i>434</i>&nbsp;        buf_loc[count_loc++] = (byte) (0x80 + (c &amp; 0x3f));
+<i>435</i>&nbsp;      }
+<b class="nc"><i>436</i>&nbsp;    }</b>
+<i>437</i>&nbsp;    // Store the local integer back into the instance variable
+<i>438</i>&nbsp;    count = count_loc;
+<i>439</i>&nbsp;
+<i>440</i>&nbsp;  }
+<i>441</i>&nbsp;
+<i>442</i>&nbsp;  /**
+<i>443</i>&nbsp;   * Flush the internal buffer
+<i>444</i>&nbsp;   *
+<i>445</i>&nbsp;   * @throws IOException
+<i>446</i>&nbsp;   */
+<i>447</i>&nbsp;  public void flushBuffer() throws IOException
+<b class="nc"><i>448</i>&nbsp;  {</b>
+<i>449</i>&nbsp;
+<b class="nc"><i>450</i>&nbsp;    if (count &gt; 0)</b>
+<i>451</i>&nbsp;    {
+<b class="nc"><i>452</i>&nbsp;      m_os.write(m_outputBytes, 0, count);</b>
+<i>453</i>&nbsp;
+<i>454</i>&nbsp;      count = 0;
+<i>455</i>&nbsp;    }
+<i>456</i>&nbsp;  }
+<i>457</i>&nbsp;
+<i>458</i>&nbsp;  /**
+<i>459</i>&nbsp;   * Flush the stream.  If the stream has saved any characters from the
+<i>460</i>&nbsp;   * various write() methods in a buffer, write them immediately to their
+<i>461</i>&nbsp;   * intended destination.  Then, if that destination is another character or
+<i>462</i>&nbsp;   * byte stream, flush it.  Thus one flush() invocation will flush all the
+<i>463</i>&nbsp;   * buffers in a chain of Writers and OutputStreams.
+<i>464</i>&nbsp;   *
+<i>465</i>&nbsp;   * @exception  IOException  If an I/O error occurs
+<i>466</i>&nbsp;   *
+<i>467</i>&nbsp;   * @throws java.io.IOException
+<i>468</i>&nbsp;   */
+<b class="nc"><i>469</i>&nbsp;  public void flush() throws java.io.IOException</b>
+<b class="nc"><i>470</i>&nbsp;  {</b>
+<i>471</i>&nbsp;    flushBuffer();
+<i>472</i>&nbsp;    m_os.flush();
+<i>473</i>&nbsp;  }
+<i>474</i>&nbsp;
+<i>475</i>&nbsp;  /**
+<i>476</i>&nbsp;   * Close the stream, flushing it first.  Once a stream has been closed,
+<i>477</i>&nbsp;   * further write() or flush() invocations will cause an IOException to be
+<i>478</i>&nbsp;   * thrown.  Closing a previously-closed stream, however, has no effect.
+<i>479</i>&nbsp;   *
+<i>480</i>&nbsp;   * @exception  IOException  If an I/O error occurs
+<i>481</i>&nbsp;   *
+<i>482</i>&nbsp;   * @throws java.io.IOException
+<i>483</i>&nbsp;   */
+<b class="nc"><i>484</i>&nbsp;  public void close() throws java.io.IOException</b>
+<b class="nc"><i>485</i>&nbsp;  {</b>
+<i>486</i>&nbsp;    flushBuffer();
+<i>487</i>&nbsp;    m_os.close();
+<i>488</i>&nbsp;  }
+<i>489</i>&nbsp;
+<i>490</i>&nbsp;  /**
+<i>491</i>&nbsp;   * Get the output stream where the events will be serialized to.
+<i>492</i>&nbsp;   *
+<i>493</i>&nbsp;   * @return reference to the result stream, or null of only a writer was
+<i>494</i>&nbsp;   * set.
+<i>495</i>&nbsp;   */
+<b class="nc"><i>496</i>&nbsp;  public OutputStream getOutputStream()</b>
+<i>497</i>&nbsp;  {
+<i>498</i>&nbsp;    return m_os;
+<i>499</i>&nbsp;  }
+<i>500</i>&nbsp;
+<i>501</i>&nbsp;  public Writer getWriter()
+<i>502</i>&nbsp;  {
+<b class="nc"><i>503</i>&nbsp;    // Only one of getWriter() or getOutputStream() can return null</b>
+<i>504</i>&nbsp;    // This type of writer wraps an OutputStream, not a Writer.
+<i>505</i>&nbsp;    return null;
+<i>506</i>&nbsp;  }
+<i>507</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

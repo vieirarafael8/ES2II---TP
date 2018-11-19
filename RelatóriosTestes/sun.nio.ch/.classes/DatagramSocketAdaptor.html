@@ -1,0 +1,513 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: DatagramSocketAdaptor</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.ch</a> ]
+</div>
+
+<h1>Coverage Summary for Class: DatagramSocketAdaptor (sun.nio.ch)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">DatagramSocketAdaptor</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 36)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 155)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">DatagramSocketAdaptor$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 42)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 161)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2001, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.ch;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.net.DatagramPacket;
+<i>30</i>&nbsp;import java.net.DatagramSocket;
+<i>31</i>&nbsp;import java.net.DatagramSocketImpl;
+<i>32</i>&nbsp;import java.net.InetAddress;
+<i>33</i>&nbsp;import java.net.InetSocketAddress;
+<i>34</i>&nbsp;import java.net.NetworkInterface;
+<i>35</i>&nbsp;import java.net.SocketAddress;
+<i>36</i>&nbsp;import java.net.SocketException;
+<i>37</i>&nbsp;import java.net.SocketOption;
+<i>38</i>&nbsp;import java.net.SocketTimeoutException;
+<i>39</i>&nbsp;import java.net.StandardSocketOptions;
+<i>40</i>&nbsp;import java.nio.ByteBuffer;
+<i>41</i>&nbsp;import java.nio.channels.ClosedChannelException;
+<i>42</i>&nbsp;import java.nio.channels.DatagramChannel;
+<i>43</i>&nbsp;import java.nio.channels.IllegalBlockingModeException;
+<i>44</i>&nbsp;import java.util.Objects;
+<i>45</i>&nbsp;
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;// Make a datagram-socket channel look like a datagram socket.
+<i>48</i>&nbsp;//
+<b class="nc"><i>49</i>&nbsp;// The methods in this class are defined in exactly the same order as in</b>
+<i>50</i>&nbsp;// java.net.DatagramSocket so as to simplify tracking future changes to that
+<i>51</i>&nbsp;// class.
+<i>52</i>&nbsp;//
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;public class DatagramSocketAdaptor
+<i>55</i>&nbsp;    extends DatagramSocket
+<i>56</i>&nbsp;{
+<b class="nc"><i>57</i>&nbsp;    // The channel being adapted</b>
+<b class="nc"><i>58</i>&nbsp;    private final DatagramChannelImpl dc;</b>
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    // Timeout &quot;option&quot; value for receives
+<i>61</i>&nbsp;    private volatile int timeout;
+<i>62</i>&nbsp;
+<b class="nc"><i>63</i>&nbsp;    // ## super will create a useless impl</b>
+<b class="nc"><i>64</i>&nbsp;    private DatagramSocketAdaptor(DatagramChannelImpl dc) throws IOException {</b>
+<b class="nc"><i>65</i>&nbsp;        // Invoke the DatagramSocketAdaptor(SocketAddress) constructor,</b>
+<i>66</i>&nbsp;        // passing a dummy DatagramSocketImpl object to avoid any native
+<i>67</i>&nbsp;        // resource allocation in super class and invoking our bind method
+<i>68</i>&nbsp;        // before the dc field is initialized.
+<i>69</i>&nbsp;        super(dummyDatagramSocket);
+<i>70</i>&nbsp;        this.dc = dc;
+<i>71</i>&nbsp;    }
+<b class="nc"><i>72</i>&nbsp;</b>
+<b class="nc"><i>73</i>&nbsp;    public static DatagramSocket create(DatagramChannelImpl dc) {</b>
+<b class="nc"><i>74</i>&nbsp;        try {</b>
+<b class="nc"><i>75</i>&nbsp;            return new DatagramSocketAdaptor(dc);</b>
+<b class="nc"><i>76</i>&nbsp;        } catch (IOException x) {</b>
+<b class="nc"><i>77</i>&nbsp;            throw new Error(x);</b>
+<b class="nc"><i>78</i>&nbsp;        }</b>
+<i>79</i>&nbsp;    }
+<i>80</i>&nbsp;
+<b class="nc"><i>81</i>&nbsp;    private void connectInternal(SocketAddress remote)</b>
+<b class="nc"><i>82</i>&nbsp;        throws SocketException</b>
+<b class="nc"><i>83</i>&nbsp;    {</b>
+<b class="nc"><i>84</i>&nbsp;        InetSocketAddress isa = Net.asInetSocketAddress(remote);</b>
+<i>85</i>&nbsp;        int port = isa.getPort();
+<i>86</i>&nbsp;        if (port &lt; 0 || port &gt; 0xFFFF)
+<i>87</i>&nbsp;            throw new IllegalArgumentException(&quot;connect: &quot; + port);
+<i>88</i>&nbsp;        if (remote == null)
+<b class="nc"><i>89</i>&nbsp;            throw new IllegalArgumentException(&quot;connect: null address&quot;);</b>
+<b class="nc"><i>90</i>&nbsp;        try {</b>
+<b class="nc"><i>91</i>&nbsp;            dc.connect(remote);</b>
+<b class="nc"><i>92</i>&nbsp;        } catch (ClosedChannelException e) {</b>
+<b class="nc"><i>93</i>&nbsp;            // ignore</b>
+<b class="nc"><i>94</i>&nbsp;        } catch (Exception x) {</b>
+<i>95</i>&nbsp;            Net.translateToSocketException(x);
+<i>96</i>&nbsp;        }
+<i>97</i>&nbsp;    }
+<i>98</i>&nbsp;
+<b class="nc"><i>99</i>&nbsp;    public void bind(SocketAddress local) throws SocketException {</b>
+<b class="nc"><i>100</i>&nbsp;        try {</b>
+<i>101</i>&nbsp;            if (local == null)
+<b class="nc"><i>102</i>&nbsp;                local = new InetSocketAddress(0);</b>
+<i>103</i>&nbsp;            dc.bind(local);
+<i>104</i>&nbsp;        } catch (Exception x) {
+<i>105</i>&nbsp;            Net.translateToSocketException(x);
+<b class="nc"><i>106</i>&nbsp;        }</b>
+<b class="nc"><i>107</i>&nbsp;    }</b>
+<b class="nc"><i>108</i>&nbsp;</b>
+<i>109</i>&nbsp;    public void connect(InetAddress address, int port) {
+<i>110</i>&nbsp;        try {
+<i>111</i>&nbsp;            connectInternal(new InetSocketAddress(address, port));
+<i>112</i>&nbsp;        } catch (SocketException x) {
+<b class="nc"><i>113</i>&nbsp;            // Yes, j.n.DatagramSocket really does this</b>
+<b class="nc"><i>114</i>&nbsp;        }</b>
+<b class="nc"><i>115</i>&nbsp;    }</b>
+<b class="nc"><i>116</i>&nbsp;</b>
+<i>117</i>&nbsp;    public void connect(SocketAddress remote) throws SocketException {
+<i>118</i>&nbsp;        Objects.requireNonNull(remote, &quot;Address can&#39;t be null&quot;);
+<i>119</i>&nbsp;        connectInternal(remote);
+<b class="nc"><i>120</i>&nbsp;    }</b>
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;    public void disconnect() {
+<i>123</i>&nbsp;        try {
+<b class="nc"><i>124</i>&nbsp;            dc.disconnect();</b>
+<i>125</i>&nbsp;        } catch (IOException x) {
+<i>126</i>&nbsp;            throw new Error(x);
+<i>127</i>&nbsp;        }
+<b class="nc"><i>128</i>&nbsp;    }</b>
+<b class="nc"><i>129</i>&nbsp;</b>
+<i>130</i>&nbsp;    public boolean isBound() {
+<i>131</i>&nbsp;        return dc.localAddress() != null;
+<i>132</i>&nbsp;    }
+<i>133</i>&nbsp;
+<b class="nc"><i>134</i>&nbsp;    public boolean isConnected() {</b>
+<b class="nc"><i>135</i>&nbsp;        return dc.remoteAddress() != null;</b>
+<i>136</i>&nbsp;    }
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    public InetAddress getInetAddress() {
+<i>139</i>&nbsp;        InetSocketAddress remote = dc.remoteAddress();
+<b class="nc"><i>140</i>&nbsp;        return (remote != null) ? remote.getAddress() : null;</b>
+<b class="nc"><i>141</i>&nbsp;    }</b>
+<b class="nc"><i>142</i>&nbsp;</b>
+<i>143</i>&nbsp;    public int getPort() {
+<b class="nc"><i>144</i>&nbsp;        InetSocketAddress remote = dc.remoteAddress();</b>
+<b class="nc"><i>145</i>&nbsp;        return (remote != null) ? remote.getPort() : -1;</b>
+<b class="nc"><i>146</i>&nbsp;    }</b>
+<b class="nc"><i>147</i>&nbsp;</b>
+<b class="nc"><i>148</i>&nbsp;    public void send(DatagramPacket p) throws IOException {</b>
+<b class="nc"><i>149</i>&nbsp;        synchronized (dc.blockingLock()) {</b>
+<i>150</i>&nbsp;            if (!dc.isBlocking())
+<i>151</i>&nbsp;                throw new IllegalBlockingModeException();
+<b class="nc"><i>152</i>&nbsp;            try {</b>
+<b class="nc"><i>153</i>&nbsp;                synchronized (p) {</b>
+<b class="nc"><i>154</i>&nbsp;                    ByteBuffer bb = ByteBuffer.wrap(p.getData(),</b>
+<b class="nc"><i>155</i>&nbsp;                                                    p.getOffset(),</b>
+<b class="nc"><i>156</i>&nbsp;                                                    p.getLength());</b>
+<b class="nc"><i>157</i>&nbsp;                    if (dc.isConnected()) {</b>
+<i>158</i>&nbsp;                        if (p.getAddress() == null) {
+<b class="nc"><i>159</i>&nbsp;                            // Legacy DatagramSocket will send in this case</b>
+<i>160</i>&nbsp;                            // and set address and port of the packet
+<i>161</i>&nbsp;                            InetSocketAddress isa = dc.remoteAddress();
+<i>162</i>&nbsp;                            p.setPort(isa.getPort());
+<b class="nc"><i>163</i>&nbsp;                            p.setAddress(isa.getAddress());</b>
+<i>164</i>&nbsp;                            dc.write(bb);
+<b class="nc"><i>165</i>&nbsp;                        } else {</b>
+<b class="nc"><i>166</i>&nbsp;                            // Target address may not match connected address</b>
+<b class="nc"><i>167</i>&nbsp;                            dc.send(bb, p.getSocketAddress());</b>
+<b class="nc"><i>168</i>&nbsp;                        }</b>
+<b class="nc"><i>169</i>&nbsp;                    } else {</b>
+<i>170</i>&nbsp;                        // Not connected so address must be valid or throw
+<i>171</i>&nbsp;                        dc.send(bb, p.getSocketAddress());
+<i>172</i>&nbsp;                    }
+<i>173</i>&nbsp;                }
+<i>174</i>&nbsp;            } catch (IOException x) {
+<b class="nc"><i>175</i>&nbsp;                Net.translateException(x);</b>
+<b class="nc"><i>176</i>&nbsp;            }</b>
+<i>177</i>&nbsp;        }
+<i>178</i>&nbsp;    }
+<b class="nc"><i>179</i>&nbsp;</b>
+<i>180</i>&nbsp;    private SocketAddress receive(ByteBuffer bb) throws IOException {
+<i>181</i>&nbsp;        assert Thread.holdsLock(dc.blockingLock()) &amp;&amp; dc.isBlocking();
+<i>182</i>&nbsp;
+<b class="nc"><i>183</i>&nbsp;        long to = this.timeout;</b>
+<b class="nc"><i>184</i>&nbsp;        if (to == 0) {</b>
+<b class="nc"><i>185</i>&nbsp;            return dc.receive(bb);</b>
+<i>186</i>&nbsp;        } else {
+<b class="nc"><i>187</i>&nbsp;            for (;;) {</b>
+<b class="nc"><i>188</i>&nbsp;                if (!dc.isOpen())</b>
+<b class="nc"><i>189</i>&nbsp;                    throw new ClosedChannelException();</b>
+<b class="nc"><i>190</i>&nbsp;                long st = System.currentTimeMillis();</b>
+<b class="nc"><i>191</i>&nbsp;                if (dc.pollRead(to)) {</b>
+<i>192</i>&nbsp;                    return dc.receive(bb);
+<b class="nc"><i>193</i>&nbsp;                }</b>
+<b class="nc"><i>194</i>&nbsp;                to -= System.currentTimeMillis() - st;</b>
+<i>195</i>&nbsp;                if (to &lt;= 0)
+<b class="nc"><i>196</i>&nbsp;                    throw new SocketTimeoutException();</b>
+<b class="nc"><i>197</i>&nbsp;            }</b>
+<b class="nc"><i>198</i>&nbsp;        }</b>
+<i>199</i>&nbsp;    }
+<b class="nc"><i>200</i>&nbsp;</b>
+<i>201</i>&nbsp;    public void receive(DatagramPacket p) throws IOException {
+<b class="nc"><i>202</i>&nbsp;        synchronized (dc.blockingLock()) {</b>
+<b class="nc"><i>203</i>&nbsp;            if (!dc.isBlocking())</b>
+<i>204</i>&nbsp;                throw new IllegalBlockingModeException();
+<i>205</i>&nbsp;            try {
+<i>206</i>&nbsp;                synchronized (p) {
+<i>207</i>&nbsp;                    ByteBuffer bb = ByteBuffer.wrap(p.getData(),
+<b class="nc"><i>208</i>&nbsp;                                                    p.getOffset(),</b>
+<b class="nc"><i>209</i>&nbsp;                                                    p.getLength());</b>
+<b class="nc"><i>210</i>&nbsp;                    SocketAddress sender = receive(bb);</b>
+<i>211</i>&nbsp;                    p.setSocketAddress(sender);
+<b class="nc"><i>212</i>&nbsp;                    p.setLength(bb.position() - p.getOffset());</b>
+<b class="nc"><i>213</i>&nbsp;                }</b>
+<b class="nc"><i>214</i>&nbsp;            } catch (IOException x) {</b>
+<b class="nc"><i>215</i>&nbsp;                Net.translateException(x);</b>
+<b class="nc"><i>216</i>&nbsp;            }</b>
+<b class="nc"><i>217</i>&nbsp;        }</b>
+<b class="nc"><i>218</i>&nbsp;    }</b>
+<b class="nc"><i>219</i>&nbsp;</b>
+<b class="nc"><i>220</i>&nbsp;    public InetAddress getLocalAddress() {</b>
+<b class="nc"><i>221</i>&nbsp;        if (isClosed())</b>
+<b class="nc"><i>222</i>&nbsp;            return null;</b>
+<b class="nc"><i>223</i>&nbsp;        InetSocketAddress local = dc.localAddress();</b>
+<i>224</i>&nbsp;        if (local == null)
+<i>225</i>&nbsp;            local = new InetSocketAddress(0);
+<i>226</i>&nbsp;        InetAddress result = local.getAddress();
+<b class="nc"><i>227</i>&nbsp;        SecurityManager sm = System.getSecurityManager();</b>
+<b class="nc"><i>228</i>&nbsp;        if (sm != null) {</b>
+<b class="nc"><i>229</i>&nbsp;            try {</b>
+<b class="nc"><i>230</i>&nbsp;                sm.checkConnect(result.getHostAddress(), -1);</b>
+<b class="nc"><i>231</i>&nbsp;            } catch (SecurityException x) {</b>
+<b class="nc"><i>232</i>&nbsp;                return new InetSocketAddress(0).getAddress();</b>
+<b class="nc"><i>233</i>&nbsp;            }</b>
+<b class="nc"><i>234</i>&nbsp;        }</b>
+<i>235</i>&nbsp;        return result;
+<b class="nc"><i>236</i>&nbsp;    }</b>
+<b class="nc"><i>237</i>&nbsp;</b>
+<b class="nc"><i>238</i>&nbsp;    public int getLocalPort() {</b>
+<b class="nc"><i>239</i>&nbsp;        if (isClosed())</b>
+<i>240</i>&nbsp;            return -1;
+<b class="nc"><i>241</i>&nbsp;        try {</b>
+<i>242</i>&nbsp;            InetSocketAddress local = dc.localAddress();
+<i>243</i>&nbsp;            if (local != null) {
+<i>244</i>&nbsp;                return local.getPort();
+<b class="nc"><i>245</i>&nbsp;            }</b>
+<b class="nc"><i>246</i>&nbsp;        } catch (Exception x) {</b>
+<i>247</i>&nbsp;        }
+<b class="nc"><i>248</i>&nbsp;        return 0;</b>
+<b class="nc"><i>249</i>&nbsp;    }</b>
+<b class="nc"><i>250</i>&nbsp;</b>
+<i>251</i>&nbsp;    public void setSoTimeout(int timeout) throws SocketException {
+<b class="nc"><i>252</i>&nbsp;        this.timeout = timeout;</b>
+<b class="nc"><i>253</i>&nbsp;    }</b>
+<b class="nc"><i>254</i>&nbsp;</b>
+<i>255</i>&nbsp;    public int getSoTimeout() throws SocketException {
+<i>256</i>&nbsp;        return timeout;
+<i>257</i>&nbsp;    }
+<b class="nc"><i>258</i>&nbsp;</b>
+<i>259</i>&nbsp;    private void setBooleanOption(SocketOption&lt;Boolean&gt; name, boolean value)
+<i>260</i>&nbsp;        throws SocketException
+<i>261</i>&nbsp;    {
+<b class="nc"><i>262</i>&nbsp;        try {</b>
+<i>263</i>&nbsp;            dc.setOption(name, value);
+<i>264</i>&nbsp;        } catch (IOException x) {
+<i>265</i>&nbsp;            Net.translateToSocketException(x);
+<i>266</i>&nbsp;        }
+<i>267</i>&nbsp;    }
+<i>268</i>&nbsp;
+<b class="nc"><i>269</i>&nbsp;    private void setIntOption(SocketOption&lt;Integer&gt; name, int value)</b>
+<b class="nc"><i>270</i>&nbsp;        throws SocketException</b>
+<b class="nc"><i>271</i>&nbsp;    {</b>
+<b class="nc"><i>272</i>&nbsp;        try {</b>
+<i>273</i>&nbsp;            dc.setOption(name, value);
+<i>274</i>&nbsp;        } catch (IOException x) {
+<i>275</i>&nbsp;            Net.translateToSocketException(x);
+<i>276</i>&nbsp;        }
+<i>277</i>&nbsp;    }
+<i>278</i>&nbsp;
+<b class="nc"><i>279</i>&nbsp;    private boolean getBooleanOption(SocketOption&lt;Boolean&gt; name) throws SocketException {</b>
+<b class="nc"><i>280</i>&nbsp;        try {</b>
+<b class="nc"><i>281</i>&nbsp;            return dc.getOption(name).booleanValue();</b>
+<b class="nc"><i>282</i>&nbsp;        } catch (IOException x) {</b>
+<i>283</i>&nbsp;            Net.translateToSocketException(x);
+<i>284</i>&nbsp;            return false;       // keep compiler happy
+<i>285</i>&nbsp;        }
+<i>286</i>&nbsp;    }
+<b class="nc"><i>287</i>&nbsp;</b>
+<b class="nc"><i>288</i>&nbsp;    private int getIntOption(SocketOption&lt;Integer&gt; name) throws SocketException {</b>
+<b class="nc"><i>289</i>&nbsp;        try {</b>
+<b class="nc"><i>290</i>&nbsp;            return dc.getOption(name).intValue();</b>
+<i>291</i>&nbsp;        } catch (IOException x) {
+<i>292</i>&nbsp;            Net.translateToSocketException(x);
+<i>293</i>&nbsp;            return -1;          // keep compiler happy
+<i>294</i>&nbsp;        }
+<i>295</i>&nbsp;    }
+<b class="nc"><i>296</i>&nbsp;</b>
+<b class="nc"><i>297</i>&nbsp;    public void setSendBufferSize(int size) throws SocketException {</b>
+<b class="nc"><i>298</i>&nbsp;        if (size &lt;= 0)</b>
+<b class="nc"><i>299</i>&nbsp;            throw new IllegalArgumentException(&quot;Invalid send size&quot;);</b>
+<i>300</i>&nbsp;        setIntOption(StandardSocketOptions.SO_SNDBUF, size);
+<i>301</i>&nbsp;    }
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;    public int getSendBufferSize() throws SocketException {
+<b class="nc"><i>304</i>&nbsp;        return getIntOption(StandardSocketOptions.SO_SNDBUF);</b>
+<b class="nc"><i>305</i>&nbsp;    }</b>
+<b class="nc"><i>306</i>&nbsp;</b>
+<i>307</i>&nbsp;    public void setReceiveBufferSize(int size) throws SocketException {
+<i>308</i>&nbsp;        if (size &lt;= 0)
+<i>309</i>&nbsp;            throw new IllegalArgumentException(&quot;Invalid receive size&quot;);
+<b class="nc"><i>310</i>&nbsp;        setIntOption(StandardSocketOptions.SO_RCVBUF, size);</b>
+<i>311</i>&nbsp;    }
+<i>312</i>&nbsp;
+<i>313</i>&nbsp;    public int getReceiveBufferSize() throws SocketException {
+<b class="nc"><i>314</i>&nbsp;        return getIntOption(StandardSocketOptions.SO_RCVBUF);</b>
+<b class="nc"><i>315</i>&nbsp;    }</b>
+<b class="nc"><i>316</i>&nbsp;</b>
+<i>317</i>&nbsp;    public void setReuseAddress(boolean on) throws SocketException {
+<i>318</i>&nbsp;        setBooleanOption(StandardSocketOptions.SO_REUSEADDR, on);
+<i>319</i>&nbsp;    }
+<b class="nc"><i>320</i>&nbsp;</b>
+<i>321</i>&nbsp;    public boolean getReuseAddress() throws SocketException {
+<i>322</i>&nbsp;        return getBooleanOption(StandardSocketOptions.SO_REUSEADDR);
+<i>323</i>&nbsp;
+<b class="nc"><i>324</i>&nbsp;    }</b>
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;    public void setBroadcast(boolean on) throws SocketException {
+<i>327</i>&nbsp;        setBooleanOption(StandardSocketOptions.SO_BROADCAST, on);
+<b class="nc"><i>328</i>&nbsp;    }</b>
+<i>329</i>&nbsp;
+<i>330</i>&nbsp;    public boolean getBroadcast() throws SocketException {
+<i>331</i>&nbsp;        return getBooleanOption(StandardSocketOptions.SO_BROADCAST);
+<i>332</i>&nbsp;    }
+<b class="nc"><i>333</i>&nbsp;</b>
+<i>334</i>&nbsp;    public void setTrafficClass(int tc) throws SocketException {
+<i>335</i>&nbsp;        setIntOption(StandardSocketOptions.IP_TOS, tc);
+<i>336</i>&nbsp;    }
+<b class="nc"><i>337</i>&nbsp;</b>
+<i>338</i>&nbsp;    public int getTrafficClass() throws SocketException {
+<i>339</i>&nbsp;        return getIntOption(StandardSocketOptions.IP_TOS);
+<i>340</i>&nbsp;    }
+<b class="nc"><i>341</i>&nbsp;</b>
+<i>342</i>&nbsp;    public void close() {
+<i>343</i>&nbsp;        try {
+<i>344</i>&nbsp;            dc.close();
+<b class="nc"><i>345</i>&nbsp;        } catch (IOException x) {</b>
+<i>346</i>&nbsp;            throw new Error(x);
+<i>347</i>&nbsp;        }
+<i>348</i>&nbsp;    }
+<i>349</i>&nbsp;
+<b class="nc"><i>350</i>&nbsp;    public boolean isClosed() {</b>
+<b class="nc"><i>351</i>&nbsp;        return !dc.isOpen();</b>
+<b class="nc"><i>352</i>&nbsp;    }</b>
+<b class="nc"><i>353</i>&nbsp;</b>
+<i>354</i>&nbsp;    public DatagramChannel getChannel() {
+<i>355</i>&nbsp;        return dc;
+<i>356</i>&nbsp;    }
+<b class="nc"><i>357</i>&nbsp;</b>
+<i>358</i>&nbsp;   /*
+<i>359</i>&nbsp;    * A dummy implementation of DatagramSocketImpl that can be passed to the
+<i>360</i>&nbsp;    * DatagramSocket constructor so that no native resources are allocated in
+<b class="nc"><i>361</i>&nbsp;    * super class.</b>
+<i>362</i>&nbsp;    */
+<i>363</i>&nbsp;   private static final DatagramSocketImpl dummyDatagramSocket
+<i>364</i>&nbsp;       = new DatagramSocketImpl()
+<i>365</i>&nbsp;   {
+<i>366</i>&nbsp;       protected void create() throws SocketException {}
+<i>367</i>&nbsp;
+<i>368</i>&nbsp;       protected void bind(int lport, InetAddress laddr) throws SocketException {}
+<b class="nc"><i>369</i>&nbsp;</b>
+<i>370</i>&nbsp;       protected void send(DatagramPacket p) throws IOException {}
+<b class="nc"><i>371</i>&nbsp;</b>
+<i>372</i>&nbsp;       protected int peek(InetAddress i) throws IOException { return 0; }
+<i>373</i>&nbsp;
+<i>374</i>&nbsp;       protected int peekData(DatagramPacket p) throws IOException { return 0; }
+<i>375</i>&nbsp;
+<i>376</i>&nbsp;       protected void receive(DatagramPacket p) throws IOException {}
+<i>377</i>&nbsp;
+<b class="nc"><i>378</i>&nbsp;       @Deprecated</b>
+<i>379</i>&nbsp;       protected void setTTL(byte ttl) throws IOException {}
+<b class="nc"><i>380</i>&nbsp;</b>
+<i>381</i>&nbsp;       @Deprecated
+<i>382</i>&nbsp;       protected byte getTTL() throws IOException { return 0; }
+<i>383</i>&nbsp;
+<i>384</i>&nbsp;       protected void setTimeToLive(int ttl) throws IOException {}
+<i>385</i>&nbsp;
+<i>386</i>&nbsp;       protected int getTimeToLive() throws IOException { return 0;}
+<i>387</i>&nbsp;
+<b class="nc"><i>388</i>&nbsp;       protected void join(InetAddress inetaddr) throws IOException {}</b>
+<i>389</i>&nbsp;
+<i>390</i>&nbsp;       protected void leave(InetAddress inetaddr) throws IOException {}
+<i>391</i>&nbsp;
+<b class="nc"><i>392</i>&nbsp;       protected void joinGroup(SocketAddress mcastaddr,</b>
+<i>393</i>&nbsp;                                 NetworkInterface netIf) throws IOException {}
+<i>394</i>&nbsp;
+<i>395</i>&nbsp;       protected void leaveGroup(SocketAddress mcastaddr,
+<i>396</i>&nbsp;                                 NetworkInterface netIf) throws IOException {}
+<i>397</i>&nbsp;
+<i>398</i>&nbsp;       protected void close() {}
+<i>399</i>&nbsp;
+<i>400</i>&nbsp;       public Object getOption(int optID) throws SocketException { return null;}
+<i>401</i>&nbsp;
+<i>402</i>&nbsp;       public void setOption(int optID, Object value) throws SocketException {}
+<i>403</i>&nbsp;   };
+<i>404</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

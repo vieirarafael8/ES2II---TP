@@ -1,0 +1,431 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: TimerQueue</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">javax.swing</a> ]
+</div>
+
+<h1>Coverage Summary for Class: TimerQueue (javax.swing)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">TimerQueue</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 11)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 90)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">TimerQueue$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">TimerQueue$DelayedTimer</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 23)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 19)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 119)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;package javax.swing;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;import java.security.AccessController;
+<i>33</i>&nbsp;import java.security.PrivilegedAction;
+<i>34</i>&nbsp;import java.util.*;
+<i>35</i>&nbsp;import java.util.concurrent.*;
+<i>36</i>&nbsp;import java.util.concurrent.locks.*;
+<i>37</i>&nbsp;import java.util.concurrent.atomic.AtomicLong;
+<i>38</i>&nbsp;import sun.awt.AppContext;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;/**
+<i>41</i>&nbsp; * Internal class to manage all Timers using one thread.
+<i>42</i>&nbsp; * TimerQueue manages a queue of Timers. The Timers are chained
+<i>43</i>&nbsp; * together in a linked list sorted by the order in which they will expire.
+<i>44</i>&nbsp; *
+<i>45</i>&nbsp; * @author Dave Moore
+<i>46</i>&nbsp; * @author Igor Kushnirskiy
+<i>47</i>&nbsp; */
+<b class="nc"><i>48</i>&nbsp;class TimerQueue implements Runnable</b>
+<i>49</i>&nbsp;{
+<b class="nc"><i>50</i>&nbsp;    private static final Object sharedInstanceKey =</b>
+<i>51</i>&nbsp;        new StringBuffer(&quot;TimerQueue.sharedInstanceKey&quot;);
+<b class="nc"><i>52</i>&nbsp;    private static final Object expiredTimersKey =</b>
+<i>53</i>&nbsp;        new StringBuffer(&quot;TimerQueue.expiredTimersKey&quot;);
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    private final DelayQueue&lt;DelayedTimer&gt; queue;
+<i>56</i>&nbsp;    private volatile boolean running;
+<i>57</i>&nbsp;    private final Lock runningLock;
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    /* Lock object used in place of class object for synchronization.
+<i>60</i>&nbsp;     * (4187686)
+<i>61</i>&nbsp;     */
+<b class="nc"><i>62</i>&nbsp;    private static final Object classLock = new Object();</b>
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    /** Base of nanosecond timings, to avoid wrapping */
+<b class="nc"><i>65</i>&nbsp;    private static final long NANO_ORIGIN = System.nanoTime();</b>
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;    /**
+<i>68</i>&nbsp;     * Constructor for TimerQueue.
+<i>69</i>&nbsp;     */
+<i>70</i>&nbsp;    public TimerQueue() {
+<b class="nc"><i>71</i>&nbsp;        super();</b>
+<b class="nc"><i>72</i>&nbsp;        queue = new DelayQueue&lt;DelayedTimer&gt;();</b>
+<i>73</i>&nbsp;        // Now start the TimerQueue thread.
+<b class="nc"><i>74</i>&nbsp;        runningLock = new ReentrantLock();</b>
+<b class="nc"><i>75</i>&nbsp;        startIfNeeded();</b>
+<i>76</i>&nbsp;    }
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    public static TimerQueue sharedInstance() {
+<b class="nc"><i>80</i>&nbsp;        synchronized (classLock) {</b>
+<b class="nc"><i>81</i>&nbsp;            TimerQueue sharedInst = (TimerQueue)</b>
+<b class="nc"><i>82</i>&nbsp;                                    SwingUtilities.appContextGet(</b>
+<i>83</i>&nbsp;                                                        sharedInstanceKey);
+<b class="nc"><i>84</i>&nbsp;            if (sharedInst == null) {</b>
+<b class="nc"><i>85</i>&nbsp;                sharedInst = new TimerQueue();</b>
+<b class="nc"><i>86</i>&nbsp;                SwingUtilities.appContextPut(sharedInstanceKey, sharedInst);</b>
+<i>87</i>&nbsp;            }
+<b class="nc"><i>88</i>&nbsp;            return sharedInst;</b>
+<b class="nc"><i>89</i>&nbsp;        }</b>
+<i>90</i>&nbsp;    }
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;
+<i>93</i>&nbsp;    void startIfNeeded() {
+<b class="nc"><i>94</i>&nbsp;        if (! running) {</b>
+<b class="nc"><i>95</i>&nbsp;            runningLock.lock();</b>
+<b class="nc"><i>96</i>&nbsp;            if (running) {</b>
+<i>97</i>&nbsp;                return;
+<i>98</i>&nbsp;            }
+<i>99</i>&nbsp;            try {
+<i>100</i>&nbsp;                final ThreadGroup threadGroup = AppContext.getAppContext().getThreadGroup();
+<b class="nc"><i>101</i>&nbsp;                AccessController.doPrivileged((PrivilegedAction&lt;Object&gt;) () -&gt; {</b>
+<b class="nc"><i>102</i>&nbsp;                    String name = &quot;TimerQueue&quot;;</b>
+<b class="nc"><i>103</i>&nbsp;                    Thread timerThread =</b>
+<i>104</i>&nbsp;                        new Thread(threadGroup, this, name, 0, false);
+<b class="nc"><i>105</i>&nbsp;                    timerThread.setDaemon(true);</b>
+<i>106</i>&nbsp;                    timerThread.setPriority(Thread.NORM_PRIORITY);
+<b class="nc"><i>107</i>&nbsp;                    timerThread.start();</b>
+<b class="nc"><i>108</i>&nbsp;                    return null;</b>
+<b class="nc"><i>109</i>&nbsp;                });</b>
+<b class="nc"><i>110</i>&nbsp;                running = true;</b>
+<i>111</i>&nbsp;            } finally {
+<i>112</i>&nbsp;                runningLock.unlock();
+<b class="nc"><i>113</i>&nbsp;            }</b>
+<i>114</i>&nbsp;        }
+<b class="nc"><i>115</i>&nbsp;    }</b>
+<b class="nc"><i>116</i>&nbsp;</b>
+<i>117</i>&nbsp;    void addTimer(Timer timer, long delayMillis) {
+<i>118</i>&nbsp;        timer.getLock().lock();
+<i>119</i>&nbsp;        try {
+<i>120</i>&nbsp;            // If the Timer is already in the queue, then ignore the add.
+<b class="nc"><i>121</i>&nbsp;            if (! containsTimer(timer)) {</b>
+<i>122</i>&nbsp;                addTimer(new DelayedTimer(timer,
+<i>123</i>&nbsp;                                      TimeUnit.MILLISECONDS.toNanos(delayMillis)
+<b class="nc"><i>124</i>&nbsp;                                      + now()));</b>
+<b class="nc"><i>125</i>&nbsp;            }</b>
+<b class="nc"><i>126</i>&nbsp;        } finally {</b>
+<b class="nc"><i>127</i>&nbsp;            timer.getLock().unlock();</b>
+<i>128</i>&nbsp;        }
+<i>129</i>&nbsp;    }
+<b class="nc"><i>130</i>&nbsp;</b>
+<b class="nc"><i>131</i>&nbsp;    private void addTimer(DelayedTimer delayedTimer) {</b>
+<i>132</i>&nbsp;        assert delayedTimer != null &amp;&amp; ! containsTimer(delayedTimer.getTimer());
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;        Timer timer = delayedTimer.getTimer();
+<b class="nc"><i>135</i>&nbsp;        timer.getLock().lock();</b>
+<i>136</i>&nbsp;        try {
+<b class="nc"><i>137</i>&nbsp;            timer.delayedTimer = delayedTimer;</b>
+<b class="nc"><i>138</i>&nbsp;            queue.add(delayedTimer);</b>
+<i>139</i>&nbsp;        } finally {
+<b class="nc"><i>140</i>&nbsp;            timer.getLock().unlock();</b>
+<b class="nc"><i>141</i>&nbsp;        }</b>
+<i>142</i>&nbsp;    }
+<b class="nc"><i>143</i>&nbsp;</b>
+<b class="nc"><i>144</i>&nbsp;    void removeTimer(Timer timer) {</b>
+<i>145</i>&nbsp;        timer.getLock().lock();
+<i>146</i>&nbsp;        try {
+<i>147</i>&nbsp;            if (timer.delayedTimer != null) {
+<b class="nc"><i>148</i>&nbsp;                queue.remove(timer.delayedTimer);</b>
+<i>149</i>&nbsp;                timer.delayedTimer = null;
+<b class="nc"><i>150</i>&nbsp;            }</b>
+<b class="nc"><i>151</i>&nbsp;        } finally {</b>
+<b class="nc"><i>152</i>&nbsp;            timer.getLock().unlock();</b>
+<i>153</i>&nbsp;        }
+<i>154</i>&nbsp;    }
+<b class="nc"><i>155</i>&nbsp;</b>
+<b class="nc"><i>156</i>&nbsp;    boolean containsTimer(Timer timer) {</b>
+<i>157</i>&nbsp;        timer.getLock().lock();
+<i>158</i>&nbsp;        try {
+<i>159</i>&nbsp;            return timer.delayedTimer != null;
+<b class="nc"><i>160</i>&nbsp;        } finally {</b>
+<i>161</i>&nbsp;            timer.getLock().unlock();
+<b class="nc"><i>162</i>&nbsp;        }</b>
+<i>163</i>&nbsp;    }
+<b class="nc"><i>164</i>&nbsp;</b>
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;    public void run() {
+<i>167</i>&nbsp;        runningLock.lock();
+<i>168</i>&nbsp;        try {
+<i>169</i>&nbsp;            while (running) {
+<b class="nc"><i>170</i>&nbsp;                try {</b>
+<i>171</i>&nbsp;                    DelayedTimer runningTimer = queue.take();
+<b class="nc"><i>172</i>&nbsp;                    Timer timer = runningTimer.getTimer();</b>
+<i>173</i>&nbsp;                    timer.getLock().lock();
+<b class="nc"><i>174</i>&nbsp;                    try {</b>
+<b class="nc"><i>175</i>&nbsp;                        DelayedTimer delayedTimer = timer.delayedTimer;</b>
+<b class="nc"><i>176</i>&nbsp;                        if (delayedTimer == runningTimer) {</b>
+<i>177</i>&nbsp;                            /*
+<b class="nc"><i>178</i>&nbsp;                             * Timer is not removed (delayedTimer != null)</b>
+<b class="nc"><i>179</i>&nbsp;                             * or not removed and added (runningTimer == delayedTimer)</b>
+<i>180</i>&nbsp;                             * after we get it from the queue and before the
+<i>181</i>&nbsp;                             * lock on the timer is acquired
+<i>182</i>&nbsp;                             */
+<i>183</i>&nbsp;                            timer.post(); // have timer post an event
+<i>184</i>&nbsp;                            timer.delayedTimer = null;
+<i>185</i>&nbsp;                            if (timer.isRepeats()) {
+<b class="nc"><i>186</i>&nbsp;                                delayedTimer.setTime(now()</b>
+<b class="nc"><i>187</i>&nbsp;                                    + TimeUnit.MILLISECONDS.toNanos(</b>
+<b class="nc"><i>188</i>&nbsp;                                          timer.getDelay()));</b>
+<b class="nc"><i>189</i>&nbsp;                                addTimer(delayedTimer);</b>
+<b class="nc"><i>190</i>&nbsp;                            }</b>
+<b class="nc"><i>191</i>&nbsp;                        }</b>
+<b class="nc"><i>192</i>&nbsp;</b>
+<i>193</i>&nbsp;                        // Allow run other threads on systems without kernel threads
+<i>194</i>&nbsp;                        timer.getLock().newCondition().awaitNanos(1);
+<i>195</i>&nbsp;                    } catch (SecurityException ignore) {
+<i>196</i>&nbsp;                    } finally {
+<b class="nc"><i>197</i>&nbsp;                        timer.getLock().unlock();</b>
+<b class="nc"><i>198</i>&nbsp;                    }</b>
+<i>199</i>&nbsp;                } catch (InterruptedException ie) {
+<b class="nc"><i>200</i>&nbsp;                    // Shouldn&#39;t ignore InterruptedExceptions here, so AppContext</b>
+<b class="nc"><i>201</i>&nbsp;                    // is disposed gracefully, see 6799345 for details</b>
+<b class="nc"><i>202</i>&nbsp;                    if (AppContext.getAppContext().isDisposed()) {</b>
+<i>203</i>&nbsp;                        break;
+<i>204</i>&nbsp;                    }
+<b class="nc"><i>205</i>&nbsp;                }</b>
+<b class="nc"><i>206</i>&nbsp;            }</b>
+<i>207</i>&nbsp;        }
+<b class="nc"><i>208</i>&nbsp;        catch (ThreadDeath td) {</b>
+<i>209</i>&nbsp;            // Mark all the timers we contain as not being queued.
+<i>210</i>&nbsp;            for (DelayedTimer delayedTimer : queue) {
+<b class="nc"><i>211</i>&nbsp;                delayedTimer.getTimer().cancelEvent();</b>
+<i>212</i>&nbsp;            }
+<b class="nc"><i>213</i>&nbsp;            throw td;</b>
+<b class="nc"><i>214</i>&nbsp;        } finally {</b>
+<b class="nc"><i>215</i>&nbsp;            running = false;</b>
+<b class="nc"><i>216</i>&nbsp;            runningLock.unlock();</b>
+<i>217</i>&nbsp;        }
+<b class="nc"><i>218</i>&nbsp;    }</b>
+<b class="nc"><i>219</i>&nbsp;</b>
+<b class="nc"><i>220</i>&nbsp;</b>
+<i>221</i>&nbsp;    public String toString() {
+<i>222</i>&nbsp;        StringBuilder buf = new StringBuilder();
+<i>223</i>&nbsp;        buf.append(&quot;TimerQueue (&quot;);
+<i>224</i>&nbsp;        boolean isFirst = true;
+<b class="nc"><i>225</i>&nbsp;        for (DelayedTimer delayedTimer : queue) {</b>
+<b class="nc"><i>226</i>&nbsp;            if (! isFirst) {</b>
+<b class="nc"><i>227</i>&nbsp;                buf.append(&quot;, &quot;);</b>
+<b class="nc"><i>228</i>&nbsp;            }</b>
+<b class="nc"><i>229</i>&nbsp;            buf.append(delayedTimer.getTimer().toString());</b>
+<b class="nc"><i>230</i>&nbsp;            isFirst = false;</b>
+<i>231</i>&nbsp;        }
+<b class="nc"><i>232</i>&nbsp;        buf.append(&quot;)&quot;);</b>
+<b class="nc"><i>233</i>&nbsp;        return buf.toString();</b>
+<b class="nc"><i>234</i>&nbsp;    }</b>
+<b class="nc"><i>235</i>&nbsp;</b>
+<b class="nc"><i>236</i>&nbsp;    /**</b>
+<i>237</i>&nbsp;     * Returns nanosecond time offset by origin
+<i>238</i>&nbsp;     */
+<i>239</i>&nbsp;    private static long now() {
+<i>240</i>&nbsp;        return System.nanoTime() - NANO_ORIGIN;
+<i>241</i>&nbsp;    }
+<i>242</i>&nbsp;
+<b class="nc"><i>243</i>&nbsp;    static class DelayedTimer implements Delayed {</b>
+<i>244</i>&nbsp;        // most of it copied from
+<i>245</i>&nbsp;        // java.util.concurrent.ScheduledThreadPoolExecutor
+<i>246</i>&nbsp;
+<i>247</i>&nbsp;        /**
+<i>248</i>&nbsp;         * Sequence number to break scheduling ties, and in turn to
+<i>249</i>&nbsp;         * guarantee FIFO order among tied entries.
+<i>250</i>&nbsp;         */
+<i>251</i>&nbsp;        private static final AtomicLong sequencer = new AtomicLong(0);
+<i>252</i>&nbsp;
+<i>253</i>&nbsp;        /** Sequence number to break ties FIFO */
+<b class="nc"><i>254</i>&nbsp;        private final long sequenceNumber;</b>
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;
+<i>257</i>&nbsp;        /** The time the task is enabled to execute in nanoTime units */
+<i>258</i>&nbsp;        private volatile long time;
+<i>259</i>&nbsp;
+<i>260</i>&nbsp;        private final Timer timer;
+<i>261</i>&nbsp;
+<i>262</i>&nbsp;        DelayedTimer(Timer timer, long nanos) {
+<i>263</i>&nbsp;            this.timer = timer;
+<i>264</i>&nbsp;            time = nanos;
+<b class="nc"><i>265</i>&nbsp;            sequenceNumber = sequencer.getAndIncrement();</b>
+<b class="nc"><i>266</i>&nbsp;        }</b>
+<b class="nc"><i>267</i>&nbsp;</b>
+<b class="nc"><i>268</i>&nbsp;</b>
+<i>269</i>&nbsp;        public final long getDelay(TimeUnit unit) {
+<i>270</i>&nbsp;            return  unit.convert(time - now(), TimeUnit.NANOSECONDS);
+<i>271</i>&nbsp;        }
+<i>272</i>&nbsp;
+<b class="nc"><i>273</i>&nbsp;        final void setTime(long nanos) {</b>
+<i>274</i>&nbsp;            time = nanos;
+<i>275</i>&nbsp;        }
+<i>276</i>&nbsp;
+<b class="nc"><i>277</i>&nbsp;        final Timer getTimer() {</b>
+<i>278</i>&nbsp;            return timer;
+<i>279</i>&nbsp;        }
+<i>280</i>&nbsp;
+<b class="nc"><i>281</i>&nbsp;        public int compareTo(Delayed other) {</b>
+<i>282</i>&nbsp;            if (other == this) { // compare zero ONLY if same object
+<i>283</i>&nbsp;                return 0;
+<i>284</i>&nbsp;            }
+<b class="nc"><i>285</i>&nbsp;            if (other instanceof DelayedTimer) {</b>
+<b class="nc"><i>286</i>&nbsp;                DelayedTimer x = (DelayedTimer)other;</b>
+<i>287</i>&nbsp;                long diff = time - x.time;
+<b class="nc"><i>288</i>&nbsp;                if (diff &lt; 0) {</b>
+<b class="nc"><i>289</i>&nbsp;                    return -1;</b>
+<b class="nc"><i>290</i>&nbsp;                } else if (diff &gt; 0) {</b>
+<b class="nc"><i>291</i>&nbsp;                    return 1;</b>
+<b class="nc"><i>292</i>&nbsp;                } else if (sequenceNumber &lt; x.sequenceNumber) {</b>
+<b class="nc"><i>293</i>&nbsp;                    return -1;</b>
+<b class="nc"><i>294</i>&nbsp;                }  else {</b>
+<b class="nc"><i>295</i>&nbsp;                    return 1;</b>
+<b class="nc"><i>296</i>&nbsp;                }</b>
+<i>297</i>&nbsp;            }
+<b class="nc"><i>298</i>&nbsp;            long d = (getDelay(TimeUnit.NANOSECONDS) -</b>
+<i>299</i>&nbsp;                      other.getDelay(TimeUnit.NANOSECONDS));
+<i>300</i>&nbsp;            return (d == 0) ? 0 : ((d &lt; 0) ? -1 : 1);
+<b class="nc"><i>301</i>&nbsp;        }</b>
+<b class="nc"><i>302</i>&nbsp;    }</b>
+<b class="nc"><i>303</i>&nbsp;}</b>
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

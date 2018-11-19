@@ -1,0 +1,1362 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: RMIGenerator</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.rmi.rmic</a> ]
+</div>
+
+<h1>Coverage Summary for Class: RMIGenerator (sun.rmi.rmic)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">RMIGenerator</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 26)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 485)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;/*****************************************************************************/
+<i>27</i>&nbsp;/*                    Copyright (c) IBM Corporation 1998                     */
+<i>28</i>&nbsp;/*                                                                           */
+<i>29</i>&nbsp;/* (C) Copyright IBM Corp. 1998                                              */
+<i>30</i>&nbsp;/*                                                                           */
+<i>31</i>&nbsp;/*****************************************************************************/
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;package sun.rmi.rmic;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;import java.io.File;
+<i>36</i>&nbsp;import java.io.FileOutputStream;
+<i>37</i>&nbsp;import java.io.OutputStreamWriter;
+<i>38</i>&nbsp;import java.io.IOException;
+<i>39</i>&nbsp;import java.util.Enumeration;
+<i>40</i>&nbsp;import java.util.Hashtable;
+<i>41</i>&nbsp;import java.util.Vector;
+<i>42</i>&nbsp;import sun.tools.java.Type;
+<i>43</i>&nbsp;import sun.tools.java.Identifier;
+<i>44</i>&nbsp;import sun.tools.java.ClassDefinition;
+<i>45</i>&nbsp;import sun.tools.java.ClassDeclaration;
+<i>46</i>&nbsp;import sun.tools.java.ClassNotFound;
+<i>47</i>&nbsp;import sun.tools.java.ClassFile;
+<i>48</i>&nbsp;import sun.tools.java.MemberDefinition;
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;/**
+<i>51</i>&nbsp; * A Generator object will generate the Java source code of the stub
+<i>52</i>&nbsp; * and skeleton classes for an RMI remote implementation class, using
+<i>53</i>&nbsp; * a particular stub protocol version.
+<i>54</i>&nbsp; *
+<i>55</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>56</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>57</i>&nbsp; * they are subject to change or removal without notice.
+<i>58</i>&nbsp; *
+<i>59</i>&nbsp; * @author      Peter Jones,  Bryan Atsatt
+<i>60</i>&nbsp; */
+<i>61</i>&nbsp;public class RMIGenerator implements RMIConstants, Generator {
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    private static final Hashtable&lt;String, Integer&gt; versionOptions = new Hashtable&lt;&gt;();
+<b class="nc"><i>64</i>&nbsp;    static {</b>
+<i>65</i>&nbsp;        versionOptions.put(&quot;-v1.1&quot;, STUB_VERSION_1_1);
+<b class="nc"><i>66</i>&nbsp;        versionOptions.put(&quot;-vcompat&quot;, STUB_VERSION_FAT);</b>
+<b class="nc"><i>67</i>&nbsp;        versionOptions.put(&quot;-v1.2&quot;, STUB_VERSION_1_2);</b>
+<b class="nc"><i>68</i>&nbsp;    }</b>
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    /**
+<i>71</i>&nbsp;     * Default constructor for Main to use.
+<i>72</i>&nbsp;     */
+<i>73</i>&nbsp;    public RMIGenerator() {
+<b class="nc"><i>74</i>&nbsp;        version = STUB_VERSION_1_2;     // default is -v1.2 (see 4638155)</b>
+<b class="nc"><i>75</i>&nbsp;    }</b>
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    /**
+<i>78</i>&nbsp;     * Examine and consume command line arguments.
+<i>79</i>&nbsp;     * @param argv The command line arguments. Ignore null
+<i>80</i>&nbsp;     * and unknown arguments. Set each consumed argument to null.
+<i>81</i>&nbsp;     * @param main Report any errors using the main.error() methods.
+<i>82</i>&nbsp;     * @return true if no errors, false otherwise.
+<i>83</i>&nbsp;     */
+<i>84</i>&nbsp;    public boolean parseArgs(String argv[], Main main) {
+<i>85</i>&nbsp;        String explicitVersion = null;
+<b class="nc"><i>86</i>&nbsp;        for (int i = 0; i &lt; argv.length; i++) {</b>
+<b class="nc"><i>87</i>&nbsp;            if (argv[i] != null) {</b>
+<b class="nc"><i>88</i>&nbsp;                String arg = argv[i].toLowerCase();</b>
+<b class="nc"><i>89</i>&nbsp;                if (versionOptions.containsKey(arg)) {</b>
+<b class="nc"><i>90</i>&nbsp;                    if (explicitVersion != null &amp;&amp;</b>
+<b class="nc"><i>91</i>&nbsp;                        !explicitVersion.equals(arg))</b>
+<b class="nc"><i>92</i>&nbsp;                    {</b>
+<i>93</i>&nbsp;                        main.error(&quot;rmic.cannot.use.both&quot;,
+<b class="nc"><i>94</i>&nbsp;                                   explicitVersion, arg);</b>
+<i>95</i>&nbsp;                        return false;
+<b class="nc"><i>96</i>&nbsp;                    }</b>
+<i>97</i>&nbsp;                    explicitVersion = arg;
+<b class="nc"><i>98</i>&nbsp;                    version = versionOptions.get(arg);</b>
+<b class="nc"><i>99</i>&nbsp;                    argv[i] = null;</b>
+<b class="nc"><i>100</i>&nbsp;                }</b>
+<i>101</i>&nbsp;            }
+<i>102</i>&nbsp;        }
+<i>103</i>&nbsp;        return true;
+<b class="nc"><i>104</i>&nbsp;    }</b>
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;    /**
+<i>107</i>&nbsp;     * Generate the source files for the stub and/or skeleton classes
+<i>108</i>&nbsp;     * needed by RMI for the given remote implementation class.
+<i>109</i>&nbsp;     *
+<i>110</i>&nbsp;     * @param env       compiler environment
+<i>111</i>&nbsp;     * @param cdef      definition of remote implementation class
+<i>112</i>&nbsp;     *                  to generate stubs and/or skeletons for
+<i>113</i>&nbsp;     * @param destDir   directory for the root of the package hierarchy
+<i>114</i>&nbsp;     *                  for generated files
+<i>115</i>&nbsp;     */
+<i>116</i>&nbsp;    public void generate(BatchEnvironment env, ClassDefinition cdef, File destDir) {
+<i>117</i>&nbsp;        RemoteClass remoteClass = RemoteClass.forClass(env, cdef);
+<b class="nc"><i>118</i>&nbsp;        if (remoteClass == null)        // exit if an error occurred</b>
+<b class="nc"><i>119</i>&nbsp;            return;</b>
+<i>120</i>&nbsp;
+<i>121</i>&nbsp;        RMIGenerator gen;
+<i>122</i>&nbsp;        try {
+<i>123</i>&nbsp;            gen = new RMIGenerator(env, cdef, destDir, remoteClass, version);
+<b class="nc"><i>124</i>&nbsp;        } catch (ClassNotFound e) {</b>
+<b class="nc"><i>125</i>&nbsp;            env.error(0, &quot;rmic.class.not.found&quot;, e.name);</b>
+<b class="nc"><i>126</i>&nbsp;            return;</b>
+<i>127</i>&nbsp;        }
+<b class="nc"><i>128</i>&nbsp;        gen.generate();</b>
+<b class="nc"><i>129</i>&nbsp;    }</b>
+<i>130</i>&nbsp;
+<i>131</i>&nbsp;    private void generate() {
+<i>132</i>&nbsp;        env.addGeneratedFile(stubFile);
+<b class="nc"><i>133</i>&nbsp;</b>
+<i>134</i>&nbsp;        try {
+<i>135</i>&nbsp;            IndentingWriter out = new IndentingWriter(
+<b class="nc"><i>136</i>&nbsp;                new OutputStreamWriter(new FileOutputStream(stubFile)));</b>
+<i>137</i>&nbsp;            writeStub(out);
+<b class="nc"><i>138</i>&nbsp;            out.close();</b>
+<b class="nc"><i>139</i>&nbsp;            if (env.verbose()) {</b>
+<b class="nc"><i>140</i>&nbsp;                env.output(Main.getText(&quot;rmic.wrote&quot;, stubFile.getPath()));</b>
+<b class="nc"><i>141</i>&nbsp;            }</b>
+<i>142</i>&nbsp;            env.parseFile(ClassFile.newClassFile(stubFile));
+<b class="nc"><i>143</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>144</i>&nbsp;            env.error(0, &quot;cant.write&quot;, stubFile.toString());</b>
+<b class="nc"><i>145</i>&nbsp;            return;</b>
+<i>146</i>&nbsp;        }
+<b class="nc"><i>147</i>&nbsp;</b>
+<i>148</i>&nbsp;        if (version == STUB_VERSION_1_1 ||
+<b class="nc"><i>149</i>&nbsp;            version == STUB_VERSION_FAT)</b>
+<i>150</i>&nbsp;        {
+<i>151</i>&nbsp;            env.addGeneratedFile(skeletonFile);
+<b class="nc"><i>152</i>&nbsp;</b>
+<i>153</i>&nbsp;            try {
+<i>154</i>&nbsp;                IndentingWriter out = new IndentingWriter(
+<b class="nc"><i>155</i>&nbsp;                    new OutputStreamWriter(</b>
+<i>156</i>&nbsp;                        new FileOutputStream(skeletonFile)));
+<i>157</i>&nbsp;                writeSkeleton(out);
+<b class="nc"><i>158</i>&nbsp;                out.close();</b>
+<b class="nc"><i>159</i>&nbsp;                if (env.verbose()) {</b>
+<b class="nc"><i>160</i>&nbsp;                    env.output(Main.getText(&quot;rmic.wrote&quot;,</b>
+<b class="nc"><i>161</i>&nbsp;                        skeletonFile.getPath()));</b>
+<b class="nc"><i>162</i>&nbsp;                }</b>
+<i>163</i>&nbsp;                env.parseFile(ClassFile.newClassFile(skeletonFile));
+<b class="nc"><i>164</i>&nbsp;            } catch (IOException e) {</b>
+<b class="nc"><i>165</i>&nbsp;                env.error(0, &quot;cant.write&quot;, stubFile.toString());</b>
+<b class="nc"><i>166</i>&nbsp;                return;</b>
+<i>167</i>&nbsp;            }
+<b class="nc"><i>168</i>&nbsp;        } else {</b>
+<i>169</i>&nbsp;            /*
+<i>170</i>&nbsp;             * For bugid 4135136: if skeleton files are not being generated
+<i>171</i>&nbsp;             * for this compilation run, delete old skeleton source or class
+<i>172</i>&nbsp;             * files for this remote implementation class that were
+<i>173</i>&nbsp;             * (presumably) left over from previous runs, to avoid user
+<i>174</i>&nbsp;             * confusion from extraneous or inconsistent generated files.
+<i>175</i>&nbsp;             */
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;            File outputDir = Util.getOutputDirectoryFor(remoteClassName,destDir,env);
+<b class="nc"><i>178</i>&nbsp;            File skeletonClassFile = new File(outputDir,skeletonClassName.getName().toString() + &quot;.class&quot;);</b>
+<b class="nc"><i>179</i>&nbsp;</b>
+<i>180</i>&nbsp;            skeletonFile.delete();      // ignore failures (no big deal)
+<b class="nc"><i>181</i>&nbsp;            skeletonClassFile.delete();</b>
+<b class="nc"><i>182</i>&nbsp;        }</b>
+<i>183</i>&nbsp;    }
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;    /**
+<i>186</i>&nbsp;     * Return the File object that should be used as the source file
+<i>187</i>&nbsp;     * for the given Java class, using the supplied destination
+<i>188</i>&nbsp;     * directory for the top of the package hierarchy.
+<i>189</i>&nbsp;     */
+<i>190</i>&nbsp;    protected static File sourceFileForClass(Identifier className,
+<i>191</i>&nbsp;                                             Identifier outputClassName,
+<i>192</i>&nbsp;                                             File destDir,
+<i>193</i>&nbsp;                                             BatchEnvironment env)
+<i>194</i>&nbsp;    {
+<i>195</i>&nbsp;        File packageDir = Util.getOutputDirectoryFor(className,destDir,env);
+<b class="nc"><i>196</i>&nbsp;        String outputName = Names.mangleClass(outputClassName).getName().toString();</b>
+<b class="nc"><i>197</i>&nbsp;</b>
+<i>198</i>&nbsp;        String outputFileName = outputName + &quot;.java&quot;;
+<i>199</i>&nbsp;        return new File(packageDir, outputFileName);
+<i>200</i>&nbsp;    }
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;
+<b class="nc"><i>203</i>&nbsp;    /** rmic environment for this object */</b>
+<b class="nc"><i>204</i>&nbsp;    private BatchEnvironment env;</b>
+<b class="nc"><i>205</i>&nbsp;</b>
+<b class="nc"><i>206</i>&nbsp;    /** the remote class that this instance is generating code for */</b>
+<i>207</i>&nbsp;    private RemoteClass remoteClass;
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    /** version of the stub protocol to use in code generation */
+<b class="nc"><i>210</i>&nbsp;    private int version;</b>
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;    /** remote methods for remote class, indexed by operation number */
+<i>213</i>&nbsp;    private RemoteClass.Method[] remoteMethods;
+<b class="nc"><i>214</i>&nbsp;</b>
+<i>215</i>&nbsp;    /**
+<b class="nc"><i>216</i>&nbsp;     * Names for the remote class and the stub and skeleton classes</b>
+<i>217</i>&nbsp;     * to be generated for it.
+<i>218</i>&nbsp;     */
+<i>219</i>&nbsp;    private Identifier remoteClassName;
+<i>220</i>&nbsp;    private Identifier stubClassName;
+<b class="nc"><i>221</i>&nbsp;    private Identifier skeletonClassName;</b>
+<b class="nc"><i>222</i>&nbsp;</b>
+<i>223</i>&nbsp;    private ClassDefinition cdef;
+<i>224</i>&nbsp;    private File destDir;
+<i>225</i>&nbsp;    private File stubFile;
+<i>226</i>&nbsp;    private File skeletonFile;
+<i>227</i>&nbsp;
+<i>228</i>&nbsp;    /**
+<i>229</i>&nbsp;     * Names to use for the java.lang.reflect.Method static fields
+<i>230</i>&nbsp;     * corresponding to each remote method.
+<i>231</i>&nbsp;     */
+<i>232</i>&nbsp;    private String[] methodFieldNames;
+<i>233</i>&nbsp;
+<i>234</i>&nbsp;    /** cached definition for certain exception classes in this environment */
+<i>235</i>&nbsp;    private ClassDefinition defException;
+<i>236</i>&nbsp;    private ClassDefinition defRemoteException;
+<i>237</i>&nbsp;    private ClassDefinition defRuntimeException;
+<i>238</i>&nbsp;
+<i>239</i>&nbsp;    /**
+<i>240</i>&nbsp;     * Create a new stub/skeleton Generator object for the given
+<i>241</i>&nbsp;     * remote implementation class to generate code according to
+<i>242</i>&nbsp;     * the given stub protocol version.
+<i>243</i>&nbsp;     */
+<i>244</i>&nbsp;    private RMIGenerator(BatchEnvironment env, ClassDefinition cdef,
+<i>245</i>&nbsp;                           File destDir, RemoteClass remoteClass, int version)
+<i>246</i>&nbsp;        throws ClassNotFound
+<i>247</i>&nbsp;    {
+<i>248</i>&nbsp;        this.destDir     = destDir;
+<i>249</i>&nbsp;        this.cdef        = cdef;
+<i>250</i>&nbsp;        this.env         = env;
+<i>251</i>&nbsp;        this.remoteClass = remoteClass;
+<i>252</i>&nbsp;        this.version     = version;
+<i>253</i>&nbsp;
+<i>254</i>&nbsp;        remoteMethods = remoteClass.getRemoteMethods();
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;        remoteClassName = remoteClass.getName();
+<i>257</i>&nbsp;        stubClassName = Names.stubFor(remoteClassName);
+<i>258</i>&nbsp;        skeletonClassName = Names.skeletonFor(remoteClassName);
+<i>259</i>&nbsp;
+<i>260</i>&nbsp;        methodFieldNames = nameMethodFields(remoteMethods);
+<i>261</i>&nbsp;
+<i>262</i>&nbsp;        stubFile = sourceFileForClass(remoteClassName,stubClassName, destDir , env);
+<i>263</i>&nbsp;        skeletonFile = sourceFileForClass(remoteClassName,skeletonClassName, destDir, env);
+<i>264</i>&nbsp;
+<i>265</i>&nbsp;        /*
+<i>266</i>&nbsp;         * Initialize cached definitions for exception classes used
+<i>267</i>&nbsp;         * in the generation process.
+<i>268</i>&nbsp;         */
+<i>269</i>&nbsp;        defException =
+<b class="nc"><i>270</i>&nbsp;            env.getClassDeclaration(idJavaLangException).</b>
+<b class="nc"><i>271</i>&nbsp;                getClassDefinition(env);</b>
+<b class="nc"><i>272</i>&nbsp;        defRemoteException =</b>
+<b class="nc"><i>273</i>&nbsp;            env.getClassDeclaration(idRemoteException).</b>
+<b class="nc"><i>274</i>&nbsp;                getClassDefinition(env);</b>
+<b class="nc"><i>275</i>&nbsp;        defRuntimeException =</b>
+<i>276</i>&nbsp;            env.getClassDeclaration(idJavaLangRuntimeException).
+<b class="nc"><i>277</i>&nbsp;                getClassDefinition(env);</b>
+<i>278</i>&nbsp;    }
+<b class="nc"><i>279</i>&nbsp;</b>
+<b class="nc"><i>280</i>&nbsp;    /**</b>
+<b class="nc"><i>281</i>&nbsp;     * Write the stub for the remote class to a stream.</b>
+<i>282</i>&nbsp;     */
+<b class="nc"><i>283</i>&nbsp;    private void writeStub(IndentingWriter p) throws IOException {</b>
+<i>284</i>&nbsp;
+<b class="nc"><i>285</i>&nbsp;        /*</b>
+<b class="nc"><i>286</i>&nbsp;         * Write boiler plate comment.</b>
+<i>287</i>&nbsp;         */
+<i>288</i>&nbsp;        p.pln(&quot;// Stub class generated by rmic, do not edit.&quot;);
+<i>289</i>&nbsp;        p.pln(&quot;// Contents subject to change without notice.&quot;);
+<i>290</i>&nbsp;        p.pln();
+<i>291</i>&nbsp;
+<b class="nc"><i>292</i>&nbsp;        /*</b>
+<b class="nc"><i>293</i>&nbsp;         * If remote implementation class was in a particular package,</b>
+<b class="nc"><i>294</i>&nbsp;         * declare the stub class to be in the same package.</b>
+<b class="nc"><i>295</i>&nbsp;         */</b>
+<b class="nc"><i>296</i>&nbsp;        if (remoteClassName.isQualified()) {</b>
+<b class="nc"><i>297</i>&nbsp;            p.pln(&quot;package &quot; + remoteClassName.getQualifier() + &quot;;&quot;);</b>
+<b class="nc"><i>298</i>&nbsp;            p.pln();</b>
+<b class="nc"><i>299</i>&nbsp;        }</b>
+<b class="nc"><i>300</i>&nbsp;</b>
+<i>301</i>&nbsp;        /*
+<i>302</i>&nbsp;         * Declare the stub class; implement all remote interfaces.
+<i>303</i>&nbsp;         */
+<i>304</i>&nbsp;        p.plnI(&quot;public final class &quot; +
+<i>305</i>&nbsp;            Names.mangleClass(stubClassName.getName()));
+<i>306</i>&nbsp;        p.pln(&quot;extends &quot; + idRemoteStub);
+<i>307</i>&nbsp;        ClassDefinition[] remoteInterfaces = remoteClass.getRemoteInterfaces();
+<i>308</i>&nbsp;        if (remoteInterfaces.length &gt; 0) {
+<i>309</i>&nbsp;            p.p(&quot;implements &quot;);
+<i>310</i>&nbsp;            for (int i = 0; i &lt; remoteInterfaces.length; i++) {
+<b class="nc"><i>311</i>&nbsp;                if (i &gt; 0)</b>
+<b class="nc"><i>312</i>&nbsp;                    p.p(&quot;, &quot;);</b>
+<b class="nc"><i>313</i>&nbsp;                p.p(remoteInterfaces[i].getName().toString());</b>
+<i>314</i>&nbsp;            }
+<i>315</i>&nbsp;            p.pln();
+<i>316</i>&nbsp;        }
+<i>317</i>&nbsp;        p.pOlnI(&quot;{&quot;);
+<i>318</i>&nbsp;
+<b class="nc"><i>319</i>&nbsp;        if (version == STUB_VERSION_1_1 ||</b>
+<b class="nc"><i>320</i>&nbsp;            version == STUB_VERSION_FAT)</b>
+<b class="nc"><i>321</i>&nbsp;        {</b>
+<i>322</i>&nbsp;            writeOperationsArray(p);
+<i>323</i>&nbsp;            p.pln();
+<i>324</i>&nbsp;            writeInterfaceHash(p);
+<i>325</i>&nbsp;            p.pln();
+<i>326</i>&nbsp;        }
+<b class="nc"><i>327</i>&nbsp;</b>
+<b class="nc"><i>328</i>&nbsp;        if (version == STUB_VERSION_FAT ||</b>
+<b class="nc"><i>329</i>&nbsp;            version == STUB_VERSION_1_2)</b>
+<b class="nc"><i>330</i>&nbsp;        {</b>
+<b class="nc"><i>331</i>&nbsp;            p.pln(&quot;private static final long serialVersionUID = &quot; +</b>
+<b class="nc"><i>332</i>&nbsp;                STUB_SERIAL_VERSION_UID + &quot;;&quot;);</b>
+<b class="nc"><i>333</i>&nbsp;            p.pln();</b>
+<b class="nc"><i>334</i>&nbsp;</b>
+<b class="nc"><i>335</i>&nbsp;            /*</b>
+<b class="nc"><i>336</i>&nbsp;             * We only need to declare and initialize the static fields of</b>
+<i>337</i>&nbsp;             * Method objects for each remote method if there are any remote
+<b class="nc"><i>338</i>&nbsp;             * methods; otherwise, skip this code entirely, to avoid generating</b>
+<i>339</i>&nbsp;             * a try/catch block for a checked exception that cannot occur
+<b class="nc"><i>340</i>&nbsp;             * (see bugid 4125181).</b>
+<i>341</i>&nbsp;             */
+<b class="nc"><i>342</i>&nbsp;            if (methodFieldNames.length &gt; 0) {</b>
+<i>343</i>&nbsp;                if (version == STUB_VERSION_FAT) {
+<i>344</i>&nbsp;                    p.pln(&quot;private static boolean useNewInvoke;&quot;);
+<b class="nc"><i>345</i>&nbsp;                }</b>
+<b class="nc"><i>346</i>&nbsp;                writeMethodFieldDeclarations(p);</b>
+<b class="nc"><i>347</i>&nbsp;                p.pln();</b>
+<b class="nc"><i>348</i>&nbsp;</b>
+<i>349</i>&nbsp;                /*
+<i>350</i>&nbsp;                 * Initialize java.lang.reflect.Method fields for each remote
+<b class="nc"><i>351</i>&nbsp;                 * method in a static initializer.</b>
+<i>352</i>&nbsp;                 */
+<i>353</i>&nbsp;                p.plnI(&quot;static {&quot;);
+<b class="nc"><i>354</i>&nbsp;                p.plnI(&quot;try {&quot;);</b>
+<i>355</i>&nbsp;                if (version == STUB_VERSION_FAT) {
+<b class="nc"><i>356</i>&nbsp;                    /*</b>
+<i>357</i>&nbsp;                     * Fat stubs must determine whether the API required for
+<i>358</i>&nbsp;                     * the JDK 1.2 stub protocol is supported in the current
+<i>359</i>&nbsp;                     * runtime, so that it can use it if supported.  This is
+<i>360</i>&nbsp;                     * determined by using the Reflection API to test if the
+<i>361</i>&nbsp;                     * new invoke method on RemoteRef exists, and setting the
+<i>362</i>&nbsp;                     * static boolean &quot;useNewInvoke&quot; to true if it does, or
+<i>363</i>&nbsp;                     * to false if a NoSuchMethodException is thrown.
+<i>364</i>&nbsp;                     */
+<b class="nc"><i>365</i>&nbsp;                    p.plnI(idRemoteRef + &quot;.class.getMethod(\&quot;invoke\&quot;,&quot;);</b>
+<b class="nc"><i>366</i>&nbsp;                    p.plnI(&quot;new java.lang.Class[] {&quot;);</b>
+<b class="nc"><i>367</i>&nbsp;                    p.pln(idRemote + &quot;.class,&quot;);</b>
+<i>368</i>&nbsp;                    p.pln(&quot;java.lang.reflect.Method.class,&quot;);
+<b class="nc"><i>369</i>&nbsp;                    p.pln(&quot;java.lang.Object[].class,&quot;);</b>
+<b class="nc"><i>370</i>&nbsp;                    p.pln(&quot;long.class&quot;);</b>
+<i>371</i>&nbsp;                    p.pOln(&quot;});&quot;);
+<i>372</i>&nbsp;                    p.pO();
+<i>373</i>&nbsp;                    p.pln(&quot;useNewInvoke = true;&quot;);
+<i>374</i>&nbsp;                }
+<i>375</i>&nbsp;                writeMethodFieldInitializers(p);
+<b class="nc"><i>376</i>&nbsp;                p.pOlnI(&quot;} catch (java.lang.NoSuchMethodException e) {&quot;);</b>
+<b class="nc"><i>377</i>&nbsp;                if (version == STUB_VERSION_FAT) {</b>
+<b class="nc"><i>378</i>&nbsp;                    p.pln(&quot;useNewInvoke = false;&quot;);</b>
+<i>379</i>&nbsp;                } else {
+<i>380</i>&nbsp;                    /*
+<i>381</i>&nbsp;                     * REMIND: By throwing an Error here, the application will
+<i>382</i>&nbsp;                     * get the NoSuchMethodError directly when the stub class
+<i>383</i>&nbsp;                     * is initialized.  If we throw a RuntimeException
+<i>384</i>&nbsp;                     * instead, the application would get an
+<i>385</i>&nbsp;                     * ExceptionInInitializerError.  Would that be more
+<i>386</i>&nbsp;                     * appropriate, and if so, which RuntimeException should
+<i>387</i>&nbsp;                     * be thrown?
+<b class="nc"><i>388</i>&nbsp;                     */</b>
+<b class="nc"><i>389</i>&nbsp;                    p.plnI(&quot;throw new java.lang.NoSuchMethodError(&quot;);</b>
+<b class="nc"><i>390</i>&nbsp;                    p.pln(&quot;\&quot;stub class initialization failed\&quot;);&quot;);</b>
+<b class="nc"><i>391</i>&nbsp;                    p.pO();</b>
+<b class="nc"><i>392</i>&nbsp;                }</b>
+<b class="nc"><i>393</i>&nbsp;                p.pOln(&quot;}&quot;);            // end try/catch block</b>
+<b class="nc"><i>394</i>&nbsp;                p.pOln(&quot;}&quot;);            // end static initializer</b>
+<b class="nc"><i>395</i>&nbsp;                p.pln();</b>
+<b class="nc"><i>396</i>&nbsp;            }</b>
+<i>397</i>&nbsp;        }
+<b class="nc"><i>398</i>&nbsp;</b>
+<b class="nc"><i>399</i>&nbsp;        writeStubConstructors(p);</b>
+<b class="nc"><i>400</i>&nbsp;        p.pln();</b>
+<b class="nc"><i>401</i>&nbsp;</b>
+<i>402</i>&nbsp;        /*
+<i>403</i>&nbsp;         * Write each stub method.
+<i>404</i>&nbsp;         */
+<i>405</i>&nbsp;        if (remoteMethods.length &gt; 0) {
+<i>406</i>&nbsp;            p.pln(&quot;// methods from remote interfaces&quot;);
+<i>407</i>&nbsp;            for (int i = 0; i &lt; remoteMethods.length; ++i) {
+<i>408</i>&nbsp;                p.pln();
+<i>409</i>&nbsp;                writeStubMethod(p, i);
+<i>410</i>&nbsp;            }
+<i>411</i>&nbsp;        }
+<b class="nc"><i>412</i>&nbsp;</b>
+<b class="nc"><i>413</i>&nbsp;        p.pOln(&quot;}&quot;);                    // end stub class</b>
+<b class="nc"><i>414</i>&nbsp;    }</b>
+<i>415</i>&nbsp;
+<b class="nc"><i>416</i>&nbsp;    /**</b>
+<b class="nc"><i>417</i>&nbsp;     * Write the constructors for the stub class.</b>
+<b class="nc"><i>418</i>&nbsp;     */</b>
+<i>419</i>&nbsp;    private void writeStubConstructors(IndentingWriter p)
+<i>420</i>&nbsp;        throws IOException
+<i>421</i>&nbsp;    {
+<b class="nc"><i>422</i>&nbsp;        p.pln(&quot;// constructors&quot;);</b>
+<b class="nc"><i>423</i>&nbsp;</b>
+<i>424</i>&nbsp;        /*
+<i>425</i>&nbsp;         * Only stubs compatible with the JDK 1.1 stub protocol need
+<i>426</i>&nbsp;         * a no-arg constructor; later versions use reflection to find
+<i>427</i>&nbsp;         * the constructor that directly takes a RemoteRef argument.
+<b class="nc"><i>428</i>&nbsp;         */</b>
+<b class="nc"><i>429</i>&nbsp;        if (version == STUB_VERSION_1_1 ||</b>
+<b class="nc"><i>430</i>&nbsp;            version == STUB_VERSION_FAT)</b>
+<b class="nc"><i>431</i>&nbsp;        {</b>
+<b class="nc"><i>432</i>&nbsp;            p.plnI(&quot;public &quot; + Names.mangleClass(stubClassName.getName()) +</b>
+<i>433</i>&nbsp;                &quot;() {&quot;);
+<i>434</i>&nbsp;            p.pln(&quot;super();&quot;);
+<i>435</i>&nbsp;            p.pOln(&quot;}&quot;);
+<b class="nc"><i>436</i>&nbsp;        }</b>
+<i>437</i>&nbsp;
+<i>438</i>&nbsp;        p.plnI(&quot;public &quot; + Names.mangleClass(stubClassName.getName()) +
+<i>439</i>&nbsp;            &quot;(&quot; + idRemoteRef + &quot; ref) {&quot;);
+<i>440</i>&nbsp;        p.pln(&quot;super(ref);&quot;);
+<i>441</i>&nbsp;        p.pOln(&quot;}&quot;);
+<i>442</i>&nbsp;    }
+<i>443</i>&nbsp;
+<i>444</i>&nbsp;    /**
+<b class="nc"><i>445</i>&nbsp;     * Write the stub method for the remote method with the given &quot;opnum&quot;.</b>
+<i>446</i>&nbsp;     */
+<i>447</i>&nbsp;    private void writeStubMethod(IndentingWriter p, int opnum)
+<i>448</i>&nbsp;        throws IOException
+<i>449</i>&nbsp;    {
+<i>450</i>&nbsp;        RemoteClass.Method method = remoteMethods[opnum];
+<i>451</i>&nbsp;        Identifier methodName = method.getName();
+<b class="nc"><i>452</i>&nbsp;        Type methodType = method.getType();</b>
+<i>453</i>&nbsp;        Type paramTypes[] = methodType.getArgumentTypes();
+<i>454</i>&nbsp;        String paramNames[] = nameParameters(paramTypes);
+<b class="nc"><i>455</i>&nbsp;        Type returnType = methodType.getReturnType();</b>
+<i>456</i>&nbsp;        ClassDeclaration[] exceptions = method.getExceptions();
+<b class="nc"><i>457</i>&nbsp;</b>
+<b class="nc"><i>458</i>&nbsp;        /*</b>
+<i>459</i>&nbsp;         * Declare stub method; throw exceptions declared in remote
+<i>460</i>&nbsp;         * interface(s).
+<b class="nc"><i>461</i>&nbsp;         */</b>
+<i>462</i>&nbsp;        p.pln(&quot;// implementation of &quot; +
+<b class="nc"><i>463</i>&nbsp;            methodType.typeString(methodName.toString(), true, false));</b>
+<b class="nc"><i>464</i>&nbsp;        p.p(&quot;public &quot; + returnType + &quot; &quot; + methodName + &quot;(&quot;);</b>
+<i>465</i>&nbsp;        for (int i = 0; i &lt; paramTypes.length; i++) {
+<i>466</i>&nbsp;            if (i &gt; 0)
+<i>467</i>&nbsp;                p.p(&quot;, &quot;);
+<i>468</i>&nbsp;            p.p(paramTypes[i] + &quot; &quot; + paramNames[i]);
+<i>469</i>&nbsp;        }
+<i>470</i>&nbsp;        p.plnI(&quot;)&quot;);
+<i>471</i>&nbsp;        if (exceptions.length &gt; 0) {
+<i>472</i>&nbsp;            p.p(&quot;throws &quot;);
+<b class="nc"><i>473</i>&nbsp;            for (int i = 0; i &lt; exceptions.length; i++) {</b>
+<b class="nc"><i>474</i>&nbsp;                if (i &gt; 0)</b>
+<b class="nc"><i>475</i>&nbsp;                    p.p(&quot;, &quot;);</b>
+<b class="nc"><i>476</i>&nbsp;                p.p(exceptions[i].getName().toString());</b>
+<b class="nc"><i>477</i>&nbsp;            }</b>
+<b class="nc"><i>478</i>&nbsp;            p.pln();</b>
+<b class="nc"><i>479</i>&nbsp;        }</b>
+<i>480</i>&nbsp;        p.pOlnI(&quot;{&quot;);
+<i>481</i>&nbsp;
+<i>482</i>&nbsp;        /*
+<i>483</i>&nbsp;         * The RemoteRef.invoke methods throw Exception, but unless this
+<i>484</i>&nbsp;         * stub method throws Exception as well, we must catch Exceptions
+<b class="nc"><i>485</i>&nbsp;         * thrown from the invocation.  So we must catch Exception and</b>
+<b class="nc"><i>486</i>&nbsp;         * rethrow something we can throw: UnexpectedException, which is a</b>
+<b class="nc"><i>487</i>&nbsp;         * subclass of RemoteException.  But for any subclasses of Exception</b>
+<b class="nc"><i>488</i>&nbsp;         * that we can throw, like RemoteException, RuntimeException, and</b>
+<b class="nc"><i>489</i>&nbsp;         * any of the exceptions declared by this stub method, we want them</b>
+<b class="nc"><i>490</i>&nbsp;         * to pass through unharmed, so first we must catch any such</b>
+<b class="nc"><i>491</i>&nbsp;         * exceptions and rethrow it directly.</b>
+<i>492</i>&nbsp;         *
+<b class="nc"><i>493</i>&nbsp;         * We have to be careful generating the rethrowing catch blocks</b>
+<b class="nc"><i>494</i>&nbsp;         * here, because javac will flag an error if there are any</b>
+<b class="nc"><i>495</i>&nbsp;         * unreachable catch blocks, i.e. if the catch of an exception class</b>
+<b class="nc"><i>496</i>&nbsp;         * follows a previous catch of it or of one of its superclasses.</b>
+<b class="nc"><i>497</i>&nbsp;         * The following method invocation takes care of these details.</b>
+<b class="nc"><i>498</i>&nbsp;         */</b>
+<b class="nc"><i>499</i>&nbsp;        Vector&lt;ClassDefinition&gt; catchList = computeUniqueCatchList(exceptions);</b>
+<i>500</i>&nbsp;
+<b class="nc"><i>501</i>&nbsp;        /*</b>
+<i>502</i>&nbsp;         * If we need to catch any particular exceptions (i.e. this method
+<b class="nc"><i>503</i>&nbsp;         * does not declare java.lang.Exception), put the entire stub</b>
+<i>504</i>&nbsp;         * method in a try block.
+<i>505</i>&nbsp;         */
+<i>506</i>&nbsp;        if (catchList.size() &gt; 0) {
+<i>507</i>&nbsp;            p.plnI(&quot;try {&quot;);
+<i>508</i>&nbsp;        }
+<i>509</i>&nbsp;
+<i>510</i>&nbsp;        if (version == STUB_VERSION_FAT) {
+<i>511</i>&nbsp;            p.plnI(&quot;if (useNewInvoke) {&quot;);
+<i>512</i>&nbsp;        }
+<i>513</i>&nbsp;        if (version == STUB_VERSION_FAT ||
+<i>514</i>&nbsp;            version == STUB_VERSION_1_2)
+<i>515</i>&nbsp;        {
+<i>516</i>&nbsp;            if (!returnType.isType(TC_VOID)) {
+<i>517</i>&nbsp;                p.p(&quot;Object $result = &quot;);               // REMIND: why $?
+<i>518</i>&nbsp;            }
+<i>519</i>&nbsp;            p.p(&quot;ref.invoke(this, &quot; + methodFieldNames[opnum] + &quot;, &quot;);
+<i>520</i>&nbsp;            if (paramTypes.length &gt; 0) {
+<i>521</i>&nbsp;                p.p(&quot;new java.lang.Object[] {&quot;);
+<b class="nc"><i>522</i>&nbsp;                for (int i = 0; i &lt; paramTypes.length; i++) {</b>
+<i>523</i>&nbsp;                    if (i &gt; 0)
+<i>524</i>&nbsp;                        p.p(&quot;, &quot;);
+<i>525</i>&nbsp;                    p.p(wrapArgumentCode(paramTypes[i], paramNames[i]));
+<i>526</i>&nbsp;                }
+<i>527</i>&nbsp;                p.p(&quot;}&quot;);
+<i>528</i>&nbsp;            } else {
+<b class="nc"><i>529</i>&nbsp;                p.p(&quot;null&quot;);</b>
+<b class="nc"><i>530</i>&nbsp;            }</b>
+<i>531</i>&nbsp;            p.pln(&quot;, &quot; + method.getMethodHash() + &quot;L);&quot;);
+<i>532</i>&nbsp;            if (!returnType.isType(TC_VOID)) {
+<b class="nc"><i>533</i>&nbsp;                p.pln(&quot;return &quot; +</b>
+<b class="nc"><i>534</i>&nbsp;                    unwrapArgumentCode(returnType, &quot;$result&quot;) + &quot;;&quot;);</b>
+<i>535</i>&nbsp;            }
+<b class="nc"><i>536</i>&nbsp;        }</b>
+<i>537</i>&nbsp;        if (version == STUB_VERSION_FAT) {
+<i>538</i>&nbsp;            p.pOlnI(&quot;} else {&quot;);
+<b class="nc"><i>539</i>&nbsp;        }</b>
+<b class="nc"><i>540</i>&nbsp;        if (version == STUB_VERSION_1_1 ||</b>
+<i>541</i>&nbsp;            version == STUB_VERSION_FAT)
+<b class="nc"><i>542</i>&nbsp;        {</b>
+<b class="nc"><i>543</i>&nbsp;            p.pln(idRemoteCall + &quot; call = ref.newCall((&quot; + idRemoteObject +</b>
+<b class="nc"><i>544</i>&nbsp;                &quot;) this, operations, &quot; + opnum + &quot;, interfaceHash);&quot;);</b>
+<b class="nc"><i>545</i>&nbsp;</b>
+<b class="nc"><i>546</i>&nbsp;            if (paramTypes.length &gt; 0) {</b>
+<b class="nc"><i>547</i>&nbsp;                p.plnI(&quot;try {&quot;);</b>
+<b class="nc"><i>548</i>&nbsp;                p.pln(&quot;java.io.ObjectOutput out = call.getOutputStream();&quot;);</b>
+<i>549</i>&nbsp;                writeMarshalArguments(p, &quot;out&quot;, paramTypes, paramNames);
+<b class="nc"><i>550</i>&nbsp;                p.pOlnI(&quot;} catch (java.io.IOException e) {&quot;);</b>
+<i>551</i>&nbsp;                p.pln(&quot;throw new &quot; + idMarshalException +
+<b class="nc"><i>552</i>&nbsp;                    &quot;(\&quot;error marshalling arguments\&quot;, e);&quot;);</b>
+<i>553</i>&nbsp;                p.pOln(&quot;}&quot;);
+<b class="nc"><i>554</i>&nbsp;            }</b>
+<b class="nc"><i>555</i>&nbsp;</b>
+<b class="nc"><i>556</i>&nbsp;            p.pln(&quot;ref.invoke(call);&quot;);</b>
+<b class="nc"><i>557</i>&nbsp;</b>
+<i>558</i>&nbsp;            if (returnType.isType(TC_VOID)) {
+<i>559</i>&nbsp;                p.pln(&quot;ref.done(call);&quot;);
+<b class="nc"><i>560</i>&nbsp;            } else {</b>
+<b class="nc"><i>561</i>&nbsp;                p.pln(returnType + &quot; $result;&quot;);        // REMIND: why $?</b>
+<i>562</i>&nbsp;                p.plnI(&quot;try {&quot;);
+<b class="nc"><i>563</i>&nbsp;                p.pln(&quot;java.io.ObjectInput in = call.getInputStream();&quot;);</b>
+<i>564</i>&nbsp;                boolean objectRead =
+<i>565</i>&nbsp;                    writeUnmarshalArgument(p, &quot;in&quot;, returnType, &quot;$result&quot;);
+<b class="nc"><i>566</i>&nbsp;                p.pln(&quot;;&quot;);</b>
+<i>567</i>&nbsp;                p.pOlnI(&quot;} catch (java.io.IOException e) {&quot;);
+<i>568</i>&nbsp;                p.pln(&quot;throw new &quot; + idUnmarshalException +
+<b class="nc"><i>569</i>&nbsp;                    &quot;(\&quot;error unmarshalling return\&quot;, e);&quot;);</b>
+<b class="nc"><i>570</i>&nbsp;                /*</b>
+<b class="nc"><i>571</i>&nbsp;                 * If any only if readObject has been invoked, we must catch</b>
+<b class="nc"><i>572</i>&nbsp;                 * ClassNotFoundException as well as IOException.</b>
+<b class="nc"><i>573</i>&nbsp;                 */</b>
+<b class="nc"><i>574</i>&nbsp;                if (objectRead) {</b>
+<i>575</i>&nbsp;                    p.pOlnI(&quot;} catch (java.lang.ClassNotFoundException e) {&quot;);
+<b class="nc"><i>576</i>&nbsp;                    p.pln(&quot;throw new &quot; + idUnmarshalException +</b>
+<i>577</i>&nbsp;                        &quot;(\&quot;error unmarshalling return\&quot;, e);&quot;);
+<i>578</i>&nbsp;                }
+<b class="nc"><i>579</i>&nbsp;                p.pOlnI(&quot;} finally {&quot;);</b>
+<i>580</i>&nbsp;                p.pln(&quot;ref.done(call);&quot;);
+<b class="nc"><i>581</i>&nbsp;                p.pOln(&quot;}&quot;);</b>
+<b class="nc"><i>582</i>&nbsp;                p.pln(&quot;return $result;&quot;);</b>
+<i>583</i>&nbsp;            }
+<b class="nc"><i>584</i>&nbsp;        }</b>
+<b class="nc"><i>585</i>&nbsp;        if (version == STUB_VERSION_FAT) {</b>
+<b class="nc"><i>586</i>&nbsp;            p.pOln(&quot;}&quot;);                // end if/else (useNewInvoke) block</b>
+<b class="nc"><i>587</i>&nbsp;        }</b>
+<b class="nc"><i>588</i>&nbsp;</b>
+<b class="nc"><i>589</i>&nbsp;        /*</b>
+<b class="nc"><i>590</i>&nbsp;         * If we need to catch any particular exceptions, finally write</b>
+<b class="nc"><i>591</i>&nbsp;         * the catch blocks for them, rethrow any other Exceptions with an</b>
+<i>592</i>&nbsp;         * UnexpectedException, and end the try block.
+<i>593</i>&nbsp;         */
+<i>594</i>&nbsp;        if (catchList.size() &gt; 0) {
+<i>595</i>&nbsp;            for (Enumeration&lt;ClassDefinition&gt; enumeration = catchList.elements();
+<i>596</i>&nbsp;                 enumeration.hasMoreElements();)
+<b class="nc"><i>597</i>&nbsp;            {</b>
+<b class="nc"><i>598</i>&nbsp;                ClassDefinition def = enumeration.nextElement();</b>
+<b class="nc"><i>599</i>&nbsp;                p.pOlnI(&quot;} catch (&quot; + def.getName() + &quot; e) {&quot;);</b>
+<i>600</i>&nbsp;                p.pln(&quot;throw e;&quot;);
+<i>601</i>&nbsp;            }
+<b class="nc"><i>602</i>&nbsp;            p.pOlnI(&quot;} catch (java.lang.Exception e) {&quot;);</b>
+<b class="nc"><i>603</i>&nbsp;            p.pln(&quot;throw new &quot; + idUnexpectedException +</b>
+<b class="nc"><i>604</i>&nbsp;                &quot;(\&quot;undeclared checked exception\&quot;, e);&quot;);</b>
+<b class="nc"><i>605</i>&nbsp;            p.pOln(&quot;}&quot;);                // end try/catch block</b>
+<i>606</i>&nbsp;        }
+<i>607</i>&nbsp;
+<b class="nc"><i>608</i>&nbsp;        p.pOln(&quot;}&quot;);                    // end stub method</b>
+<b class="nc"><i>609</i>&nbsp;    }</b>
+<i>610</i>&nbsp;
+<i>611</i>&nbsp;    /**
+<i>612</i>&nbsp;     * Compute the exceptions which need to be caught and rethrown in a
+<i>613</i>&nbsp;     * stub method before wrapping Exceptions in UnexpectedExceptions,
+<i>614</i>&nbsp;     * given the exceptions declared in the throws clause of the method.
+<i>615</i>&nbsp;     * Returns a Vector containing ClassDefinition objects for each
+<i>616</i>&nbsp;     * exception to catch.  Each exception is guaranteed to be unique,
+<b class="nc"><i>617</i>&nbsp;     * i.e. not a subclass of any of the other exceptions in the Vector,</b>
+<b class="nc"><i>618</i>&nbsp;     * so the catch blocks for these exceptions may be generated in any</b>
+<b class="nc"><i>619</i>&nbsp;     * order relative to each other.</b>
+<i>620</i>&nbsp;     *
+<b class="nc"><i>621</i>&nbsp;     * RemoteException and RuntimeException are each automatically placed</b>
+<b class="nc"><i>622</i>&nbsp;     * in the returned Vector (if none of their superclasses are already</b>
+<b class="nc"><i>623</i>&nbsp;     * present), since those exceptions should always be directly rethrown</b>
+<b class="nc"><i>624</i>&nbsp;     * by a stub method.</b>
+<b class="nc"><i>625</i>&nbsp;     *</b>
+<b class="nc"><i>626</i>&nbsp;     * The returned Vector will be empty if java.lang.Exception or one</b>
+<i>627</i>&nbsp;     * of its superclasses is in the throws clause of the method, indicating
+<b class="nc"><i>628</i>&nbsp;     * that no exceptions need to be caught.</b>
+<i>629</i>&nbsp;     */
+<i>630</i>&nbsp;    private Vector&lt;ClassDefinition&gt; computeUniqueCatchList(ClassDeclaration[] exceptions) {
+<b class="nc"><i>631</i>&nbsp;        Vector&lt;ClassDefinition&gt; uniqueList = new Vector&lt;&gt;();       // unique exceptions to catch</b>
+<i>632</i>&nbsp;
+<i>633</i>&nbsp;        uniqueList.addElement(defRuntimeException);
+<i>634</i>&nbsp;        uniqueList.addElement(defRemoteException);
+<i>635</i>&nbsp;
+<i>636</i>&nbsp;        /* For each exception declared by the stub method&#39;s throws clause: */
+<i>637</i>&nbsp;    nextException:
+<i>638</i>&nbsp;        for (int i = 0; i &lt; exceptions.length; i++) {
+<i>639</i>&nbsp;            ClassDeclaration decl = exceptions[i];
+<i>640</i>&nbsp;            try {
+<i>641</i>&nbsp;                if (defException.subClassOf(env, decl)) {
+<i>642</i>&nbsp;                    /*
+<i>643</i>&nbsp;                     * (If java.lang.Exception (or a superclass) was declared
+<i>644</i>&nbsp;                     * in the throws clause of this stub method, then we don&#39;t
+<i>645</i>&nbsp;                     * have to bother catching anything; clear the list and
+<i>646</i>&nbsp;                     * return.)
+<i>647</i>&nbsp;                     */
+<i>648</i>&nbsp;                    uniqueList.clear();
+<i>649</i>&nbsp;                    break;
+<i>650</i>&nbsp;                } else if (!defException.superClassOf(env, decl)) {
+<i>651</i>&nbsp;                    /*
+<i>652</i>&nbsp;                     * Ignore other Throwables that do not extend Exception,
+<i>653</i>&nbsp;                     * since they do not need to be caught anyway.
+<b class="nc"><i>654</i>&nbsp;                     */</b>
+<i>655</i>&nbsp;                    continue;
+<b class="nc"><i>656</i>&nbsp;                }</b>
+<b class="nc"><i>657</i>&nbsp;                /*</b>
+<i>658</i>&nbsp;                 * Compare this exception against the current list of
+<i>659</i>&nbsp;                 * exceptions that need to be caught:
+<i>660</i>&nbsp;                 */
+<b class="nc"><i>661</i>&nbsp;                for (int j = 0; j &lt; uniqueList.size();) {</b>
+<b class="nc"><i>662</i>&nbsp;                    ClassDefinition def = uniqueList.elementAt(j);</b>
+<i>663</i>&nbsp;                    if (def.superClassOf(env, decl)) {
+<b class="nc"><i>664</i>&nbsp;                        /*</b>
+<i>665</i>&nbsp;                         * If a superclass of this exception is already on
+<i>666</i>&nbsp;                         * the list to catch, then ignore and continue;
+<i>667</i>&nbsp;                         */
+<i>668</i>&nbsp;                        continue nextException;
+<i>669</i>&nbsp;                    } else if (def.subClassOf(env, decl)) {
+<i>670</i>&nbsp;                        /*
+<b class="nc"><i>671</i>&nbsp;                         * If a subclass of this exception is on the list</b>
+<b class="nc"><i>672</i>&nbsp;                         * to catch, then remove it.</b>
+<b class="nc"><i>673</i>&nbsp;                         */</b>
+<i>674</i>&nbsp;                        uniqueList.removeElementAt(j);
+<i>675</i>&nbsp;                    } else {
+<i>676</i>&nbsp;                        j++;    // else continue comparing
+<i>677</i>&nbsp;                    }
+<b class="nc"><i>678</i>&nbsp;                }</b>
+<i>679</i>&nbsp;                /* This exception is unique: add it to the list to catch. */
+<i>680</i>&nbsp;                uniqueList.addElement(decl.getClassDefinition(env));
+<i>681</i>&nbsp;            } catch (ClassNotFound e) {
+<i>682</i>&nbsp;                env.error(0, &quot;class.not.found&quot;, e.name, decl.getName());
+<i>683</i>&nbsp;                /*
+<b class="nc"><i>684</i>&nbsp;                 * REMIND: We do not exit from this exceptional condition,</b>
+<b class="nc"><i>685</i>&nbsp;                 * generating questionable code and likely letting the</b>
+<b class="nc"><i>686</i>&nbsp;                 * compiler report a resulting error later.</b>
+<i>687</i>&nbsp;                 */
+<i>688</i>&nbsp;            }
+<i>689</i>&nbsp;        }
+<i>690</i>&nbsp;        return uniqueList;
+<b class="nc"><i>691</i>&nbsp;    }</b>
+<b class="nc"><i>692</i>&nbsp;</b>
+<i>693</i>&nbsp;    /**
+<i>694</i>&nbsp;     * Write the skeleton for the remote class to a stream.
+<i>695</i>&nbsp;     */
+<i>696</i>&nbsp;    private void writeSkeleton(IndentingWriter p) throws IOException {
+<b class="nc"><i>697</i>&nbsp;        if (version == STUB_VERSION_1_2) {</b>
+<i>698</i>&nbsp;            throw new Error(&quot;should not generate skeleton for version&quot;);
+<b class="nc"><i>699</i>&nbsp;        }</b>
+<i>700</i>&nbsp;
+<b class="nc"><i>701</i>&nbsp;        /*</b>
+<i>702</i>&nbsp;         * Write boiler plate comment.
+<b class="nc"><i>703</i>&nbsp;         */</b>
+<b class="nc"><i>704</i>&nbsp;        p.pln(&quot;// Skeleton class generated by rmic, do not edit.&quot;);</b>
+<b class="nc"><i>705</i>&nbsp;        p.pln(&quot;// Contents subject to change without notice.&quot;);</b>
+<i>706</i>&nbsp;        p.pln();
+<i>707</i>&nbsp;
+<i>708</i>&nbsp;        /*
+<i>709</i>&nbsp;         * If remote implementation class was in a particular package,
+<i>710</i>&nbsp;         * declare the skeleton class to be in the same package.
+<b class="nc"><i>711</i>&nbsp;         */</b>
+<i>712</i>&nbsp;        if (remoteClassName.isQualified()) {
+<b class="nc"><i>713</i>&nbsp;            p.pln(&quot;package &quot; + remoteClassName.getQualifier() + &quot;;&quot;);</b>
+<i>714</i>&nbsp;            p.pln();
+<i>715</i>&nbsp;        }
+<i>716</i>&nbsp;
+<i>717</i>&nbsp;        /*
+<i>718</i>&nbsp;         * Declare the skeleton class.
+<i>719</i>&nbsp;         */
+<b class="nc"><i>720</i>&nbsp;        p.plnI(&quot;public final class &quot; +</b>
+<b class="nc"><i>721</i>&nbsp;            Names.mangleClass(skeletonClassName.getName()));</b>
+<i>722</i>&nbsp;        p.pln(&quot;implements &quot; + idSkeleton);
+<i>723</i>&nbsp;        p.pOlnI(&quot;{&quot;);
+<i>724</i>&nbsp;
+<i>725</i>&nbsp;        writeOperationsArray(p);
+<i>726</i>&nbsp;        p.pln();
+<b class="nc"><i>727</i>&nbsp;</b>
+<b class="nc"><i>728</i>&nbsp;        writeInterfaceHash(p);</b>
+<b class="nc"><i>729</i>&nbsp;        p.pln();</b>
+<i>730</i>&nbsp;
+<i>731</i>&nbsp;        /*
+<i>732</i>&nbsp;         * Define the getOperations() method.
+<i>733</i>&nbsp;         */
+<i>734</i>&nbsp;        p.plnI(&quot;public &quot; + idOperation + &quot;[] getOperations() {&quot;);
+<b class="nc"><i>735</i>&nbsp;        p.pln(&quot;return (&quot; + idOperation + &quot;[]) operations.clone();&quot;);</b>
+<b class="nc"><i>736</i>&nbsp;        p.pOln(&quot;}&quot;);</b>
+<b class="nc"><i>737</i>&nbsp;        p.pln();</b>
+<i>738</i>&nbsp;
+<i>739</i>&nbsp;        /*
+<i>740</i>&nbsp;         * Define the dispatch() method.
+<i>741</i>&nbsp;         */
+<i>742</i>&nbsp;        p.plnI(&quot;public void dispatch(&quot; + idRemote + &quot; obj, &quot; +
+<b class="nc"><i>743</i>&nbsp;            idRemoteCall + &quot; call, int opnum, long hash)&quot;);</b>
+<b class="nc"><i>744</i>&nbsp;        p.pln(&quot;throws java.lang.Exception&quot;);</b>
+<b class="nc"><i>745</i>&nbsp;        p.pOlnI(&quot;{&quot;);</b>
+<b class="nc"><i>746</i>&nbsp;</b>
+<i>747</i>&nbsp;        if (version == STUB_VERSION_FAT) {
+<b class="nc"><i>748</i>&nbsp;            p.plnI(&quot;if (opnum &lt; 0) {&quot;);</b>
+<b class="nc"><i>749</i>&nbsp;            if (remoteMethods.length &gt; 0) {</b>
+<i>750</i>&nbsp;                for (int opnum = 0; opnum &lt; remoteMethods.length; opnum++) {
+<b class="nc"><i>751</i>&nbsp;                    if (opnum &gt; 0)</b>
+<b class="nc"><i>752</i>&nbsp;                        p.pO(&quot;} else &quot;);</b>
+<i>753</i>&nbsp;                    p.plnI(&quot;if (hash == &quot; +
+<i>754</i>&nbsp;                        remoteMethods[opnum].getMethodHash() + &quot;L) {&quot;);
+<i>755</i>&nbsp;                    p.pln(&quot;opnum = &quot; + opnum + &quot;;&quot;);
+<i>756</i>&nbsp;                }
+<b class="nc"><i>757</i>&nbsp;                p.pOlnI(&quot;} else {&quot;);</b>
+<b class="nc"><i>758</i>&nbsp;            }</b>
+<b class="nc"><i>759</i>&nbsp;            /*</b>
+<b class="nc"><i>760</i>&nbsp;             * Skeleton throws UnmarshalException if it does not recognize</b>
+<i>761</i>&nbsp;             * the method hash; this is what UnicastServerRef.dispatch()
+<i>762</i>&nbsp;             * would do.
+<i>763</i>&nbsp;             */
+<i>764</i>&nbsp;            p.pln(&quot;throw new &quot; +
+<b class="nc"><i>765</i>&nbsp;                idUnmarshalException + &quot;(\&quot;invalid method hash\&quot;);&quot;);</b>
+<i>766</i>&nbsp;            if (remoteMethods.length &gt; 0) {
+<b class="nc"><i>767</i>&nbsp;                p.pOln(&quot;}&quot;);</b>
+<b class="nc"><i>768</i>&nbsp;            }</b>
+<i>769</i>&nbsp;            /*
+<b class="nc"><i>770</i>&nbsp;             * Ignore the validation of the interface hash if the</b>
+<b class="nc"><i>771</i>&nbsp;             * operation number was negative, since it is really a</b>
+<b class="nc"><i>772</i>&nbsp;             * method hash instead.</b>
+<b class="nc"><i>773</i>&nbsp;             */</b>
+<b class="nc"><i>774</i>&nbsp;            p.pOlnI(&quot;} else {&quot;);</b>
+<b class="nc"><i>775</i>&nbsp;        }</b>
+<b class="nc"><i>776</i>&nbsp;</b>
+<b class="nc"><i>777</i>&nbsp;        p.plnI(&quot;if (hash != interfaceHash)&quot;);</b>
+<b class="nc"><i>778</i>&nbsp;        p.pln(&quot;throw new &quot; +</b>
+<i>779</i>&nbsp;            idSkeletonMismatchException + &quot;(\&quot;interface hash mismatch\&quot;);&quot;);
+<b class="nc"><i>780</i>&nbsp;        p.pO();</b>
+<i>781</i>&nbsp;
+<i>782</i>&nbsp;        if (version == STUB_VERSION_FAT) {
+<i>783</i>&nbsp;            p.pOln(&quot;}&quot;);                // end if/else (opnum &lt; 0) block
+<i>784</i>&nbsp;        }
+<i>785</i>&nbsp;        p.pln();
+<i>786</i>&nbsp;
+<b class="nc"><i>787</i>&nbsp;        /*</b>
+<i>788</i>&nbsp;         * Cast remote object instance to our specific implementation class.
+<b class="nc"><i>789</i>&nbsp;         */</b>
+<b class="nc"><i>790</i>&nbsp;        p.pln(remoteClassName + &quot; server = (&quot; + remoteClassName + &quot;) obj;&quot;);</b>
+<i>791</i>&nbsp;
+<i>792</i>&nbsp;        /*
+<i>793</i>&nbsp;         * Process call according to the operation number.
+<i>794</i>&nbsp;         */
+<i>795</i>&nbsp;        p.plnI(&quot;switch (opnum) {&quot;);
+<i>796</i>&nbsp;        for (int opnum = 0; opnum &lt; remoteMethods.length; opnum++) {
+<b class="nc"><i>797</i>&nbsp;            writeSkeletonDispatchCase(p, opnum);</b>
+<i>798</i>&nbsp;        }
+<i>799</i>&nbsp;        p.pOlnI(&quot;default:&quot;);
+<b class="nc"><i>800</i>&nbsp;        /*</b>
+<b class="nc"><i>801</i>&nbsp;         * Skeleton throws UnmarshalException if it does not recognize</b>
+<i>802</i>&nbsp;         * the operation number; this is consistent with the case of an
+<b class="nc"><i>803</i>&nbsp;         * unrecognized method hash.</b>
+<i>804</i>&nbsp;         */
+<b class="nc"><i>805</i>&nbsp;        p.pln(&quot;throw new &quot; + idUnmarshalException +</b>
+<b class="nc"><i>806</i>&nbsp;            &quot;(\&quot;invalid method number\&quot;);&quot;);</b>
+<i>807</i>&nbsp;        p.pOln(&quot;}&quot;);                    // end switch statement
+<b class="nc"><i>808</i>&nbsp;</b>
+<i>809</i>&nbsp;        p.pOln(&quot;}&quot;);                    // end dispatch() method
+<i>810</i>&nbsp;
+<i>811</i>&nbsp;        p.pOln(&quot;}&quot;);                    // end skeleton class
+<i>812</i>&nbsp;    }
+<b class="nc"><i>813</i>&nbsp;</b>
+<i>814</i>&nbsp;    /**
+<i>815</i>&nbsp;     * Write the case block for the skeleton&#39;s dispatch method for
+<i>816</i>&nbsp;     * the remote method with the given &quot;opnum&quot;.
+<i>817</i>&nbsp;     */
+<b class="nc"><i>818</i>&nbsp;    private void writeSkeletonDispatchCase(IndentingWriter p, int opnum)</b>
+<b class="nc"><i>819</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>820</i>&nbsp;    {</b>
+<i>821</i>&nbsp;        RemoteClass.Method method = remoteMethods[opnum];
+<b class="nc"><i>822</i>&nbsp;        Identifier methodName = method.getName();</b>
+<i>823</i>&nbsp;        Type methodType = method.getType();
+<i>824</i>&nbsp;        Type paramTypes[] = methodType.getArgumentTypes();
+<i>825</i>&nbsp;        String paramNames[] = nameParameters(paramTypes);
+<i>826</i>&nbsp;        Type returnType = methodType.getReturnType();
+<i>827</i>&nbsp;
+<b class="nc"><i>828</i>&nbsp;        p.pOlnI(&quot;case &quot; + opnum + &quot;: // &quot; +</b>
+<i>829</i>&nbsp;            methodType.typeString(methodName.toString(), true, false));
+<b class="nc"><i>830</i>&nbsp;        /*</b>
+<i>831</i>&nbsp;         * Use nested block statement inside case to provide an independent
+<b class="nc"><i>832</i>&nbsp;         * namespace for local variables used to unmarshal parameters for</b>
+<i>833</i>&nbsp;         * this remote method.
+<b class="nc"><i>834</i>&nbsp;         */</b>
+<i>835</i>&nbsp;        p.pOlnI(&quot;{&quot;);
+<i>836</i>&nbsp;
+<i>837</i>&nbsp;        if (paramTypes.length &gt; 0) {
+<i>838</i>&nbsp;            /*
+<i>839</i>&nbsp;             * Declare local variables to hold arguments.
+<i>840</i>&nbsp;             */
+<i>841</i>&nbsp;            for (int i = 0; i &lt; paramTypes.length; i++) {
+<i>842</i>&nbsp;                p.pln(paramTypes[i] + &quot; &quot; + paramNames[i] + &quot;;&quot;);
+<i>843</i>&nbsp;            }
+<b class="nc"><i>844</i>&nbsp;</b>
+<b class="nc"><i>845</i>&nbsp;            /*</b>
+<b class="nc"><i>846</i>&nbsp;             * Unmarshal arguments from call stream.</b>
+<b class="nc"><i>847</i>&nbsp;             */</b>
+<b class="nc"><i>848</i>&nbsp;            p.plnI(&quot;try {&quot;);</b>
+<b class="nc"><i>849</i>&nbsp;            p.pln(&quot;java.io.ObjectInput in = call.getInputStream();&quot;);</b>
+<i>850</i>&nbsp;            boolean objectsRead = writeUnmarshalArguments(p, &quot;in&quot;,
+<b class="nc"><i>851</i>&nbsp;                paramTypes, paramNames);</b>
+<b class="nc"><i>852</i>&nbsp;            p.pOlnI(&quot;} catch (java.io.IOException e) {&quot;);</b>
+<i>853</i>&nbsp;            p.pln(&quot;throw new &quot; + idUnmarshalException +
+<i>854</i>&nbsp;                &quot;(\&quot;error unmarshalling arguments\&quot;, e);&quot;);
+<i>855</i>&nbsp;            /*
+<i>856</i>&nbsp;             * If any only if readObject has been invoked, we must catch
+<i>857</i>&nbsp;             * ClassNotFoundException as well as IOException.
+<b class="nc"><i>858</i>&nbsp;             */</b>
+<i>859</i>&nbsp;            if (objectsRead) {
+<b class="nc"><i>860</i>&nbsp;                p.pOlnI(&quot;} catch (java.lang.ClassNotFoundException e) {&quot;);</b>
+<i>861</i>&nbsp;                p.pln(&quot;throw new &quot; + idUnmarshalException +
+<i>862</i>&nbsp;                    &quot;(\&quot;error unmarshalling arguments\&quot;, e);&quot;);
+<i>863</i>&nbsp;            }
+<b class="nc"><i>864</i>&nbsp;            p.pOlnI(&quot;} finally {&quot;);</b>
+<b class="nc"><i>865</i>&nbsp;            p.pln(&quot;call.releaseInputStream();&quot;);</b>
+<i>866</i>&nbsp;            p.pOln(&quot;}&quot;);
+<i>867</i>&nbsp;        } else {
+<i>868</i>&nbsp;            p.pln(&quot;call.releaseInputStream();&quot;);
+<i>869</i>&nbsp;        }
+<i>870</i>&nbsp;
+<b class="nc"><i>871</i>&nbsp;        if (!returnType.isType(TC_VOID)) {</b>
+<b class="nc"><i>872</i>&nbsp;            /*</b>
+<b class="nc"><i>873</i>&nbsp;             * Declare variable to hold return type, if not void.</b>
+<i>874</i>&nbsp;             */
+<b class="nc"><i>875</i>&nbsp;            p.p(returnType + &quot; $result = &quot;);            // REMIND: why $?</b>
+<b class="nc"><i>876</i>&nbsp;        }</b>
+<i>877</i>&nbsp;
+<i>878</i>&nbsp;        /*
+<i>879</i>&nbsp;         * Invoke the method on the server object.
+<i>880</i>&nbsp;         */
+<i>881</i>&nbsp;        p.p(&quot;server.&quot; + methodName + &quot;(&quot;);
+<b class="nc"><i>882</i>&nbsp;        for (int i = 0; i &lt; paramNames.length; i++) {</b>
+<b class="nc"><i>883</i>&nbsp;            if (i &gt; 0)</b>
+<b class="nc"><i>884</i>&nbsp;                p.p(&quot;, &quot;);</b>
+<i>885</i>&nbsp;            p.p(paramNames[i]);
+<i>886</i>&nbsp;        }
+<b class="nc"><i>887</i>&nbsp;        p.pln(&quot;);&quot;);</b>
+<b class="nc"><i>888</i>&nbsp;</b>
+<b class="nc"><i>889</i>&nbsp;        /*</b>
+<b class="nc"><i>890</i>&nbsp;         * Always invoke getResultStream(true) on the call object to send</b>
+<b class="nc"><i>891</i>&nbsp;         * the indication of a successful invocation to the caller.  If</b>
+<i>892</i>&nbsp;         * the return type is not void, keep the result stream and marshal
+<i>893</i>&nbsp;         * the return value.
+<b class="nc"><i>894</i>&nbsp;         */</b>
+<i>895</i>&nbsp;        p.plnI(&quot;try {&quot;);
+<i>896</i>&nbsp;        if (!returnType.isType(TC_VOID)) {
+<i>897</i>&nbsp;            p.p(&quot;java.io.ObjectOutput out = &quot;);
+<b class="nc"><i>898</i>&nbsp;        }</b>
+<i>899</i>&nbsp;        p.pln(&quot;call.getResultStream(true);&quot;);
+<i>900</i>&nbsp;        if (!returnType.isType(TC_VOID)) {
+<i>901</i>&nbsp;            writeMarshalArgument(p, &quot;out&quot;, returnType, &quot;$result&quot;);
+<i>902</i>&nbsp;            p.pln(&quot;;&quot;);
+<i>903</i>&nbsp;        }
+<b class="nc"><i>904</i>&nbsp;        p.pOlnI(&quot;} catch (java.io.IOException e) {&quot;);</b>
+<b class="nc"><i>905</i>&nbsp;        p.pln(&quot;throw new &quot; +</b>
+<b class="nc"><i>906</i>&nbsp;            idMarshalException + &quot;(\&quot;error marshalling return\&quot;, e);&quot;);</b>
+<b class="nc"><i>907</i>&nbsp;        p.pOln(&quot;}&quot;);</b>
+<b class="nc"><i>908</i>&nbsp;</b>
+<i>909</i>&nbsp;        p.pln(&quot;break;&quot;);                // break from switch statement
+<b class="nc"><i>910</i>&nbsp;</b>
+<i>911</i>&nbsp;        p.pOlnI(&quot;}&quot;);                   // end nested block statement
+<i>912</i>&nbsp;        p.pln();
+<i>913</i>&nbsp;    }
+<i>914</i>&nbsp;
+<i>915</i>&nbsp;    /**
+<i>916</i>&nbsp;     * Write declaration and initializer for &quot;operations&quot; static array.
+<i>917</i>&nbsp;     */
+<b class="nc"><i>918</i>&nbsp;    private void writeOperationsArray(IndentingWriter p)</b>
+<b class="nc"><i>919</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>920</i>&nbsp;    {</b>
+<i>921</i>&nbsp;        p.plnI(&quot;private static final &quot; + idOperation + &quot;[] operations = {&quot;);
+<b class="nc"><i>922</i>&nbsp;        for (int i = 0; i &lt; remoteMethods.length; i++) {</b>
+<b class="nc"><i>923</i>&nbsp;            if (i &gt; 0)</b>
+<b class="nc"><i>924</i>&nbsp;                p.pln(&quot;,&quot;);</b>
+<b class="nc"><i>925</i>&nbsp;            p.p(&quot;new &quot; + idOperation + &quot;(\&quot;&quot; +</b>
+<i>926</i>&nbsp;                remoteMethods[i].getOperationString() + &quot;\&quot;)&quot;);
+<b class="nc"><i>927</i>&nbsp;        }</b>
+<b class="nc"><i>928</i>&nbsp;        p.pln();</b>
+<i>929</i>&nbsp;        p.pOln(&quot;};&quot;);
+<b class="nc"><i>930</i>&nbsp;    }</b>
+<i>931</i>&nbsp;
+<b class="nc"><i>932</i>&nbsp;    /**</b>
+<i>933</i>&nbsp;     * Write declaration and initializer for &quot;interfaceHash&quot; static field.
+<b class="nc"><i>934</i>&nbsp;     */</b>
+<b class="nc"><i>935</i>&nbsp;    private void writeInterfaceHash(IndentingWriter p)</b>
+<i>936</i>&nbsp;        throws IOException
+<i>937</i>&nbsp;    {
+<i>938</i>&nbsp;        p.pln(&quot;private static final long interfaceHash = &quot; +
+<i>939</i>&nbsp;            remoteClass.getInterfaceHash() + &quot;L;&quot;);
+<i>940</i>&nbsp;    }
+<i>941</i>&nbsp;
+<i>942</i>&nbsp;    /**
+<i>943</i>&nbsp;     * Write declaration for java.lang.reflect.Method static fields
+<b class="nc"><i>944</i>&nbsp;     * corresponding to each remote method in a stub.</b>
+<b class="nc"><i>945</i>&nbsp;     */</b>
+<b class="nc"><i>946</i>&nbsp;    private void writeMethodFieldDeclarations(IndentingWriter p)</b>
+<b class="nc"><i>947</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>948</i>&nbsp;    {</b>
+<b class="nc"><i>949</i>&nbsp;        for (int i = 0; i &lt; methodFieldNames.length; i++) {</b>
+<i>950</i>&nbsp;            p.pln(&quot;private static java.lang.reflect.Method &quot; +
+<b class="nc"><i>951</i>&nbsp;                methodFieldNames[i] + &quot;;&quot;);</b>
+<b class="nc"><i>952</i>&nbsp;        }</b>
+<i>953</i>&nbsp;    }
+<i>954</i>&nbsp;
+<i>955</i>&nbsp;    /**
+<i>956</i>&nbsp;     * Write code to initialize the static fields for each method
+<i>957</i>&nbsp;     * using the Java Reflection API.
+<i>958</i>&nbsp;     */
+<i>959</i>&nbsp;    private void writeMethodFieldInitializers(IndentingWriter p)
+<i>960</i>&nbsp;        throws IOException
+<b class="nc"><i>961</i>&nbsp;    {</b>
+<b class="nc"><i>962</i>&nbsp;        for (int i = 0; i &lt; methodFieldNames.length; i++) {</b>
+<i>963</i>&nbsp;            p.p(methodFieldNames[i] + &quot; = &quot;);
+<i>964</i>&nbsp;            /*
+<i>965</i>&nbsp;             * Here we look up the Method object in the arbitrary interface
+<i>966</i>&nbsp;             * that we find in the RemoteClass.Method object.
+<i>967</i>&nbsp;             * REMIND: Is this arbitrary choice OK?
+<i>968</i>&nbsp;             * REMIND: Should this access be part of RemoteClass.Method&#39;s
+<i>969</i>&nbsp;             * abstraction?
+<i>970</i>&nbsp;             */
+<i>971</i>&nbsp;            RemoteClass.Method method = remoteMethods[i];
+<b class="nc"><i>972</i>&nbsp;            MemberDefinition def = method.getMemberDefinition();</b>
+<b class="nc"><i>973</i>&nbsp;            Identifier methodName = method.getName();</b>
+<i>974</i>&nbsp;            Type methodType = method.getType();
+<i>975</i>&nbsp;            Type paramTypes[] = methodType.getArgumentTypes();
+<i>976</i>&nbsp;
+<i>977</i>&nbsp;            p.p(def.getClassDefinition().getName() + &quot;.class.getMethod(\&quot;&quot; +
+<i>978</i>&nbsp;                methodName + &quot;\&quot;, new java.lang.Class[] {&quot;);
+<i>979</i>&nbsp;            for (int j = 0; j &lt; paramTypes.length; j++) {
+<i>980</i>&nbsp;                if (j &gt; 0)
+<i>981</i>&nbsp;                    p.p(&quot;, &quot;);
+<i>982</i>&nbsp;                p.p(paramTypes[j] + &quot;.class&quot;);
+<i>983</i>&nbsp;            }
+<i>984</i>&nbsp;            p.pln(&quot;});&quot;);
+<b class="nc"><i>985</i>&nbsp;        }</b>
+<b class="nc"><i>986</i>&nbsp;    }</b>
+<i>987</i>&nbsp;
+<i>988</i>&nbsp;
+<i>989</i>&nbsp;    /*
+<i>990</i>&nbsp;     * Following are a series of static utility methods useful during
+<i>991</i>&nbsp;     * the code generation process:
+<i>992</i>&nbsp;     */
+<i>993</i>&nbsp;
+<b class="nc"><i>994</i>&nbsp;    /**</b>
+<b class="nc"><i>995</i>&nbsp;     * Generate an array of names for fields that correspond to the given</b>
+<b class="nc"><i>996</i>&nbsp;     * array of remote methods.  Each name in the returned array is</b>
+<b class="nc"><i>997</i>&nbsp;     * guaranteed to be unique.</b>
+<b class="nc"><i>998</i>&nbsp;     *</b>
+<i>999</i>&nbsp;     * The name of a method is included in its corresponding field name
+<b class="nc"><i>1000</i>&nbsp;     * to enhance readability of the generated code.</b>
+<i>1001</i>&nbsp;     */
+<b class="nc"><i>1002</i>&nbsp;    private static String[] nameMethodFields(RemoteClass.Method[] methods) {</b>
+<b class="nc"><i>1003</i>&nbsp;        String[] names = new String[methods.length];</b>
+<b class="nc"><i>1004</i>&nbsp;        for (int i = 0; i &lt; names.length; i++) {</b>
+<b class="nc"><i>1005</i>&nbsp;            names[i] = &quot;$method_&quot; + methods[i].getName() + &quot;_&quot; + i;</b>
+<i>1006</i>&nbsp;        }
+<b class="nc"><i>1007</i>&nbsp;        return names;</b>
+<i>1008</i>&nbsp;    }
+<i>1009</i>&nbsp;
+<i>1010</i>&nbsp;    /**
+<i>1011</i>&nbsp;     * Generate an array of names for parameters corresponding to the
+<i>1012</i>&nbsp;     * given array of types for the parameters.  Each name in the returned
+<i>1013</i>&nbsp;     * array is guaranteed to be unique.
+<i>1014</i>&nbsp;     *
+<i>1015</i>&nbsp;     * A representation of the type of a parameter is included in its
+<i>1016</i>&nbsp;     * corresponding field name to enhance the readability of the generated
+<i>1017</i>&nbsp;     * code.
+<i>1018</i>&nbsp;     */
+<i>1019</i>&nbsp;    private static String[] nameParameters(Type[] types) {
+<i>1020</i>&nbsp;        String[] names = new String[types.length];
+<i>1021</i>&nbsp;        for (int i = 0; i &lt; names.length; i++) {
+<i>1022</i>&nbsp;            names[i] = &quot;$param_&quot; +
+<i>1023</i>&nbsp;                generateNameFromType(types[i]) + &quot;_&quot; + (i + 1);
+<i>1024</i>&nbsp;        }
+<i>1025</i>&nbsp;        return names;
+<b class="nc"><i>1026</i>&nbsp;    }</b>
+<b class="nc"><i>1027</i>&nbsp;</b>
+<b class="nc"><i>1028</i>&nbsp;    /**</b>
+<i>1029</i>&nbsp;     * Generate a readable string representing the given type suitable
+<b class="nc"><i>1030</i>&nbsp;     * for embedding within a Java identifier.</b>
+<i>1031</i>&nbsp;     */
+<i>1032</i>&nbsp;    private static String generateNameFromType(Type type) {
+<i>1033</i>&nbsp;        int typeCode = type.getTypeCode();
+<i>1034</i>&nbsp;        switch (typeCode) {
+<i>1035</i>&nbsp;        case TC_BOOLEAN:
+<i>1036</i>&nbsp;        case TC_BYTE:
+<i>1037</i>&nbsp;        case TC_CHAR:
+<i>1038</i>&nbsp;        case TC_SHORT:
+<i>1039</i>&nbsp;        case TC_INT:
+<i>1040</i>&nbsp;        case TC_LONG:
+<i>1041</i>&nbsp;        case TC_FLOAT:
+<i>1042</i>&nbsp;        case TC_DOUBLE:
+<b class="nc"><i>1043</i>&nbsp;            return type.toString();</b>
+<b class="nc"><i>1044</i>&nbsp;        case TC_ARRAY:</b>
+<b class="nc"><i>1045</i>&nbsp;            return &quot;arrayOf_&quot; + generateNameFromType(type.getElementType());</b>
+<b class="nc"><i>1046</i>&nbsp;        case TC_CLASS:</b>
+<i>1047</i>&nbsp;            return Names.mangleClass(type.getClassName().getName()).toString();
+<b class="nc"><i>1048</i>&nbsp;        default:</b>
+<i>1049</i>&nbsp;            throw new Error(&quot;unexpected type code: &quot; + typeCode);
+<i>1050</i>&nbsp;        }
+<i>1051</i>&nbsp;    }
+<i>1052</i>&nbsp;
+<i>1053</i>&nbsp;    /**
+<i>1054</i>&nbsp;     * Write a snippet of Java code to marshal a value named &quot;name&quot; of
+<i>1055</i>&nbsp;     * type &quot;type&quot; to the java.io.ObjectOutput stream named &quot;stream&quot;.
+<b class="nc"><i>1056</i>&nbsp;     *</b>
+<b class="nc"><i>1057</i>&nbsp;     * Primitive types are marshalled with their corresponding methods</b>
+<i>1058</i>&nbsp;     * in the java.io.DataOutput interface, and objects (including arrays)
+<i>1059</i>&nbsp;     * are marshalled using the writeObject method.
+<i>1060</i>&nbsp;     */
+<i>1061</i>&nbsp;    private static void writeMarshalArgument(IndentingWriter p,
+<i>1062</i>&nbsp;                                             String streamName,
+<i>1063</i>&nbsp;                                             Type type, String name)
+<i>1064</i>&nbsp;        throws IOException
+<i>1065</i>&nbsp;    {
+<b class="nc"><i>1066</i>&nbsp;        int typeCode = type.getTypeCode();</b>
+<i>1067</i>&nbsp;        switch (typeCode) {
+<b class="nc"><i>1068</i>&nbsp;        case TC_BOOLEAN:</b>
+<i>1069</i>&nbsp;            p.p(streamName + &quot;.writeBoolean(&quot; + name + &quot;)&quot;);
+<b class="nc"><i>1070</i>&nbsp;            break;</b>
+<i>1071</i>&nbsp;        case TC_BYTE:
+<b class="nc"><i>1072</i>&nbsp;            p.p(streamName + &quot;.writeByte(&quot; + name + &quot;)&quot;);</b>
+<i>1073</i>&nbsp;            break;
+<i>1074</i>&nbsp;        case TC_CHAR:
+<i>1075</i>&nbsp;            p.p(streamName + &quot;.writeChar(&quot; + name + &quot;)&quot;);
+<i>1076</i>&nbsp;            break;
+<i>1077</i>&nbsp;        case TC_SHORT:
+<i>1078</i>&nbsp;            p.p(streamName + &quot;.writeShort(&quot; + name + &quot;)&quot;);
+<i>1079</i>&nbsp;            break;
+<i>1080</i>&nbsp;        case TC_INT:
+<i>1081</i>&nbsp;            p.p(streamName + &quot;.writeInt(&quot; + name + &quot;)&quot;);
+<i>1082</i>&nbsp;            break;
+<i>1083</i>&nbsp;        case TC_LONG:
+<i>1084</i>&nbsp;            p.p(streamName + &quot;.writeLong(&quot; + name + &quot;)&quot;);
+<i>1085</i>&nbsp;            break;
+<i>1086</i>&nbsp;        case TC_FLOAT:
+<i>1087</i>&nbsp;            p.p(streamName + &quot;.writeFloat(&quot; + name + &quot;)&quot;);
+<i>1088</i>&nbsp;            break;
+<b class="nc"><i>1089</i>&nbsp;        case TC_DOUBLE:</b>
+<b class="nc"><i>1090</i>&nbsp;            p.p(streamName + &quot;.writeDouble(&quot; + name + &quot;)&quot;);</b>
+<i>1091</i>&nbsp;            break;
+<b class="nc"><i>1092</i>&nbsp;        case TC_ARRAY:</b>
+<b class="nc"><i>1093</i>&nbsp;        case TC_CLASS:</b>
+<i>1094</i>&nbsp;            p.p(streamName + &quot;.writeObject(&quot; + name + &quot;)&quot;);
+<b class="nc"><i>1095</i>&nbsp;            break;</b>
+<b class="nc"><i>1096</i>&nbsp;        default:</b>
+<i>1097</i>&nbsp;            throw new Error(&quot;unexpected type code: &quot; + typeCode);
+<b class="nc"><i>1098</i>&nbsp;        }</b>
+<b class="nc"><i>1099</i>&nbsp;    }</b>
+<i>1100</i>&nbsp;
+<b class="nc"><i>1101</i>&nbsp;    /**</b>
+<b class="nc"><i>1102</i>&nbsp;     * Write Java statements to marshal a series of values in order as</b>
+<i>1103</i>&nbsp;     * named in the &quot;names&quot; array, with types as specified in the &quot;types&quot;
+<b class="nc"><i>1104</i>&nbsp;     * array&quot;, to the java.io.ObjectOutput stream named &quot;stream&quot;.</b>
+<b class="nc"><i>1105</i>&nbsp;     */</b>
+<i>1106</i>&nbsp;    private static void writeMarshalArguments(IndentingWriter p,
+<b class="nc"><i>1107</i>&nbsp;                                              String streamName,</b>
+<b class="nc"><i>1108</i>&nbsp;                                              Type[] types, String[] names)</b>
+<i>1109</i>&nbsp;        throws IOException
+<b class="nc"><i>1110</i>&nbsp;    {</b>
+<b class="nc"><i>1111</i>&nbsp;        if (types.length != names.length) {</b>
+<i>1112</i>&nbsp;            throw new Error(&quot;parameter type and name arrays different sizes&quot;);
+<b class="nc"><i>1113</i>&nbsp;        }</b>
+<b class="nc"><i>1114</i>&nbsp;</b>
+<i>1115</i>&nbsp;        for (int i = 0; i &lt; types.length; i++) {
+<i>1116</i>&nbsp;            writeMarshalArgument(p, streamName, types[i], names[i]);
+<b class="nc"><i>1117</i>&nbsp;            p.pln(&quot;;&quot;);</b>
+<b class="nc"><i>1118</i>&nbsp;        }</b>
+<i>1119</i>&nbsp;    }
+<b class="nc"><i>1120</i>&nbsp;</b>
+<i>1121</i>&nbsp;    /**
+<i>1122</i>&nbsp;     * Write a snippet of Java code to unmarshal a value of type &quot;type&quot;
+<i>1123</i>&nbsp;     * from the java.io.ObjectInput stream named &quot;stream&quot; into a variable
+<i>1124</i>&nbsp;     * named &quot;name&quot; (if &quot;name&quot; is null, the value in unmarshalled and
+<i>1125</i>&nbsp;     * discarded).
+<i>1126</i>&nbsp;     *
+<i>1127</i>&nbsp;     * Primitive types are unmarshalled with their corresponding methods
+<i>1128</i>&nbsp;     * in the java.io.DataInput interface, and objects (including arrays)
+<i>1129</i>&nbsp;     * are unmarshalled using the readObject method.
+<i>1130</i>&nbsp;     */
+<i>1131</i>&nbsp;    private static boolean writeUnmarshalArgument(IndentingWriter p,
+<i>1132</i>&nbsp;                                                  String streamName,
+<i>1133</i>&nbsp;                                                  Type type, String name)
+<b class="nc"><i>1134</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>1135</i>&nbsp;    {</b>
+<i>1136</i>&nbsp;        boolean readObject = false;
+<i>1137</i>&nbsp;
+<b class="nc"><i>1138</i>&nbsp;        if (name != null) {</b>
+<b class="nc"><i>1139</i>&nbsp;            p.p(name + &quot; = &quot;);</b>
+<b class="nc"><i>1140</i>&nbsp;        }</b>
+<i>1141</i>&nbsp;
+<i>1142</i>&nbsp;        int typeCode = type.getTypeCode();
+<i>1143</i>&nbsp;        switch (type.getTypeCode()) {
+<i>1144</i>&nbsp;        case TC_BOOLEAN:
+<i>1145</i>&nbsp;            p.p(streamName + &quot;.readBoolean()&quot;);
+<i>1146</i>&nbsp;            break;
+<i>1147</i>&nbsp;        case TC_BYTE:
+<i>1148</i>&nbsp;            p.p(streamName + &quot;.readByte()&quot;);
+<i>1149</i>&nbsp;            break;
+<i>1150</i>&nbsp;        case TC_CHAR:
+<i>1151</i>&nbsp;            p.p(streamName + &quot;.readChar()&quot;);
+<i>1152</i>&nbsp;            break;
+<i>1153</i>&nbsp;        case TC_SHORT:
+<i>1154</i>&nbsp;            p.p(streamName + &quot;.readShort()&quot;);
+<i>1155</i>&nbsp;            break;
+<i>1156</i>&nbsp;        case TC_INT:
+<i>1157</i>&nbsp;            p.p(streamName + &quot;.readInt()&quot;);
+<i>1158</i>&nbsp;            break;
+<b class="nc"><i>1159</i>&nbsp;        case TC_LONG:</b>
+<i>1160</i>&nbsp;            p.p(streamName + &quot;.readLong()&quot;);
+<b class="nc"><i>1161</i>&nbsp;            break;</b>
+<b class="nc"><i>1162</i>&nbsp;        case TC_FLOAT:</b>
+<i>1163</i>&nbsp;            p.p(streamName + &quot;.readFloat()&quot;);
+<i>1164</i>&nbsp;            break;
+<b class="nc"><i>1165</i>&nbsp;        case TC_DOUBLE:</b>
+<b class="nc"><i>1166</i>&nbsp;            p.p(streamName + &quot;.readDouble()&quot;);</b>
+<i>1167</i>&nbsp;            break;
+<b class="nc"><i>1168</i>&nbsp;        case TC_ARRAY:</b>
+<b class="nc"><i>1169</i>&nbsp;        case TC_CLASS:</b>
+<i>1170</i>&nbsp;            p.p(&quot;(&quot; + type + &quot;) &quot; + streamName + &quot;.readObject()&quot;);
+<b class="nc"><i>1171</i>&nbsp;            readObject = true;</b>
+<b class="nc"><i>1172</i>&nbsp;            break;</b>
+<i>1173</i>&nbsp;        default:
+<b class="nc"><i>1174</i>&nbsp;            throw new Error(&quot;unexpected type code: &quot; + typeCode);</b>
+<b class="nc"><i>1175</i>&nbsp;        }</b>
+<i>1176</i>&nbsp;        return readObject;
+<b class="nc"><i>1177</i>&nbsp;    }</b>
+<b class="nc"><i>1178</i>&nbsp;</b>
+<i>1179</i>&nbsp;    /**
+<b class="nc"><i>1180</i>&nbsp;     * Write Java statements to unmarshal a series of values in order of</b>
+<b class="nc"><i>1181</i>&nbsp;     * types as in the &quot;types&quot; array from the java.io.ObjectInput stream</b>
+<i>1182</i>&nbsp;     * named &quot;stream&quot; into variables as named in &quot;names&quot; (for any element
+<b class="nc"><i>1183</i>&nbsp;     * of &quot;names&quot; that is null, the corresponding value is unmarshalled</b>
+<b class="nc"><i>1184</i>&nbsp;     * and discarded).</b>
+<i>1185</i>&nbsp;     */
+<b class="nc"><i>1186</i>&nbsp;    private static boolean writeUnmarshalArguments(IndentingWriter p,</b>
+<b class="nc"><i>1187</i>&nbsp;                                                   String streamName,</b>
+<i>1188</i>&nbsp;                                                   Type[] types,
+<b class="nc"><i>1189</i>&nbsp;                                                   String[] names)</b>
+<b class="nc"><i>1190</i>&nbsp;        throws IOException</b>
+<i>1191</i>&nbsp;    {
+<i>1192</i>&nbsp;        if (types.length != names.length) {
+<b class="nc"><i>1193</i>&nbsp;            throw new Error(&quot;parameter type and name arrays different sizes&quot;);</b>
+<b class="nc"><i>1194</i>&nbsp;        }</b>
+<b class="nc"><i>1195</i>&nbsp;</b>
+<i>1196</i>&nbsp;        boolean readObject = false;
+<b class="nc"><i>1197</i>&nbsp;        for (int i = 0; i &lt; types.length; i++) {</b>
+<i>1198</i>&nbsp;            if (writeUnmarshalArgument(p, streamName, types[i], names[i])) {
+<b class="nc"><i>1199</i>&nbsp;                readObject = true;</b>
+<i>1200</i>&nbsp;            }
+<i>1201</i>&nbsp;            p.pln(&quot;;&quot;);
+<i>1202</i>&nbsp;        }
+<i>1203</i>&nbsp;        return readObject;
+<i>1204</i>&nbsp;    }
+<i>1205</i>&nbsp;
+<i>1206</i>&nbsp;    /**
+<i>1207</i>&nbsp;     * Return a snippet of Java code to wrap a value named &quot;name&quot; of
+<i>1208</i>&nbsp;     * type &quot;type&quot; into an object as appropriate for use by the
+<i>1209</i>&nbsp;     * Java Reflection API.
+<i>1210</i>&nbsp;     *
+<i>1211</i>&nbsp;     * For primitive types, an appropriate wrapper class instantiated
+<i>1212</i>&nbsp;     * with the primitive value.  For object types (including arrays),
+<i>1213</i>&nbsp;     * no wrapping is necessary, so the value is named directly.
+<i>1214</i>&nbsp;     */
+<b class="nc"><i>1215</i>&nbsp;    private static String wrapArgumentCode(Type type, String name) {</b>
+<b class="nc"><i>1216</i>&nbsp;        int typeCode = type.getTypeCode();</b>
+<i>1217</i>&nbsp;        switch (typeCode) {
+<i>1218</i>&nbsp;        case TC_BOOLEAN:
+<b class="nc"><i>1219</i>&nbsp;            return (&quot;(&quot; + name +</b>
+<b class="nc"><i>1220</i>&nbsp;                    &quot; ? java.lang.Boolean.TRUE : java.lang.Boolean.FALSE)&quot;);</b>
+<b class="nc"><i>1221</i>&nbsp;        case TC_BYTE:</b>
+<b class="nc"><i>1222</i>&nbsp;            return &quot;new java.lang.Byte(&quot; + name + &quot;)&quot;;</b>
+<i>1223</i>&nbsp;        case TC_CHAR:
+<b class="nc"><i>1224</i>&nbsp;            return &quot;new java.lang.Character(&quot; + name + &quot;)&quot;;</b>
+<i>1225</i>&nbsp;        case TC_SHORT:
+<b class="nc"><i>1226</i>&nbsp;            return &quot;new java.lang.Short(&quot; + name + &quot;)&quot;;</b>
+<i>1227</i>&nbsp;        case TC_INT:
+<i>1228</i>&nbsp;            return &quot;new java.lang.Integer(&quot; + name + &quot;)&quot;;
+<i>1229</i>&nbsp;        case TC_LONG:
+<i>1230</i>&nbsp;            return &quot;new java.lang.Long(&quot; + name + &quot;)&quot;;
+<i>1231</i>&nbsp;        case TC_FLOAT:
+<i>1232</i>&nbsp;            return &quot;new java.lang.Float(&quot; + name + &quot;)&quot;;
+<i>1233</i>&nbsp;        case TC_DOUBLE:
+<i>1234</i>&nbsp;            return &quot;new java.lang.Double(&quot; + name + &quot;)&quot;;
+<i>1235</i>&nbsp;        case TC_ARRAY:
+<i>1236</i>&nbsp;        case TC_CLASS:
+<i>1237</i>&nbsp;            return name;
+<i>1238</i>&nbsp;        default:
+<b class="nc"><i>1239</i>&nbsp;            throw new Error(&quot;unexpected type code: &quot; + typeCode);</b>
+<b class="nc"><i>1240</i>&nbsp;        }</b>
+<i>1241</i>&nbsp;    }
+<b class="nc"><i>1242</i>&nbsp;</b>
+<i>1243</i>&nbsp;    /**
+<i>1244</i>&nbsp;     * Return a snippet of Java code to unwrap a value named &quot;name&quot; into
+<b class="nc"><i>1245</i>&nbsp;     * a value of type &quot;type&quot;, as appropriate for the Java Reflection API.</b>
+<i>1246</i>&nbsp;     *
+<b class="nc"><i>1247</i>&nbsp;     * For primitive types, the value is assumed to be of the corresponding</b>
+<i>1248</i>&nbsp;     * wrapper type, and a method is called on the wrapper type to retrieve
+<b class="nc"><i>1249</i>&nbsp;     * the primitive value.  For object types (include arrays), no</b>
+<i>1250</i>&nbsp;     * unwrapping is necessary; the value is simply cast to the expected
+<b class="nc"><i>1251</i>&nbsp;     * real object type.</b>
+<i>1252</i>&nbsp;     */
+<b class="nc"><i>1253</i>&nbsp;    private static String unwrapArgumentCode(Type type, String name) {</b>
+<i>1254</i>&nbsp;        int typeCode = type.getTypeCode();
+<b class="nc"><i>1255</i>&nbsp;        switch (typeCode) {</b>
+<i>1256</i>&nbsp;        case TC_BOOLEAN:
+<b class="nc"><i>1257</i>&nbsp;            return &quot;((java.lang.Boolean) &quot; + name + &quot;).booleanValue()&quot;;</b>
+<i>1258</i>&nbsp;        case TC_BYTE:
+<i>1259</i>&nbsp;            return &quot;((java.lang.Byte) &quot; + name + &quot;).byteValue()&quot;;
+<b class="nc"><i>1260</i>&nbsp;        case TC_CHAR:</b>
+<i>1261</i>&nbsp;            return &quot;((java.lang.Character) &quot; + name + &quot;).charValue()&quot;;
+<b class="nc"><i>1262</i>&nbsp;        case TC_SHORT:</b>
+<i>1263</i>&nbsp;            return &quot;((java.lang.Short) &quot; + name + &quot;).shortValue()&quot;;
+<i>1264</i>&nbsp;        case TC_INT:
+<i>1265</i>&nbsp;            return &quot;((java.lang.Integer) &quot; + name + &quot;).intValue()&quot;;
+<i>1266</i>&nbsp;        case TC_LONG:
+<i>1267</i>&nbsp;            return &quot;((java.lang.Long) &quot; + name + &quot;).longValue()&quot;;
+<i>1268</i>&nbsp;        case TC_FLOAT:
+<i>1269</i>&nbsp;            return &quot;((java.lang.Float) &quot; + name + &quot;).floatValue()&quot;;
+<i>1270</i>&nbsp;        case TC_DOUBLE:
+<i>1271</i>&nbsp;            return &quot;((java.lang.Double) &quot; + name + &quot;).doubleValue()&quot;;
+<i>1272</i>&nbsp;        case TC_ARRAY:
+<i>1273</i>&nbsp;        case TC_CLASS:
+<i>1274</i>&nbsp;            return &quot;((&quot; + type + &quot;) &quot; + name + &quot;)&quot;;
+<i>1275</i>&nbsp;        default:
+<i>1276</i>&nbsp;            throw new Error(&quot;unexpected type code: &quot; + typeCode);
+<b class="nc"><i>1277</i>&nbsp;        }</b>
+<b class="nc"><i>1278</i>&nbsp;    }</b>
+<i>1279</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

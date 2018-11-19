@@ -1,0 +1,497 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ObjectTable</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.rmi.transport</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ObjectTable (sun.rmi.transport)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ObjectTable</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 84)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">ObjectTable$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">ObjectTable$Reaper</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 17)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 101)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;package sun.rmi.transport;
+<i>26</i>&nbsp;
+<i>27</i>&nbsp;import java.lang.ref.ReferenceQueue;
+<i>28</i>&nbsp;import java.rmi.NoSuchObjectException;
+<i>29</i>&nbsp;import java.rmi.Remote;
+<i>30</i>&nbsp;import java.rmi.dgc.VMID;
+<i>31</i>&nbsp;import java.rmi.server.ExportException;
+<i>32</i>&nbsp;import java.rmi.server.ObjID;
+<i>33</i>&nbsp;import java.security.AccessController;
+<i>34</i>&nbsp;import java.security.PrivilegedAction;
+<i>35</i>&nbsp;import java.util.HashMap;
+<i>36</i>&nbsp;import java.util.Map;
+<i>37</i>&nbsp;import sun.rmi.runtime.Log;
+<i>38</i>&nbsp;import sun.rmi.runtime.NewThreadAction;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;/**
+<i>41</i>&nbsp; * Object table shared by all implementors of the Transport interface.
+<i>42</i>&nbsp; * This table maps object ids to remote object targets in this address
+<i>43</i>&nbsp; * space.
+<i>44</i>&nbsp; *
+<i>45</i>&nbsp; * @author  Ann Wollrath
+<i>46</i>&nbsp; * @author  Peter Jones
+<i>47</i>&nbsp; */
+<i>48</i>&nbsp;public final class ObjectTable {
+<i>49</i>&nbsp;
+<b class="nc"><i>50</i>&nbsp;    /** maximum interval between complete garbage collections of local heap */</b>
+<i>51</i>&nbsp;    private final static long gcInterval =              // default 1 hour
+<i>52</i>&nbsp;        AccessController.doPrivileged((PrivilegedAction&lt;Long&gt;) () -&gt;
+<b class="nc"><i>53</i>&nbsp;            Long.getLong(&quot;sun.rmi.dgc.server.gcInterval&quot;, 3600000));</b>
+<b class="nc"><i>54</i>&nbsp;</b>
+<i>55</i>&nbsp;    /**
+<i>56</i>&nbsp;     * lock guarding objTable and implTable.
+<i>57</i>&nbsp;     * Holders MAY acquire a Target instance&#39;s lock or keepAliveLock.
+<i>58</i>&nbsp;     */
+<i>59</i>&nbsp;    private static final Object tableLock = new Object();
+<i>60</i>&nbsp;
+<b class="nc"><i>61</i>&nbsp;    /** tables mapping to Target, keyed from ObjectEndpoint and impl object */</b>
+<i>62</i>&nbsp;    private static final Map&lt;ObjectEndpoint,Target&gt; objTable =
+<i>63</i>&nbsp;        new HashMap&lt;&gt;();
+<b class="nc"><i>64</i>&nbsp;    private static final Map&lt;WeakRef,Target&gt; implTable =</b>
+<i>65</i>&nbsp;        new HashMap&lt;&gt;();
+<b class="nc"><i>66</i>&nbsp;</b>
+<i>67</i>&nbsp;    /**
+<i>68</i>&nbsp;     * lock guarding keepAliveCount, reaper, and gcLatencyRequest.
+<i>69</i>&nbsp;     * Holders may NOT acquire a Target instance&#39;s lock or tableLock.
+<i>70</i>&nbsp;     */
+<i>71</i>&nbsp;    private static final Object keepAliveLock = new Object();
+<i>72</i>&nbsp;
+<b class="nc"><i>73</i>&nbsp;    /** count of non-permanent objects in table or still processing calls */</b>
+<i>74</i>&nbsp;    private static int keepAliveCount = 0;
+<i>75</i>&nbsp;
+<b class="nc"><i>76</i>&nbsp;    /** thread to collect unreferenced objects from table */</b>
+<i>77</i>&nbsp;    private static Thread reaper = null;
+<i>78</i>&nbsp;
+<b class="nc"><i>79</i>&nbsp;    /** queue notified when weak refs in the table are cleared */</b>
+<i>80</i>&nbsp;    static final ReferenceQueue&lt;Object&gt; reapQueue = new ReferenceQueue&lt;&gt;();
+<i>81</i>&nbsp;
+<b class="nc"><i>82</i>&nbsp;    /** handle for GC latency request (for future cancellation) */</b>
+<i>83</i>&nbsp;    private static GC.LatencyRequest gcLatencyRequest = null;
+<i>84</i>&nbsp;
+<b class="nc"><i>85</i>&nbsp;    /*</b>
+<i>86</i>&nbsp;     * Disallow anyone from creating one of these.
+<i>87</i>&nbsp;     */
+<i>88</i>&nbsp;    private ObjectTable() {}
+<i>89</i>&nbsp;
+<b class="nc"><i>90</i>&nbsp;    /**</b>
+<i>91</i>&nbsp;     * Returns the target associated with the object id.
+<i>92</i>&nbsp;     */
+<i>93</i>&nbsp;    static Target getTarget(ObjectEndpoint oe) {
+<i>94</i>&nbsp;        synchronized (tableLock) {
+<i>95</i>&nbsp;            return objTable.get(oe);
+<b class="nc"><i>96</i>&nbsp;        }</b>
+<b class="nc"><i>97</i>&nbsp;    }</b>
+<b class="nc"><i>98</i>&nbsp;</b>
+<i>99</i>&nbsp;    /**
+<i>100</i>&nbsp;     * Returns the target associated with the remote object
+<i>101</i>&nbsp;     */
+<i>102</i>&nbsp;    public static Target getTarget(Remote impl) {
+<i>103</i>&nbsp;        synchronized (tableLock) {
+<i>104</i>&nbsp;            return implTable.get(new WeakRef(impl));
+<b class="nc"><i>105</i>&nbsp;        }</b>
+<b class="nc"><i>106</i>&nbsp;    }</b>
+<b class="nc"><i>107</i>&nbsp;</b>
+<i>108</i>&nbsp;    /**
+<i>109</i>&nbsp;     * Returns the stub for the remote object &lt;b&gt;obj&lt;/b&gt; passed
+<i>110</i>&nbsp;     * as a parameter. This operation is only valid &lt;i&gt;after&lt;/i&gt;
+<i>111</i>&nbsp;     * the object has been exported.
+<i>112</i>&nbsp;     *
+<i>113</i>&nbsp;     * @return the stub for the remote object, &lt;b&gt;obj&lt;/b&gt;.
+<i>114</i>&nbsp;     * @exception NoSuchObjectException if the stub for the
+<i>115</i>&nbsp;     * remote object could not be found.
+<i>116</i>&nbsp;     */
+<i>117</i>&nbsp;    public static Remote getStub(Remote impl)
+<i>118</i>&nbsp;        throws NoSuchObjectException
+<i>119</i>&nbsp;    {
+<i>120</i>&nbsp;        Target target = getTarget(impl);
+<i>121</i>&nbsp;        if (target == null) {
+<b class="nc"><i>122</i>&nbsp;            throw new NoSuchObjectException(&quot;object not exported&quot;);</b>
+<b class="nc"><i>123</i>&nbsp;        } else {</b>
+<b class="nc"><i>124</i>&nbsp;            return target.getStub();</b>
+<i>125</i>&nbsp;        }
+<b class="nc"><i>126</i>&nbsp;    }</b>
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;   /**
+<i>129</i>&nbsp;    * Remove the remote object, obj, from the RMI runtime. If
+<i>130</i>&nbsp;    * successful, the object can no longer accept incoming RMI calls.
+<i>131</i>&nbsp;    * If the force parameter is true, the object is forcibly unexported
+<i>132</i>&nbsp;    * even if there are pending calls to the remote object or the
+<i>133</i>&nbsp;    * remote object still has calls in progress.  If the force
+<i>134</i>&nbsp;    * parameter is false, the object is only unexported if there are
+<i>135</i>&nbsp;    * no pending or in progress calls to the object.
+<i>136</i>&nbsp;    *
+<i>137</i>&nbsp;    * @param obj the remote object to be unexported
+<i>138</i>&nbsp;    * @param force if true, unexports the object even if there are
+<i>139</i>&nbsp;    * pending or in-progress calls; if false, only unexports the object
+<i>140</i>&nbsp;    * if there are no pending or in-progress calls
+<i>141</i>&nbsp;    * @return true if operation is successful, false otherwise
+<i>142</i>&nbsp;    * @exception NoSuchObjectException if the remote object is not
+<i>143</i>&nbsp;    * currently exported
+<i>144</i>&nbsp;    */
+<i>145</i>&nbsp;   public static boolean unexportObject(Remote obj, boolean force)
+<i>146</i>&nbsp;        throws java.rmi.NoSuchObjectException
+<i>147</i>&nbsp;    {
+<i>148</i>&nbsp;        synchronized (tableLock) {
+<i>149</i>&nbsp;            Target target = getTarget(obj);
+<b class="nc"><i>150</i>&nbsp;            if (target == null) {</b>
+<b class="nc"><i>151</i>&nbsp;                throw new NoSuchObjectException(&quot;object not exported&quot;);</b>
+<b class="nc"><i>152</i>&nbsp;            } else {</b>
+<b class="nc"><i>153</i>&nbsp;                if (target.unexport(force)) {</b>
+<i>154</i>&nbsp;                    removeTarget(target);
+<b class="nc"><i>155</i>&nbsp;                    return true;</b>
+<b class="nc"><i>156</i>&nbsp;                } else {</b>
+<b class="nc"><i>157</i>&nbsp;                    return false;</b>
+<i>158</i>&nbsp;                }
+<b class="nc"><i>159</i>&nbsp;            }</b>
+<i>160</i>&nbsp;        }
+<i>161</i>&nbsp;    }
+<b class="nc"><i>162</i>&nbsp;</b>
+<i>163</i>&nbsp;    /**
+<i>164</i>&nbsp;     * Add target to object table.  If it is not a permanent entry, then
+<i>165</i>&nbsp;     * make sure that reaper thread is running to remove collected entries
+<i>166</i>&nbsp;     * and keep VM alive.
+<i>167</i>&nbsp;     */
+<i>168</i>&nbsp;    static void putTarget(Target target) throws ExportException {
+<i>169</i>&nbsp;        ObjectEndpoint oe = target.getObjectEndpoint();
+<i>170</i>&nbsp;        WeakRef weakImpl = target.getWeakImpl();
+<b class="nc"><i>171</i>&nbsp;</b>
+<b class="nc"><i>172</i>&nbsp;        if (DGCImpl.dgcLog.isLoggable(Log.VERBOSE)) {</b>
+<i>173</i>&nbsp;            DGCImpl.dgcLog.log(Log.VERBOSE, &quot;add object &quot; + oe);
+<b class="nc"><i>174</i>&nbsp;        }</b>
+<b class="nc"><i>175</i>&nbsp;</b>
+<i>176</i>&nbsp;        synchronized (tableLock) {
+<i>177</i>&nbsp;            /**
+<b class="nc"><i>178</i>&nbsp;             * Do nothing if impl has already been collected (see 6597112). Check while</b>
+<i>179</i>&nbsp;             * holding tableLock to ensure that Reaper cannot process weakImpl in between
+<i>180</i>&nbsp;             * null check and put/increment effects.
+<i>181</i>&nbsp;             */
+<i>182</i>&nbsp;            if (target.getImpl() != null) {
+<i>183</i>&nbsp;                if (objTable.containsKey(oe)) {
+<b class="nc"><i>184</i>&nbsp;                    throw new ExportException(</b>
+<b class="nc"><i>185</i>&nbsp;                        &quot;internal error: ObjID already in use&quot;);</b>
+<b class="nc"><i>186</i>&nbsp;                } else if (implTable.containsKey(weakImpl)) {</b>
+<i>187</i>&nbsp;                    throw new ExportException(&quot;object already exported&quot;);
+<b class="nc"><i>188</i>&nbsp;                }</b>
+<b class="nc"><i>189</i>&nbsp;</b>
+<i>190</i>&nbsp;                objTable.put(oe, target);
+<i>191</i>&nbsp;                implTable.put(weakImpl, target);
+<b class="nc"><i>192</i>&nbsp;</b>
+<b class="nc"><i>193</i>&nbsp;                if (!target.isPermanent()) {</b>
+<i>194</i>&nbsp;                    incrementKeepAliveCount();
+<b class="nc"><i>195</i>&nbsp;                }</b>
+<b class="nc"><i>196</i>&nbsp;            }</b>
+<i>197</i>&nbsp;        }
+<i>198</i>&nbsp;    }
+<b class="nc"><i>199</i>&nbsp;</b>
+<i>200</i>&nbsp;    /**
+<i>201</i>&nbsp;     * Remove target from object table.
+<i>202</i>&nbsp;     *
+<i>203</i>&nbsp;     * NOTE: This method must only be invoked while synchronized on
+<i>204</i>&nbsp;     * the &quot;tableLock&quot; object, because it does not do so itself.
+<i>205</i>&nbsp;     */
+<i>206</i>&nbsp;    private static void removeTarget(Target target) {
+<i>207</i>&nbsp;        // assert Thread.holdsLock(tableLock);
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;        ObjectEndpoint oe = target.getObjectEndpoint();
+<i>210</i>&nbsp;        WeakRef weakImpl = target.getWeakImpl();
+<b class="nc"><i>211</i>&nbsp;</b>
+<b class="nc"><i>212</i>&nbsp;        if (DGCImpl.dgcLog.isLoggable(Log.VERBOSE)) {</b>
+<i>213</i>&nbsp;            DGCImpl.dgcLog.log(Log.VERBOSE, &quot;remove object &quot; + oe);
+<b class="nc"><i>214</i>&nbsp;        }</b>
+<b class="nc"><i>215</i>&nbsp;</b>
+<i>216</i>&nbsp;        objTable.remove(oe);
+<i>217</i>&nbsp;        implTable.remove(weakImpl);
+<b class="nc"><i>218</i>&nbsp;</b>
+<b class="nc"><i>219</i>&nbsp;        target.markRemoved();   // handles decrementing keep-alive count</b>
+<i>220</i>&nbsp;    }
+<b class="nc"><i>221</i>&nbsp;</b>
+<i>222</i>&nbsp;    /**
+<i>223</i>&nbsp;     * Process client VM signalling reference for given ObjID: forward to
+<i>224</i>&nbsp;     * corresponding Target entry.  If ObjID is not found in table,
+<i>225</i>&nbsp;     * no action is taken.
+<i>226</i>&nbsp;     */
+<i>227</i>&nbsp;    static void referenced(ObjID id, long sequenceNum, VMID vmid) {
+<i>228</i>&nbsp;        synchronized (tableLock) {
+<i>229</i>&nbsp;            ObjectEndpoint oe =
+<b class="nc"><i>230</i>&nbsp;                new ObjectEndpoint(id, Transport.currentTransport());</b>
+<b class="nc"><i>231</i>&nbsp;            Target target = objTable.get(oe);</b>
+<b class="nc"><i>232</i>&nbsp;            if (target != null) {</b>
+<b class="nc"><i>233</i>&nbsp;                target.referenced(sequenceNum, vmid);</b>
+<b class="nc"><i>234</i>&nbsp;            }</b>
+<b class="nc"><i>235</i>&nbsp;        }</b>
+<i>236</i>&nbsp;    }
+<b class="nc"><i>237</i>&nbsp;</b>
+<i>238</i>&nbsp;    /**
+<i>239</i>&nbsp;     * Process client VM dropping reference for given ObjID: forward to
+<i>240</i>&nbsp;     * corresponding Target entry.  If ObjID is not found in table,
+<i>241</i>&nbsp;     * no action is taken.
+<i>242</i>&nbsp;     */
+<i>243</i>&nbsp;    static void unreferenced(ObjID id, long sequenceNum, VMID vmid,
+<i>244</i>&nbsp;                             boolean strong)
+<i>245</i>&nbsp;    {
+<i>246</i>&nbsp;        synchronized (tableLock) {
+<i>247</i>&nbsp;            ObjectEndpoint oe =
+<b class="nc"><i>248</i>&nbsp;                new ObjectEndpoint(id, Transport.currentTransport());</b>
+<b class="nc"><i>249</i>&nbsp;            Target target = objTable.get(oe);</b>
+<b class="nc"><i>250</i>&nbsp;            if (target != null)</b>
+<b class="nc"><i>251</i>&nbsp;                target.unreferenced(sequenceNum, vmid, strong);</b>
+<b class="nc"><i>252</i>&nbsp;        }</b>
+<b class="nc"><i>253</i>&nbsp;    }</b>
+<b class="nc"><i>254</i>&nbsp;</b>
+<i>255</i>&nbsp;    /**
+<i>256</i>&nbsp;     * Increments the &quot;keep-alive count&quot;.
+<i>257</i>&nbsp;     *
+<i>258</i>&nbsp;     * The &quot;keep-alive count&quot; is the number of non-permanent remote objects
+<i>259</i>&nbsp;     * that are either in the object table or still have calls in progress.
+<i>260</i>&nbsp;     * Therefore, this method should be invoked exactly once for every
+<i>261</i>&nbsp;     * non-permanent remote object exported (a remote object must be
+<i>262</i>&nbsp;     * exported before it can have any calls in progress).
+<i>263</i>&nbsp;     *
+<i>264</i>&nbsp;     * The VM is &quot;kept alive&quot; while the keep-alive count is greater than
+<i>265</i>&nbsp;     * zero; this is accomplished by keeping a non-daemon thread running.
+<i>266</i>&nbsp;     *
+<i>267</i>&nbsp;     * Because non-permanent objects are those that can be garbage
+<i>268</i>&nbsp;     * collected while exported, and thus those for which the &quot;reaper&quot;
+<i>269</i>&nbsp;     * thread operates, the reaper thread also serves as the non-daemon
+<i>270</i>&nbsp;     * VM keep-alive thread; a new reaper thread is created if necessary.
+<i>271</i>&nbsp;     */
+<i>272</i>&nbsp;    static void incrementKeepAliveCount() {
+<i>273</i>&nbsp;        synchronized (keepAliveLock) {
+<i>274</i>&nbsp;            keepAliveCount++;
+<b class="nc"><i>275</i>&nbsp;</b>
+<b class="nc"><i>276</i>&nbsp;            if (reaper == null) {</b>
+<i>277</i>&nbsp;                reaper = AccessController.doPrivileged(
+<b class="nc"><i>278</i>&nbsp;                    new NewThreadAction(new Reaper(), &quot;Reaper&quot;, false));</b>
+<b class="nc"><i>279</i>&nbsp;                reaper.start();</b>
+<i>280</i>&nbsp;            }
+<b class="nc"><i>281</i>&nbsp;</b>
+<i>282</i>&nbsp;            /*
+<i>283</i>&nbsp;             * While there are non-&quot;permanent&quot; objects in the object table,
+<i>284</i>&nbsp;             * request a maximum latency for inspecting the entire heap
+<i>285</i>&nbsp;             * from the local garbage collector, to place an upper bound
+<i>286</i>&nbsp;             * on the time to discover remote objects that have become
+<i>287</i>&nbsp;             * unreachable (and thus can be removed from the table).
+<i>288</i>&nbsp;             */
+<i>289</i>&nbsp;            if (gcLatencyRequest == null) {
+<i>290</i>&nbsp;                gcLatencyRequest = GC.requestLatency(gcInterval);
+<b class="nc"><i>291</i>&nbsp;            }</b>
+<b class="nc"><i>292</i>&nbsp;        }</b>
+<i>293</i>&nbsp;    }
+<b class="nc"><i>294</i>&nbsp;</b>
+<i>295</i>&nbsp;    /**
+<i>296</i>&nbsp;     * Decrements the &quot;keep-alive count&quot;.
+<i>297</i>&nbsp;     *
+<i>298</i>&nbsp;     * The &quot;keep-alive count&quot; is the number of non-permanent remote objects
+<i>299</i>&nbsp;     * that are either in the object table or still have calls in progress.
+<i>300</i>&nbsp;     * Therefore, this method should be invoked exactly once for every
+<i>301</i>&nbsp;     * previously-exported non-permanent remote object that both has been
+<i>302</i>&nbsp;     * removed from the object table and has no calls still in progress.
+<i>303</i>&nbsp;     *
+<i>304</i>&nbsp;     * If the keep-alive count is decremented to zero, then the current
+<i>305</i>&nbsp;     * reaper thread is terminated to cease keeping the VM alive (and
+<i>306</i>&nbsp;     * because there are no more non-permanent remote objects to reap).
+<i>307</i>&nbsp;     */
+<i>308</i>&nbsp;    static void decrementKeepAliveCount() {
+<i>309</i>&nbsp;        synchronized (keepAliveLock) {
+<i>310</i>&nbsp;            keepAliveCount--;
+<b class="nc"><i>311</i>&nbsp;</b>
+<b class="nc"><i>312</i>&nbsp;            if (keepAliveCount == 0) {</b>
+<i>313</i>&nbsp;                if (!(reaper != null)) { throw new AssertionError(); }
+<b class="nc"><i>314</i>&nbsp;                AccessController.doPrivileged(new PrivilegedAction&lt;Void&gt;() {</b>
+<b class="nc"><i>315</i>&nbsp;                    public Void run() {</b>
+<b class="nc"><i>316</i>&nbsp;                        reaper.interrupt();</b>
+<i>317</i>&nbsp;                        return null;
+<b class="nc"><i>318</i>&nbsp;                    }</b>
+<b class="nc"><i>319</i>&nbsp;                });</b>
+<i>320</i>&nbsp;                reaper = null;
+<i>321</i>&nbsp;
+<b class="nc"><i>322</i>&nbsp;                /*</b>
+<i>323</i>&nbsp;                 * If there are no longer any non-permanent objects in the
+<i>324</i>&nbsp;                 * object table, we are no longer concerned with the latency
+<i>325</i>&nbsp;                 * of local garbage collection here.
+<i>326</i>&nbsp;                 */
+<i>327</i>&nbsp;                gcLatencyRequest.cancel();
+<i>328</i>&nbsp;                gcLatencyRequest = null;
+<b class="nc"><i>329</i>&nbsp;            }</b>
+<b class="nc"><i>330</i>&nbsp;        }</b>
+<i>331</i>&nbsp;    }
+<b class="nc"><i>332</i>&nbsp;</b>
+<i>333</i>&nbsp;    /**
+<i>334</i>&nbsp;     * The Reaper thread waits for notifications that weak references in the
+<i>335</i>&nbsp;     * object table have been cleared.  When it receives a notification, it
+<i>336</i>&nbsp;     * removes the corresponding entry from the table.
+<i>337</i>&nbsp;     *
+<i>338</i>&nbsp;     * Since the Reaper is created as a non-daemon thread, it also serves
+<i>339</i>&nbsp;     * to keep the VM from exiting while there are objects in the table
+<i>340</i>&nbsp;     * (other than permanent entries that should neither be reaped nor
+<i>341</i>&nbsp;     * keep the VM alive).
+<i>342</i>&nbsp;     */
+<i>343</i>&nbsp;    private static class Reaper implements Runnable {
+<i>344</i>&nbsp;
+<b class="nc"><i>345</i>&nbsp;        public void run() {</b>
+<i>346</i>&nbsp;            try {
+<i>347</i>&nbsp;                do {
+<i>348</i>&nbsp;                    // wait for next cleared weak reference
+<i>349</i>&nbsp;                    WeakRef weakImpl = (WeakRef) reapQueue.remove();
+<i>350</i>&nbsp;
+<b class="nc"><i>351</i>&nbsp;                    synchronized (tableLock) {</b>
+<i>352</i>&nbsp;                        Target target = implTable.get(weakImpl);
+<b class="nc"><i>353</i>&nbsp;                        if (target != null) {</b>
+<b class="nc"><i>354</i>&nbsp;                            if (!target.isEmpty()) {</b>
+<b class="nc"><i>355</i>&nbsp;                                throw new Error(</b>
+<b class="nc"><i>356</i>&nbsp;                                    &quot;object with known references collected&quot;);</b>
+<b class="nc"><i>357</i>&nbsp;                            } else if (target.isPermanent()) {</b>
+<i>358</i>&nbsp;                                throw new Error(&quot;permanent object collected&quot;);
+<b class="nc"><i>359</i>&nbsp;                            }</b>
+<b class="nc"><i>360</i>&nbsp;                            removeTarget(target);</b>
+<i>361</i>&nbsp;                        }
+<b class="nc"><i>362</i>&nbsp;                    }</b>
+<i>363</i>&nbsp;                } while (!Thread.interrupted());
+<b class="nc"><i>364</i>&nbsp;            } catch (InterruptedException e) {</b>
+<b class="nc"><i>365</i>&nbsp;                // pass away if interrupted</b>
+<b class="nc"><i>366</i>&nbsp;            }</b>
+<i>367</i>&nbsp;        }
+<b class="nc"><i>368</i>&nbsp;    }</b>
+<i>369</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,871 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Base64</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.org.apache.xml.internal.security.utils</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Base64 (com.sun.org.apache.xml.internal.security.utils)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Base64</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 24)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 316)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; */
+<i>5</i>&nbsp;/**
+<i>6</i>&nbsp; * Licensed to the Apache Software Foundation (ASF) under one
+<i>7</i>&nbsp; * or more contributor license agreements. See the NOTICE file
+<i>8</i>&nbsp; * distributed with this work for additional information
+<i>9</i>&nbsp; * regarding copyright ownership. The ASF licenses this file
+<i>10</i>&nbsp; * to you under the Apache License, Version 2.0 (the
+<i>11</i>&nbsp; * &quot;License&quot;); you may not use this file except in compliance
+<i>12</i>&nbsp; * with the License. You may obtain a copy of the License at
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; * http://www.apache.org/licenses/LICENSE-2.0
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; * Unless required by applicable law or agreed to in writing,
+<i>17</i>&nbsp; * software distributed under the License is distributed on an
+<i>18</i>&nbsp; * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+<i>19</i>&nbsp; * KIND, either express or implied. See the License for the
+<i>20</i>&nbsp; * specific language governing permissions and limitations
+<i>21</i>&nbsp; * under the License.
+<i>22</i>&nbsp; */
+<i>23</i>&nbsp;package com.sun.org.apache.xml.internal.security.utils;
+<i>24</i>&nbsp;
+<i>25</i>&nbsp;import java.io.BufferedReader;
+<i>26</i>&nbsp;import java.io.IOException;
+<i>27</i>&nbsp;import java.io.InputStream;
+<i>28</i>&nbsp;import java.io.OutputStream;
+<i>29</i>&nbsp;import java.math.BigInteger;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;import com.sun.org.apache.xml.internal.security.exceptions.Base64DecodingException;
+<i>32</i>&nbsp;import org.w3c.dom.Document;
+<i>33</i>&nbsp;import org.w3c.dom.Element;
+<i>34</i>&nbsp;import org.w3c.dom.Node;
+<i>35</i>&nbsp;import org.w3c.dom.Text;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;/**
+<i>38</i>&nbsp; * Implementation of MIME&#39;s Base64 encoding and decoding conversions.
+<i>39</i>&nbsp; * Optimized code. (raw version taken from oreilly.jonathan.util,
+<i>40</i>&nbsp; * and currently org.apache.xerces.ds.util.Base64)
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * @see &lt;A HREF=&quot;ftp://ftp.isi.edu/in-notes/rfc2045.txt&quot;&gt;RFC 2045&lt;/A&gt;
+<i>43</i>&nbsp; * @see com.sun.org.apache.xml.internal.security.transforms.implementations.TransformBase64Decode
+<i>44</i>&nbsp; */
+<i>45</i>&nbsp;@Deprecated
+<i>46</i>&nbsp;public class Base64 {
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;    /** Field BASE64DEFAULTLENGTH */
+<i>49</i>&nbsp;    public static final int BASE64DEFAULTLENGTH = 76;
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;    private static final int BASELENGTH = 255;
+<i>52</i>&nbsp;    private static final int LOOKUPLENGTH = 64;
+<i>53</i>&nbsp;    private static final int TWENTYFOURBITGROUP = 24;
+<i>54</i>&nbsp;    private static final int EIGHTBIT = 8;
+<i>55</i>&nbsp;    private static final int SIXTEENBIT = 16;
+<i>56</i>&nbsp;    private static final int FOURBYTE = 4;
+<i>57</i>&nbsp;    private static final int SIGN = -128;
+<i>58</i>&nbsp;    private static final char PAD = &#39;=&#39;;
+<i>59</i>&nbsp;    private static final byte [] base64Alphabet = new byte[BASELENGTH];
+<i>60</i>&nbsp;    private static final char [] lookUpBase64Alphabet = new char[LOOKUPLENGTH];
+<b class="nc"><i>61</i>&nbsp;</b>
+<b class="nc"><i>62</i>&nbsp;    static {</b>
+<i>63</i>&nbsp;        for (int i = 0; i &lt; BASELENGTH; i++) {
+<i>64</i>&nbsp;            base64Alphabet[i] = -1;
+<b class="nc"><i>65</i>&nbsp;        }</b>
+<b class="nc"><i>66</i>&nbsp;        for (int i = &#39;Z&#39;; i &gt;= &#39;A&#39;; i--) {</b>
+<i>67</i>&nbsp;            base64Alphabet[i] = (byte) (i - &#39;A&#39;);
+<b class="nc"><i>68</i>&nbsp;        }</b>
+<b class="nc"><i>69</i>&nbsp;        for (int i = &#39;z&#39;; i&gt;= &#39;a&#39;; i--) {</b>
+<i>70</i>&nbsp;            base64Alphabet[i] = (byte) (i - &#39;a&#39; + 26);
+<b class="nc"><i>71</i>&nbsp;        }</b>
+<b class="nc"><i>72</i>&nbsp;</b>
+<i>73</i>&nbsp;        for (int i = &#39;9&#39;; i &gt;= &#39;0&#39;; i--) {
+<i>74</i>&nbsp;            base64Alphabet[i] = (byte) (i - &#39;0&#39; + 52);
+<b class="nc"><i>75</i>&nbsp;        }</b>
+<b class="nc"><i>76</i>&nbsp;</b>
+<i>77</i>&nbsp;        base64Alphabet[&#39;+&#39;] = 62;
+<i>78</i>&nbsp;        base64Alphabet[&#39;/&#39;] = 63;
+<b class="nc"><i>79</i>&nbsp;</b>
+<b class="nc"><i>80</i>&nbsp;        for (int i = 0; i &lt;= 25; i++) {</b>
+<i>81</i>&nbsp;            lookUpBase64Alphabet[i] = (char)(&#39;A&#39; + i);
+<b class="nc"><i>82</i>&nbsp;        }</b>
+<b class="nc"><i>83</i>&nbsp;</b>
+<i>84</i>&nbsp;        for (int i = 26,  j = 0; i &lt;= 51; i++, j++) {
+<i>85</i>&nbsp;            lookUpBase64Alphabet[i] = (char)(&#39;a&#39; + j);
+<b class="nc"><i>86</i>&nbsp;        }</b>
+<b class="nc"><i>87</i>&nbsp;</b>
+<i>88</i>&nbsp;        for (int i = 52,  j = 0; i &lt;= 61; i++, j++) {
+<i>89</i>&nbsp;            lookUpBase64Alphabet[i] = (char)(&#39;0&#39; + j);
+<b class="nc"><i>90</i>&nbsp;        }</b>
+<b class="nc"><i>91</i>&nbsp;        lookUpBase64Alphabet[62] = &#39;+&#39;;</b>
+<i>92</i>&nbsp;        lookUpBase64Alphabet[63] = &#39;/&#39;;
+<b class="nc"><i>93</i>&nbsp;    }</b>
+<b class="nc"><i>94</i>&nbsp;</b>
+<i>95</i>&nbsp;    private Base64() {
+<i>96</i>&nbsp;        // we don&#39;t allow instantiation
+<b class="nc"><i>97</i>&nbsp;    }</b>
+<i>98</i>&nbsp;
+<i>99</i>&nbsp;    /**
+<i>100</i>&nbsp;     * Returns a byte-array representation of a &lt;code&gt;{@link BigInteger}&lt;code&gt;.
+<i>101</i>&nbsp;     * No sign-bit is output.
+<i>102</i>&nbsp;     *
+<i>103</i>&nbsp;     * &lt;b&gt;N.B.:&lt;/B&gt; &lt;code&gt;{@link BigInteger}&lt;code&gt;&#39;s toByteArray
+<i>104</i>&nbsp;     * returns eventually longer arrays because of the leading sign-bit.
+<i>105</i>&nbsp;     *
+<i>106</i>&nbsp;     * @param big {@code BigInteger} to be converted
+<i>107</i>&nbsp;     * @param bitlen {@code int} the desired length in bits of the representation
+<i>108</i>&nbsp;     * @return a byte array with {@code bitlen} bits of {@code big}
+<i>109</i>&nbsp;     */
+<i>110</i>&nbsp;    static final byte[] getBytes(BigInteger big, int bitlen) {
+<i>111</i>&nbsp;
+<i>112</i>&nbsp;        //round bitlen
+<i>113</i>&nbsp;        bitlen = ((bitlen + 7) &gt;&gt; 3) &lt;&lt; 3;
+<i>114</i>&nbsp;
+<b class="nc"><i>115</i>&nbsp;        if (bitlen &lt; big.bitLength()) {</b>
+<i>116</i>&nbsp;            throw new IllegalArgumentException(I18n.translate(&quot;utils.Base64.IllegalBitlength&quot;));
+<b class="nc"><i>117</i>&nbsp;        }</b>
+<b class="nc"><i>118</i>&nbsp;</b>
+<i>119</i>&nbsp;        byte[] bigBytes = big.toByteArray();
+<i>120</i>&nbsp;
+<b class="nc"><i>121</i>&nbsp;        if (big.bitLength() % 8 != 0</b>
+<i>122</i>&nbsp;            &amp;&amp; big.bitLength() / 8 + 1 == bitlen / 8) {
+<b class="nc"><i>123</i>&nbsp;            return bigBytes;</b>
+<b class="nc"><i>124</i>&nbsp;        }</b>
+<b class="nc"><i>125</i>&nbsp;</b>
+<i>126</i>&nbsp;        // some copying needed
+<i>127</i>&nbsp;        int startSrc = 0;    // no need to skip anything
+<i>128</i>&nbsp;        int bigLen = bigBytes.length;    //valid length of the string
+<b class="nc"><i>129</i>&nbsp;</b>
+<b class="nc"><i>130</i>&nbsp;        if (big.bitLength() % 8 == 0) {    // correct values</b>
+<i>131</i>&nbsp;            startSrc = 1;    // skip sign bit
+<b class="nc"><i>132</i>&nbsp;</b>
+<b class="nc"><i>133</i>&nbsp;            bigLen--;    // valid length of the string</b>
+<i>134</i>&nbsp;        }
+<b class="nc"><i>135</i>&nbsp;</b>
+<i>136</i>&nbsp;        int startDst = bitlen / 8 - bigLen;    //pad with leading nulls
+<i>137</i>&nbsp;        byte[] resizedBytes = new byte[bitlen / 8];
+<b class="nc"><i>138</i>&nbsp;</b>
+<b class="nc"><i>139</i>&nbsp;        System.arraycopy(bigBytes, startSrc, resizedBytes, startDst, bigLen);</b>
+<i>140</i>&nbsp;
+<b class="nc"><i>141</i>&nbsp;        return resizedBytes;</b>
+<i>142</i>&nbsp;    }
+<b class="nc"><i>143</i>&nbsp;</b>
+<i>144</i>&nbsp;    /**
+<i>145</i>&nbsp;     * Encode in Base64 the given {@code {@link BigInteger}}.
+<i>146</i>&nbsp;     *
+<i>147</i>&nbsp;     * @param big
+<i>148</i>&nbsp;     * @return String with Base64 encoding
+<i>149</i>&nbsp;     */
+<i>150</i>&nbsp;    public static final String encode(BigInteger big) {
+<i>151</i>&nbsp;        return encode(getBytes(big, big.bitLength()));
+<i>152</i>&nbsp;    }
+<b class="nc"><i>153</i>&nbsp;</b>
+<i>154</i>&nbsp;    /**
+<i>155</i>&nbsp;     * Returns a byte-array representation of a {@code {@link BigInteger}}.
+<i>156</i>&nbsp;     * No sign-bit is output.
+<i>157</i>&nbsp;     *
+<i>158</i>&nbsp;     * &lt;b&gt;N.B.:&lt;/B&gt; {@code {@link BigInteger}}&#39;s toByteArray
+<i>159</i>&nbsp;     * returns eventually longer arrays because of the leading sign-bit.
+<i>160</i>&nbsp;     *
+<i>161</i>&nbsp;     * @param big {@code BigInteger} to be converted
+<i>162</i>&nbsp;     * @param bitlen {@code int} the desired length in bits of the representation
+<i>163</i>&nbsp;     * @return a byte array with {@code bitlen} bits of {@code big}
+<i>164</i>&nbsp;     */
+<i>165</i>&nbsp;    public static final byte[] encode(BigInteger big, int bitlen) {
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;        //round bitlen
+<i>168</i>&nbsp;        bitlen = ((bitlen + 7) &gt;&gt; 3) &lt;&lt; 3;
+<i>169</i>&nbsp;
+<b class="nc"><i>170</i>&nbsp;        if (bitlen &lt; big.bitLength()) {</b>
+<i>171</i>&nbsp;            throw new IllegalArgumentException(I18n.translate(&quot;utils.Base64.IllegalBitlength&quot;));
+<b class="nc"><i>172</i>&nbsp;        }</b>
+<b class="nc"><i>173</i>&nbsp;</b>
+<i>174</i>&nbsp;        byte[] bigBytes = big.toByteArray();
+<i>175</i>&nbsp;
+<b class="nc"><i>176</i>&nbsp;        if (big.bitLength() % 8 != 0</b>
+<i>177</i>&nbsp;            &amp;&amp; big.bitLength() / 8 + 1 == bitlen / 8) {
+<b class="nc"><i>178</i>&nbsp;            return bigBytes;</b>
+<b class="nc"><i>179</i>&nbsp;        }</b>
+<b class="nc"><i>180</i>&nbsp;</b>
+<i>181</i>&nbsp;        // some copying needed
+<i>182</i>&nbsp;        int startSrc = 0;    // no need to skip anything
+<i>183</i>&nbsp;        int bigLen = bigBytes.length;    //valid length of the string
+<b class="nc"><i>184</i>&nbsp;</b>
+<b class="nc"><i>185</i>&nbsp;        if (big.bitLength() % 8 == 0) {    // correct values</b>
+<i>186</i>&nbsp;            startSrc = 1;    // skip sign bit
+<b class="nc"><i>187</i>&nbsp;</b>
+<b class="nc"><i>188</i>&nbsp;            bigLen--;    // valid length of the string</b>
+<i>189</i>&nbsp;        }
+<b class="nc"><i>190</i>&nbsp;</b>
+<i>191</i>&nbsp;        int startDst = bitlen / 8 - bigLen;    //pad with leading nulls
+<i>192</i>&nbsp;        byte[] resizedBytes = new byte[bitlen / 8];
+<b class="nc"><i>193</i>&nbsp;</b>
+<b class="nc"><i>194</i>&nbsp;        System.arraycopy(bigBytes, startSrc, resizedBytes, startDst, bigLen);</b>
+<i>195</i>&nbsp;
+<b class="nc"><i>196</i>&nbsp;        return resizedBytes;</b>
+<i>197</i>&nbsp;    }
+<b class="nc"><i>198</i>&nbsp;</b>
+<i>199</i>&nbsp;    /**
+<i>200</i>&nbsp;     * Method decodeBigIntegerFromElement
+<i>201</i>&nbsp;     *
+<i>202</i>&nbsp;     * @param element
+<i>203</i>&nbsp;     * @return the biginteger obtained from the node
+<i>204</i>&nbsp;     * @throws Base64DecodingException
+<i>205</i>&nbsp;     */
+<i>206</i>&nbsp;    public static final BigInteger decodeBigIntegerFromElement(Element element)
+<i>207</i>&nbsp;        throws Base64DecodingException {
+<i>208</i>&nbsp;        return new BigInteger(1, Base64.decode(element));
+<i>209</i>&nbsp;    }
+<b class="nc"><i>210</i>&nbsp;</b>
+<i>211</i>&nbsp;    /**
+<i>212</i>&nbsp;     * Decode a base 64 string into a {@link BigInteger}
+<i>213</i>&nbsp;     * @param base64str Base 64 encoded string.
+<i>214</i>&nbsp;     * @return a decoded BigInteger
+<i>215</i>&nbsp;     * @throws Base64DecodingException
+<i>216</i>&nbsp;     */
+<i>217</i>&nbsp;    public static BigInteger decodeBigIntegerFromString(String base64str)
+<i>218</i>&nbsp;            throws Base64DecodingException {
+<i>219</i>&nbsp;        return new BigInteger(1, Base64.decode(base64str));
+<i>220</i>&nbsp;    }
+<i>221</i>&nbsp;
+<b class="nc"><i>222</i>&nbsp;    /**</b>
+<i>223</i>&nbsp;     * This method takes an (empty) Element and a BigInteger and adds the
+<i>224</i>&nbsp;     * base64 encoded BigInteger to the Element.
+<i>225</i>&nbsp;     *
+<i>226</i>&nbsp;     * @param element
+<i>227</i>&nbsp;     * @param biginteger
+<i>228</i>&nbsp;     */
+<i>229</i>&nbsp;    public static final void fillElementWithBigInteger(Element element, BigInteger biginteger) {
+<i>230</i>&nbsp;
+<i>231</i>&nbsp;        String encodedInt = encode(biginteger);
+<i>232</i>&nbsp;
+<i>233</i>&nbsp;        if (!XMLUtils.ignoreLineBreaks() &amp;&amp; encodedInt.length() &gt; BASE64DEFAULTLENGTH) {
+<b class="nc"><i>234</i>&nbsp;            encodedInt = &quot;\n&quot; + encodedInt + &quot;\n&quot;;</b>
+<i>235</i>&nbsp;        }
+<b class="nc"><i>236</i>&nbsp;</b>
+<b class="nc"><i>237</i>&nbsp;        Document doc = element.getOwnerDocument();</b>
+<i>238</i>&nbsp;        Text text = doc.createTextNode(encodedInt);
+<i>239</i>&nbsp;
+<b class="nc"><i>240</i>&nbsp;        element.appendChild(text);</b>
+<b class="nc"><i>241</i>&nbsp;    }</b>
+<i>242</i>&nbsp;
+<b class="nc"><i>243</i>&nbsp;    /**</b>
+<i>244</i>&nbsp;     * Method decode
+<i>245</i>&nbsp;     *
+<i>246</i>&nbsp;     * Takes the {@code Text} children of the Element and interprets
+<i>247</i>&nbsp;     * them as input for the {@code Base64.decode()} function.
+<i>248</i>&nbsp;     *
+<i>249</i>&nbsp;     * @param element
+<i>250</i>&nbsp;     * @return the byte obtained of the decoding the element
+<i>251</i>&nbsp;     * $todo$ not tested yet
+<i>252</i>&nbsp;     * @throws Base64DecodingException
+<i>253</i>&nbsp;     */
+<i>254</i>&nbsp;    public static final byte[] decode(Element element) throws Base64DecodingException {
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;        Node sibling = element.getFirstChild();
+<i>257</i>&nbsp;        StringBuilder sb = new StringBuilder();
+<i>258</i>&nbsp;
+<b class="nc"><i>259</i>&nbsp;        while (sibling != null) {</b>
+<b class="nc"><i>260</i>&nbsp;            if (sibling.getNodeType() == Node.TEXT_NODE) {</b>
+<i>261</i>&nbsp;                Text t = (Text) sibling;
+<b class="nc"><i>262</i>&nbsp;</b>
+<b class="nc"><i>263</i>&nbsp;                sb.append(t.getData());</b>
+<b class="nc"><i>264</i>&nbsp;            }</b>
+<i>265</i>&nbsp;            sibling = sibling.getNextSibling();
+<b class="nc"><i>266</i>&nbsp;        }</b>
+<i>267</i>&nbsp;
+<b class="nc"><i>268</i>&nbsp;        return decode(sb.toString());</b>
+<i>269</i>&nbsp;    }
+<i>270</i>&nbsp;
+<b class="nc"><i>271</i>&nbsp;    /**</b>
+<i>272</i>&nbsp;     * Method encodeToElement
+<i>273</i>&nbsp;     *
+<i>274</i>&nbsp;     * @param doc
+<i>275</i>&nbsp;     * @param localName
+<i>276</i>&nbsp;     * @param bytes
+<i>277</i>&nbsp;     * @return an Element with the base64 encoded in the text.
+<i>278</i>&nbsp;     *
+<i>279</i>&nbsp;     */
+<i>280</i>&nbsp;    public static final Element encodeToElement(Document doc, String localName, byte[] bytes) {
+<i>281</i>&nbsp;        Element el = XMLUtils.createElementInSignatureSpace(doc, localName);
+<i>282</i>&nbsp;        Text text = doc.createTextNode(encode(bytes));
+<i>283</i>&nbsp;
+<b class="nc"><i>284</i>&nbsp;        el.appendChild(text);</b>
+<b class="nc"><i>285</i>&nbsp;</b>
+<i>286</i>&nbsp;        return el;
+<b class="nc"><i>287</i>&nbsp;    }</b>
+<i>288</i>&nbsp;
+<b class="nc"><i>289</i>&nbsp;    /**</b>
+<i>290</i>&nbsp;     * Method decode
+<i>291</i>&nbsp;     *
+<i>292</i>&nbsp;     * @param base64
+<i>293</i>&nbsp;     * @return the UTF bytes of the base64
+<i>294</i>&nbsp;     * @throws Base64DecodingException
+<i>295</i>&nbsp;     *
+<i>296</i>&nbsp;     */
+<i>297</i>&nbsp;    public static final byte[] decode(byte[] base64) throws Base64DecodingException  {
+<i>298</i>&nbsp;        return decodeInternal(base64, -1);
+<i>299</i>&nbsp;    }
+<i>300</i>&nbsp;
+<b class="nc"><i>301</i>&nbsp;    /**</b>
+<i>302</i>&nbsp;     * Encode a byte array and fold lines at the standard 76th character unless
+<i>303</i>&nbsp;     * ignore line breaks property is set.
+<i>304</i>&nbsp;     *
+<i>305</i>&nbsp;     * @param binaryData {@code byte[]} to be base64 encoded
+<i>306</i>&nbsp;     * @return the {@code String} with encoded data
+<i>307</i>&nbsp;     */
+<i>308</i>&nbsp;    public static final String encode(byte[] binaryData) {
+<i>309</i>&nbsp;        return XMLUtils.ignoreLineBreaks()
+<i>310</i>&nbsp;            ? encode(binaryData, Integer.MAX_VALUE)
+<i>311</i>&nbsp;            : encode(binaryData, BASE64DEFAULTLENGTH);
+<b class="nc"><i>312</i>&nbsp;    }</b>
+<b class="nc"><i>313</i>&nbsp;</b>
+<b class="nc"><i>314</i>&nbsp;    /**</b>
+<i>315</i>&nbsp;     * Base64 decode the lines from the reader and return an InputStream
+<i>316</i>&nbsp;     * with the bytes.
+<i>317</i>&nbsp;     *
+<i>318</i>&nbsp;     * @param reader
+<i>319</i>&nbsp;     * @return InputStream with the decoded bytes
+<i>320</i>&nbsp;     * @exception IOException passes what the reader throws
+<i>321</i>&nbsp;     * @throws IOException
+<i>322</i>&nbsp;     * @throws Base64DecodingException
+<i>323</i>&nbsp;     */
+<i>324</i>&nbsp;    public static final byte[] decode(BufferedReader reader)
+<i>325</i>&nbsp;        throws IOException, Base64DecodingException {
+<i>326</i>&nbsp;
+<i>327</i>&nbsp;        byte[] retBytes = null;
+<i>328</i>&nbsp;        UnsyncByteArrayOutputStream baos = new UnsyncByteArrayOutputStream();
+<i>329</i>&nbsp;        try {
+<b class="nc"><i>330</i>&nbsp;            String line;</b>
+<b class="nc"><i>331</i>&nbsp;            while (null != (line = reader.readLine())) {</b>
+<i>332</i>&nbsp;                byte[] bytes = decode(line);
+<b class="nc"><i>333</i>&nbsp;                baos.write(bytes);</b>
+<i>334</i>&nbsp;            }
+<i>335</i>&nbsp;            retBytes = baos.toByteArray();
+<b class="nc"><i>336</i>&nbsp;        } finally {</b>
+<b class="nc"><i>337</i>&nbsp;            baos.close();</b>
+<b class="nc"><i>338</i>&nbsp;        }</b>
+<b class="nc"><i>339</i>&nbsp;</b>
+<b class="nc"><i>340</i>&nbsp;        return retBytes;</b>
+<i>341</i>&nbsp;    }
+<b class="nc"><i>342</i>&nbsp;</b>
+<b class="nc"><i>343</i>&nbsp;    protected static final boolean isWhiteSpace(byte octet) {</b>
+<i>344</i>&nbsp;        return octet == 0x20 || octet == 0xd || octet == 0xa || octet == 0x9;
+<b class="nc"><i>345</i>&nbsp;    }</b>
+<i>346</i>&nbsp;
+<i>347</i>&nbsp;    protected static final boolean isPad(byte octet) {
+<i>348</i>&nbsp;        return octet == PAD;
+<b class="nc"><i>349</i>&nbsp;    }</b>
+<i>350</i>&nbsp;
+<i>351</i>&nbsp;    /**
+<i>352</i>&nbsp;     * Encodes hex octets into Base64
+<b class="nc"><i>353</i>&nbsp;     *</b>
+<i>354</i>&nbsp;     * @param binaryData Array containing binaryData
+<i>355</i>&nbsp;     * @return Encoded Base64 array
+<i>356</i>&nbsp;     */
+<i>357</i>&nbsp;    /**
+<i>358</i>&nbsp;     * Encode a byte array in Base64 format and return an optionally
+<i>359</i>&nbsp;     * wrapped line.
+<i>360</i>&nbsp;     *
+<i>361</i>&nbsp;     * @param binaryData {@code byte[]} data to be encoded
+<i>362</i>&nbsp;     * @param length {@code int} length of wrapped lines; No wrapping if less than 4.
+<i>363</i>&nbsp;     * @return a {@code String} with encoded data
+<i>364</i>&nbsp;     */
+<i>365</i>&nbsp;    public static final String  encode(byte[] binaryData, int length) {
+<i>366</i>&nbsp;        if (length &lt; 4) {
+<i>367</i>&nbsp;            length = Integer.MAX_VALUE;
+<i>368</i>&nbsp;        }
+<i>369</i>&nbsp;
+<i>370</i>&nbsp;        if (binaryData == null) {
+<b class="nc"><i>371</i>&nbsp;            return null;</b>
+<b class="nc"><i>372</i>&nbsp;        }</b>
+<i>373</i>&nbsp;
+<i>374</i>&nbsp;        long lengthDataBits = ((long) binaryData.length) * ((long) EIGHTBIT);
+<b class="nc"><i>375</i>&nbsp;        if (lengthDataBits == 0L) {</b>
+<b class="nc"><i>376</i>&nbsp;            return &quot;&quot;;</b>
+<i>377</i>&nbsp;        }
+<i>378</i>&nbsp;
+<b class="nc"><i>379</i>&nbsp;        long fewerThan24bits = lengthDataBits % ((long) TWENTYFOURBITGROUP);</b>
+<b class="nc"><i>380</i>&nbsp;        int numberTriplets = (int) (lengthDataBits / TWENTYFOURBITGROUP);</b>
+<b class="nc"><i>381</i>&nbsp;        int numberQuartet = fewerThan24bits != 0L ? numberTriplets + 1 : numberTriplets;</b>
+<i>382</i>&nbsp;        int quartesPerLine = length / 4;
+<i>383</i>&nbsp;        int numberLines = (numberQuartet - 1) / quartesPerLine;
+<b class="nc"><i>384</i>&nbsp;        char encodedData[] = null;</b>
+<b class="nc"><i>385</i>&nbsp;</b>
+<b class="nc"><i>386</i>&nbsp;        encodedData = new char[numberQuartet * 4 + numberLines * 2];</b>
+<b class="nc"><i>387</i>&nbsp;</b>
+<b class="nc"><i>388</i>&nbsp;        byte k = 0, l = 0, b1 = 0, b2 = 0, b3 = 0;</b>
+<b class="nc"><i>389</i>&nbsp;        int encodedIndex = 0;</b>
+<i>390</i>&nbsp;        int dataIndex = 0;
+<b class="nc"><i>391</i>&nbsp;        int i = 0;</b>
+<i>392</i>&nbsp;
+<b class="nc"><i>393</i>&nbsp;        for (int line = 0; line &lt; numberLines; line++) {</b>
+<b class="nc"><i>394</i>&nbsp;            for (int quartet = 0; quartet &lt; 19; quartet++) {</b>
+<b class="nc"><i>395</i>&nbsp;                b1 = binaryData[dataIndex++];</b>
+<b class="nc"><i>396</i>&nbsp;                b2 = binaryData[dataIndex++];</b>
+<i>397</i>&nbsp;                b3 = binaryData[dataIndex++];
+<b class="nc"><i>398</i>&nbsp;</b>
+<b class="nc"><i>399</i>&nbsp;                l = (byte)(b2 &amp; 0x0f);</b>
+<b class="nc"><i>400</i>&nbsp;                k = (byte)(b1 &amp; 0x03);</b>
+<b class="nc"><i>401</i>&nbsp;</b>
+<b class="nc"><i>402</i>&nbsp;                byte val1 = ((b1 &amp; SIGN) == 0) ? (byte)(b1 &gt;&gt; 2): (byte)((b1) &gt;&gt; 2 ^ 0xc0);</b>
+<i>403</i>&nbsp;
+<b class="nc"><i>404</i>&nbsp;                byte val2 = ((b2 &amp; SIGN) == 0) ? (byte)(b2 &gt;&gt; 4) : (byte)((b2) &gt;&gt; 4 ^ 0xf0);</b>
+<b class="nc"><i>405</i>&nbsp;                byte val3 = ((b3 &amp; SIGN) == 0) ? (byte)(b3 &gt;&gt; 6) : (byte)((b3) &gt;&gt; 6 ^ 0xfc);</b>
+<i>406</i>&nbsp;
+<b class="nc"><i>407</i>&nbsp;</b>
+<i>408</i>&nbsp;                encodedData[encodedIndex++] = lookUpBase64Alphabet[val1];
+<b class="nc"><i>409</i>&nbsp;                encodedData[encodedIndex++] = lookUpBase64Alphabet[val2 | (k &lt;&lt; 4)];</b>
+<b class="nc"><i>410</i>&nbsp;                encodedData[encodedIndex++] = lookUpBase64Alphabet[(l &lt;&lt; 2) | val3];</b>
+<i>411</i>&nbsp;                encodedData[encodedIndex++] = lookUpBase64Alphabet[b3 &amp; 0x3f];
+<i>412</i>&nbsp;
+<b class="nc"><i>413</i>&nbsp;                i++;</b>
+<b class="nc"><i>414</i>&nbsp;            }</b>
+<b class="nc"><i>415</i>&nbsp;            encodedData[encodedIndex++] = 0xd;</b>
+<b class="nc"><i>416</i>&nbsp;            encodedData[encodedIndex++] = 0xa;</b>
+<i>417</i>&nbsp;        }
+<b class="nc"><i>418</i>&nbsp;</b>
+<i>419</i>&nbsp;        for (; i &lt; numberTriplets; i++) {
+<b class="nc"><i>420</i>&nbsp;            b1 = binaryData[dataIndex++];</b>
+<i>421</i>&nbsp;            b2 = binaryData[dataIndex++];
+<i>422</i>&nbsp;            b3 = binaryData[dataIndex++];
+<b class="nc"><i>423</i>&nbsp;</b>
+<b class="nc"><i>424</i>&nbsp;            l = (byte)(b2 &amp; 0x0f);</b>
+<b class="nc"><i>425</i>&nbsp;            k = (byte)(b1 &amp; 0x03);</b>
+<b class="nc"><i>426</i>&nbsp;</b>
+<i>427</i>&nbsp;            byte val1 = ((b1 &amp; SIGN) == 0) ? (byte)(b1 &gt;&gt; 2) : (byte)((b1) &gt;&gt; 2 ^ 0xc0);
+<b class="nc"><i>428</i>&nbsp;</b>
+<b class="nc"><i>429</i>&nbsp;            byte val2 = ((b2 &amp; SIGN) == 0) ? (byte)(b2 &gt;&gt; 4) : (byte)((b2) &gt;&gt; 4 ^ 0xf0);</b>
+<i>430</i>&nbsp;            byte val3 = ((b3 &amp; SIGN) == 0) ? (byte)(b3 &gt;&gt; 6) : (byte)((b3) &gt;&gt; 6 ^ 0xfc);
+<b class="nc"><i>431</i>&nbsp;</b>
+<i>432</i>&nbsp;
+<b class="nc"><i>433</i>&nbsp;            encodedData[encodedIndex++] = lookUpBase64Alphabet[val1];</b>
+<b class="nc"><i>434</i>&nbsp;            encodedData[encodedIndex++] = lookUpBase64Alphabet[val2 | (k &lt;&lt; 4)];</b>
+<i>435</i>&nbsp;            encodedData[encodedIndex++] = lookUpBase64Alphabet[(l &lt;&lt; 2) | val3];
+<i>436</i>&nbsp;            encodedData[encodedIndex++] = lookUpBase64Alphabet[b3 &amp; 0x3f];
+<b class="nc"><i>437</i>&nbsp;        }</b>
+<b class="nc"><i>438</i>&nbsp;</b>
+<b class="nc"><i>439</i>&nbsp;        // form integral number of 6-bit groups</b>
+<b class="nc"><i>440</i>&nbsp;        if (fewerThan24bits == EIGHTBIT) {</b>
+<i>441</i>&nbsp;            b1 = binaryData[dataIndex];
+<i>442</i>&nbsp;            k = (byte) (b1 &amp;0x03);
+<i>443</i>&nbsp;            byte val1 = ((b1 &amp; SIGN) == 0) ? (byte)(b1 &gt;&gt; 2):(byte)((b1) &gt;&gt; 2 ^ 0xc0);
+<b class="nc"><i>444</i>&nbsp;            encodedData[encodedIndex++] = lookUpBase64Alphabet[val1];</b>
+<b class="nc"><i>445</i>&nbsp;            encodedData[encodedIndex++] = lookUpBase64Alphabet[k &lt;&lt; 4];</b>
+<b class="nc"><i>446</i>&nbsp;            encodedData[encodedIndex++] = PAD;</b>
+<b class="nc"><i>447</i>&nbsp;            encodedData[encodedIndex++] = PAD;</b>
+<b class="nc"><i>448</i>&nbsp;        } else if (fewerThan24bits == SIXTEENBIT) {</b>
+<b class="nc"><i>449</i>&nbsp;            b1 = binaryData[dataIndex];</b>
+<b class="nc"><i>450</i>&nbsp;            b2 = binaryData[dataIndex +1 ];</b>
+<b class="nc"><i>451</i>&nbsp;            l = ( byte ) (b2 &amp; 0x0f);</b>
+<b class="nc"><i>452</i>&nbsp;            k = ( byte ) (b1 &amp; 0x03);</b>
+<b class="nc"><i>453</i>&nbsp;</b>
+<b class="nc"><i>454</i>&nbsp;            byte val1 = ((b1 &amp; SIGN) == 0) ? (byte)(b1 &gt;&gt; 2) : (byte)((b1) &gt;&gt; 2 ^ 0xc0);</b>
+<b class="nc"><i>455</i>&nbsp;            byte val2 = ((b2 &amp; SIGN) == 0) ? (byte)(b2 &gt;&gt; 4) : (byte)((b2) &gt;&gt; 4 ^ 0xf0);</b>
+<b class="nc"><i>456</i>&nbsp;</b>
+<i>457</i>&nbsp;            encodedData[encodedIndex++] = lookUpBase64Alphabet[val1];
+<b class="nc"><i>458</i>&nbsp;            encodedData[encodedIndex++] = lookUpBase64Alphabet[val2 | (k &lt;&lt; 4)];</b>
+<b class="nc"><i>459</i>&nbsp;            encodedData[encodedIndex++] = lookUpBase64Alphabet[l &lt;&lt; 2];</b>
+<i>460</i>&nbsp;            encodedData[encodedIndex++] = PAD;
+<b class="nc"><i>461</i>&nbsp;        }</b>
+<b class="nc"><i>462</i>&nbsp;</b>
+<b class="nc"><i>463</i>&nbsp;        //encodedData[encodedIndex] = 0xa;</b>
+<b class="nc"><i>464</i>&nbsp;</b>
+<i>465</i>&nbsp;        return new String(encodedData);
+<i>466</i>&nbsp;    }
+<i>467</i>&nbsp;
+<i>468</i>&nbsp;    /**
+<b class="nc"><i>469</i>&nbsp;     * Decodes Base64 data into octets</b>
+<i>470</i>&nbsp;     *
+<i>471</i>&nbsp;     * @param encoded String containing base64 encoded data
+<i>472</i>&nbsp;     * @return byte array containing the decoded data
+<i>473</i>&nbsp;     * @throws Base64DecodingException if there is a problem decoding the data
+<i>474</i>&nbsp;     */
+<i>475</i>&nbsp;    public static final byte[] decode(String encoded) throws Base64DecodingException {
+<i>476</i>&nbsp;        if (encoded == null) {
+<i>477</i>&nbsp;            return null;
+<i>478</i>&nbsp;        }
+<i>479</i>&nbsp;        byte[] bytes = new byte[encoded.length()];
+<b class="nc"><i>480</i>&nbsp;        int len = getBytesInternal(encoded, bytes);</b>
+<b class="nc"><i>481</i>&nbsp;        return decodeInternal(bytes, len);</b>
+<i>482</i>&nbsp;    }
+<b class="nc"><i>483</i>&nbsp;</b>
+<b class="nc"><i>484</i>&nbsp;    protected static final int getBytesInternal(String s, byte[] result) {</b>
+<b class="nc"><i>485</i>&nbsp;        int length = s.length();</b>
+<i>486</i>&nbsp;
+<i>487</i>&nbsp;        int newSize = 0;
+<i>488</i>&nbsp;        for (int i = 0; i &lt; length; i++) {
+<b class="nc"><i>489</i>&nbsp;            byte dataS = (byte)s.charAt(i);</b>
+<i>490</i>&nbsp;            if (!isWhiteSpace(dataS)) {
+<b class="nc"><i>491</i>&nbsp;                result[newSize++] = dataS;</b>
+<b class="nc"><i>492</i>&nbsp;            }</b>
+<b class="nc"><i>493</i>&nbsp;        }</b>
+<b class="nc"><i>494</i>&nbsp;        return newSize;</b>
+<b class="nc"><i>495</i>&nbsp;    }</b>
+<i>496</i>&nbsp;
+<i>497</i>&nbsp;    protected static final byte[] decodeInternal(byte[] base64Data, int len)
+<b class="nc"><i>498</i>&nbsp;        throws Base64DecodingException {</b>
+<i>499</i>&nbsp;        // remove white spaces
+<i>500</i>&nbsp;        if (len == -1) {
+<i>501</i>&nbsp;            len = removeWhiteSpace(base64Data);
+<i>502</i>&nbsp;        }
+<i>503</i>&nbsp;
+<b class="nc"><i>504</i>&nbsp;        if (len % FOURBYTE != 0) {</b>
+<b class="nc"><i>505</i>&nbsp;            throw new Base64DecodingException(&quot;decoding.divisible.four&quot;);</b>
+<i>506</i>&nbsp;            //should be divisible by four
+<i>507</i>&nbsp;        }
+<b class="nc"><i>508</i>&nbsp;</b>
+<b class="nc"><i>509</i>&nbsp;        int numberQuadruple = len / FOURBYTE;</b>
+<i>510</i>&nbsp;
+<i>511</i>&nbsp;        if (numberQuadruple == 0) {
+<i>512</i>&nbsp;            return new byte[0];
+<b class="nc"><i>513</i>&nbsp;        }</b>
+<i>514</i>&nbsp;
+<b class="nc"><i>515</i>&nbsp;        byte decodedData[] = null;</b>
+<b class="nc"><i>516</i>&nbsp;        byte b1 = 0, b2 = 0, b3 = 0, b4 = 0;</b>
+<i>517</i>&nbsp;
+<i>518</i>&nbsp;        int i = 0;
+<b class="nc"><i>519</i>&nbsp;        int encodedIndex = 0;</b>
+<b class="nc"><i>520</i>&nbsp;        int dataIndex = 0;</b>
+<i>521</i>&nbsp;
+<b class="nc"><i>522</i>&nbsp;        //decodedData = new byte[ (numberQuadruple)*3];</b>
+<b class="nc"><i>523</i>&nbsp;        dataIndex = (numberQuadruple - 1) * 4;</b>
+<b class="nc"><i>524</i>&nbsp;        encodedIndex = (numberQuadruple - 1) * 3;</b>
+<i>525</i>&nbsp;        //first last bits.
+<i>526</i>&nbsp;        b1 = base64Alphabet[base64Data[dataIndex++]];
+<b class="nc"><i>527</i>&nbsp;        b2 = base64Alphabet[base64Data[dataIndex++]];</b>
+<b class="nc"><i>528</i>&nbsp;        if (b1 == -1 || b2 == -1) {</b>
+<i>529</i>&nbsp;             //if found &quot;no data&quot; just return null
+<b class="nc"><i>530</i>&nbsp;            throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<b class="nc"><i>531</i>&nbsp;        }</b>
+<b class="nc"><i>532</i>&nbsp;</b>
+<i>533</i>&nbsp;
+<b class="nc"><i>534</i>&nbsp;        byte d3, d4;</b>
+<i>535</i>&nbsp;        b3 = base64Alphabet[d3 = base64Data[dataIndex++]];
+<i>536</i>&nbsp;        b4 = base64Alphabet[d4 = base64Data[dataIndex++]];
+<i>537</i>&nbsp;        if (b3 == -1 || b4 == -1) {
+<i>538</i>&nbsp;            //Check if they are PAD characters
+<b class="nc"><i>539</i>&nbsp;            if (isPad(d3) &amp;&amp; isPad(d4)) {               //Two PAD e.g. 3c[Pad][Pad]</b>
+<b class="nc"><i>540</i>&nbsp;                if ((b2 &amp; 0xf) != 0) { //last 4 bits should be zero</b>
+<b class="nc"><i>541</i>&nbsp;                    throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<i>542</i>&nbsp;                }
+<b class="nc"><i>543</i>&nbsp;                decodedData = new byte[encodedIndex + 1];</b>
+<b class="nc"><i>544</i>&nbsp;                decodedData[encodedIndex]   = (byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4) ;</b>
+<b class="nc"><i>545</i>&nbsp;            } else if (!isPad(d3) &amp;&amp; isPad(d4)) {               //One PAD  e.g. 3cQ[Pad]</b>
+<i>546</i>&nbsp;                if ((b3 &amp; 0x3) != 0) { //last 2 bits should be zero
+<b class="nc"><i>547</i>&nbsp;                    throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<b class="nc"><i>548</i>&nbsp;                }</b>
+<b class="nc"><i>549</i>&nbsp;                decodedData = new byte[encodedIndex + 2];</b>
+<b class="nc"><i>550</i>&nbsp;                decodedData[encodedIndex++] = (byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4);</b>
+<b class="nc"><i>551</i>&nbsp;                decodedData[encodedIndex] = (byte)(((b2 &amp; 0xf) &lt;&lt; 4) |((b3 &gt;&gt; 2) &amp; 0xf));</b>
+<i>552</i>&nbsp;            } else {
+<b class="nc"><i>553</i>&nbsp;                //an error  like &quot;3c[Pad]r&quot;, &quot;3cdX&quot;, &quot;3cXd&quot;, &quot;3cXX&quot; where X is non data</b>
+<b class="nc"><i>554</i>&nbsp;                throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<b class="nc"><i>555</i>&nbsp;            }</b>
+<i>556</i>&nbsp;        } else {
+<i>557</i>&nbsp;            //No PAD e.g 3cQl
+<b class="nc"><i>558</i>&nbsp;            decodedData = new byte[encodedIndex+3];</b>
+<i>559</i>&nbsp;            decodedData[encodedIndex++] = (byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4) ;
+<i>560</i>&nbsp;            decodedData[encodedIndex++] = (byte)(((b2 &amp; 0xf) &lt;&lt; 4) | ((b3 &gt;&gt; 2) &amp; 0xf));
+<i>561</i>&nbsp;            decodedData[encodedIndex++] = (byte)(b3 &lt;&lt; 6 | b4);
+<b class="nc"><i>562</i>&nbsp;        }</b>
+<b class="nc"><i>563</i>&nbsp;        encodedIndex = 0;</b>
+<b class="nc"><i>564</i>&nbsp;        dataIndex = 0;</b>
+<b class="nc"><i>565</i>&nbsp;        //the begin</b>
+<i>566</i>&nbsp;        for (i = numberQuadruple - 1; i &gt; 0; i--) {
+<b class="nc"><i>567</i>&nbsp;            b1 = base64Alphabet[base64Data[dataIndex++]];</b>
+<b class="nc"><i>568</i>&nbsp;            b2 = base64Alphabet[base64Data[dataIndex++]];</b>
+<i>569</i>&nbsp;            b3 = base64Alphabet[base64Data[dataIndex++]];
+<b class="nc"><i>570</i>&nbsp;            b4 = base64Alphabet[base64Data[dataIndex++]];</b>
+<b class="nc"><i>571</i>&nbsp;</b>
+<b class="nc"><i>572</i>&nbsp;            if (b1 == -1 || b2 == -1 || b3 == -1 || b4 == -1) {</b>
+<b class="nc"><i>573</i>&nbsp;                //if found &quot;no data&quot; just return null</b>
+<b class="nc"><i>574</i>&nbsp;                throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<i>575</i>&nbsp;            }
+<b class="nc"><i>576</i>&nbsp;</b>
+<i>577</i>&nbsp;            decodedData[encodedIndex++] = (byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4) ;
+<i>578</i>&nbsp;            decodedData[encodedIndex++] = (byte)(((b2 &amp; 0xf) &lt;&lt; 4) |((b3 &gt;&gt; 2) &amp; 0xf));
+<i>579</i>&nbsp;            decodedData[encodedIndex++] = (byte)(b3 &lt;&lt; 6 | b4 );
+<i>580</i>&nbsp;        }
+<b class="nc"><i>581</i>&nbsp;        return decodedData;</b>
+<i>582</i>&nbsp;    }
+<i>583</i>&nbsp;
+<b class="nc"><i>584</i>&nbsp;    /**</b>
+<b class="nc"><i>585</i>&nbsp;     * Decodes Base64 data into outputstream</b>
+<b class="nc"><i>586</i>&nbsp;     *</b>
+<i>587</i>&nbsp;     * @param base64Data String containing Base64 data
+<b class="nc"><i>588</i>&nbsp;     * @param os the outputstream</b>
+<i>589</i>&nbsp;     * @throws IOException
+<i>590</i>&nbsp;     * @throws Base64DecodingException
+<i>591</i>&nbsp;     */
+<i>592</i>&nbsp;    public static final void decode(String base64Data, OutputStream os)
+<i>593</i>&nbsp;        throws Base64DecodingException, IOException {
+<i>594</i>&nbsp;        byte[] bytes = new byte[base64Data.length()];
+<i>595</i>&nbsp;        int len = getBytesInternal(base64Data, bytes);
+<i>596</i>&nbsp;        decode(bytes, os, len);
+<i>597</i>&nbsp;    }
+<i>598</i>&nbsp;
+<i>599</i>&nbsp;    /**
+<i>600</i>&nbsp;     * Decodes Base64 data into outputstream
+<b class="nc"><i>601</i>&nbsp;     *</b>
+<b class="nc"><i>602</i>&nbsp;     * @param base64Data Byte array containing Base64 data</b>
+<b class="nc"><i>603</i>&nbsp;     * @param os the outputstream</b>
+<i>604</i>&nbsp;     * @throws IOException
+<i>605</i>&nbsp;     * @throws Base64DecodingException
+<i>606</i>&nbsp;     */
+<i>607</i>&nbsp;    public static final void decode(byte[] base64Data, OutputStream os)
+<i>608</i>&nbsp;        throws Base64DecodingException, IOException {
+<i>609</i>&nbsp;        decode(base64Data, os, -1);
+<i>610</i>&nbsp;    }
+<i>611</i>&nbsp;
+<i>612</i>&nbsp;    protected static final void decode(byte[] base64Data, OutputStream os, int len)
+<i>613</i>&nbsp;        throws Base64DecodingException, IOException {
+<i>614</i>&nbsp;        // remove white spaces
+<i>615</i>&nbsp;        if (len == -1) {
+<b class="nc"><i>616</i>&nbsp;            len = removeWhiteSpace(base64Data);</b>
+<i>617</i>&nbsp;        }
+<i>618</i>&nbsp;
+<i>619</i>&nbsp;        if (len % FOURBYTE != 0) {
+<i>620</i>&nbsp;            throw new Base64DecodingException(&quot;decoding.divisible.four&quot;);
+<i>621</i>&nbsp;            //should be divisible by four
+<b class="nc"><i>622</i>&nbsp;        }</b>
+<b class="nc"><i>623</i>&nbsp;</b>
+<i>624</i>&nbsp;        int numberQuadruple = len / FOURBYTE;
+<i>625</i>&nbsp;
+<b class="nc"><i>626</i>&nbsp;        if (numberQuadruple == 0) {</b>
+<b class="nc"><i>627</i>&nbsp;            return;</b>
+<i>628</i>&nbsp;        }
+<i>629</i>&nbsp;
+<i>630</i>&nbsp;        //byte decodedData[] = null;
+<b class="nc"><i>631</i>&nbsp;        byte b1 = 0, b2 = 0, b3 = 0, b4 = 0;</b>
+<i>632</i>&nbsp;
+<b class="nc"><i>633</i>&nbsp;        int i = 0;</b>
+<i>634</i>&nbsp;        int dataIndex = 0;
+<i>635</i>&nbsp;
+<i>636</i>&nbsp;        //the begin
+<i>637</i>&nbsp;        for (i = numberQuadruple - 1; i &gt; 0; i--) {
+<b class="nc"><i>638</i>&nbsp;            b1 = base64Alphabet[base64Data[dataIndex++]];</b>
+<i>639</i>&nbsp;            b2 = base64Alphabet[base64Data[dataIndex++]];
+<b class="nc"><i>640</i>&nbsp;            b3 = base64Alphabet[base64Data[dataIndex++]];</b>
+<b class="nc"><i>641</i>&nbsp;            b4 = base64Alphabet[base64Data[dataIndex++]];</b>
+<i>642</i>&nbsp;            if (b1 == -1 || b2 == -1 || b3 == -1 || b4 == -1) {
+<i>643</i>&nbsp;                //if found &quot;no data&quot; just return null
+<b class="nc"><i>644</i>&nbsp;                throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<b class="nc"><i>645</i>&nbsp;            }</b>
+<b class="nc"><i>646</i>&nbsp;</b>
+<b class="nc"><i>647</i>&nbsp;            os.write((byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4));</b>
+<b class="nc"><i>648</i>&nbsp;            os.write((byte)(((b2 &amp; 0xf) &lt;&lt; 4 ) | ((b3 &gt;&gt; 2) &amp; 0xf)));</b>
+<b class="nc"><i>649</i>&nbsp;            os.write((byte)(b3 &lt;&lt; 6 | b4));</b>
+<i>650</i>&nbsp;        }
+<i>651</i>&nbsp;        b1 = base64Alphabet[base64Data[dataIndex++]];
+<i>652</i>&nbsp;        b2 = base64Alphabet[base64Data[dataIndex++]];
+<i>653</i>&nbsp;
+<b class="nc"><i>654</i>&nbsp;        //  first last bits.</b>
+<i>655</i>&nbsp;        if (b1 == -1 || b2 == -1) {
+<i>656</i>&nbsp;            //if found &quot;no data&quot; just return null
+<b class="nc"><i>657</i>&nbsp;            throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<b class="nc"><i>658</i>&nbsp;        }</b>
+<b class="nc"><i>659</i>&nbsp;</b>
+<i>660</i>&nbsp;        byte d3, d4;
+<b class="nc"><i>661</i>&nbsp;        b3 = base64Alphabet[d3 = base64Data[dataIndex++]];</b>
+<b class="nc"><i>662</i>&nbsp;        b4 = base64Alphabet[d4 = base64Data[dataIndex++]];</b>
+<i>663</i>&nbsp;        if (b3 == -1 || b4 == -1) { //Check if they are PAD characters
+<i>664</i>&nbsp;            if (isPad(d3) &amp;&amp; isPad(d4)) {               //Two PAD e.g. 3c[Pad][Pad]
+<b class="nc"><i>665</i>&nbsp;                if ((b2 &amp; 0xf) != 0) { //last 4 bits should be zero</b>
+<i>666</i>&nbsp;                    throw new Base64DecodingException(&quot;decoding.general&quot;);
+<b class="nc"><i>667</i>&nbsp;                }</b>
+<i>668</i>&nbsp;                os.write((byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4));
+<i>669</i>&nbsp;            } else if (!isPad(d3) &amp;&amp; isPad(d4)) {               //One PAD  e.g. 3cQ[Pad]
+<i>670</i>&nbsp;                if ((b3 &amp; 0x3 ) != 0) { //last 2 bits should be zero
+<b class="nc"><i>671</i>&nbsp;                    throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<b class="nc"><i>672</i>&nbsp;                }</b>
+<b class="nc"><i>673</i>&nbsp;                os.write((byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4));</b>
+<b class="nc"><i>674</i>&nbsp;                os.write((byte)(((b2 &amp; 0xf) &lt;&lt; 4) | ((b3 &gt;&gt; 2) &amp; 0xf)));</b>
+<b class="nc"><i>675</i>&nbsp;            } else {</b>
+<b class="nc"><i>676</i>&nbsp;                //an error  like &quot;3c[Pad]r&quot;, &quot;3cdX&quot;, &quot;3cXd&quot;, &quot;3cXX&quot; where X is non data</b>
+<i>677</i>&nbsp;                throw new Base64DecodingException(&quot;decoding.general&quot;);
+<b class="nc"><i>678</i>&nbsp;            }</b>
+<b class="nc"><i>679</i>&nbsp;        } else {</b>
+<b class="nc"><i>680</i>&nbsp;            //No PAD e.g 3cQl</b>
+<b class="nc"><i>681</i>&nbsp;            os.write((byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4));</b>
+<i>682</i>&nbsp;            os.write( (byte)(((b2 &amp; 0xf) &lt;&lt; 4) | ((b3 &gt;&gt; 2) &amp; 0xf)));
+<b class="nc"><i>683</i>&nbsp;            os.write((byte)(b3 &lt;&lt; 6 | b4));</b>
+<b class="nc"><i>684</i>&nbsp;        }</b>
+<i>685</i>&nbsp;    }
+<i>686</i>&nbsp;
+<b class="nc"><i>687</i>&nbsp;    /**</b>
+<i>688</i>&nbsp;     * Decodes Base64 data into  outputstream
+<i>689</i>&nbsp;     *
+<i>690</i>&nbsp;     * @param is containing Base64 data
+<b class="nc"><i>691</i>&nbsp;     * @param os the outputstream</b>
+<b class="nc"><i>692</i>&nbsp;     * @throws IOException</b>
+<b class="nc"><i>693</i>&nbsp;     * @throws Base64DecodingException</b>
+<i>694</i>&nbsp;     */
+<i>695</i>&nbsp;    public static final void decode(InputStream is, OutputStream os)
+<i>696</i>&nbsp;        throws Base64DecodingException, IOException {
+<i>697</i>&nbsp;        //byte decodedData[] = null;
+<i>698</i>&nbsp;        byte b1 = 0, b2 = 0, b3 = 0, b4 = 0;
+<i>699</i>&nbsp;
+<i>700</i>&nbsp;        int index = 0;
+<i>701</i>&nbsp;        byte[] data = new byte[4];
+<i>702</i>&nbsp;        int read;
+<i>703</i>&nbsp;        //the begin
+<i>704</i>&nbsp;        while ((read = is.read()) &gt; 0) {
+<i>705</i>&nbsp;            byte readed = (byte)read;
+<i>706</i>&nbsp;            if (isWhiteSpace(readed)) {
+<i>707</i>&nbsp;                continue;
+<b class="nc"><i>708</i>&nbsp;            }</b>
+<i>709</i>&nbsp;            if (isPad(readed)) {
+<b class="nc"><i>710</i>&nbsp;                data[index++] = readed;</b>
+<b class="nc"><i>711</i>&nbsp;                if (index == 3) {</b>
+<i>712</i>&nbsp;                    data[index++] = (byte)is.read();
+<i>713</i>&nbsp;                }
+<b class="nc"><i>714</i>&nbsp;                break;</b>
+<b class="nc"><i>715</i>&nbsp;            }</b>
+<b class="nc"><i>716</i>&nbsp;</b>
+<b class="nc"><i>717</i>&nbsp;            if ((data[index++] = readed) == -1) {</b>
+<i>718</i>&nbsp;                //if found &quot;no data&quot; just return null
+<b class="nc"><i>719</i>&nbsp;                throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<b class="nc"><i>720</i>&nbsp;            }</b>
+<b class="nc"><i>721</i>&nbsp;</b>
+<b class="nc"><i>722</i>&nbsp;            if (index != 4) {</b>
+<i>723</i>&nbsp;                continue;
+<i>724</i>&nbsp;            }
+<i>725</i>&nbsp;            index = 0;
+<i>726</i>&nbsp;            b1 = base64Alphabet[data[0]];
+<b class="nc"><i>727</i>&nbsp;            b2 = base64Alphabet[data[1]];</b>
+<i>728</i>&nbsp;            b3 = base64Alphabet[data[2]];
+<b class="nc"><i>729</i>&nbsp;            b4 = base64Alphabet[data[3]];</b>
+<i>730</i>&nbsp;
+<i>731</i>&nbsp;            os.write((byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4));
+<b class="nc"><i>732</i>&nbsp;            os.write((byte)(((b2 &amp; 0xf) &lt;&lt; 4) | ((b3 &gt;&gt; 2) &amp; 0xf)));</b>
+<b class="nc"><i>733</i>&nbsp;            os.write((byte)(b3 &lt;&lt; 6 | b4));</b>
+<i>734</i>&nbsp;        }
+<b class="nc"><i>735</i>&nbsp;</b>
+<b class="nc"><i>736</i>&nbsp;        byte d1 = data[0], d2 = data[1], d3 = data[2], d4 = data[3];</b>
+<b class="nc"><i>737</i>&nbsp;        b1 = base64Alphabet[d1];</b>
+<b class="nc"><i>738</i>&nbsp;        b2 = base64Alphabet[d2];</b>
+<b class="nc"><i>739</i>&nbsp;        b3 = base64Alphabet[d3];</b>
+<i>740</i>&nbsp;        b4 = base64Alphabet[d4];
+<b class="nc"><i>741</i>&nbsp;        if (b3 == -1 || b4 == -1) { //Check if they are PAD characters</b>
+<b class="nc"><i>742</i>&nbsp;            if (isPad(d3) &amp;&amp; isPad(d4)) {               //Two PAD e.g. 3c[Pad][Pad]</b>
+<b class="nc"><i>743</i>&nbsp;                if ((b2 &amp; 0xf) != 0) { //last 4 bits should be zero</b>
+<b class="nc"><i>744</i>&nbsp;                    throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<i>745</i>&nbsp;                }
+<b class="nc"><i>746</i>&nbsp;                os.write((byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4));</b>
+<b class="nc"><i>747</i>&nbsp;            } else if (!isPad(d3) &amp;&amp; isPad(d4)) {               //One PAD  e.g. 3cQ[Pad]</b>
+<b class="nc"><i>748</i>&nbsp;                b3 = base64Alphabet[d3];</b>
+<b class="nc"><i>749</i>&nbsp;                if ((b3 &amp; 0x3) != 0) { //last 2 bits should be zero</b>
+<b class="nc"><i>750</i>&nbsp;                    throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<b class="nc"><i>751</i>&nbsp;                }</b>
+<b class="nc"><i>752</i>&nbsp;                os.write((byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4));</b>
+<b class="nc"><i>753</i>&nbsp;                os.write((byte)(((b2 &amp; 0xf) &lt;&lt; 4) | ((b3 &gt;&gt; 2) &amp; 0xf)));</b>
+<b class="nc"><i>754</i>&nbsp;            } else {</b>
+<i>755</i>&nbsp;                //an error  like &quot;3c[Pad]r&quot;, &quot;3cdX&quot;, &quot;3cXd&quot;, &quot;3cXX&quot; where X is non data
+<b class="nc"><i>756</i>&nbsp;                throw new Base64DecodingException(&quot;decoding.general&quot;);</b>
+<b class="nc"><i>757</i>&nbsp;            }</b>
+<b class="nc"><i>758</i>&nbsp;        } else {</b>
+<b class="nc"><i>759</i>&nbsp;            //No PAD e.g 3cQl</b>
+<b class="nc"><i>760</i>&nbsp;            os.write((byte)(b1 &lt;&lt; 2 | b2 &gt;&gt; 4));</b>
+<i>761</i>&nbsp;            os.write((byte)(((b2 &amp; 0xf) &lt;&lt; 4) | ((b3 &gt;&gt; 2) &amp; 0xf)));
+<b class="nc"><i>762</i>&nbsp;            os.write((byte)(b3 &lt;&lt; 6 | b4));</b>
+<b class="nc"><i>763</i>&nbsp;        }</b>
+<i>764</i>&nbsp;    }
+<i>765</i>&nbsp;
+<b class="nc"><i>766</i>&nbsp;    /**</b>
+<i>767</i>&nbsp;     * remove WhiteSpace from MIME containing encoded Base64 data.
+<i>768</i>&nbsp;     *
+<i>769</i>&nbsp;     * @param data  the byte array of base64 data (with WS)
+<b class="nc"><i>770</i>&nbsp;     * @return the new length</b>
+<b class="nc"><i>771</i>&nbsp;     */</b>
+<b class="nc"><i>772</i>&nbsp;    protected static final int removeWhiteSpace(byte[] data) {</b>
+<i>773</i>&nbsp;        if (data == null) {
+<i>774</i>&nbsp;            return 0;
+<i>775</i>&nbsp;        }
+<i>776</i>&nbsp;
+<i>777</i>&nbsp;        // count characters that&#39;s not whitespace
+<i>778</i>&nbsp;        int newSize = 0;
+<i>779</i>&nbsp;        int len = data.length;
+<i>780</i>&nbsp;        for (int i = 0; i &lt; len; i++) {
+<i>781</i>&nbsp;            byte dataS = data[i];
+<i>782</i>&nbsp;            if (!isWhiteSpace(dataS)) {
+<b class="nc"><i>783</i>&nbsp;                data[newSize++] = dataS;</b>
+<b class="nc"><i>784</i>&nbsp;            }</b>
+<i>785</i>&nbsp;        }
+<i>786</i>&nbsp;        return newSize;
+<i>787</i>&nbsp;    }
+<b class="nc"><i>788</i>&nbsp;}</b>
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

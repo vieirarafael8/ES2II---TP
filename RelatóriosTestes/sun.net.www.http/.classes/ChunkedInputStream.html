@@ -1,0 +1,863 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ChunkedInputStream</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.net.www.http</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ChunkedInputStream (sun.net.www.http)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ChunkedInputStream</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 199)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1999, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;package sun.net.www.http;
+<i>26</i>&nbsp;
+<i>27</i>&nbsp;import java.io.*;
+<i>28</i>&nbsp;import java.util.*;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;import sun.net.*;
+<i>31</i>&nbsp;import sun.net.www.*;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;/**
+<i>34</i>&nbsp; * A &lt;code&gt;ChunkedInputStream&lt;/code&gt; provides a stream for reading a body of
+<i>35</i>&nbsp; * a http message that can be sent as a series of chunks, each with its own
+<i>36</i>&nbsp; * size indicator. Optionally the last chunk can be followed by trailers
+<i>37</i>&nbsp; * containing entity-header fields.
+<i>38</i>&nbsp; * &lt;p&gt;
+<i>39</i>&nbsp; * A &lt;code&gt;ChunkedInputStream&lt;/code&gt; is also &lt;code&gt;Hurryable&lt;/code&gt; so it
+<i>40</i>&nbsp; * can be hurried to the end of the stream if the bytes are available on
+<i>41</i>&nbsp; * the underlying stream.
+<i>42</i>&nbsp; */
+<i>43</i>&nbsp;public
+<i>44</i>&nbsp;class ChunkedInputStream extends InputStream implements Hurryable {
+<i>45</i>&nbsp;
+<i>46</i>&nbsp;    /**
+<i>47</i>&nbsp;     * The underlying stream
+<i>48</i>&nbsp;     */
+<i>49</i>&nbsp;    private InputStream in;
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;    /**
+<i>52</i>&nbsp;     * The &lt;code&gt;HttpClient&lt;/code&gt; that should be notified when the chunked stream has
+<i>53</i>&nbsp;     * completed.
+<i>54</i>&nbsp;     */
+<i>55</i>&nbsp;    private HttpClient hc;
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;    /**
+<i>58</i>&nbsp;     * The &lt;code&gt;MessageHeader&lt;/code&gt; that is populated with any optional trailer
+<i>59</i>&nbsp;     * that appear after the last chunk.
+<i>60</i>&nbsp;     */
+<i>61</i>&nbsp;    private MessageHeader responses;
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    /**
+<i>64</i>&nbsp;     * The size, in bytes, of the chunk that is currently being read.
+<i>65</i>&nbsp;     * This size is only valid if the current position in the underlying
+<i>66</i>&nbsp;     * input stream is inside a chunk (ie: state == STATE_READING_CHUNK).
+<i>67</i>&nbsp;     */
+<i>68</i>&nbsp;    private int chunkSize;
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    /**
+<i>71</i>&nbsp;     * The number of bytes read from the underlying stream for the current
+<i>72</i>&nbsp;     * chunk. This value is always in the range &lt;code&gt;0&lt;/code&gt; through to
+<i>73</i>&nbsp;     * &lt;code&gt;chunkSize&lt;/code&gt;
+<i>74</i>&nbsp;     */
+<i>75</i>&nbsp;    private int chunkRead;
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    /**
+<i>78</i>&nbsp;     * The internal buffer array where chunk data is available for the
+<i>79</i>&nbsp;     * application to read.
+<i>80</i>&nbsp;     */
+<b class="nc"><i>81</i>&nbsp;    private byte chunkData[] = new byte[4096];</b>
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;    /**
+<i>84</i>&nbsp;     * The current position in the buffer. It contains the index
+<i>85</i>&nbsp;     * of the next byte to read from &lt;code&gt;chunkData&lt;/code&gt;
+<i>86</i>&nbsp;     */
+<i>87</i>&nbsp;    private int chunkPos;
+<i>88</i>&nbsp;
+<i>89</i>&nbsp;    /**
+<i>90</i>&nbsp;     * The index one greater than the index of the last valid byte in the
+<i>91</i>&nbsp;     * buffer. This value is always in the range &lt;code&gt;0&lt;/code&gt; through
+<i>92</i>&nbsp;     * &lt;code&gt;chunkData.length&lt;/code&gt;.
+<i>93</i>&nbsp;     */
+<i>94</i>&nbsp;    private int chunkCount;
+<i>95</i>&nbsp;
+<i>96</i>&nbsp;    /**
+<i>97</i>&nbsp;     * The internal buffer where bytes from the underlying stream can be
+<i>98</i>&nbsp;     * read. It may contain bytes representing chunk-size, chunk-data, or
+<i>99</i>&nbsp;     * trailer fields.
+<i>100</i>&nbsp;     */
+<b class="nc"><i>101</i>&nbsp;    private byte rawData[] = new byte[32];</b>
+<i>102</i>&nbsp;
+<i>103</i>&nbsp;    /**
+<i>104</i>&nbsp;     * The current position in the buffer. It contains the index
+<i>105</i>&nbsp;     * of the next byte to read from &lt;code&gt;rawData&lt;/code&gt;
+<i>106</i>&nbsp;     */
+<i>107</i>&nbsp;    private int rawPos;
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    /**
+<i>110</i>&nbsp;     * The index one greater than the index of the last valid byte in the
+<i>111</i>&nbsp;     * buffer. This value is always in the range &lt;code&gt;0&lt;/code&gt; through
+<i>112</i>&nbsp;     * &lt;code&gt;rawData.length&lt;/code&gt;.
+<i>113</i>&nbsp;     */
+<i>114</i>&nbsp;    private int rawCount;
+<i>115</i>&nbsp;
+<i>116</i>&nbsp;    /**
+<i>117</i>&nbsp;     * Indicates if an error was encountered when processing the chunked
+<i>118</i>&nbsp;     * stream.
+<i>119</i>&nbsp;     */
+<i>120</i>&nbsp;    private boolean error;
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;    /**
+<i>123</i>&nbsp;     * Indicates if the chunked stream has been closed using the
+<i>124</i>&nbsp;     * &lt;code&gt;close&lt;/code&gt; method.
+<i>125</i>&nbsp;     */
+<i>126</i>&nbsp;    private boolean closed;
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;    /*
+<i>129</i>&nbsp;     * Maximum chunk header size of 2KB + 2 bytes for CRLF
+<i>130</i>&nbsp;     */
+<i>131</i>&nbsp;    private static final int MAX_CHUNK_HEADER_SIZE = 2050;
+<i>132</i>&nbsp;
+<i>133</i>&nbsp;    /**
+<i>134</i>&nbsp;     * State to indicate that next field should be :-
+<i>135</i>&nbsp;     *  chunk-size [ chunk-extension ] CRLF
+<i>136</i>&nbsp;     */
+<i>137</i>&nbsp;    static final int STATE_AWAITING_CHUNK_HEADER    = 1;
+<i>138</i>&nbsp;
+<i>139</i>&nbsp;    /**
+<i>140</i>&nbsp;     * State to indicate that we are currently reading the chunk-data.
+<i>141</i>&nbsp;     */
+<i>142</i>&nbsp;    static final int STATE_READING_CHUNK            = 2;
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;    /**
+<i>145</i>&nbsp;     * Indicates that a chunk has been completely read and the next
+<i>146</i>&nbsp;     * fields to be examine should be CRLF
+<i>147</i>&nbsp;     */
+<i>148</i>&nbsp;    static final int STATE_AWAITING_CHUNK_EOL       = 3;
+<i>149</i>&nbsp;
+<i>150</i>&nbsp;    /**
+<i>151</i>&nbsp;     * Indicates that all chunks have been read and the next field
+<i>152</i>&nbsp;     * should be optional trailers or an indication that the chunked
+<i>153</i>&nbsp;     * stream is complete.
+<i>154</i>&nbsp;     */
+<i>155</i>&nbsp;    static final int STATE_AWAITING_TRAILERS        = 4;
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;    /**
+<i>158</i>&nbsp;     * State to indicate that the chunked stream is complete and
+<i>159</i>&nbsp;     * no further bytes should be read from the underlying stream.
+<i>160</i>&nbsp;     */
+<i>161</i>&nbsp;    static final int STATE_DONE                     = 5;
+<i>162</i>&nbsp;
+<i>163</i>&nbsp;    /**
+<i>164</i>&nbsp;     * Indicates the current state.
+<i>165</i>&nbsp;     */
+<i>166</i>&nbsp;    private int state;
+<i>167</i>&nbsp;
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;    /**
+<i>170</i>&nbsp;     * Check to make sure that this stream has not been closed.
+<i>171</i>&nbsp;     */
+<i>172</i>&nbsp;    private void ensureOpen() throws IOException {
+<b class="nc"><i>173</i>&nbsp;        if (closed) {</b>
+<b class="nc"><i>174</i>&nbsp;            throw new IOException(&quot;stream is closed&quot;);</b>
+<i>175</i>&nbsp;        }
+<i>176</i>&nbsp;    }
+<i>177</i>&nbsp;
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;    /**
+<i>180</i>&nbsp;     * Ensures there is &lt;code&gt;size&lt;/code&gt; bytes available in
+<i>181</i>&nbsp;     * &lt;code&gt;rawData&lt;/code&gt;. This requires that we either
+<i>182</i>&nbsp;     * shift the bytes in use to the begining of the buffer
+<i>183</i>&nbsp;     * or allocate a large buffer with sufficient space available.
+<i>184</i>&nbsp;     */
+<i>185</i>&nbsp;    private void ensureRawAvailable(int size) {
+<b class="nc"><i>186</i>&nbsp;        if (rawCount + size &gt; rawData.length) {</b>
+<b class="nc"><i>187</i>&nbsp;            int used = rawCount - rawPos;</b>
+<b class="nc"><i>188</i>&nbsp;            if (used + size &gt; rawData.length) {</b>
+<b class="nc"><i>189</i>&nbsp;                byte tmp[] = new byte[used + size];</b>
+<b class="nc"><i>190</i>&nbsp;                if (used &gt; 0) {</b>
+<b class="nc"><i>191</i>&nbsp;                    System.arraycopy(rawData, rawPos, tmp, 0, used);</b>
+<i>192</i>&nbsp;                }
+<b class="nc"><i>193</i>&nbsp;                rawData = tmp;</b>
+<b class="nc"><i>194</i>&nbsp;            } else {</b>
+<b class="nc"><i>195</i>&nbsp;                if (used &gt; 0) {</b>
+<b class="nc"><i>196</i>&nbsp;                    System.arraycopy(rawData, rawPos, rawData, 0, used);</b>
+<i>197</i>&nbsp;                }
+<i>198</i>&nbsp;            }
+<b class="nc"><i>199</i>&nbsp;            rawCount = used;</b>
+<b class="nc"><i>200</i>&nbsp;            rawPos = 0;</b>
+<i>201</i>&nbsp;        }
+<i>202</i>&nbsp;    }
+<i>203</i>&nbsp;
+<i>204</i>&nbsp;
+<i>205</i>&nbsp;    /**
+<i>206</i>&nbsp;     * Close the underlying input stream by either returning it to the
+<i>207</i>&nbsp;     * keep alive cache or closing the stream.
+<i>208</i>&nbsp;     * &lt;p&gt;
+<i>209</i>&nbsp;     * As a chunked stream is inheritly persistent (see HTTP 1.1 RFC) the
+<i>210</i>&nbsp;     * underlying stream can be returned to the keep alive cache if the
+<i>211</i>&nbsp;     * stream can be completely read without error.
+<i>212</i>&nbsp;     */
+<i>213</i>&nbsp;    private void closeUnderlying() throws IOException {
+<b class="nc"><i>214</i>&nbsp;        if (in == null) {</b>
+<i>215</i>&nbsp;            return;
+<i>216</i>&nbsp;        }
+<i>217</i>&nbsp;
+<b class="nc"><i>218</i>&nbsp;        if (!error &amp;&amp; state == STATE_DONE) {</b>
+<b class="nc"><i>219</i>&nbsp;            hc.finished();</b>
+<i>220</i>&nbsp;        } else {
+<b class="nc"><i>221</i>&nbsp;            if (!hurry()) {</b>
+<b class="nc"><i>222</i>&nbsp;                hc.closeServer();</b>
+<i>223</i>&nbsp;            }
+<i>224</i>&nbsp;        }
+<i>225</i>&nbsp;
+<b class="nc"><i>226</i>&nbsp;        in = null;</b>
+<i>227</i>&nbsp;    }
+<i>228</i>&nbsp;
+<i>229</i>&nbsp;    /**
+<i>230</i>&nbsp;     * Attempt to read the remainder of a chunk directly into the
+<i>231</i>&nbsp;     * caller&#39;s buffer.
+<i>232</i>&nbsp;     * &lt;p&gt;
+<i>233</i>&nbsp;     * Return the number of bytes read.
+<i>234</i>&nbsp;     */
+<i>235</i>&nbsp;    private int fastRead(byte[] b, int off, int len) throws IOException {
+<i>236</i>&nbsp;
+<i>237</i>&nbsp;        // assert state == STATE_READING_CHUNKS;
+<i>238</i>&nbsp;
+<b class="nc"><i>239</i>&nbsp;        int remaining = chunkSize - chunkRead;</b>
+<b class="nc"><i>240</i>&nbsp;        int cnt = (remaining &lt; len) ? remaining : len;</b>
+<b class="nc"><i>241</i>&nbsp;        if (cnt &gt; 0) {</b>
+<i>242</i>&nbsp;            int nread;
+<i>243</i>&nbsp;            try {
+<b class="nc"><i>244</i>&nbsp;                nread = in.read(b, off, cnt);</b>
+<b class="nc"><i>245</i>&nbsp;            } catch (IOException e) {</b>
+<b class="nc"><i>246</i>&nbsp;                error = true;</b>
+<b class="nc"><i>247</i>&nbsp;                throw e;</b>
+<b class="nc"><i>248</i>&nbsp;            }</b>
+<b class="nc"><i>249</i>&nbsp;            if (nread &gt; 0) {</b>
+<b class="nc"><i>250</i>&nbsp;                chunkRead += nread;</b>
+<b class="nc"><i>251</i>&nbsp;                if (chunkRead &gt;= chunkSize) {</b>
+<b class="nc"><i>252</i>&nbsp;                    state = STATE_AWAITING_CHUNK_EOL;</b>
+<i>253</i>&nbsp;                }
+<b class="nc"><i>254</i>&nbsp;                return nread;</b>
+<i>255</i>&nbsp;            }
+<b class="nc"><i>256</i>&nbsp;            error = true;</b>
+<b class="nc"><i>257</i>&nbsp;            throw new IOException(&quot;Premature EOF&quot;);</b>
+<i>258</i>&nbsp;        } else {
+<b class="nc"><i>259</i>&nbsp;            return 0;</b>
+<i>260</i>&nbsp;        }
+<i>261</i>&nbsp;    }
+<i>262</i>&nbsp;
+<i>263</i>&nbsp;    /**
+<i>264</i>&nbsp;     * Process any outstanding bytes that have already been read into
+<i>265</i>&nbsp;     * &lt;code&gt;rawData&lt;/code&gt;.
+<i>266</i>&nbsp;     * &lt;p&gt;
+<i>267</i>&nbsp;     * The parsing of the chunked stream is performed as a state machine with
+<i>268</i>&nbsp;     * &lt;code&gt;state&lt;/code&gt; representing the current state of the processing.
+<i>269</i>&nbsp;     * &lt;p&gt;
+<i>270</i>&nbsp;     * Returns when either all the outstanding bytes in rawData have been
+<i>271</i>&nbsp;     * processed or there is insufficient bytes available to continue
+<i>272</i>&nbsp;     * processing. When the latter occurs &lt;code&gt;rawPos&lt;/code&gt; will not have
+<i>273</i>&nbsp;     * been updated and thus the processing can be restarted once further
+<i>274</i>&nbsp;     * bytes have been read into &lt;code&gt;rawData&lt;/code&gt;.
+<i>275</i>&nbsp;     */
+<i>276</i>&nbsp;    private void processRaw() throws IOException {
+<i>277</i>&nbsp;        int pos;
+<i>278</i>&nbsp;        int i;
+<i>279</i>&nbsp;
+<b class="nc"><i>280</i>&nbsp;        while (state != STATE_DONE) {</b>
+<i>281</i>&nbsp;
+<b class="nc"><i>282</i>&nbsp;            switch (state) {</b>
+<i>283</i>&nbsp;
+<i>284</i>&nbsp;                /**
+<i>285</i>&nbsp;                 * We are awaiting a line with a chunk header
+<i>286</i>&nbsp;                 */
+<i>287</i>&nbsp;                case STATE_AWAITING_CHUNK_HEADER:
+<i>288</i>&nbsp;                    /*
+<i>289</i>&nbsp;                     * Find \n to indicate end of chunk header. If not found when there is
+<i>290</i>&nbsp;                     * insufficient bytes in the raw buffer to parse a chunk header.
+<i>291</i>&nbsp;                     */
+<b class="nc"><i>292</i>&nbsp;                    pos = rawPos;</b>
+<b class="nc"><i>293</i>&nbsp;                    while (pos &lt; rawCount) {</b>
+<b class="nc"><i>294</i>&nbsp;                        if (rawData[pos] == &#39;\n&#39;) {</b>
+<b class="nc"><i>295</i>&nbsp;                            break;</b>
+<i>296</i>&nbsp;                        }
+<b class="nc"><i>297</i>&nbsp;                        pos++;</b>
+<b class="nc"><i>298</i>&nbsp;                        if ((pos - rawPos) &gt;= MAX_CHUNK_HEADER_SIZE) {</b>
+<b class="nc"><i>299</i>&nbsp;                            error = true;</b>
+<b class="nc"><i>300</i>&nbsp;                            throw new IOException(&quot;Chunk header too long&quot;);</b>
+<i>301</i>&nbsp;                        }
+<i>302</i>&nbsp;                    }
+<b class="nc"><i>303</i>&nbsp;                    if (pos &gt;= rawCount) {</b>
+<i>304</i>&nbsp;                        return;
+<i>305</i>&nbsp;                    }
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;                    /*
+<i>308</i>&nbsp;                     * Extract the chunk size from the header (ignoring extensions).
+<i>309</i>&nbsp;                     */
+<b class="nc"><i>310</i>&nbsp;                    String header = new String(rawData, rawPos, pos-rawPos+1, &quot;US-ASCII&quot;);</b>
+<b class="nc"><i>311</i>&nbsp;                    for (i=0; i &lt; header.length(); i++) {</b>
+<b class="nc"><i>312</i>&nbsp;                        if (Character.digit(header.charAt(i), 16) == -1)</b>
+<b class="nc"><i>313</i>&nbsp;                            break;</b>
+<i>314</i>&nbsp;                    }
+<i>315</i>&nbsp;                    try {
+<b class="nc"><i>316</i>&nbsp;                        chunkSize = Integer.parseInt(header, 0, i, 16);</b>
+<b class="nc"><i>317</i>&nbsp;                    } catch (NumberFormatException e) {</b>
+<b class="nc"><i>318</i>&nbsp;                        error = true;</b>
+<b class="nc"><i>319</i>&nbsp;                        throw new IOException(&quot;Bogus chunk size&quot;);</b>
+<b class="nc"><i>320</i>&nbsp;                    }</b>
+<i>321</i>&nbsp;
+<i>322</i>&nbsp;                    /*
+<i>323</i>&nbsp;                     * Chunk has been parsed so move rawPos to first byte of chunk
+<i>324</i>&nbsp;                     * data.
+<i>325</i>&nbsp;                     */
+<b class="nc"><i>326</i>&nbsp;                    rawPos = pos + 1;</b>
+<b class="nc"><i>327</i>&nbsp;                    chunkRead = 0;</b>
+<i>328</i>&nbsp;
+<i>329</i>&nbsp;                    /*
+<i>330</i>&nbsp;                     * A chunk size of 0 means EOF.
+<i>331</i>&nbsp;                     */
+<b class="nc"><i>332</i>&nbsp;                    if (chunkSize &gt; 0) {</b>
+<b class="nc"><i>333</i>&nbsp;                        state = STATE_READING_CHUNK;</b>
+<i>334</i>&nbsp;                    } else {
+<b class="nc"><i>335</i>&nbsp;                        state = STATE_AWAITING_TRAILERS;</b>
+<i>336</i>&nbsp;                    }
+<b class="nc"><i>337</i>&nbsp;                    break;</b>
+<i>338</i>&nbsp;
+<i>339</i>&nbsp;
+<i>340</i>&nbsp;                /**
+<i>341</i>&nbsp;                 * We are awaiting raw entity data (some may have already been
+<i>342</i>&nbsp;                 * read). chunkSize is the size of the chunk; chunkRead is the
+<i>343</i>&nbsp;                 * total read from the underlying stream to date.
+<i>344</i>&nbsp;                 */
+<i>345</i>&nbsp;                case STATE_READING_CHUNK :
+<i>346</i>&nbsp;                    /* no data available yet */
+<b class="nc"><i>347</i>&nbsp;                    if (rawPos &gt;= rawCount) {</b>
+<i>348</i>&nbsp;                        return;
+<i>349</i>&nbsp;                    }
+<i>350</i>&nbsp;
+<i>351</i>&nbsp;                    /*
+<i>352</i>&nbsp;                     * Compute the number of bytes of chunk data available in the
+<i>353</i>&nbsp;                     * raw buffer.
+<i>354</i>&nbsp;                     */
+<b class="nc"><i>355</i>&nbsp;                    int copyLen = Math.min( chunkSize-chunkRead, rawCount-rawPos );</b>
+<i>356</i>&nbsp;
+<i>357</i>&nbsp;                    /*
+<i>358</i>&nbsp;                     * Expand or compact chunkData if needed.
+<i>359</i>&nbsp;                     */
+<b class="nc"><i>360</i>&nbsp;                    if (chunkData.length &lt; chunkCount + copyLen) {</b>
+<b class="nc"><i>361</i>&nbsp;                        int cnt = chunkCount - chunkPos;</b>
+<b class="nc"><i>362</i>&nbsp;                        if (chunkData.length &lt; cnt + copyLen) {</b>
+<b class="nc"><i>363</i>&nbsp;                            byte tmp[] = new byte[cnt + copyLen];</b>
+<b class="nc"><i>364</i>&nbsp;                            System.arraycopy(chunkData, chunkPos, tmp, 0, cnt);</b>
+<b class="nc"><i>365</i>&nbsp;                            chunkData = tmp;</b>
+<b class="nc"><i>366</i>&nbsp;                        } else {</b>
+<b class="nc"><i>367</i>&nbsp;                            System.arraycopy(chunkData, chunkPos, chunkData, 0, cnt);</b>
+<i>368</i>&nbsp;                        }
+<b class="nc"><i>369</i>&nbsp;                        chunkPos = 0;</b>
+<b class="nc"><i>370</i>&nbsp;                        chunkCount = cnt;</b>
+<i>371</i>&nbsp;                    }
+<i>372</i>&nbsp;
+<i>373</i>&nbsp;                    /*
+<i>374</i>&nbsp;                     * Copy the chunk data into chunkData so that it&#39;s available
+<i>375</i>&nbsp;                     * to the read methods.
+<i>376</i>&nbsp;                     */
+<b class="nc"><i>377</i>&nbsp;                    System.arraycopy(rawData, rawPos, chunkData, chunkCount, copyLen);</b>
+<b class="nc"><i>378</i>&nbsp;                    rawPos += copyLen;</b>
+<b class="nc"><i>379</i>&nbsp;                    chunkCount += copyLen;</b>
+<b class="nc"><i>380</i>&nbsp;                    chunkRead += copyLen;</b>
+<i>381</i>&nbsp;
+<i>382</i>&nbsp;                    /*
+<i>383</i>&nbsp;                     * If all the chunk has been copied into chunkData then the next
+<i>384</i>&nbsp;                     * token should be CRLF.
+<i>385</i>&nbsp;                     */
+<b class="nc"><i>386</i>&nbsp;                    if (chunkSize - chunkRead &lt;= 0) {</b>
+<b class="nc"><i>387</i>&nbsp;                        state = STATE_AWAITING_CHUNK_EOL;</b>
+<i>388</i>&nbsp;                    } else {
+<i>389</i>&nbsp;                        return;
+<i>390</i>&nbsp;                    }
+<i>391</i>&nbsp;                    break;
+<i>392</i>&nbsp;
+<i>393</i>&nbsp;
+<i>394</i>&nbsp;                /**
+<i>395</i>&nbsp;                 * Awaiting CRLF after the chunk
+<i>396</i>&nbsp;                 */
+<i>397</i>&nbsp;                case STATE_AWAITING_CHUNK_EOL:
+<i>398</i>&nbsp;                    /* not available yet */
+<b class="nc"><i>399</i>&nbsp;                    if (rawPos + 1 &gt;= rawCount) {</b>
+<i>400</i>&nbsp;                        return;
+<i>401</i>&nbsp;                    }
+<i>402</i>&nbsp;
+<b class="nc"><i>403</i>&nbsp;                    if (rawData[rawPos] != &#39;\r&#39;) {</b>
+<b class="nc"><i>404</i>&nbsp;                        error = true;</b>
+<b class="nc"><i>405</i>&nbsp;                        throw new IOException(&quot;missing CR&quot;);</b>
+<i>406</i>&nbsp;                    }
+<b class="nc"><i>407</i>&nbsp;                    if (rawData[rawPos+1] != &#39;\n&#39;) {</b>
+<b class="nc"><i>408</i>&nbsp;                        error = true;</b>
+<b class="nc"><i>409</i>&nbsp;                        throw new IOException(&quot;missing LF&quot;);</b>
+<i>410</i>&nbsp;                    }
+<b class="nc"><i>411</i>&nbsp;                    rawPos += 2;</b>
+<i>412</i>&nbsp;
+<i>413</i>&nbsp;                    /*
+<i>414</i>&nbsp;                     * Move onto the next chunk
+<i>415</i>&nbsp;                     */
+<b class="nc"><i>416</i>&nbsp;                    state = STATE_AWAITING_CHUNK_HEADER;</b>
+<b class="nc"><i>417</i>&nbsp;                    break;</b>
+<i>418</i>&nbsp;
+<i>419</i>&nbsp;
+<i>420</i>&nbsp;                /**
+<i>421</i>&nbsp;                 * Last chunk has been read so not we&#39;re waiting for optional
+<i>422</i>&nbsp;                 * trailers.
+<i>423</i>&nbsp;                 */
+<i>424</i>&nbsp;                case STATE_AWAITING_TRAILERS:
+<i>425</i>&nbsp;
+<i>426</i>&nbsp;                    /*
+<i>427</i>&nbsp;                     * Do we have an entire line in the raw buffer?
+<i>428</i>&nbsp;                     */
+<b class="nc"><i>429</i>&nbsp;                    pos = rawPos;</b>
+<b class="nc"><i>430</i>&nbsp;                    while (pos &lt; rawCount) {</b>
+<b class="nc"><i>431</i>&nbsp;                        if (rawData[pos] == &#39;\n&#39;) {</b>
+<b class="nc"><i>432</i>&nbsp;                            break;</b>
+<i>433</i>&nbsp;                        }
+<b class="nc"><i>434</i>&nbsp;                        pos++;</b>
+<i>435</i>&nbsp;                    }
+<b class="nc"><i>436</i>&nbsp;                    if (pos &gt;= rawCount) {</b>
+<i>437</i>&nbsp;                        return;
+<i>438</i>&nbsp;                    }
+<i>439</i>&nbsp;
+<b class="nc"><i>440</i>&nbsp;                    if (pos == rawPos) {</b>
+<b class="nc"><i>441</i>&nbsp;                        error = true;</b>
+<b class="nc"><i>442</i>&nbsp;                        throw new IOException(&quot;LF should be proceeded by CR&quot;);</b>
+<i>443</i>&nbsp;                    }
+<b class="nc"><i>444</i>&nbsp;                    if (rawData[pos-1] != &#39;\r&#39;) {</b>
+<b class="nc"><i>445</i>&nbsp;                        error = true;</b>
+<b class="nc"><i>446</i>&nbsp;                        throw new IOException(&quot;LF should be proceeded by CR&quot;);</b>
+<i>447</i>&nbsp;                    }
+<i>448</i>&nbsp;
+<i>449</i>&nbsp;                    /*
+<i>450</i>&nbsp;                     * Stream done so close underlying stream.
+<i>451</i>&nbsp;                     */
+<b class="nc"><i>452</i>&nbsp;                    if (pos == (rawPos + 1)) {</b>
+<i>453</i>&nbsp;
+<b class="nc"><i>454</i>&nbsp;                        state = STATE_DONE;</b>
+<b class="nc"><i>455</i>&nbsp;                        closeUnderlying();</b>
+<i>456</i>&nbsp;
+<i>457</i>&nbsp;                        return;
+<i>458</i>&nbsp;                    }
+<i>459</i>&nbsp;
+<i>460</i>&nbsp;                    /*
+<i>461</i>&nbsp;                     * Extract any tailers and append them to the message
+<i>462</i>&nbsp;                     * headers.
+<i>463</i>&nbsp;                     */
+<b class="nc"><i>464</i>&nbsp;                    String trailer = new String(rawData, rawPos, pos-rawPos, &quot;US-ASCII&quot;);</b>
+<b class="nc"><i>465</i>&nbsp;                    i = trailer.indexOf(&#39;:&#39;);</b>
+<b class="nc"><i>466</i>&nbsp;                    if (i == -1) {</b>
+<b class="nc"><i>467</i>&nbsp;                        throw new IOException(&quot;Malformed tailer - format should be key:value&quot;);</b>
+<i>468</i>&nbsp;                    }
+<b class="nc"><i>469</i>&nbsp;                    String key = (trailer.substring(0, i)).trim();</b>
+<b class="nc"><i>470</i>&nbsp;                    String value = (trailer.substring(i+1, trailer.length())).trim();</b>
+<i>471</i>&nbsp;
+<b class="nc"><i>472</i>&nbsp;                    responses.add(key, value);</b>
+<i>473</i>&nbsp;
+<i>474</i>&nbsp;                    /*
+<i>475</i>&nbsp;                     * Move onto the next trailer.
+<i>476</i>&nbsp;                     */
+<b class="nc"><i>477</i>&nbsp;                    rawPos = pos+1;</b>
+<b class="nc"><i>478</i>&nbsp;                    break;</b>
+<i>479</i>&nbsp;
+<i>480</i>&nbsp;            } /* switch */
+<i>481</i>&nbsp;        }
+<i>482</i>&nbsp;    }
+<i>483</i>&nbsp;
+<i>484</i>&nbsp;
+<i>485</i>&nbsp;    /**
+<i>486</i>&nbsp;     * Reads any available bytes from the underlying stream into
+<i>487</i>&nbsp;     * &lt;code&gt;rawData&lt;/code&gt; and returns the number of bytes of
+<i>488</i>&nbsp;     * chunk data available in &lt;code&gt;chunkData&lt;/code&gt; that the
+<i>489</i>&nbsp;     * application can read.
+<i>490</i>&nbsp;     */
+<i>491</i>&nbsp;    private int readAheadNonBlocking() throws IOException {
+<i>492</i>&nbsp;
+<i>493</i>&nbsp;        /*
+<i>494</i>&nbsp;         * If there&#39;s anything available on the underlying stream then we read
+<i>495</i>&nbsp;         * it into the raw buffer and process it. Processing ensures that any
+<i>496</i>&nbsp;         * available chunk data is made available in chunkData.
+<i>497</i>&nbsp;         */
+<b class="nc"><i>498</i>&nbsp;        int avail = in.available();</b>
+<b class="nc"><i>499</i>&nbsp;        if (avail &gt; 0) {</b>
+<i>500</i>&nbsp;
+<i>501</i>&nbsp;            /* ensure that there is space in rawData to read the available */
+<b class="nc"><i>502</i>&nbsp;            ensureRawAvailable(avail);</b>
+<i>503</i>&nbsp;
+<i>504</i>&nbsp;            int nread;
+<i>505</i>&nbsp;            try {
+<b class="nc"><i>506</i>&nbsp;                nread = in.read(rawData, rawCount, avail);</b>
+<b class="nc"><i>507</i>&nbsp;            } catch (IOException e) {</b>
+<b class="nc"><i>508</i>&nbsp;                error = true;</b>
+<b class="nc"><i>509</i>&nbsp;                throw e;</b>
+<b class="nc"><i>510</i>&nbsp;            }</b>
+<b class="nc"><i>511</i>&nbsp;            if (nread &lt; 0) {</b>
+<b class="nc"><i>512</i>&nbsp;                error = true;   /* premature EOF ? */</b>
+<b class="nc"><i>513</i>&nbsp;                return -1;</b>
+<i>514</i>&nbsp;            }
+<b class="nc"><i>515</i>&nbsp;            rawCount += nread;</b>
+<i>516</i>&nbsp;
+<i>517</i>&nbsp;            /*
+<i>518</i>&nbsp;             * Process the raw bytes that have been read.
+<i>519</i>&nbsp;             */
+<b class="nc"><i>520</i>&nbsp;            processRaw();</b>
+<i>521</i>&nbsp;        }
+<i>522</i>&nbsp;
+<i>523</i>&nbsp;        /*
+<i>524</i>&nbsp;         * Return the number of chunked bytes available to read
+<i>525</i>&nbsp;         */
+<b class="nc"><i>526</i>&nbsp;        return chunkCount - chunkPos;</b>
+<i>527</i>&nbsp;    }
+<i>528</i>&nbsp;
+<i>529</i>&nbsp;    /**
+<i>530</i>&nbsp;     * Reads from the underlying stream until there is chunk data
+<i>531</i>&nbsp;     * available in &lt;code&gt;chunkData&lt;/code&gt; for the application to
+<i>532</i>&nbsp;     * read.
+<i>533</i>&nbsp;     */
+<i>534</i>&nbsp;    private int readAheadBlocking() throws IOException {
+<i>535</i>&nbsp;
+<i>536</i>&nbsp;        do {
+<i>537</i>&nbsp;            /*
+<i>538</i>&nbsp;             * All of chunked response has been read to return EOF.
+<i>539</i>&nbsp;             */
+<b class="nc"><i>540</i>&nbsp;            if (state == STATE_DONE) {</b>
+<b class="nc"><i>541</i>&nbsp;                return -1;</b>
+<i>542</i>&nbsp;            }
+<i>543</i>&nbsp;
+<i>544</i>&nbsp;            /*
+<i>545</i>&nbsp;             * We must read into the raw buffer so make sure there is space
+<i>546</i>&nbsp;             * available. We use a size of 32 to avoid too much chunk data
+<i>547</i>&nbsp;             * being read into the raw buffer.
+<i>548</i>&nbsp;             */
+<b class="nc"><i>549</i>&nbsp;            ensureRawAvailable(32);</b>
+<i>550</i>&nbsp;            int nread;
+<i>551</i>&nbsp;            try {
+<b class="nc"><i>552</i>&nbsp;                nread = in.read(rawData, rawCount, rawData.length-rawCount);</b>
+<b class="nc"><i>553</i>&nbsp;            } catch (IOException e) {</b>
+<b class="nc"><i>554</i>&nbsp;                error = true;</b>
+<b class="nc"><i>555</i>&nbsp;                throw e;</b>
+<b class="nc"><i>556</i>&nbsp;            }</b>
+<i>557</i>&nbsp;
+<i>558</i>&nbsp;            /**
+<i>559</i>&nbsp;             * If we hit EOF it means there&#39;s a problem as we should never
+<i>560</i>&nbsp;             * attempt to read once the last chunk and trailers have been
+<i>561</i>&nbsp;             * received.
+<i>562</i>&nbsp;             */
+<b class="nc"><i>563</i>&nbsp;            if (nread &lt; 0) {</b>
+<b class="nc"><i>564</i>&nbsp;                error = true;</b>
+<b class="nc"><i>565</i>&nbsp;                throw new IOException(&quot;Premature EOF&quot;);</b>
+<i>566</i>&nbsp;            }
+<i>567</i>&nbsp;
+<i>568</i>&nbsp;            /**
+<i>569</i>&nbsp;             * Process the bytes from the underlying stream
+<i>570</i>&nbsp;             */
+<b class="nc"><i>571</i>&nbsp;            rawCount += nread;</b>
+<b class="nc"><i>572</i>&nbsp;            processRaw();</b>
+<i>573</i>&nbsp;
+<b class="nc"><i>574</i>&nbsp;        } while (chunkCount &lt;= 0);</b>
+<i>575</i>&nbsp;
+<i>576</i>&nbsp;        /*
+<i>577</i>&nbsp;         * Return the number of chunked bytes available to read
+<i>578</i>&nbsp;         */
+<b class="nc"><i>579</i>&nbsp;        return chunkCount - chunkPos;</b>
+<i>580</i>&nbsp;    }
+<i>581</i>&nbsp;
+<i>582</i>&nbsp;    /**
+<i>583</i>&nbsp;     * Read ahead in either blocking or non-blocking mode. This method
+<i>584</i>&nbsp;     * is typically used when we run out of available bytes in
+<i>585</i>&nbsp;     * &lt;code&gt;chunkData&lt;/code&gt; or we need to determine how many bytes
+<i>586</i>&nbsp;     * are available on the input stream.
+<i>587</i>&nbsp;     */
+<i>588</i>&nbsp;    private int readAhead(boolean allowBlocking) throws IOException {
+<i>589</i>&nbsp;
+<i>590</i>&nbsp;        /*
+<i>591</i>&nbsp;         * Last chunk already received - return EOF
+<i>592</i>&nbsp;         */
+<b class="nc"><i>593</i>&nbsp;        if (state == STATE_DONE) {</b>
+<b class="nc"><i>594</i>&nbsp;            return -1;</b>
+<i>595</i>&nbsp;        }
+<i>596</i>&nbsp;
+<i>597</i>&nbsp;        /*
+<i>598</i>&nbsp;         * Reset position/count if data in chunkData is exhausted.
+<i>599</i>&nbsp;         */
+<b class="nc"><i>600</i>&nbsp;        if (chunkPos &gt;= chunkCount) {</b>
+<b class="nc"><i>601</i>&nbsp;            chunkCount = 0;</b>
+<b class="nc"><i>602</i>&nbsp;            chunkPos = 0;</b>
+<i>603</i>&nbsp;        }
+<i>604</i>&nbsp;
+<i>605</i>&nbsp;        /*
+<i>606</i>&nbsp;         * Read ahead blocking or non-blocking
+<i>607</i>&nbsp;         */
+<b class="nc"><i>608</i>&nbsp;        if (allowBlocking) {</b>
+<b class="nc"><i>609</i>&nbsp;            return readAheadBlocking();</b>
+<i>610</i>&nbsp;        } else {
+<b class="nc"><i>611</i>&nbsp;            return readAheadNonBlocking();</b>
+<i>612</i>&nbsp;        }
+<i>613</i>&nbsp;    }
+<i>614</i>&nbsp;
+<i>615</i>&nbsp;    /**
+<i>616</i>&nbsp;     * Creates a &lt;code&gt;ChunkedInputStream&lt;/code&gt; and saves its  arguments, for
+<i>617</i>&nbsp;     * later use.
+<i>618</i>&nbsp;     *
+<i>619</i>&nbsp;     * @param   in   the underlying input stream.
+<i>620</i>&nbsp;     * @param   hc   the HttpClient
+<i>621</i>&nbsp;     * @param   responses   the MessageHeader that should be populated with optional
+<i>622</i>&nbsp;     *                      trailers.
+<i>623</i>&nbsp;     */
+<b class="nc"><i>624</i>&nbsp;    public ChunkedInputStream(InputStream in, HttpClient hc, MessageHeader responses) throws IOException {</b>
+<i>625</i>&nbsp;
+<i>626</i>&nbsp;        /* save arguments */
+<b class="nc"><i>627</i>&nbsp;        this.in = in;</b>
+<b class="nc"><i>628</i>&nbsp;        this.responses = responses;</b>
+<b class="nc"><i>629</i>&nbsp;        this.hc = hc;</b>
+<i>630</i>&nbsp;
+<i>631</i>&nbsp;        /*
+<i>632</i>&nbsp;         * Set our initial state to indicate that we are first starting to
+<i>633</i>&nbsp;         * look for a chunk header.
+<i>634</i>&nbsp;         */
+<b class="nc"><i>635</i>&nbsp;        state = STATE_AWAITING_CHUNK_HEADER;</b>
+<i>636</i>&nbsp;    }
+<i>637</i>&nbsp;
+<i>638</i>&nbsp;    /**
+<i>639</i>&nbsp;     * See
+<i>640</i>&nbsp;     * the general contract of the &lt;code&gt;read&lt;/code&gt;
+<i>641</i>&nbsp;     * method of &lt;code&gt;InputStream&lt;/code&gt;.
+<i>642</i>&nbsp;     *
+<i>643</i>&nbsp;     * @return     the next byte of data, or &lt;code&gt;-1&lt;/code&gt; if the end of the
+<i>644</i>&nbsp;     *             stream is reached.
+<i>645</i>&nbsp;     * @exception  IOException  if an I/O error occurs.
+<i>646</i>&nbsp;     * @see        java.io.FilterInputStream#in
+<i>647</i>&nbsp;     */
+<i>648</i>&nbsp;    public synchronized int read() throws IOException {
+<b class="nc"><i>649</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>650</i>&nbsp;        if (chunkPos &gt;= chunkCount) {</b>
+<b class="nc"><i>651</i>&nbsp;            if (readAhead(true) &lt;= 0) {</b>
+<b class="nc"><i>652</i>&nbsp;                return -1;</b>
+<i>653</i>&nbsp;            }
+<i>654</i>&nbsp;        }
+<b class="nc"><i>655</i>&nbsp;        return chunkData[chunkPos++] &amp; 0xff;</b>
+<i>656</i>&nbsp;    }
+<i>657</i>&nbsp;
+<i>658</i>&nbsp;
+<i>659</i>&nbsp;    /**
+<i>660</i>&nbsp;     * Reads bytes from this stream into the specified byte array, starting at
+<i>661</i>&nbsp;     * the given offset.
+<i>662</i>&nbsp;     *
+<i>663</i>&nbsp;     * @param      b     destination buffer.
+<i>664</i>&nbsp;     * @param      off   offset at which to start storing bytes.
+<i>665</i>&nbsp;     * @param      len   maximum number of bytes to read.
+<i>666</i>&nbsp;     * @return     the number of bytes read, or &lt;code&gt;-1&lt;/code&gt; if the end of
+<i>667</i>&nbsp;     *             the stream has been reached.
+<i>668</i>&nbsp;     * @exception  IOException  if an I/O error occurs.
+<i>669</i>&nbsp;     */
+<i>670</i>&nbsp;    public synchronized int read(byte b[], int off, int len)
+<i>671</i>&nbsp;        throws IOException
+<i>672</i>&nbsp;    {
+<b class="nc"><i>673</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>674</i>&nbsp;        if ((off &lt; 0) || (off &gt; b.length) || (len &lt; 0) ||</b>
+<i>675</i>&nbsp;            ((off + len) &gt; b.length) || ((off + len) &lt; 0)) {
+<b class="nc"><i>676</i>&nbsp;            throw new IndexOutOfBoundsException();</b>
+<b class="nc"><i>677</i>&nbsp;        } else if (len == 0) {</b>
+<b class="nc"><i>678</i>&nbsp;            return 0;</b>
+<i>679</i>&nbsp;        }
+<i>680</i>&nbsp;
+<b class="nc"><i>681</i>&nbsp;        int avail = chunkCount - chunkPos;</b>
+<b class="nc"><i>682</i>&nbsp;        if (avail &lt;= 0) {</b>
+<i>683</i>&nbsp;            /*
+<i>684</i>&nbsp;             * Optimization: if we&#39;re in the middle of the chunk read
+<i>685</i>&nbsp;             * directly from the underlying stream into the caller&#39;s
+<i>686</i>&nbsp;             * buffer
+<i>687</i>&nbsp;             */
+<b class="nc"><i>688</i>&nbsp;            if (state == STATE_READING_CHUNK) {</b>
+<b class="nc"><i>689</i>&nbsp;                return fastRead( b, off, len );</b>
+<i>690</i>&nbsp;            }
+<i>691</i>&nbsp;
+<i>692</i>&nbsp;            /*
+<i>693</i>&nbsp;             * We&#39;re not in the middle of a chunk so we must read ahead
+<i>694</i>&nbsp;             * until there is some chunk data available.
+<i>695</i>&nbsp;             */
+<b class="nc"><i>696</i>&nbsp;            avail = readAhead(true);</b>
+<b class="nc"><i>697</i>&nbsp;            if (avail &lt; 0) {</b>
+<b class="nc"><i>698</i>&nbsp;                return -1;      /* EOF */</b>
+<i>699</i>&nbsp;            }
+<i>700</i>&nbsp;        }
+<b class="nc"><i>701</i>&nbsp;        int cnt = (avail &lt; len) ? avail : len;</b>
+<b class="nc"><i>702</i>&nbsp;        System.arraycopy(chunkData, chunkPos, b, off, cnt);</b>
+<b class="nc"><i>703</i>&nbsp;        chunkPos += cnt;</b>
+<i>704</i>&nbsp;
+<b class="nc"><i>705</i>&nbsp;        return cnt;</b>
+<i>706</i>&nbsp;    }
+<i>707</i>&nbsp;
+<i>708</i>&nbsp;    /**
+<i>709</i>&nbsp;     * Returns the number of bytes that can be read from this input
+<i>710</i>&nbsp;     * stream without blocking.
+<i>711</i>&nbsp;     *
+<i>712</i>&nbsp;     * @return     the number of bytes that can be read from this input
+<i>713</i>&nbsp;     *             stream without blocking.
+<i>714</i>&nbsp;     * @exception  IOException  if an I/O error occurs.
+<i>715</i>&nbsp;     * @see        java.io.FilterInputStream#in
+<i>716</i>&nbsp;     */
+<i>717</i>&nbsp;    public synchronized int available() throws IOException {
+<b class="nc"><i>718</i>&nbsp;        ensureOpen();</b>
+<i>719</i>&nbsp;
+<b class="nc"><i>720</i>&nbsp;        int avail = chunkCount - chunkPos;</b>
+<b class="nc"><i>721</i>&nbsp;        if(avail &gt; 0) {</b>
+<b class="nc"><i>722</i>&nbsp;            return avail;</b>
+<i>723</i>&nbsp;        }
+<i>724</i>&nbsp;
+<b class="nc"><i>725</i>&nbsp;        avail = readAhead(false);</b>
+<i>726</i>&nbsp;
+<b class="nc"><i>727</i>&nbsp;        if (avail &lt; 0) {</b>
+<b class="nc"><i>728</i>&nbsp;            return 0;</b>
+<i>729</i>&nbsp;        } else  {
+<b class="nc"><i>730</i>&nbsp;            return avail;</b>
+<i>731</i>&nbsp;        }
+<i>732</i>&nbsp;    }
+<i>733</i>&nbsp;
+<i>734</i>&nbsp;    /**
+<i>735</i>&nbsp;     * Close the stream by either returning the connection to the
+<i>736</i>&nbsp;     * keep alive cache or closing the underlying stream.
+<i>737</i>&nbsp;     * &lt;p&gt;
+<i>738</i>&nbsp;     * If the chunked response hasn&#39;t been completely read we
+<i>739</i>&nbsp;     * try to &quot;hurry&quot; to the end of the response. If this is
+<i>740</i>&nbsp;     * possible (without blocking) then the connection can be
+<i>741</i>&nbsp;     * returned to the keep alive cache.
+<i>742</i>&nbsp;     *
+<i>743</i>&nbsp;     * @exception  IOException  if an I/O error occurs.
+<i>744</i>&nbsp;     */
+<i>745</i>&nbsp;    public synchronized void close() throws IOException {
+<b class="nc"><i>746</i>&nbsp;        if (closed) {</b>
+<i>747</i>&nbsp;            return;
+<i>748</i>&nbsp;        }
+<b class="nc"><i>749</i>&nbsp;        closeUnderlying();</b>
+<b class="nc"><i>750</i>&nbsp;        closed = true;</b>
+<i>751</i>&nbsp;    }
+<i>752</i>&nbsp;
+<i>753</i>&nbsp;    /**
+<i>754</i>&nbsp;     * Hurry the input stream by reading everything from the underlying
+<i>755</i>&nbsp;     * stream. If the last chunk (and optional trailers) can be read without
+<i>756</i>&nbsp;     * blocking then the stream is considered hurried.
+<i>757</i>&nbsp;     * &lt;p&gt;
+<i>758</i>&nbsp;     * Note that if an error has occurred or we can&#39;t get to last chunk
+<i>759</i>&nbsp;     * without blocking then this stream can&#39;t be hurried and should be
+<i>760</i>&nbsp;     * closed.
+<i>761</i>&nbsp;     */
+<i>762</i>&nbsp;    public synchronized boolean hurry() {
+<b class="nc"><i>763</i>&nbsp;        if (in == null || error) {</b>
+<b class="nc"><i>764</i>&nbsp;            return false;</b>
+<i>765</i>&nbsp;        }
+<i>766</i>&nbsp;
+<i>767</i>&nbsp;        try {
+<b class="nc"><i>768</i>&nbsp;            readAhead(false);</b>
+<b class="nc"><i>769</i>&nbsp;        } catch (Exception e) {</b>
+<b class="nc"><i>770</i>&nbsp;            return false;</b>
+<b class="nc"><i>771</i>&nbsp;        }</b>
+<i>772</i>&nbsp;
+<b class="nc"><i>773</i>&nbsp;        if (error) {</b>
+<b class="nc"><i>774</i>&nbsp;            return false;</b>
+<i>775</i>&nbsp;        }
+<i>776</i>&nbsp;
+<b class="nc"><i>777</i>&nbsp;        return (state == STATE_DONE);</b>
+<i>778</i>&nbsp;    }
+<i>779</i>&nbsp;
+<i>780</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

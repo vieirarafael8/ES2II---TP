@@ -1,0 +1,443 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: FinallyStatement</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.tree</a> ]
+</div>
+
+<h1>Coverage Summary for Class: FinallyStatement (sun.tools.tree)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FinallyStatement</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 109)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1994, 2014, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.tree;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import sun.tools.java.*;
+<i>29</i>&nbsp;import sun.tools.asm.Assembler;
+<i>30</i>&nbsp;import sun.tools.asm.Label;
+<i>31</i>&nbsp;import sun.tools.asm.TryData;
+<i>32</i>&nbsp;import sun.tools.asm.CatchData;
+<i>33</i>&nbsp;import java.io.PrintStream;
+<i>34</i>&nbsp;import java.util.Hashtable;
+<i>35</i>&nbsp;import java.util.Enumeration;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;/**
+<i>38</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>39</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>40</i>&nbsp; * they are subject to change or removal without notice.
+<i>41</i>&nbsp; */
+<i>42</i>&nbsp;public
+<i>43</i>&nbsp;class FinallyStatement extends Statement {
+<i>44</i>&nbsp;    Statement body;
+<i>45</i>&nbsp;    Statement finalbody;
+<i>46</i>&nbsp;    boolean finallyCanFinish; // does finalBody never return?
+<i>47</i>&nbsp;    boolean needReturnSlot;   // set by inner return statement
+<i>48</i>&nbsp;    Statement init;           // try object expression  or declaration from parser
+<i>49</i>&nbsp;    LocalMember tryTemp;      // temp holding the try object, if any
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;    /**
+<i>52</i>&nbsp;     * Constructor
+<i>53</i>&nbsp;     */
+<i>54</i>&nbsp;    public FinallyStatement(long where, Statement body, Statement finalbody) {
+<b class="nc"><i>55</i>&nbsp;        super(FINALLY, where);</b>
+<b class="nc"><i>56</i>&nbsp;        this.body = body;</b>
+<b class="nc"><i>57</i>&nbsp;        this.finalbody = finalbody;</b>
+<i>58</i>&nbsp;    }
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;//    /**
+<i>61</i>&nbsp;//     * Constructor for  try (init) {body}
+<i>62</i>&nbsp;//     */
+<i>63</i>&nbsp;//    public FinallyStatement(long where, Statement init, Statement body, int junk) {
+<i>64</i>&nbsp;//      this(where, body, null);
+<i>65</i>&nbsp;//      this.init = init;
+<i>66</i>&nbsp;//    }
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    /**
+<i>69</i>&nbsp;     * Check statement
+<i>70</i>&nbsp;     */
+<i>71</i>&nbsp;    Vset check(Environment env, Context ctx, Vset vset, Hashtable&lt;Object, Object&gt; exp) {
+<b class="nc"><i>72</i>&nbsp;        vset = reach(env, vset);</b>
+<b class="nc"><i>73</i>&nbsp;        Hashtable&lt;Object, Object&gt; newexp = new Hashtable&lt;&gt;();</b>
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;        // Handle the proposed &#39;try (init) { stmts } finally { stmts }&#39; syntax.
+<i>76</i>&nbsp;        // This feature has not been adopted, and support is presently disabled.
+<i>77</i>&nbsp;        /*-----------------------------------------------------------*
+<i>78</i>&nbsp;        if (init != null) {
+<i>79</i>&nbsp;            ClassDefinition sourceClass = ctx.field.getClassDefinition();
+<i>80</i>&nbsp;            Expression tryExpr = null;
+<i>81</i>&nbsp;            DeclarationStatement tryDecl = null;
+<i>82</i>&nbsp;            long where = init.getWhere();
+<i>83</i>&nbsp;            // find out whether init is a simple expression or a declaration
+<i>84</i>&nbsp;            if (init.getOp() == EXPRESSION) {
+<i>85</i>&nbsp;                tryExpr = ((ExpressionStatement)init).expr;
+<i>86</i>&nbsp;                init = null;    // restore it below
+<i>87</i>&nbsp;                vset = tryExpr.checkValue(env, ctx, vset, exp);
+<i>88</i>&nbsp;            } else if (init.getOp() == DECLARATION) {
+<i>89</i>&nbsp;                tryDecl = (DeclarationStatement) init;
+<i>90</i>&nbsp;                init = null;    // restore it below
+<i>91</i>&nbsp;                vset = tryDecl.checkBlockStatement(env, ctx, vset, exp);
+<i>92</i>&nbsp;                if (tryDecl.args.length != 1) {
+<i>93</i>&nbsp;                    env.error(where, &quot;invalid.decl&quot;);
+<i>94</i>&nbsp;                } else {
+<i>95</i>&nbsp;                    LocalMember field =
+<i>96</i>&nbsp;                        ((VarDeclarationStatement) tryDecl.args[0]).field;
+<i>97</i>&nbsp;                    tryExpr = new IdentifierExpression(where, field);
+<i>98</i>&nbsp;                    tryExpr.type = field.getType();
+<i>99</i>&nbsp;                }
+<i>100</i>&nbsp;            } else {
+<i>101</i>&nbsp;                env.error(where, &quot;invalid.expr&quot;);
+<i>102</i>&nbsp;                vset = init.check(env, ctx, vset, exp);
+<i>103</i>&nbsp;            }
+<i>104</i>&nbsp;            Type type = (tryExpr == null) ? Type.tError : tryExpr.getType();
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;            MemberDefinition tryEnter = null;
+<i>107</i>&nbsp;            MemberDefinition tryExit = null;
+<i>108</i>&nbsp;            if (!type.isType(TC_CLASS)) {
+<i>109</i>&nbsp;                if (!type.isType(TC_ERROR)) {
+<i>110</i>&nbsp;                    env.error(where, &quot;invalid.method.invoke&quot;, type);
+<i>111</i>&nbsp;                }
+<i>112</i>&nbsp;            } else {
+<i>113</i>&nbsp;                Identifier idTryEnter = Identifier.lookup(&quot;tryEnter&quot;);
+<i>114</i>&nbsp;                Identifier idTryExit = Identifier.lookup(&quot;tryExit&quot;);
+<i>115</i>&nbsp;                Type tTryMethod = Type.tMethod(Type.tVoid);
+<i>116</i>&nbsp;                try {
+<i>117</i>&nbsp;                    ClassDefinition tryClass = env.getClassDefinition(type);
+<i>118</i>&nbsp;                    tryEnter = tryClass.matchMethod(env, sourceClass, idTryEnter);
+<i>119</i>&nbsp;                    tryExit = tryClass.matchMethod(env, sourceClass, idTryExit);
+<i>120</i>&nbsp;                    if (tryEnter != null &amp;&amp; !tryEnter.getType().equals(tTryMethod)) {
+<i>121</i>&nbsp;                        tryEnter = null;
+<i>122</i>&nbsp;                    }
+<i>123</i>&nbsp;                    if (tryExit != null &amp;&amp; !tryExit.getType().equals(tTryMethod)) {
+<i>124</i>&nbsp;                        tryExit = null;
+<i>125</i>&nbsp;                    }
+<i>126</i>&nbsp;                } catch (ClassNotFound ee) {
+<i>127</i>&nbsp;                    env.error(where, &quot;class.not.found&quot;, ee.name, ctx.field);
+<i>128</i>&nbsp;                } catch (AmbiguousMember ee) {
+<i>129</i>&nbsp;                    Identifier id = ee.field1.getName();
+<i>130</i>&nbsp;                    env.error(where, &quot;ambig.field&quot;, id, ee.field1, ee.field2);
+<i>131</i>&nbsp;                }
+<i>132</i>&nbsp;            }
+<i>133</i>&nbsp;            if (tryEnter == null || tryExit == null) {
+<i>134</i>&nbsp;                // Make a better (more didactic) error here!
+<i>135</i>&nbsp;                env.error(where, &quot;invalid.method.invoke&quot;, type);
+<i>136</i>&nbsp;            } else {
+<i>137</i>&nbsp;                tryTemp = new LocalMember(where, sourceClass, 0,
+<i>138</i>&nbsp;                                          type, Identifier.lookup(&quot;&lt;try_object&gt;&quot;));
+<i>139</i>&nbsp;                ctx = new Context(ctx, this);
+<i>140</i>&nbsp;                ctx.declare(env, tryTemp);
+<i>141</i>&nbsp;
+<i>142</i>&nbsp;                Expression e;
+<i>143</i>&nbsp;                e = new IdentifierExpression(where, tryTemp);
+<i>144</i>&nbsp;                e = new AssignExpression(where, e, tryExpr);
+<i>145</i>&nbsp;                e = new MethodExpression(where, e, tryEnter, new Expression[0]);
+<i>146</i>&nbsp;                e.type = Type.tVoid;
+<i>147</i>&nbsp;                Statement enterCall = new ExpressionStatement(where, e);
+<i>148</i>&nbsp;                // store it on the init, for code generation
+<i>149</i>&nbsp;                if (tryDecl != null) {
+<i>150</i>&nbsp;                    Statement args2[] = { tryDecl.args[0], enterCall };
+<i>151</i>&nbsp;                    tryDecl.args = args2;
+<i>152</i>&nbsp;                    init = tryDecl;
+<i>153</i>&nbsp;                } else {
+<i>154</i>&nbsp;                    init = enterCall;
+<i>155</i>&nbsp;                }
+<i>156</i>&nbsp;                e = new IdentifierExpression(where, tryTemp);
+<i>157</i>&nbsp;                e = new MethodExpression(where, e, tryExit, new Expression[0]);
+<i>158</i>&nbsp;                e.type = Type.tVoid;
+<i>159</i>&nbsp;                Statement exitCall = new ExpressionStatement(where, e);
+<i>160</i>&nbsp;                finalbody = exitCall;
+<i>161</i>&nbsp;            }
+<i>162</i>&nbsp;        }
+<i>163</i>&nbsp;        *-----------------------------------------------------------*/
+<i>164</i>&nbsp;
+<i>165</i>&nbsp;        // Check the try part. We reach the end of the try part either by
+<i>166</i>&nbsp;        // finishing normally, or doing a break to the label of the try/finally.
+<i>167</i>&nbsp;        // NOTE: I don&#39;t think newctx1.vsBreak is ever used -- see TryStatement.
+<b class="nc"><i>168</i>&nbsp;        CheckContext newctx1 = new CheckContext(ctx, this);</b>
+<b class="nc"><i>169</i>&nbsp;        Vset vset1 = body.check(env, newctx1, vset.copy(), newexp)</b>
+<b class="nc"><i>170</i>&nbsp;            .join(newctx1.vsBreak);</b>
+<i>171</i>&nbsp;        // Check the finally part.
+<b class="nc"><i>172</i>&nbsp;        CheckContext newctx2 = new CheckContext(ctx, this);</b>
+<i>173</i>&nbsp;        // Should never access this field.  The null indicates the finally part.
+<b class="nc"><i>174</i>&nbsp;        newctx2.vsContinue = null;</b>
+<b class="nc"><i>175</i>&nbsp;        Vset vset2 = finalbody.check(env, newctx2, vset, exp);</b>
+<b class="nc"><i>176</i>&nbsp;        finallyCanFinish = !vset2.isDeadEnd();</b>
+<b class="nc"><i>177</i>&nbsp;        vset2 = vset2.join(newctx2.vsBreak);</b>
+<i>178</i>&nbsp;        // If !finallyCanFinish, then the only possible exceptions that can
+<i>179</i>&nbsp;        // occur at this point are the ones preceding the try/finally, or
+<i>180</i>&nbsp;        // the ones generated by the finally.  Anything in the try is
+<i>181</i>&nbsp;        // irrelevant. Otherwise, we have to merge in all the exceptions
+<i>182</i>&nbsp;        // generated by the body into exp.
+<b class="nc"><i>183</i>&nbsp;        if (finallyCanFinish) {</b>
+<i>184</i>&nbsp;            // Add newexp&#39;s back into exp; cf. ThrowStatement.check().
+<b class="nc"><i>185</i>&nbsp;            for (Enumeration&lt;?&gt; e = newexp.keys() ; e.hasMoreElements() ; ) {</b>
+<b class="nc"><i>186</i>&nbsp;                Object def = e.nextElement();</b>
+<b class="nc"><i>187</i>&nbsp;                exp.put(def, newexp.get(def));</b>
+<b class="nc"><i>188</i>&nbsp;            }</b>
+<i>189</i>&nbsp;        }
+<b class="nc"><i>190</i>&nbsp;        return ctx.removeAdditionalVars(vset1.addDAandJoinDU(vset2));</b>
+<i>191</i>&nbsp;    }
+<i>192</i>&nbsp;
+<i>193</i>&nbsp;    /**
+<i>194</i>&nbsp;     * Inline
+<i>195</i>&nbsp;     */
+<i>196</i>&nbsp;    public Statement inline(Environment env, Context ctx) {
+<b class="nc"><i>197</i>&nbsp;        if (tryTemp != null) {</b>
+<b class="nc"><i>198</i>&nbsp;            ctx = new Context(ctx, this);</b>
+<b class="nc"><i>199</i>&nbsp;            ctx.declare(env, tryTemp);</b>
+<i>200</i>&nbsp;        }
+<b class="nc"><i>201</i>&nbsp;        if (init != null) {</b>
+<b class="nc"><i>202</i>&nbsp;            init = init.inline(env, ctx);</b>
+<i>203</i>&nbsp;        }
+<b class="nc"><i>204</i>&nbsp;        if (body != null) {</b>
+<b class="nc"><i>205</i>&nbsp;            body = body.inline(env, ctx);</b>
+<i>206</i>&nbsp;        }
+<b class="nc"><i>207</i>&nbsp;        if (finalbody != null) {</b>
+<b class="nc"><i>208</i>&nbsp;            finalbody = finalbody.inline(env, ctx);</b>
+<i>209</i>&nbsp;        }
+<b class="nc"><i>210</i>&nbsp;        if (body == null) {</b>
+<b class="nc"><i>211</i>&nbsp;            return eliminate(env, finalbody);</b>
+<i>212</i>&nbsp;        }
+<b class="nc"><i>213</i>&nbsp;        if (finalbody == null) {</b>
+<b class="nc"><i>214</i>&nbsp;            return eliminate(env, body);</b>
+<i>215</i>&nbsp;        }
+<b class="nc"><i>216</i>&nbsp;        return this;</b>
+<i>217</i>&nbsp;    }
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;    /**
+<i>220</i>&nbsp;     * Create a copy of the statement for method inlining
+<i>221</i>&nbsp;     */
+<i>222</i>&nbsp;    public Statement copyInline(Context ctx, boolean valNeeded) {
+<b class="nc"><i>223</i>&nbsp;        FinallyStatement s = (FinallyStatement)clone();</b>
+<b class="nc"><i>224</i>&nbsp;        if (tryTemp != null) {</b>
+<b class="nc"><i>225</i>&nbsp;            s.tryTemp = tryTemp.copyInline(ctx);</b>
+<i>226</i>&nbsp;        }
+<b class="nc"><i>227</i>&nbsp;        if (init != null) {</b>
+<b class="nc"><i>228</i>&nbsp;            s.init = init.copyInline(ctx, valNeeded);</b>
+<i>229</i>&nbsp;        }
+<b class="nc"><i>230</i>&nbsp;        if (body != null) {</b>
+<b class="nc"><i>231</i>&nbsp;            s.body = body.copyInline(ctx, valNeeded);</b>
+<i>232</i>&nbsp;        }
+<b class="nc"><i>233</i>&nbsp;        if (finalbody != null) {</b>
+<b class="nc"><i>234</i>&nbsp;            s.finalbody = finalbody.copyInline(ctx, valNeeded);</b>
+<i>235</i>&nbsp;        }
+<b class="nc"><i>236</i>&nbsp;        return s;</b>
+<i>237</i>&nbsp;     }
+<i>238</i>&nbsp;
+<i>239</i>&nbsp;    /**
+<i>240</i>&nbsp;     * Compute cost of inlining this statement
+<i>241</i>&nbsp;     */
+<i>242</i>&nbsp;    public int costInline(int thresh, Environment env, Context ctx){
+<b class="nc"><i>243</i>&nbsp;        int cost = 4;</b>
+<b class="nc"><i>244</i>&nbsp;        if (init != null) {</b>
+<b class="nc"><i>245</i>&nbsp;            cost += init.costInline(thresh, env,ctx);</b>
+<b class="nc"><i>246</i>&nbsp;            if (cost &gt;= thresh) return cost;</b>
+<i>247</i>&nbsp;        }
+<b class="nc"><i>248</i>&nbsp;        if (body != null) {</b>
+<b class="nc"><i>249</i>&nbsp;            cost += body.costInline(thresh, env,ctx);</b>
+<b class="nc"><i>250</i>&nbsp;            if (cost &gt;= thresh) return cost;</b>
+<i>251</i>&nbsp;        }
+<b class="nc"><i>252</i>&nbsp;        if (finalbody != null) {</b>
+<b class="nc"><i>253</i>&nbsp;            cost += finalbody.costInline(thresh, env,ctx);</b>
+<i>254</i>&nbsp;        }
+<b class="nc"><i>255</i>&nbsp;        return cost;</b>
+<i>256</i>&nbsp;    }
+<i>257</i>&nbsp;
+<i>258</i>&nbsp;    /**
+<i>259</i>&nbsp;     * Code
+<i>260</i>&nbsp;     */
+<i>261</i>&nbsp;    public void code(Environment env, Context ctx, Assembler asm) {
+<b class="nc"><i>262</i>&nbsp;        ctx = new Context(ctx);</b>
+<b class="nc"><i>263</i>&nbsp;        Integer num1 = null, num2 = null;</b>
+<b class="nc"><i>264</i>&nbsp;        Label endLabel = new Label();</b>
+<i>265</i>&nbsp;
+<b class="nc"><i>266</i>&nbsp;        if (tryTemp != null) {</b>
+<b class="nc"><i>267</i>&nbsp;            ctx.declare(env, tryTemp);</b>
+<i>268</i>&nbsp;        }
+<b class="nc"><i>269</i>&nbsp;        if (init != null) {</b>
+<b class="nc"><i>270</i>&nbsp;            CodeContext exprctx = new CodeContext(ctx, this);</b>
+<b class="nc"><i>271</i>&nbsp;            init.code(env, exprctx, asm);</b>
+<i>272</i>&nbsp;        }
+<i>273</i>&nbsp;
+<b class="nc"><i>274</i>&nbsp;        if (finallyCanFinish) {</b>
+<i>275</i>&nbsp;            LocalMember f1, f2;
+<b class="nc"><i>276</i>&nbsp;            ClassDefinition thisClass = ctx.field.getClassDefinition();</b>
+<i>277</i>&nbsp;
+<b class="nc"><i>278</i>&nbsp;            if (needReturnSlot) {</b>
+<b class="nc"><i>279</i>&nbsp;                Type returnType = ctx.field.getType().getReturnType();</b>
+<b class="nc"><i>280</i>&nbsp;                LocalMember localfield = new LocalMember(0, thisClass, 0,</b>
+<i>281</i>&nbsp;                                                       returnType,
+<i>282</i>&nbsp;                                                       idFinallyReturnValue);
+<b class="nc"><i>283</i>&nbsp;                ctx.declare(env, localfield);</b>
+<b class="nc"><i>284</i>&nbsp;                Environment.debugOutput(&quot;Assigning return slot to &quot; + localfield.number);</b>
+<i>285</i>&nbsp;            }
+<i>286</i>&nbsp;
+<i>287</i>&nbsp;            // allocate space for the exception and return address
+<b class="nc"><i>288</i>&nbsp;            f1 = new LocalMember(where, thisClass, 0, Type.tObject, null);</b>
+<b class="nc"><i>289</i>&nbsp;            f2 = new LocalMember(where, thisClass, 0, Type.tInt, null);</b>
+<b class="nc"><i>290</i>&nbsp;            num1 = ctx.declare(env, f1);</b>
+<b class="nc"><i>291</i>&nbsp;            num2 = ctx.declare(env, f2);</b>
+<i>292</i>&nbsp;        }
+<i>293</i>&nbsp;
+<b class="nc"><i>294</i>&nbsp;        TryData td = new TryData();</b>
+<b class="nc"><i>295</i>&nbsp;        td.add(null);</b>
+<i>296</i>&nbsp;
+<i>297</i>&nbsp;        // Main body
+<b class="nc"><i>298</i>&nbsp;        CodeContext bodyctx = new CodeContext(ctx, this);</b>
+<b class="nc"><i>299</i>&nbsp;        asm.add(where, opc_try, td); // start of protected code</b>
+<b class="nc"><i>300</i>&nbsp;        body.code(env, bodyctx, asm);</b>
+<b class="nc"><i>301</i>&nbsp;        asm.add(bodyctx.breakLabel);</b>
+<b class="nc"><i>302</i>&nbsp;        asm.add(td.getEndLabel());   // end of protected code</b>
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;        // Cleanup afer body
+<b class="nc"><i>305</i>&nbsp;        if (finallyCanFinish) {</b>
+<b class="nc"><i>306</i>&nbsp;            asm.add(where, opc_jsr, bodyctx.contLabel);</b>
+<b class="nc"><i>307</i>&nbsp;            asm.add(where, opc_goto, endLabel);</b>
+<i>308</i>&nbsp;        } else {
+<i>309</i>&nbsp;            // just goto the cleanup code.  It will never return.
+<b class="nc"><i>310</i>&nbsp;            asm.add(where, opc_goto, bodyctx.contLabel);</b>
+<i>311</i>&nbsp;        }
+<i>312</i>&nbsp;
+<i>313</i>&nbsp;        // Catch code
+<b class="nc"><i>314</i>&nbsp;        CatchData cd = td.getCatch(0);</b>
+<b class="nc"><i>315</i>&nbsp;        asm.add(cd.getLabel());</b>
+<b class="nc"><i>316</i>&nbsp;        if (finallyCanFinish) {</b>
+<b class="nc"><i>317</i>&nbsp;            asm.add(where, opc_astore, num1); // store exception</b>
+<b class="nc"><i>318</i>&nbsp;            asm.add(where, opc_jsr, bodyctx.contLabel);</b>
+<b class="nc"><i>319</i>&nbsp;            asm.add(where, opc_aload, num1); // rethrow exception</b>
+<b class="nc"><i>320</i>&nbsp;            asm.add(where, opc_athrow);</b>
+<i>321</i>&nbsp;        } else {
+<i>322</i>&nbsp;            // pop exception off stack.  Fall through to finally code
+<b class="nc"><i>323</i>&nbsp;            asm.add(where, opc_pop);</b>
+<i>324</i>&nbsp;        }
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;        // The finally part, which is marked by the contLabel.  Update
+<i>327</i>&nbsp;        //    breakLabel: since break&#39;s in the finally are different
+<i>328</i>&nbsp;        //    contLabel:  to null to indicate no longer in the protected code.
+<b class="nc"><i>329</i>&nbsp;        asm.add(bodyctx.contLabel);</b>
+<b class="nc"><i>330</i>&nbsp;        bodyctx.contLabel = null;</b>
+<b class="nc"><i>331</i>&nbsp;        bodyctx.breakLabel = endLabel;</b>
+<b class="nc"><i>332</i>&nbsp;        if (finallyCanFinish) {</b>
+<b class="nc"><i>333</i>&nbsp;            asm.add(where, opc_astore, num2);  // save the return address</b>
+<b class="nc"><i>334</i>&nbsp;            finalbody.code(env, bodyctx, asm); // execute the cleanup code</b>
+<b class="nc"><i>335</i>&nbsp;            asm.add(where, opc_ret, num2);     // return</b>
+<i>336</i>&nbsp;        } else {
+<b class="nc"><i>337</i>&nbsp;            finalbody.code(env, bodyctx, asm); // execute the cleanup code</b>
+<i>338</i>&nbsp;        }
+<b class="nc"><i>339</i>&nbsp;        asm.add(endLabel);                     // breaks come here</b>
+<i>340</i>&nbsp;    }
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;    /**
+<i>343</i>&nbsp;     * Print
+<i>344</i>&nbsp;     */
+<i>345</i>&nbsp;    public void print(PrintStream out, int indent) {
+<b class="nc"><i>346</i>&nbsp;        super.print(out, indent);</b>
+<b class="nc"><i>347</i>&nbsp;        out.print(&quot;try &quot;);</b>
+<b class="nc"><i>348</i>&nbsp;        if (body != null) {</b>
+<b class="nc"><i>349</i>&nbsp;            body.print(out, indent);</b>
+<i>350</i>&nbsp;        } else {
+<b class="nc"><i>351</i>&nbsp;            out.print(&quot;&lt;empty&gt;&quot;);</b>
+<i>352</i>&nbsp;        }
+<b class="nc"><i>353</i>&nbsp;        out.print(&quot; finally &quot;);</b>
+<b class="nc"><i>354</i>&nbsp;        if (finalbody != null) {</b>
+<b class="nc"><i>355</i>&nbsp;            finalbody.print(out, indent);</b>
+<i>356</i>&nbsp;        } else {
+<b class="nc"><i>357</i>&nbsp;            out.print(&quot;&lt;empty&gt;&quot;);</b>
+<i>358</i>&nbsp;        }
+<i>359</i>&nbsp;    }
+<i>360</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,368 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Disposer</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.java2d</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Disposer (sun.java2d)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Disposer</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 12)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 76)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">Disposer$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 79)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2002, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.java2d;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import sun.awt.util.ThreadGroupUtils;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;import java.lang.ref.Reference;
+<i>31</i>&nbsp;import java.lang.ref.ReferenceQueue;
+<i>32</i>&nbsp;import java.lang.ref.PhantomReference;
+<i>33</i>&nbsp;import java.lang.ref.WeakReference;
+<i>34</i>&nbsp;import java.security.AccessController;
+<i>35</i>&nbsp;import java.security.PrivilegedAction;
+<i>36</i>&nbsp;import java.util.ArrayList;
+<i>37</i>&nbsp;import java.util.Hashtable;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp; * This class is used for registering and disposing the native
+<i>41</i>&nbsp; * data associated with java objects.
+<i>42</i>&nbsp; *
+<i>43</i>&nbsp; * The object can register itself by calling one of the addRecord
+<i>44</i>&nbsp; * methods and providing either the pointer to the native disposal
+<i>45</i>&nbsp; * method or a descendant of the DisposerRecord class with overridden
+<i>46</i>&nbsp; * dispose() method.
+<i>47</i>&nbsp; *
+<i>48</i>&nbsp; * When the object becomes unreachable, the dispose() method
+<i>49</i>&nbsp; * of the associated DisposerRecord object will be called.
+<i>50</i>&nbsp; *
+<i>51</i>&nbsp; * @see DisposerRecord
+<i>52</i>&nbsp; */
+<b class="nc"><i>53</i>&nbsp;public class Disposer implements Runnable {</b>
+<b class="nc"><i>54</i>&nbsp;    private static final ReferenceQueue&lt;Object&gt; queue = new ReferenceQueue&lt;&gt;();</b>
+<b class="nc"><i>55</i>&nbsp;    private static final Hashtable&lt;java.lang.ref.Reference&lt;Object&gt;, DisposerRecord&gt; records =</b>
+<i>56</i>&nbsp;        new Hashtable&lt;&gt;();
+<i>57</i>&nbsp;
+<i>58</i>&nbsp;    private static Disposer disposerInstance;
+<i>59</i>&nbsp;    public static final int WEAK = 0;
+<b class="nc"><i>60</i>&nbsp;    public static final int PHANTOM = 1;</b>
+<i>61</i>&nbsp;    public static int refType = PHANTOM;
+<i>62</i>&nbsp;
+<b class="nc"><i>63</i>&nbsp;    static {</b>
+<b class="nc"><i>64</i>&nbsp;        java.security.AccessController.doPrivileged(</b>
+<i>65</i>&nbsp;            new java.security.PrivilegedAction&lt;Void&gt;() {
+<b class="nc"><i>66</i>&nbsp;                public Void run() {</b>
+<b class="nc"><i>67</i>&nbsp;                    System.loadLibrary(&quot;awt&quot;);</b>
+<i>68</i>&nbsp;                    return null;
+<i>69</i>&nbsp;                }
+<b class="nc"><i>70</i>&nbsp;            });</b>
+<b class="nc"><i>71</i>&nbsp;        initIDs();</b>
+<i>72</i>&nbsp;        String type = java.security.AccessController.doPrivileged(
+<b class="nc"><i>73</i>&nbsp;                new sun.security.action.GetPropertyAction(&quot;sun.java2d.reftype&quot;));</b>
+<b class="nc"><i>74</i>&nbsp;        if (type != null) {</b>
+<b class="nc"><i>75</i>&nbsp;            if (type.equals(&quot;weak&quot;)) {</b>
+<b class="nc"><i>76</i>&nbsp;                refType = WEAK;</b>
+<i>77</i>&nbsp;                System.err.println(&quot;Using WEAK refs&quot;);
+<b class="nc"><i>78</i>&nbsp;            } else {</b>
+<b class="nc"><i>79</i>&nbsp;                refType = PHANTOM;</b>
+<i>80</i>&nbsp;                System.err.println(&quot;Using PHANTOM refs&quot;);
+<i>81</i>&nbsp;            }
+<b class="nc"><i>82</i>&nbsp;        }</b>
+<b class="nc"><i>83</i>&nbsp;        disposerInstance = new Disposer();</b>
+<i>84</i>&nbsp;        AccessController.doPrivileged((PrivilegedAction&lt;Void&gt;) () -&gt; {
+<i>85</i>&nbsp;            String name = &quot;Java2D Disposer&quot;;
+<i>86</i>&nbsp;            ThreadGroup rootTG = ThreadGroupUtils.getRootThreadGroup();
+<i>87</i>&nbsp;            Thread t = new Thread(rootTG, disposerInstance, name, 0, false);
+<i>88</i>&nbsp;            t.setContextClassLoader(null);
+<b class="nc"><i>89</i>&nbsp;            t.setDaemon(true);</b>
+<b class="nc"><i>90</i>&nbsp;            t.setPriority(Thread.MAX_PRIORITY);</b>
+<b class="nc"><i>91</i>&nbsp;            t.start();</b>
+<b class="nc"><i>92</i>&nbsp;            return null;</b>
+<b class="nc"><i>93</i>&nbsp;        });</b>
+<b class="nc"><i>94</i>&nbsp;    }</b>
+<b class="nc"><i>95</i>&nbsp;</b>
+<i>96</i>&nbsp;    /**
+<i>97</i>&nbsp;     * Registers the object and the native data for later disposal.
+<i>98</i>&nbsp;     * @param target Object to be registered
+<i>99</i>&nbsp;     * @param disposeMethod pointer to the native disposal method
+<i>100</i>&nbsp;     * @param pData pointer to the data to be passed to the
+<i>101</i>&nbsp;     *              native disposal method
+<i>102</i>&nbsp;     */
+<i>103</i>&nbsp;    public static void addRecord(Object target,
+<i>104</i>&nbsp;                                 long disposeMethod, long pData)
+<i>105</i>&nbsp;    {
+<i>106</i>&nbsp;        disposerInstance.add(target,
+<i>107</i>&nbsp;                             new DefaultDisposerRecord(disposeMethod, pData));
+<i>108</i>&nbsp;    }
+<i>109</i>&nbsp;
+<b class="nc"><i>110</i>&nbsp;    /**</b>
+<i>111</i>&nbsp;     * Registers the object and the native data for later disposal.
+<i>112</i>&nbsp;     * @param target Object to be registered
+<i>113</i>&nbsp;     * @param rec the associated DisposerRecord object
+<i>114</i>&nbsp;     * @see DisposerRecord
+<i>115</i>&nbsp;     */
+<i>116</i>&nbsp;    public static void addRecord(Object target, DisposerRecord rec) {
+<i>117</i>&nbsp;        disposerInstance.add(target, rec);
+<i>118</i>&nbsp;    }
+<i>119</i>&nbsp;
+<i>120</i>&nbsp;    /**
+<b class="nc"><i>121</i>&nbsp;     * Performs the actual registration of the target object to be disposed.</b>
+<i>122</i>&nbsp;     * @param target Object to be registered, or if target is an instance
+<i>123</i>&nbsp;     *               of DisposerTarget, its associated disposer referent
+<i>124</i>&nbsp;     *               will be the Object that is registered
+<i>125</i>&nbsp;     * @param rec the associated DisposerRecord object
+<i>126</i>&nbsp;     * @see DisposerRecord
+<i>127</i>&nbsp;     */
+<i>128</i>&nbsp;    synchronized void add(Object target, DisposerRecord rec) {
+<i>129</i>&nbsp;        if (target instanceof DisposerTarget) {
+<i>130</i>&nbsp;            target = ((DisposerTarget)target).getDisposerReferent();
+<i>131</i>&nbsp;        }
+<i>132</i>&nbsp;        java.lang.ref.Reference&lt;Object&gt; ref;
+<b class="nc"><i>133</i>&nbsp;        if (refType == PHANTOM) {</b>
+<b class="nc"><i>134</i>&nbsp;            ref = new PhantomReference&lt;&gt;(target, queue);</b>
+<i>135</i>&nbsp;        } else {
+<i>136</i>&nbsp;            ref = new WeakReference&lt;&gt;(target, queue);
+<b class="nc"><i>137</i>&nbsp;        }</b>
+<b class="nc"><i>138</i>&nbsp;        records.put(ref, rec);</b>
+<i>139</i>&nbsp;    }
+<b class="nc"><i>140</i>&nbsp;</b>
+<i>141</i>&nbsp;    public void run() {
+<b class="nc"><i>142</i>&nbsp;        while (true) {</b>
+<i>143</i>&nbsp;            try {
+<i>144</i>&nbsp;                Object obj = queue.remove();
+<i>145</i>&nbsp;                ((Reference)obj).clear();
+<i>146</i>&nbsp;                DisposerRecord rec = records.remove(obj);
+<i>147</i>&nbsp;                rec.dispose();
+<b class="nc"><i>148</i>&nbsp;                obj = null;</b>
+<b class="nc"><i>149</i>&nbsp;                rec = null;</b>
+<b class="nc"><i>150</i>&nbsp;                clearDeferredRecords();</b>
+<b class="nc"><i>151</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i>152</i>&nbsp;                System.out.println(&quot;Exception while removing reference.&quot;);</b>
+<b class="nc"><i>153</i>&nbsp;            }</b>
+<b class="nc"><i>154</i>&nbsp;        }</b>
+<b class="nc"><i>155</i>&nbsp;    }</b>
+<b class="nc"><i>156</i>&nbsp;</b>
+<b class="nc"><i>157</i>&nbsp;    /*</b>
+<i>158</i>&nbsp;     * This is a marker interface that, if implemented, means it
+<i>159</i>&nbsp;     * doesn&#39;t acquire any special locks, and is safe to
+<i>160</i>&nbsp;     * be disposed in the poll loop on whatever thread
+<i>161</i>&nbsp;     * which happens to be the Toolkit thread, is in use.
+<i>162</i>&nbsp;     */
+<i>163</i>&nbsp;    public static interface PollDisposable {
+<i>164</i>&nbsp;    };
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;    private static ArrayList&lt;DisposerRecord&gt; deferredRecords = null;
+<i>167</i>&nbsp;
+<i>168</i>&nbsp;    private static void clearDeferredRecords() {
+<i>169</i>&nbsp;        if (deferredRecords == null || deferredRecords.isEmpty()) {
+<b class="nc"><i>170</i>&nbsp;            return;</b>
+<i>171</i>&nbsp;        }
+<i>172</i>&nbsp;        for (int i=0;i&lt;deferredRecords.size(); i++) {
+<b class="nc"><i>173</i>&nbsp;            try {</b>
+<i>174</i>&nbsp;                DisposerRecord rec = deferredRecords.get(i);
+<i>175</i>&nbsp;                rec.dispose();
+<b class="nc"><i>176</i>&nbsp;            } catch (Exception e) {</b>
+<i>177</i>&nbsp;                System.out.println(&quot;Exception while disposing deferred rec.&quot;);
+<b class="nc"><i>178</i>&nbsp;            }</b>
+<b class="nc"><i>179</i>&nbsp;        }</b>
+<b class="nc"><i>180</i>&nbsp;        deferredRecords.clear();</b>
+<b class="nc"><i>181</i>&nbsp;    }</b>
+<b class="nc"><i>182</i>&nbsp;</b>
+<i>183</i>&nbsp;    /*
+<b class="nc"><i>184</i>&nbsp;     * Set to indicate the queue is presently being polled.</b>
+<i>185</i>&nbsp;     */
+<i>186</i>&nbsp;    public static volatile boolean pollingQueue = false;
+<i>187</i>&nbsp;
+<i>188</i>&nbsp;    /*
+<i>189</i>&nbsp;     * The pollRemove() method is called back from a dispose method
+<b class="nc"><i>190</i>&nbsp;     * that is running on the toolkit thread and wants to</b>
+<i>191</i>&nbsp;     * dispose any pending refs that are safe to be disposed
+<i>192</i>&nbsp;     * on that thread.
+<i>193</i>&nbsp;     */
+<i>194</i>&nbsp;    public static void pollRemove() {
+<i>195</i>&nbsp;
+<i>196</i>&nbsp;        /* This should never be called recursively, so this check
+<i>197</i>&nbsp;         * is just a safeguard against the unexpected.
+<i>198</i>&nbsp;         */
+<i>199</i>&nbsp;        if (pollingQueue) {
+<i>200</i>&nbsp;            return;
+<i>201</i>&nbsp;        }
+<i>202</i>&nbsp;        Object obj;
+<b class="nc"><i>203</i>&nbsp;        pollingQueue = true;</b>
+<i>204</i>&nbsp;        int freed = 0;
+<i>205</i>&nbsp;        int deferred = 0;
+<i>206</i>&nbsp;        try {
+<b class="nc"><i>207</i>&nbsp;            while ( freed &lt; 10000 &amp;&amp; deferred &lt; 100 &amp;&amp;</b>
+<b class="nc"><i>208</i>&nbsp;                    (obj = queue.poll()) != null ) {</b>
+<b class="nc"><i>209</i>&nbsp;                freed++;</b>
+<i>210</i>&nbsp;                ((Reference)obj).clear();
+<b class="nc"><i>211</i>&nbsp;                DisposerRecord rec = records.remove(obj);</b>
+<i>212</i>&nbsp;                if (rec instanceof PollDisposable) {
+<b class="nc"><i>213</i>&nbsp;                    rec.dispose();</b>
+<b class="nc"><i>214</i>&nbsp;                    obj = null;</b>
+<b class="nc"><i>215</i>&nbsp;                    rec = null;</b>
+<b class="nc"><i>216</i>&nbsp;                } else {</b>
+<b class="nc"><i>217</i>&nbsp;                    if (rec == null) { // shouldn&#39;t happen, but just in case.</b>
+<b class="nc"><i>218</i>&nbsp;                        continue;</b>
+<b class="nc"><i>219</i>&nbsp;                    }</b>
+<i>220</i>&nbsp;                    deferred++;
+<b class="nc"><i>221</i>&nbsp;                    if (deferredRecords == null) {</b>
+<b class="nc"><i>222</i>&nbsp;                      deferredRecords = new ArrayList&lt;DisposerRecord&gt;(5);</b>
+<i>223</i>&nbsp;                    }
+<b class="nc"><i>224</i>&nbsp;                    deferredRecords.add(rec);</b>
+<b class="nc"><i>225</i>&nbsp;                }</b>
+<b class="nc"><i>226</i>&nbsp;            }</b>
+<i>227</i>&nbsp;        } catch (Exception e) {
+<b class="nc"><i>228</i>&nbsp;            System.out.println(&quot;Exception while removing reference.&quot;);</b>
+<i>229</i>&nbsp;        } finally {
+<b class="nc"><i>230</i>&nbsp;            pollingQueue = false;</b>
+<b class="nc"><i>231</i>&nbsp;        }</b>
+<b class="nc"><i>232</i>&nbsp;    }</b>
+<i>233</i>&nbsp;
+<b class="nc"><i>234</i>&nbsp;    private static native void initIDs();</b>
+<b class="nc"><i>235</i>&nbsp;</b>
+<i>236</i>&nbsp;    /*
+<i>237</i>&nbsp;     * This was added for use by the 2D font implementation to avoid creation
+<i>238</i>&nbsp;     * of an additional disposer thread.
+<i>239</i>&nbsp;     * WARNING: this thread class monitors a specific queue, so a reference
+<i>240</i>&nbsp;     * added here must have been created with this queue. Failure to do
+<i>241</i>&nbsp;     * so will clutter the records hashmap and no one will be cleaning up
+<i>242</i>&nbsp;     * the reference queue.
+<i>243</i>&nbsp;     */
+<i>244</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>245</i>&nbsp;    public static void addReference(Reference&lt;Object&gt; ref, DisposerRecord rec) {
+<i>246</i>&nbsp;        records.put(ref, rec);
+<i>247</i>&nbsp;    }
+<i>248</i>&nbsp;
+<b class="nc"><i>249</i>&nbsp;    public static void addObjectRecord(Object obj, DisposerRecord rec) {</b>
+<i>250</i>&nbsp;        records.put(new WeakReference&lt;&gt;(obj, queue) , rec);
+<i>251</i>&nbsp;    }
+<i>252</i>&nbsp;
+<b class="nc"><i>253</i>&nbsp;    /* This is intended for use in conjunction with addReference(..)</b>
+<i>254</i>&nbsp;     */
+<i>255</i>&nbsp;    public static ReferenceQueue&lt;Object&gt; getQueue() {
+<i>256</i>&nbsp;        return queue;
+<i>257</i>&nbsp;    }
+<i>258</i>&nbsp;
+<b class="nc"><i>259</i>&nbsp;}</b>
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

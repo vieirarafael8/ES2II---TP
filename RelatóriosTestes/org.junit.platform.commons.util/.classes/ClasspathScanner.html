@@ -1,0 +1,314 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ClasspathScanner</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">org.junit.platform.commons.util</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ClasspathScanner (org.junit.platform.commons.util)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ClasspathScanner</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    9,5%
+  </span>
+  <span class="absValue">
+    (2/ 21)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    6,7%
+  </span>
+  <span class="absValue">
+    (6/ 89)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright 2015-2018 the original author or authors.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; * All rights reserved. This program and the accompanying materials are
+<i>5</i>&nbsp; * made available under the terms of the Eclipse Public License v2.0 which
+<i>6</i>&nbsp; * accompanies this distribution and is available at
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; * http://www.eclipse.org/legal/epl-v20.html
+<i>9</i>&nbsp; */
+<i>10</i>&nbsp;
+<i>11</i>&nbsp;package org.junit.platform.commons.util;
+<i>12</i>&nbsp;
+<i>13</i>&nbsp;import static java.lang.String.format;
+<i>14</i>&nbsp;import static java.util.Collections.emptyList;
+<i>15</i>&nbsp;import static java.util.stream.Collectors.joining;
+<i>16</i>&nbsp;import static java.util.stream.Collectors.toList;
+<i>17</i>&nbsp;import static org.junit.platform.commons.util.BlacklistedExceptions.rethrowIfBlacklisted;
+<i>18</i>&nbsp;import static org.junit.platform.commons.util.ClassFileVisitor.CLASS_FILE_SUFFIX;
+<i>19</i>&nbsp;
+<i>20</i>&nbsp;import java.io.IOException;
+<i>21</i>&nbsp;import java.net.URI;
+<i>22</i>&nbsp;import java.net.URL;
+<i>23</i>&nbsp;import java.nio.file.Files;
+<i>24</i>&nbsp;import java.nio.file.Path;
+<i>25</i>&nbsp;import java.util.ArrayList;
+<i>26</i>&nbsp;import java.util.Collection;
+<i>27</i>&nbsp;import java.util.Enumeration;
+<i>28</i>&nbsp;import java.util.List;
+<i>29</i>&nbsp;import java.util.Optional;
+<i>30</i>&nbsp;import java.util.function.BiFunction;
+<i>31</i>&nbsp;import java.util.function.Consumer;
+<i>32</i>&nbsp;import java.util.function.Supplier;
+<i>33</i>&nbsp;import java.util.stream.Stream;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;import org.junit.platform.commons.logging.Logger;
+<i>36</i>&nbsp;import org.junit.platform.commons.logging.LoggerFactory;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * &lt;h3&gt;DISCLAIMER&lt;/h3&gt;
+<i>40</i>&nbsp; *
+<i>41</i>&nbsp; * &lt;p&gt;These utilities are intended solely for usage within the JUnit framework
+<i>42</i>&nbsp; * itself. &lt;strong&gt;Any usage by external parties is not supported.&lt;/strong&gt;
+<i>43</i>&nbsp; * Use at your own risk!
+<i>44</i>&nbsp; *
+<i>45</i>&nbsp; * @since 1.0
+<i>46</i>&nbsp; */
+<i>47</i>&nbsp;class ClasspathScanner {
+<i>48</i>&nbsp;
+<b class="fc"><i>49</i>&nbsp;	private static final Logger logger = LoggerFactory.getLogger(ClasspathScanner.class);</b>
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;	private static final char CLASSPATH_RESOURCE_PATH_SEPARATOR = &#39;/&#39;;
+<i>52</i>&nbsp;	private static final char PACKAGE_SEPARATOR_CHAR = &#39;.&#39;;
+<b class="fc"><i>53</i>&nbsp;	private static final String PACKAGE_SEPARATOR_STRING = String.valueOf(PACKAGE_SEPARATOR_CHAR);</b>
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;	/**
+<i>56</i>&nbsp;	 * Malformed class name InternalError like reported in #401.
+<i>57</i>&nbsp;	 */
+<i>58</i>&nbsp;	private static final String MALFORMED_CLASS_NAME_ERROR_MESSAGE = &quot;Malformed class name&quot;;
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;	private final Supplier&lt;ClassLoader&gt; classLoaderSupplier;
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;	private final BiFunction&lt;String, ClassLoader, Optional&lt;Class&lt;?&gt;&gt;&gt; loadClass;
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;	ClasspathScanner(Supplier&lt;ClassLoader&gt; classLoaderSupplier,
+<b class="fc"><i>65</i>&nbsp;			BiFunction&lt;String, ClassLoader, Optional&lt;Class&lt;?&gt;&gt;&gt; loadClass) {</b>
+<i>66</i>&nbsp;
+<b class="fc"><i>67</i>&nbsp;		this.classLoaderSupplier = classLoaderSupplier;</b>
+<b class="fc"><i>68</i>&nbsp;		this.loadClass = loadClass;</b>
+<b class="fc"><i>69</i>&nbsp;	}</b>
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;	List&lt;Class&lt;?&gt;&gt; scanForClassesInPackage(String basePackageName, ClassFilter classFilter) {
+<i>72</i>&nbsp;
+<b class="nc"><i>73</i>&nbsp;		PackageUtils.assertPackageNameIsValid(basePackageName);</b>
+<b class="nc"><i>74</i>&nbsp;		Preconditions.notNull(classFilter, &quot;classFilter must not be null&quot;);</b>
+<b class="nc"><i>75</i>&nbsp;		basePackageName = basePackageName.trim();</b>
+<i>76</i>&nbsp;
+<b class="nc"><i>77</i>&nbsp;		return findClassesForUris(getRootUrisForPackage(basePackageName), basePackageName, classFilter);</b>
+<i>78</i>&nbsp;	}
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;	List&lt;Class&lt;?&gt;&gt; scanForClassesInClasspathRoot(URI root, ClassFilter classFilter) {
+<b class="nc"><i>81</i>&nbsp;		Preconditions.notNull(root, &quot;root must not be null&quot;);</b>
+<b class="nc"><i>82</i>&nbsp;		Preconditions.notNull(classFilter, &quot;classFilter must not be null&quot;);</b>
+<i>83</i>&nbsp;
+<b class="nc"><i>84</i>&nbsp;		return findClassesForUri(root, PackageUtils.DEFAULT_PACKAGE_NAME, classFilter);</b>
+<i>85</i>&nbsp;	}
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;	/**
+<i>88</i>&nbsp;	 * Recursively scan for classes in all of the supplied source directories.
+<i>89</i>&nbsp;	 */
+<i>90</i>&nbsp;	private List&lt;Class&lt;?&gt;&gt; findClassesForUris(List&lt;URI&gt; baseUris, String basePackageName, ClassFilter classFilter) {
+<i>91</i>&nbsp;		// @formatter:off
+<b class="nc"><i>92</i>&nbsp;		return baseUris.stream()</b>
+<b class="nc"><i>93</i>&nbsp;				.map(baseUri -&gt; findClassesForUri(baseUri, basePackageName, classFilter))</b>
+<b class="nc"><i>94</i>&nbsp;				.flatMap(Collection::stream)</b>
+<b class="nc"><i>95</i>&nbsp;				.distinct()</b>
+<b class="nc"><i>96</i>&nbsp;				.collect(toList());</b>
+<i>97</i>&nbsp;		// @formatter:on
+<i>98</i>&nbsp;	}
+<i>99</i>&nbsp;
+<i>100</i>&nbsp;	private List&lt;Class&lt;?&gt;&gt; findClassesForUri(URI baseUri, String basePackageName, ClassFilter classFilter) {
+<b class="nc"><i>101</i>&nbsp;		try (CloseablePath closeablePath = CloseablePath.create(baseUri)) {</b>
+<b class="nc"><i>102</i>&nbsp;			Path baseDir = closeablePath.getPath();</b>
+<b class="nc"><i>103</i>&nbsp;			return findClassesForPath(baseDir, basePackageName, classFilter);</b>
+<b class="nc"><i>104</i>&nbsp;		}</b>
+<b class="nc"><i>105</i>&nbsp;		catch (PreconditionViolationException ex) {</b>
+<b class="nc"><i>106</i>&nbsp;			throw ex;</b>
+<i>107</i>&nbsp;		}
+<b class="nc"><i>108</i>&nbsp;		catch (Exception ex) {</b>
+<b class="nc"><i>109</i>&nbsp;			logger.warn(ex, () -&gt; &quot;Error scanning files for URI &quot; + baseUri);</b>
+<b class="nc"><i>110</i>&nbsp;			return emptyList();</b>
+<i>111</i>&nbsp;		}
+<i>112</i>&nbsp;	}
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;	private List&lt;Class&lt;?&gt;&gt; findClassesForPath(Path baseDir, String basePackageName, ClassFilter classFilter) {
+<b class="nc"><i>115</i>&nbsp;		Preconditions.condition(Files.exists(baseDir), () -&gt; &quot;baseDir must exist: &quot; + baseDir);</b>
+<b class="nc"><i>116</i>&nbsp;		List&lt;Class&lt;?&gt;&gt; classes = new ArrayList&lt;&gt;();</b>
+<i>117</i>&nbsp;		try {
+<b class="nc"><i>118</i>&nbsp;			Files.walkFileTree(baseDir, new ClassFileVisitor(</b>
+<b class="nc"><i>119</i>&nbsp;				classFile -&gt; processClassFileSafely(baseDir, basePackageName, classFilter, classFile, classes::add)));</b>
+<i>120</i>&nbsp;		}
+<b class="nc"><i>121</i>&nbsp;		catch (IOException ex) {</b>
+<b class="nc"><i>122</i>&nbsp;			logger.warn(ex, () -&gt; &quot;I/O error scanning files in &quot; + baseDir);</b>
+<b class="nc"><i>123</i>&nbsp;		}</b>
+<b class="nc"><i>124</i>&nbsp;		return classes;</b>
+<i>125</i>&nbsp;	}
+<i>126</i>&nbsp;
+<i>127</i>&nbsp;	private void processClassFileSafely(Path baseDir, String basePackageName, ClassFilter classFilter, Path classFile,
+<i>128</i>&nbsp;			Consumer&lt;Class&lt;?&gt;&gt; classConsumer) {
+<i>129</i>&nbsp;		try {
+<b class="nc"><i>130</i>&nbsp;			String fullyQualifiedClassName = determineFullyQualifiedClassName(baseDir, basePackageName, classFile);</b>
+<b class="nc"><i>131</i>&nbsp;			if (classFilter.match(fullyQualifiedClassName)) {</b>
+<i>132</i>&nbsp;				try {
+<i>133</i>&nbsp;					// @formatter:off
+<b class="nc"><i>134</i>&nbsp;					loadClass.apply(fullyQualifiedClassName, getClassLoader())</b>
+<b class="nc"><i>135</i>&nbsp;							.filter(classFilter) // Always use &quot;.filter(classFilter)&quot; to include future predicates.</b>
+<b class="nc"><i>136</i>&nbsp;							.ifPresent(classConsumer);</b>
+<i>137</i>&nbsp;					// @formatter:on
+<i>138</i>&nbsp;				}
+<b class="nc"><i>139</i>&nbsp;				catch (InternalError internalError) {</b>
+<b class="nc"><i>140</i>&nbsp;					handleInternalError(classFile, fullyQualifiedClassName, internalError);</b>
+<b class="nc"><i>141</i>&nbsp;				}</b>
+<i>142</i>&nbsp;			}
+<i>143</i>&nbsp;		}
+<b class="nc"><i>144</i>&nbsp;		catch (Throwable throwable) {</b>
+<b class="nc"><i>145</i>&nbsp;			handleThrowable(classFile, throwable);</b>
+<b class="nc"><i>146</i>&nbsp;		}</b>
+<b class="nc"><i>147</i>&nbsp;	}</b>
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;	private String determineFullyQualifiedClassName(Path baseDir, String basePackageName, Path classFile) {
+<i>150</i>&nbsp;		// @formatter:off
+<b class="nc"><i>151</i>&nbsp;		return Stream.of(</b>
+<i>152</i>&nbsp;					basePackageName,
+<b class="nc"><i>153</i>&nbsp;					determineSubpackageName(baseDir, classFile),</b>
+<b class="nc"><i>154</i>&nbsp;					determineSimpleClassName(classFile)</b>
+<i>155</i>&nbsp;				)
+<b class="nc"><i>156</i>&nbsp;				.filter(value -&gt; !value.isEmpty()) // Handle default package appropriately.</b>
+<b class="nc"><i>157</i>&nbsp;				.collect(joining(PACKAGE_SEPARATOR_STRING));</b>
+<i>158</i>&nbsp;		// @formatter:on
+<i>159</i>&nbsp;	}
+<i>160</i>&nbsp;
+<i>161</i>&nbsp;	private String determineSimpleClassName(Path classFile) {
+<b class="nc"><i>162</i>&nbsp;		String fileName = classFile.getFileName().toString();</b>
+<b class="nc"><i>163</i>&nbsp;		return fileName.substring(0, fileName.length() - CLASS_FILE_SUFFIX.length());</b>
+<i>164</i>&nbsp;	}
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;	private String determineSubpackageName(Path baseDir, Path classFile) {
+<b class="nc"><i>167</i>&nbsp;		Path relativePath = baseDir.relativize(classFile.getParent());</b>
+<b class="nc"><i>168</i>&nbsp;		String pathSeparator = baseDir.getFileSystem().getSeparator();</b>
+<b class="nc"><i>169</i>&nbsp;		String subpackageName = relativePath.toString().replace(pathSeparator, PACKAGE_SEPARATOR_STRING);</b>
+<b class="nc"><i>170</i>&nbsp;		if (subpackageName.endsWith(pathSeparator)) {</b>
+<i>171</i>&nbsp;			// Workaround for JDK bug: https://bugs.openjdk.java.net/browse/JDK-8153248
+<b class="nc"><i>172</i>&nbsp;			subpackageName = subpackageName.substring(0, subpackageName.length() - pathSeparator.length());</b>
+<i>173</i>&nbsp;		}
+<b class="nc"><i>174</i>&nbsp;		return subpackageName;</b>
+<i>175</i>&nbsp;	}
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;	private void handleInternalError(Path classFile, String fullyQualifiedClassName, InternalError ex) {
+<b class="nc"><i>178</i>&nbsp;		if (MALFORMED_CLASS_NAME_ERROR_MESSAGE.equals(ex.getMessage())) {</b>
+<b class="nc"><i>179</i>&nbsp;			logMalformedClassName(classFile, fullyQualifiedClassName, ex);</b>
+<i>180</i>&nbsp;		}
+<i>181</i>&nbsp;		else {
+<b class="nc"><i>182</i>&nbsp;			logGenericFileProcessingException(classFile, ex);</b>
+<i>183</i>&nbsp;		}
+<b class="nc"><i>184</i>&nbsp;	}</b>
+<i>185</i>&nbsp;
+<i>186</i>&nbsp;	private void handleThrowable(Path classFile, Throwable throwable) {
+<b class="nc"><i>187</i>&nbsp;		rethrowIfBlacklisted(throwable);</b>
+<b class="nc"><i>188</i>&nbsp;		logGenericFileProcessingException(classFile, throwable);</b>
+<b class="nc"><i>189</i>&nbsp;	}</b>
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;	private void logMalformedClassName(Path classFile, String fullyQualifiedClassName, InternalError ex) {
+<i>192</i>&nbsp;		try {
+<b class="nc"><i>193</i>&nbsp;			logger.debug(ex, () -&gt; format(&quot;The java.lang.Class loaded from path [%s] has a malformed class name [%s].&quot;,</b>
+<b class="nc"><i>194</i>&nbsp;				classFile.toAbsolutePath(), fullyQualifiedClassName));</b>
+<i>195</i>&nbsp;		}
+<b class="nc"><i>196</i>&nbsp;		catch (Throwable t) {</b>
+<b class="nc"><i>197</i>&nbsp;			ex.addSuppressed(t);</b>
+<b class="nc"><i>198</i>&nbsp;			logGenericFileProcessingException(classFile, ex);</b>
+<b class="nc"><i>199</i>&nbsp;		}</b>
+<b class="nc"><i>200</i>&nbsp;	}</b>
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;	private void logGenericFileProcessingException(Path classFile, Throwable throwable) {
+<b class="nc"><i>203</i>&nbsp;		logger.debug(throwable, () -&gt; format(&quot;Failed to load java.lang.Class for path [%s] during classpath scanning.&quot;,</b>
+<b class="nc"><i>204</i>&nbsp;			classFile.toAbsolutePath()));</b>
+<b class="nc"><i>205</i>&nbsp;	}</b>
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;	private ClassLoader getClassLoader() {
+<b class="nc"><i>208</i>&nbsp;		return this.classLoaderSupplier.get();</b>
+<i>209</i>&nbsp;	}
+<i>210</i>&nbsp;
+<i>211</i>&nbsp;	private static String packagePath(String packageName) {
+<b class="nc"><i>212</i>&nbsp;		return packageName.replace(PACKAGE_SEPARATOR_CHAR, CLASSPATH_RESOURCE_PATH_SEPARATOR);</b>
+<i>213</i>&nbsp;	}
+<i>214</i>&nbsp;
+<i>215</i>&nbsp;	private List&lt;URI&gt; getRootUrisForPackage(String basePackageName) {
+<i>216</i>&nbsp;		try {
+<b class="nc"><i>217</i>&nbsp;			Enumeration&lt;URL&gt; resources = getClassLoader().getResources(packagePath(basePackageName));</b>
+<b class="nc"><i>218</i>&nbsp;			List&lt;URI&gt; uris = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>219</i>&nbsp;			while (resources.hasMoreElements()) {</b>
+<b class="nc"><i>220</i>&nbsp;				URL resource = resources.nextElement();</b>
+<b class="nc"><i>221</i>&nbsp;				uris.add(resource.toURI());</b>
+<b class="nc"><i>222</i>&nbsp;			}</b>
+<b class="nc"><i>223</i>&nbsp;			return uris;</b>
+<i>224</i>&nbsp;		}
+<b class="nc"><i>225</i>&nbsp;		catch (Exception ex) {</b>
+<b class="nc"><i>226</i>&nbsp;			logger.warn(ex, () -&gt; &quot;Error reading URIs from class loader for base package &quot; + basePackageName);</b>
+<b class="nc"><i>227</i>&nbsp;			return emptyList();</b>
+<i>228</i>&nbsp;		}
+<i>229</i>&nbsp;	}
+<i>230</i>&nbsp;
+<i>231</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

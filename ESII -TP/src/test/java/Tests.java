@@ -194,7 +194,7 @@ Teste utilizador não existe
 
         //Testar se retorna 0 se o IDDeposit  existir
 
-        assertEquals(-1, brs.returnBicycle(1, 1, 1));
+        assertEquals(0, brs.returnBicycle(1, 1, 1));
 
     }
 
@@ -233,16 +233,125 @@ Teste utilizador não existe
     // BICYCLE RENTALFEE
 
 
+    /*
+ Teste rentalProgram=-1
+  */
+    @Test
+    public void testbicycleRentalfeeRENTALMENOS1() {
+
+        assertEquals(0,brs.bicycleRentalFee(-1, 1,1,1));
+
+    }
+
+    /*
+Teste rentalProgram=0
+*/
+    @Test
+    public void testbicycleRentalfeeRENTALZERO() {
+
+        assertEquals(0,brs.bicycleRentalFee(0, 1,1,1));
+
+    }
+
+    /*
+Teste rentalProgram=1
+*/
+    @Test
+    public void testbicycleRentalfeeRENTALUM() {
+
+        assertEquals(1,brs.bicycleRentalFee(1, 1,2,1));
+
+    }
+
+    /*
+Teste rentalProgram=2
+*/
+    @Test
+    public void testbicycleRentalfeeRENTALDOIS() {
+
+        assertEquals(1,brs.bicycleRentalFee(2, 1,2,1));
+
+    }
+
+    /*
+Teste rentalProgram=3
+*/
+    @Test
+    public void testbicycleRentalfeeRENTALTRES() {
+
+        assertEquals(0,brs.bicycleRentalFee(3, 1,2,1));
+
+    }
+
+    /*
+Teste starttime=-1 (NÃO DEVIA ACEITAR STARTTIME<0)
+*/
+    @Test
+    public void testbicycleRentalfeeSTARTMENOSUM() {
+
+        assertEquals(0,brs.bicycleRentalFee(1, -1,1,1));
+
+    }
+
+    /*
+Teste starttime=0
+*/
+    @Test
+    public void testbicycleRentalfeeSTARTZERO() {
+
+        assertEquals(1,brs.bicycleRentalFee(1, 0,1,1));
+
+    }
 
 
+    /*
+Teste endtime=-1 (NÃO DEVIA ACEITAR ENDTIME <0 NEM MENOR QUE O STARTTIME)
+*/
+    @Test
+    public void testbicycleRentalfeeENDMENOSUM() {
 
+        assertEquals(0,brs.bicycleRentalFee(1, 1,-1,1));
 
+    }
 
+    /*
+Teste endtime=0 (NAO DEVIA ACEITAR VALORES DE ENDTIME MENORES QUE STARTTIME)
+*/
+    @Test
+    public void testbicycleRentalfeeENDZERO() {
 
+        assertEquals(0,brs.bicycleRentalFee(1, 1,0,1));
 
+    }
 
+    /*
+Teste nRentals=-1 (NAO DEVIA ACEITAR NRENTALS NEGATIVO)
+*/
+    @Test
+    public void testbicycleRentalfeeNRENTALMENOSUM() {
 
+        assertEquals(0,brs.bicycleRentalFee(1, 1,2,-1));
 
+    }
+
+    /*
+Teste nRentals=0
+*/
+    @Test
+    public void testbicycleRentalfeeNRENTALZERO() {
+
+        assertEquals(1,brs.bicycleRentalFee(1, 1,2,0));
+
+    }
+    /*
+Teste nRentals=1
+*/
+    @Test
+    public void testbicycleRentalfeeNRENTALUM() {
+
+        assertEquals(1,brs.bicycleRentalFee(1, 1,2,1));
+
+    }
 
 
 

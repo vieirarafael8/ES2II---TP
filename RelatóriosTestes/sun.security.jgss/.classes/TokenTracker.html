@@ -1,0 +1,528 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: TokenTracker</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.jgss</a> ]
+</div>
+
+<h1>Coverage Summary for Class: TokenTracker (sun.security.jgss)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">TokenTracker</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 103)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">TokenTracker$Entry</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 18)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 15)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 121)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2006, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.jgss;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import org.ietf.jgss.MessageProp;
+<i>29</i>&nbsp;import java.util.LinkedList;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;/**
+<i>32</i>&nbsp; * A utility class that implements a number list that keeps track of which
+<i>33</i>&nbsp; * tokens have arrived by storing their token numbers in the list. It helps
+<i>34</i>&nbsp; * detect old tokens, out of sequence tokens, and duplicate tokens.
+<i>35</i>&nbsp; *
+<i>36</i>&nbsp; * Each element of the list is an interval [a, b]. Its existence in the
+<i>37</i>&nbsp; * list implies that all token numbers in the range a, a+1, ..., b-1, b
+<i>38</i>&nbsp; * have arrived. Gaps in arrived token numbers are represented by the
+<i>39</i>&nbsp; * numbers that fall in between two elements of the list. eg. {[a,b],
+<i>40</i>&nbsp; * [c,d]} indicates that the token numbers b+1, ..., c-1 have not arrived
+<i>41</i>&nbsp; * yet.
+<i>42</i>&nbsp; *
+<i>43</i>&nbsp; * The maximum number of intervals that we keep track of is
+<i>44</i>&nbsp; * MAX_INTERVALS. Thus if there are too many gaps, then some of the older
+<i>45</i>&nbsp; * sequence numbers are deleted from the list. The earliest sequence number
+<i>46</i>&nbsp; * that exists in the list is the windowStart. The next expected sequence
+<i>47</i>&nbsp; * number, or expectedNumber, is one greater than the latest sequence
+<i>48</i>&nbsp; * number in the list.
+<i>49</i>&nbsp; *
+<i>50</i>&nbsp; * The list keeps track the first token number that should have arrived
+<i>51</i>&nbsp; * (initNumber) so that it is able to detect if certain numbers occur after
+<i>52</i>&nbsp; * the first valid token number but before windowStart. That would happen
+<i>53</i>&nbsp; * if the number of elements (intervals) exceeds MAX_INTERVALS and some
+<i>54</i>&nbsp; * initial elements had  to be deleted.
+<i>55</i>&nbsp; *
+<i>56</i>&nbsp; * The working of the list is optimized for the normal case where the
+<i>57</i>&nbsp; * tokens arrive in sequence.
+<i>58</i>&nbsp; *
+<i>59</i>&nbsp; * @author Mayank Upadhyay
+<i>60</i>&nbsp; * @since 1.4
+<i>61</i>&nbsp; */
+<i>62</i>&nbsp;public class TokenTracker {
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    static final int MAX_INTERVALS = 5;
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    private int initNumber;
+<i>67</i>&nbsp;    private int windowStart;
+<i>68</i>&nbsp;    private int expectedNumber;
+<i>69</i>&nbsp;
+<b class="nc"><i>70</i>&nbsp;    private int windowStartIndex = 0;</b>
+<i>71</i>&nbsp;
+<b class="nc"><i>72</i>&nbsp;    private LinkedList&lt;Entry&gt; list = new LinkedList&lt;Entry&gt;();</b>
+<i>73</i>&nbsp;
+<b class="nc"><i>74</i>&nbsp;    public TokenTracker(int initNumber) {</b>
+<i>75</i>&nbsp;
+<b class="nc"><i>76</i>&nbsp;        this.initNumber = initNumber;</b>
+<b class="nc"><i>77</i>&nbsp;        this.windowStart = initNumber;</b>
+<b class="nc"><i>78</i>&nbsp;        this.expectedNumber = initNumber;</b>
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;        // Make an entry with one less than the expected first token
+<b class="nc"><i>81</i>&nbsp;        Entry entry = new Entry(initNumber-1);</b>
+<i>82</i>&nbsp;
+<b class="nc"><i>83</i>&nbsp;        list.add(entry);</b>
+<i>84</i>&nbsp;    }
+<i>85</i>&nbsp;
+<i>86</i>&nbsp;    /**
+<i>87</i>&nbsp;     * Returns the index for the entry into which this number will fit. If
+<i>88</i>&nbsp;     * there is none, it returns the index of the last interval
+<i>89</i>&nbsp;     * which precedes this number. It returns -1 if the number needs to be
+<i>90</i>&nbsp;     * a in a new interval ahead of the whole list.
+<i>91</i>&nbsp;     */
+<i>92</i>&nbsp;    private int getIntervalIndex(int number) {
+<b class="nc"><i>93</i>&nbsp;        Entry entry = null;</b>
+<i>94</i>&nbsp;        int i;
+<i>95</i>&nbsp;        // Start from the rear to optimize for the normal case
+<b class="nc"><i>96</i>&nbsp;        for (i = list.size() - 1; i &gt;= 0; i--) {</b>
+<b class="nc"><i>97</i>&nbsp;            entry = list.get(i);</b>
+<b class="nc"><i>98</i>&nbsp;            if (entry.compareTo(number) &lt;= 0)</b>
+<b class="nc"><i>99</i>&nbsp;                break;</b>
+<i>100</i>&nbsp;        }
+<b class="nc"><i>101</i>&nbsp;        return i;</b>
+<i>102</i>&nbsp;    }
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;    /**
+<i>105</i>&nbsp;     * Sets the sequencing and replay information for the given token
+<i>106</i>&nbsp;     * number.
+<i>107</i>&nbsp;     *
+<i>108</i>&nbsp;     * The following represents the number line with positions of
+<i>109</i>&nbsp;     * initNumber, windowStart, expectedNumber marked on it. Regions in
+<i>110</i>&nbsp;     * between them show the different sequencing and replay state
+<i>111</i>&nbsp;     * possibilites for tokens that fall in there.
+<i>112</i>&nbsp;     *
+<i>113</i>&nbsp;     *  (1)      windowStart
+<i>114</i>&nbsp;     *           initNumber               expectedNumber
+<i>115</i>&nbsp;     *              |                           |
+<i>116</i>&nbsp;     *           ---|---------------------------|---
+<i>117</i>&nbsp;     *          GAP |    DUP/UNSEQ              | GAP
+<i>118</i>&nbsp;     *
+<i>119</i>&nbsp;     *
+<i>120</i>&nbsp;     *  (2)       initNumber   windowStart   expectedNumber
+<i>121</i>&nbsp;     *              |               |              |
+<i>122</i>&nbsp;     *           ---|---------------|--------------|---
+<i>123</i>&nbsp;     *          GAP |      OLD      |  DUP/UNSEQ   | GAP
+<i>124</i>&nbsp;     *
+<i>125</i>&nbsp;     *
+<i>126</i>&nbsp;     *  (3)                                windowStart
+<i>127</i>&nbsp;     *           expectedNumber            initNumber
+<i>128</i>&nbsp;     *              |                           |
+<i>129</i>&nbsp;     *           ---|---------------------------|---
+<i>130</i>&nbsp;     *    DUP/UNSEQ |           GAP             | DUP/UNSEQ
+<i>131</i>&nbsp;     *
+<i>132</i>&nbsp;     *
+<i>133</i>&nbsp;     *  (4)      expectedNumber    initNumber   windowStart
+<i>134</i>&nbsp;     *              |               |              |
+<i>135</i>&nbsp;     *           ---|---------------|--------------|---
+<i>136</i>&nbsp;     *    DUP/UNSEQ |        GAP    |    OLD       | DUP/UNSEQ
+<i>137</i>&nbsp;     *
+<i>138</i>&nbsp;     *
+<i>139</i>&nbsp;     *
+<i>140</i>&nbsp;     *  (5)      windowStart   expectedNumber    initNumber
+<i>141</i>&nbsp;     *              |               |              |
+<i>142</i>&nbsp;     *           ---|---------------|--------------|---
+<i>143</i>&nbsp;     *          OLD |    DUP/UNSEQ  |     GAP      | OLD
+<i>144</i>&nbsp;     *
+<i>145</i>&nbsp;     *
+<i>146</i>&nbsp;     *
+<i>147</i>&nbsp;     * (This analysis leaves out the possibility that expectedNumber passes
+<i>148</i>&nbsp;     * initNumber after wrapping around. That may be added later.)
+<i>149</i>&nbsp;     */
+<i>150</i>&nbsp;    synchronized public final void getProps(int number, MessageProp prop) {
+<i>151</i>&nbsp;
+<b class="nc"><i>152</i>&nbsp;        boolean gap = false;</b>
+<b class="nc"><i>153</i>&nbsp;        boolean old = false;</b>
+<b class="nc"><i>154</i>&nbsp;        boolean unsequenced = false;</b>
+<b class="nc"><i>155</i>&nbsp;        boolean duplicate = false;</b>
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;        // System.out.println(&quot;\n\n==========&quot;);
+<i>158</i>&nbsp;        // System.out.println(&quot;TokenTracker.getProps(): number=&quot; + number);
+<i>159</i>&nbsp;        // System.out.println(toString());
+<i>160</i>&nbsp;
+<b class="nc"><i>161</i>&nbsp;        int pos = getIntervalIndex(number);</b>
+<b class="nc"><i>162</i>&nbsp;        Entry entry = null;</b>
+<b class="nc"><i>163</i>&nbsp;        if (pos != -1)</b>
+<b class="nc"><i>164</i>&nbsp;            entry = list.get(pos);</b>
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;        // Optimize for the expected case:
+<i>167</i>&nbsp;
+<b class="nc"><i>168</i>&nbsp;        if (number == expectedNumber) {</b>
+<b class="nc"><i>169</i>&nbsp;            expectedNumber++;</b>
+<i>170</i>&nbsp;        } else {
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;            // Next trivial case is to check for duplicate
+<b class="nc"><i>173</i>&nbsp;            if (entry != null &amp;&amp; entry.contains(number))</b>
+<b class="nc"><i>174</i>&nbsp;                duplicate = true;</b>
+<i>175</i>&nbsp;            else {
+<i>176</i>&nbsp;
+<b class="nc"><i>177</i>&nbsp;                if (expectedNumber &gt;= initNumber) {</b>
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;                    // Cases (1) and (2)
+<i>180</i>&nbsp;
+<b class="nc"><i>181</i>&nbsp;                    if (number &gt; expectedNumber) {</b>
+<b class="nc"><i>182</i>&nbsp;                        gap = true;</b>
+<b class="nc"><i>183</i>&nbsp;                    } else if (number &gt;= windowStart) {</b>
+<b class="nc"><i>184</i>&nbsp;                        unsequenced = true;</b>
+<b class="nc"><i>185</i>&nbsp;                    } else if (number &gt;= initNumber) {</b>
+<b class="nc"><i>186</i>&nbsp;                        old = true;</b>
+<i>187</i>&nbsp;                    } else {
+<b class="nc"><i>188</i>&nbsp;                        gap = true;</b>
+<i>189</i>&nbsp;                    }
+<i>190</i>&nbsp;                } else {
+<i>191</i>&nbsp;
+<i>192</i>&nbsp;                    // Cases (3), (4) and (5)
+<i>193</i>&nbsp;
+<b class="nc"><i>194</i>&nbsp;                    if (number &gt; expectedNumber) {</b>
+<b class="nc"><i>195</i>&nbsp;                        if (number &lt; initNumber) {</b>
+<b class="nc"><i>196</i>&nbsp;                            gap = true;</b>
+<b class="nc"><i>197</i>&nbsp;                        } else if (windowStart &gt;= initNumber) {</b>
+<b class="nc"><i>198</i>&nbsp;                            if (number &gt;= windowStart) {</b>
+<b class="nc"><i>199</i>&nbsp;                               unsequenced = true;</b>
+<i>200</i>&nbsp;                            } else
+<b class="nc"><i>201</i>&nbsp;                                old = true;</b>
+<i>202</i>&nbsp;                        } else {
+<b class="nc"><i>203</i>&nbsp;                            old = true;</b>
+<i>204</i>&nbsp;                        }
+<b class="nc"><i>205</i>&nbsp;                    } else if (windowStart &gt; expectedNumber) {</b>
+<b class="nc"><i>206</i>&nbsp;                        unsequenced = true;</b>
+<b class="nc"><i>207</i>&nbsp;                    } else if (number &lt; windowStart) {</b>
+<b class="nc"><i>208</i>&nbsp;                        old = true;</b>
+<i>209</i>&nbsp;                    } else
+<b class="nc"><i>210</i>&nbsp;                        unsequenced = true;</b>
+<i>211</i>&nbsp;                }
+<i>212</i>&nbsp;            }
+<i>213</i>&nbsp;        }
+<i>214</i>&nbsp;
+<b class="nc"><i>215</i>&nbsp;        if (!duplicate &amp;&amp; !old)</b>
+<b class="nc"><i>216</i>&nbsp;            add(number, pos);</b>
+<i>217</i>&nbsp;
+<b class="nc"><i>218</i>&nbsp;        if (gap)</b>
+<b class="nc"><i>219</i>&nbsp;            expectedNumber = number+1;</b>
+<i>220</i>&nbsp;
+<b class="nc"><i>221</i>&nbsp;        prop.setSupplementaryStates(duplicate, old, unsequenced, gap,</b>
+<i>222</i>&nbsp;                                    0, null);
+<i>223</i>&nbsp;
+<i>224</i>&nbsp;        // System.out.println(&quot;Leaving with state:&quot;);
+<i>225</i>&nbsp;        // System.out.println(toString());
+<i>226</i>&nbsp;        // System.out.println(&quot;==========\n&quot;);
+<i>227</i>&nbsp;    }
+<i>228</i>&nbsp;
+<i>229</i>&nbsp;    /**
+<i>230</i>&nbsp;     * Adds the number to the list just after the entry that is currently
+<i>231</i>&nbsp;     * at position prevEntryPos. If prevEntryPos is -1, then the number
+<i>232</i>&nbsp;     * will begin a new interval at the front of the list.
+<i>233</i>&nbsp;     */
+<i>234</i>&nbsp;    private void add(int number, int prevEntryPos) {
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;        Entry entry;
+<b class="nc"><i>237</i>&nbsp;        Entry entryBefore = null;</b>
+<b class="nc"><i>238</i>&nbsp;        Entry entryAfter = null;</b>
+<i>239</i>&nbsp;
+<b class="nc"><i>240</i>&nbsp;        boolean appended = false;</b>
+<b class="nc"><i>241</i>&nbsp;        boolean prepended = false;</b>
+<i>242</i>&nbsp;
+<b class="nc"><i>243</i>&nbsp;        if (prevEntryPos != -1) {</b>
+<b class="nc"><i>244</i>&nbsp;            entryBefore = list.get(prevEntryPos);</b>
+<i>245</i>&nbsp;
+<i>246</i>&nbsp;            // Can this number simply be added to the previous interval?
+<b class="nc"><i>247</i>&nbsp;            if (number == (entryBefore.getEnd() + 1)) {</b>
+<b class="nc"><i>248</i>&nbsp;                entryBefore.setEnd(number);</b>
+<b class="nc"><i>249</i>&nbsp;                appended = true;</b>
+<i>250</i>&nbsp;            }
+<i>251</i>&nbsp;        }
+<i>252</i>&nbsp;
+<i>253</i>&nbsp;        // Now check the interval that follows this number
+<i>254</i>&nbsp;
+<b class="nc"><i>255</i>&nbsp;        int nextEntryPos = prevEntryPos + 1;</b>
+<b class="nc"><i>256</i>&nbsp;        if ((nextEntryPos) &lt; list.size()) {</b>
+<b class="nc"><i>257</i>&nbsp;            entryAfter = list.get(nextEntryPos);</b>
+<i>258</i>&nbsp;
+<i>259</i>&nbsp;            // Can this number simply be added to the next interval?
+<b class="nc"><i>260</i>&nbsp;            if (number == (entryAfter.getStart() - 1)) {</b>
+<b class="nc"><i>261</i>&nbsp;                if (!appended) {</b>
+<b class="nc"><i>262</i>&nbsp;                    entryAfter.setStart(number);</b>
+<i>263</i>&nbsp;                } else {
+<i>264</i>&nbsp;                    // Merge the two entries
+<b class="nc"><i>265</i>&nbsp;                    entryAfter.setStart(entryBefore.getStart());</b>
+<b class="nc"><i>266</i>&nbsp;                    list.remove(prevEntryPos);</b>
+<i>267</i>&nbsp;                    // Index of any entry following this gets decremented
+<b class="nc"><i>268</i>&nbsp;                    if (windowStartIndex &gt; prevEntryPos)</b>
+<b class="nc"><i>269</i>&nbsp;                        windowStartIndex--;</b>
+<i>270</i>&nbsp;                }
+<b class="nc"><i>271</i>&nbsp;                prepended = true;</b>
+<i>272</i>&nbsp;            }
+<i>273</i>&nbsp;        }
+<i>274</i>&nbsp;
+<b class="nc"><i>275</i>&nbsp;        if (prepended || appended)</b>
+<i>276</i>&nbsp;            return;
+<i>277</i>&nbsp;
+<i>278</i>&nbsp;        /*
+<i>279</i>&nbsp;         * At this point we know that the number will start a new interval
+<i>280</i>&nbsp;         * which needs to be added to the list. We might have to recyle an
+<i>281</i>&nbsp;         * older entry in the list.
+<i>282</i>&nbsp;         */
+<i>283</i>&nbsp;
+<b class="nc"><i>284</i>&nbsp;        if (list.size() &lt; MAX_INTERVALS) {</b>
+<b class="nc"><i>285</i>&nbsp;            entry = new Entry(number);</b>
+<b class="nc"><i>286</i>&nbsp;            if (prevEntryPos  &lt; windowStartIndex)</b>
+<b class="nc"><i>287</i>&nbsp;                windowStartIndex++; // due to the insertion which will happen</b>
+<i>288</i>&nbsp;        } else {
+<i>289</i>&nbsp;            /*
+<i>290</i>&nbsp;             * Delete the entry that marks the start of the current window.
+<i>291</i>&nbsp;             * The marker will automatically point to the next entry in the
+<i>292</i>&nbsp;             * list when this happens. If the current entry is at the end
+<i>293</i>&nbsp;             * of the list then set the marker to the start of the list.
+<i>294</i>&nbsp;             */
+<b class="nc"><i>295</i>&nbsp;            int oldWindowStartIndex = windowStartIndex;</b>
+<b class="nc"><i>296</i>&nbsp;            if (windowStartIndex == (list.size() - 1))</b>
+<b class="nc"><i>297</i>&nbsp;                windowStartIndex = 0;</b>
+<i>298</i>&nbsp;
+<b class="nc"><i>299</i>&nbsp;            entry = list.remove(oldWindowStartIndex);</b>
+<b class="nc"><i>300</i>&nbsp;            windowStart = list.get(windowStartIndex).getStart();</b>
+<b class="nc"><i>301</i>&nbsp;            entry.setStart(number);</b>
+<b class="nc"><i>302</i>&nbsp;            entry.setEnd(number);</b>
+<i>303</i>&nbsp;
+<b class="nc"><i>304</i>&nbsp;            if (prevEntryPos &gt;= oldWindowStartIndex) {</b>
+<b class="nc"><i>305</i>&nbsp;                prevEntryPos--; // due to the deletion that just happened</b>
+<i>306</i>&nbsp;            } else {
+<i>307</i>&nbsp;                /*
+<i>308</i>&nbsp;                 * If the start of the current window just moved from the
+<i>309</i>&nbsp;                 * end of the list to the front of the list, and if the new
+<i>310</i>&nbsp;                 * entry will be added to the front of the list, then
+<i>311</i>&nbsp;                 * the new entry is the actual window start.
+<i>312</i>&nbsp;                 * eg, Consider { [-10, -8], ..., [-6, -3], [3, 9]}. In
+<i>313</i>&nbsp;                 * this list, suppose the element [3, 9] is the start of
+<i>314</i>&nbsp;                 * the window and has to be deleted to make place to add
+<i>315</i>&nbsp;                 * [-12, -12]. The resultant list will be
+<i>316</i>&nbsp;                 * {[-12, -12], [-10, -8], ..., [-6, -3]} and the new start
+<i>317</i>&nbsp;                 * of the window should be the element [-12, -12], not
+<i>318</i>&nbsp;                 * [-10, -8] which succeeded [3, 9] in the old list.
+<i>319</i>&nbsp;                 */
+<b class="nc"><i>320</i>&nbsp;                if (oldWindowStartIndex != windowStartIndex) {</b>
+<i>321</i>&nbsp;                    // windowStartIndex is 0 at this point
+<b class="nc"><i>322</i>&nbsp;                    if (prevEntryPos == -1)</b>
+<i>323</i>&nbsp;                        // The new entry is going to the front
+<b class="nc"><i>324</i>&nbsp;                        windowStart = number;</b>
+<i>325</i>&nbsp;                } else {
+<i>326</i>&nbsp;                    // due to the insertion which will happen:
+<b class="nc"><i>327</i>&nbsp;                    windowStartIndex++;</b>
+<i>328</i>&nbsp;                }
+<i>329</i>&nbsp;            }
+<i>330</i>&nbsp;        }
+<i>331</i>&nbsp;
+<i>332</i>&nbsp;        // Finally we are ready to actually add to the list at index
+<i>333</i>&nbsp;        // &#39;prevEntryPos+1&#39;
+<i>334</i>&nbsp;
+<b class="nc"><i>335</i>&nbsp;        list.add(prevEntryPos+1, entry);</b>
+<i>336</i>&nbsp;    }
+<i>337</i>&nbsp;
+<i>338</i>&nbsp;    public String toString() {
+<b class="nc"><i>339</i>&nbsp;        StringBuilder sb = new StringBuilder(&quot;TokenTracker: &quot;);</b>
+<b class="nc"><i>340</i>&nbsp;        sb.append(&quot; initNumber=&quot;).append(initNumber);</b>
+<b class="nc"><i>341</i>&nbsp;        sb.append(&quot; windowStart=&quot;).append(windowStart);</b>
+<b class="nc"><i>342</i>&nbsp;        sb.append(&quot; expectedNumber=&quot;).append(expectedNumber);</b>
+<b class="nc"><i>343</i>&nbsp;        sb.append(&quot; windowStartIndex=&quot;).append(windowStartIndex);</b>
+<b class="nc"><i>344</i>&nbsp;        sb.append(&quot;\n\tIntervals are: {&quot;);</b>
+<b class="nc"><i>345</i>&nbsp;        for (int i = 0; i &lt; list.size(); i++) {</b>
+<b class="nc"><i>346</i>&nbsp;            if (i != 0)</b>
+<b class="nc"><i>347</i>&nbsp;                sb.append(&quot;, &quot;);</b>
+<b class="nc"><i>348</i>&nbsp;            sb.append(list.get(i).toString());</b>
+<i>349</i>&nbsp;        }
+<b class="nc"><i>350</i>&nbsp;        sb.append(&#39;}&#39;);</b>
+<b class="nc"><i>351</i>&nbsp;        return sb.toString();</b>
+<i>352</i>&nbsp;    }
+<i>353</i>&nbsp;
+<i>354</i>&nbsp;    /**
+<i>355</i>&nbsp;     * An entry in the list that represents the sequence of received
+<i>356</i>&nbsp;     * tokens. Each entry is actaully an interval of numbers, all of which
+<i>357</i>&nbsp;     * have been received.
+<i>358</i>&nbsp;     */
+<i>359</i>&nbsp;    class Entry {
+<i>360</i>&nbsp;
+<i>361</i>&nbsp;        private int start;
+<i>362</i>&nbsp;        private int end;
+<i>363</i>&nbsp;
+<b class="nc"><i>364</i>&nbsp;        Entry(int number) {</b>
+<b class="nc"><i>365</i>&nbsp;            start = number;</b>
+<b class="nc"><i>366</i>&nbsp;            end = number;</b>
+<i>367</i>&nbsp;        }
+<i>368</i>&nbsp;
+<i>369</i>&nbsp;        /**
+<i>370</i>&nbsp;         * Returns -1 if this interval represented by this entry precedes
+<i>371</i>&nbsp;         * the number, 0 if the number is contained in the interval,
+<i>372</i>&nbsp;         * and -1 if the interval occurs after the number.
+<i>373</i>&nbsp;         */
+<i>374</i>&nbsp;        final int compareTo(int number) {
+<b class="nc"><i>375</i>&nbsp;            if (start &gt; number)</b>
+<b class="nc"><i>376</i>&nbsp;                return 1;</b>
+<b class="nc"><i>377</i>&nbsp;            else if (end &lt; number)</b>
+<b class="nc"><i>378</i>&nbsp;                return -1;</b>
+<i>379</i>&nbsp;            else
+<b class="nc"><i>380</i>&nbsp;                return 0;</b>
+<i>381</i>&nbsp;        }
+<i>382</i>&nbsp;
+<i>383</i>&nbsp;        final boolean contains(int number) {
+<b class="nc"><i>384</i>&nbsp;            return (number &gt;= start &amp;&amp;</b>
+<i>385</i>&nbsp;                    number &lt;= end);
+<i>386</i>&nbsp;        }
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;        final void append(int number) {
+<b class="nc"><i>389</i>&nbsp;            if (number == (end + 1))</b>
+<b class="nc"><i>390</i>&nbsp;                end = number;</b>
+<i>391</i>&nbsp;        }
+<i>392</i>&nbsp;
+<i>393</i>&nbsp;        final void setInterval(int start, int end) {
+<b class="nc"><i>394</i>&nbsp;            this.start = start;</b>
+<b class="nc"><i>395</i>&nbsp;            this.end = end;</b>
+<i>396</i>&nbsp;        }
+<i>397</i>&nbsp;
+<i>398</i>&nbsp;        final void setEnd(int end) {
+<b class="nc"><i>399</i>&nbsp;            this.end = end;</b>
+<i>400</i>&nbsp;        }
+<i>401</i>&nbsp;
+<i>402</i>&nbsp;        final void setStart(int start) {
+<b class="nc"><i>403</i>&nbsp;            this.start = start;</b>
+<i>404</i>&nbsp;        }
+<i>405</i>&nbsp;
+<i>406</i>&nbsp;        final int getStart() {
+<b class="nc"><i>407</i>&nbsp;            return start;</b>
+<i>408</i>&nbsp;        }
+<i>409</i>&nbsp;
+<i>410</i>&nbsp;        final int getEnd() {
+<b class="nc"><i>411</i>&nbsp;            return end;</b>
+<i>412</i>&nbsp;        }
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;        public String toString() {
+<b class="nc"><i>415</i>&nbsp;            return (&quot;[&quot; + start + &quot;, &quot; + end + &quot;]&quot;);</b>
+<i>416</i>&nbsp;        }
+<i>417</i>&nbsp;
+<i>418</i>&nbsp;    }
+<i>419</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,1172 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: DnsContext</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.jndi.dns</a> ]
+</div>
+
+<h1>Coverage Summary for Class: DnsContext (com.sun.jndi.dns)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">DnsContext</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 47)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 329)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.jndi.dns;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;
+<i>29</i>&nbsp;import java.util.Enumeration;
+<i>30</i>&nbsp;import java.util.Hashtable;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;import javax.naming.*;
+<i>33</i>&nbsp;import javax.naming.directory.*;
+<i>34</i>&nbsp;import javax.naming.spi.DirectoryManager;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import com.sun.jndi.toolkit.ctx.*;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp; * A DnsContext is a directory context representing a DNS node.
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * @author Scott Seligman
+<i>43</i>&nbsp; */
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;
+<i>46</i>&nbsp;public class DnsContext extends ComponentDirContext {
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;    DnsName domain;             // fully-qualified domain name of this context,
+<i>49</i>&nbsp;                                // with a root (empty) label at position 0
+<i>50</i>&nbsp;    Hashtable&lt;Object,Object&gt; environment;
+<i>51</i>&nbsp;    private boolean envShared;  // true if environment is possibly shared
+<i>52</i>&nbsp;                                // and so must be copied on write
+<i>53</i>&nbsp;    private boolean parentIsDns;        // was this DnsContext created by
+<i>54</i>&nbsp;                                        // another?  see composeName()
+<i>55</i>&nbsp;    private String[] servers;
+<i>56</i>&nbsp;    private Resolver resolver;
+<i>57</i>&nbsp;
+<i>58</i>&nbsp;    private boolean authoritative;      // must all responses be authoritative?
+<i>59</i>&nbsp;    private boolean recursion;          // request recursion on queries?
+<i>60</i>&nbsp;    private int timeout;                // initial timeout on UDP queries in ms
+<i>61</i>&nbsp;    private int retries;                // number of UDP retries
+<i>62</i>&nbsp;
+<b class="nc"><i>63</i>&nbsp;    static final NameParser nameParser = new DnsNameParser();</b>
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    // Timeouts for UDP queries use exponential backoff:  each retry
+<i>66</i>&nbsp;    // is for twice as long as the last.  The following constants set
+<i>67</i>&nbsp;    // the defaults for the initial timeout (in ms) and the number of
+<i>68</i>&nbsp;    // retries, and name the environment properties used to override
+<i>69</i>&nbsp;    // these defaults.
+<i>70</i>&nbsp;    private static final int DEFAULT_INIT_TIMEOUT = 1000;
+<i>71</i>&nbsp;    private static final int DEFAULT_RETRIES = 4;
+<i>72</i>&nbsp;    private static final String INIT_TIMEOUT =
+<i>73</i>&nbsp;                                          &quot;com.sun.jndi.dns.timeout.initial&quot;;
+<i>74</i>&nbsp;    private static final String RETRIES = &quot;com.sun.jndi.dns.timeout.retries&quot;;
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    // The resource record type and class to use for lookups, and the
+<i>77</i>&nbsp;    // property used to modify them
+<i>78</i>&nbsp;    private CT lookupCT;
+<i>79</i>&nbsp;    private static final String LOOKUP_ATTR = &quot;com.sun.jndi.dns.lookup.attr&quot;;
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    // Property used to disallow recursion on queries
+<i>82</i>&nbsp;    private static final String RECURSION = &quot;com.sun.jndi.dns.recursion&quot;;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    // ANY == ResourceRecord.QCLASS_STAR == ResourceRecord.QTYPE_STAR
+<i>85</i>&nbsp;    private static final int ANY = ResourceRecord.QTYPE_STAR;
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    // The zone tree used for list operations
+<b class="nc"><i>88</i>&nbsp;    private static final ZoneNode zoneTree = new ZoneNode(null);</b>
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;
+<i>91</i>&nbsp;    /**
+<i>92</i>&nbsp;     * Returns a DNS context for a given domain and servers.
+<i>93</i>&nbsp;     * Each server is of the form &quot;server[:port]&quot;.
+<i>94</i>&nbsp;     * IPv6 literal host names include delimiting brackets.
+<i>95</i>&nbsp;     * There must be at least one server.
+<i>96</i>&nbsp;     * The environment must not be null; it is cloned before being stored.
+<i>97</i>&nbsp;     */
+<i>98</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>99</i>&nbsp;    public DnsContext(String domain, String[] servers, Hashtable&lt;?,?&gt; environment)
+<b class="nc"><i>100</i>&nbsp;            throws NamingException {</b>
+<i>101</i>&nbsp;
+<b class="nc"><i>102</i>&nbsp;        this.domain = new DnsName(domain.endsWith(&quot;.&quot;)</b>
+<i>103</i>&nbsp;                                  ? domain
+<i>104</i>&nbsp;                                  : domain + &quot;.&quot;);
+<b class="nc"><i>105</i>&nbsp;        this.servers = (servers == null) ? null : servers.clone();</b>
+<b class="nc"><i>106</i>&nbsp;        this.environment = (Hashtable&lt;Object,Object&gt;) environment.clone();</b>
+<b class="nc"><i>107</i>&nbsp;        envShared = false;</b>
+<b class="nc"><i>108</i>&nbsp;        parentIsDns = false;</b>
+<b class="nc"><i>109</i>&nbsp;        resolver = null;</b>
+<i>110</i>&nbsp;
+<b class="nc"><i>111</i>&nbsp;        initFromEnvironment();</b>
+<i>112</i>&nbsp;    }
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    /*
+<i>115</i>&nbsp;     * Returns a clone of a DNS context, just like DnsContext(DnsContext)
+<i>116</i>&nbsp;     * but with a different domain name and with parentIsDns set to true.
+<i>117</i>&nbsp;     */
+<i>118</i>&nbsp;    DnsContext(DnsContext ctx, DnsName domain) {
+<b class="nc"><i>119</i>&nbsp;        this(ctx);</b>
+<b class="nc"><i>120</i>&nbsp;        this.domain = domain;</b>
+<b class="nc"><i>121</i>&nbsp;        parentIsDns = true;</b>
+<i>122</i>&nbsp;    }
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    /*
+<i>125</i>&nbsp;     * Returns a clone of a DNS context.  The context&#39;s modifiable
+<i>126</i>&nbsp;     * private state is independent of the original&#39;s (so closing one
+<i>127</i>&nbsp;     * context, for example, won&#39;t close the other).  The two contexts
+<i>128</i>&nbsp;     * share {@code environment}, but it&#39;s copy-on-write so there&#39;s
+<i>129</i>&nbsp;     * no conflict.
+<i>130</i>&nbsp;     */
+<b class="nc"><i>131</i>&nbsp;    private DnsContext(DnsContext ctx) {</b>
+<b class="nc"><i>132</i>&nbsp;        environment = ctx.environment;  // shared environment, copy-on-write</b>
+<b class="nc"><i>133</i>&nbsp;        envShared = ctx.envShared = true;</b>
+<b class="nc"><i>134</i>&nbsp;        parentIsDns = ctx.parentIsDns;</b>
+<b class="nc"><i>135</i>&nbsp;        domain = ctx.domain;</b>
+<b class="nc"><i>136</i>&nbsp;        servers = ctx.servers;          // shared servers, no write operation</b>
+<b class="nc"><i>137</i>&nbsp;        resolver = ctx.resolver;</b>
+<b class="nc"><i>138</i>&nbsp;        authoritative = ctx.authoritative;</b>
+<b class="nc"><i>139</i>&nbsp;        recursion = ctx.recursion;</b>
+<b class="nc"><i>140</i>&nbsp;        timeout = ctx.timeout;</b>
+<b class="nc"><i>141</i>&nbsp;        retries = ctx.retries;</b>
+<b class="nc"><i>142</i>&nbsp;        lookupCT = ctx.lookupCT;</b>
+<i>143</i>&nbsp;    }
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;    public void close() {
+<b class="nc"><i>146</i>&nbsp;        if (resolver != null) {</b>
+<b class="nc"><i>147</i>&nbsp;            resolver.close();</b>
+<b class="nc"><i>148</i>&nbsp;            resolver = null;</b>
+<i>149</i>&nbsp;        }
+<i>150</i>&nbsp;    }
+<i>151</i>&nbsp;
+<i>152</i>&nbsp;
+<i>153</i>&nbsp;    //---------- Environment operations
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    /*
+<i>156</i>&nbsp;     * Override default with a noncloning version.
+<i>157</i>&nbsp;     */
+<i>158</i>&nbsp;    protected Hashtable&lt;?,?&gt; p_getEnvironment() {
+<b class="nc"><i>159</i>&nbsp;        return environment;</b>
+<i>160</i>&nbsp;    }
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;    public Hashtable&lt;?,?&gt; getEnvironment() throws NamingException {
+<b class="nc"><i>163</i>&nbsp;        return (Hashtable&lt;?,?&gt;) environment.clone();</b>
+<i>164</i>&nbsp;    }
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>167</i>&nbsp;    public Object addToEnvironment(String propName, Object propVal)
+<i>168</i>&nbsp;            throws NamingException {
+<i>169</i>&nbsp;
+<b class="nc"><i>170</i>&nbsp;        if (propName.equals(LOOKUP_ATTR)) {</b>
+<b class="nc"><i>171</i>&nbsp;            lookupCT = getLookupCT((String) propVal);</b>
+<b class="nc"><i>172</i>&nbsp;        } else if (propName.equals(Context.AUTHORITATIVE)) {</b>
+<b class="nc"><i>173</i>&nbsp;            authoritative = &quot;true&quot;.equalsIgnoreCase((String) propVal);</b>
+<b class="nc"><i>174</i>&nbsp;        } else if (propName.equals(RECURSION)) {</b>
+<b class="nc"><i>175</i>&nbsp;            recursion = &quot;true&quot;.equalsIgnoreCase((String) propVal);</b>
+<b class="nc"><i>176</i>&nbsp;        } else if (propName.equals(INIT_TIMEOUT)) {</b>
+<b class="nc"><i>177</i>&nbsp;            int val = Integer.parseInt((String) propVal);</b>
+<b class="nc"><i>178</i>&nbsp;            if (timeout != val) {</b>
+<b class="nc"><i>179</i>&nbsp;                timeout = val;</b>
+<b class="nc"><i>180</i>&nbsp;                resolver = null;</b>
+<i>181</i>&nbsp;            }
+<b class="nc"><i>182</i>&nbsp;        } else if (propName.equals(RETRIES)) {</b>
+<b class="nc"><i>183</i>&nbsp;            int val = Integer.parseInt((String) propVal);</b>
+<b class="nc"><i>184</i>&nbsp;            if (retries != val) {</b>
+<b class="nc"><i>185</i>&nbsp;                retries = val;</b>
+<b class="nc"><i>186</i>&nbsp;                resolver = null;</b>
+<i>187</i>&nbsp;            }
+<i>188</i>&nbsp;        }
+<i>189</i>&nbsp;
+<b class="nc"><i>190</i>&nbsp;        if (!envShared) {</b>
+<b class="nc"><i>191</i>&nbsp;            return environment.put(propName, propVal);</b>
+<b class="nc"><i>192</i>&nbsp;        } else if (environment.get(propName) != propVal) {</b>
+<i>193</i>&nbsp;            // copy on write
+<b class="nc"><i>194</i>&nbsp;            environment = (Hashtable&lt;Object,Object&gt;) environment.clone();</b>
+<b class="nc"><i>195</i>&nbsp;            envShared = false;</b>
+<b class="nc"><i>196</i>&nbsp;            return environment.put(propName, propVal);</b>
+<i>197</i>&nbsp;        } else {
+<b class="nc"><i>198</i>&nbsp;            return propVal;</b>
+<i>199</i>&nbsp;        }
+<i>200</i>&nbsp;    }
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>203</i>&nbsp;    public Object removeFromEnvironment(String propName)
+<i>204</i>&nbsp;            throws NamingException {
+<i>205</i>&nbsp;
+<b class="nc"><i>206</i>&nbsp;        if (propName.equals(LOOKUP_ATTR)) {</b>
+<b class="nc"><i>207</i>&nbsp;            lookupCT = getLookupCT(null);</b>
+<b class="nc"><i>208</i>&nbsp;        } else if (propName.equals(Context.AUTHORITATIVE)) {</b>
+<b class="nc"><i>209</i>&nbsp;            authoritative = false;</b>
+<b class="nc"><i>210</i>&nbsp;        } else if (propName.equals(RECURSION)) {</b>
+<b class="nc"><i>211</i>&nbsp;            recursion = true;</b>
+<b class="nc"><i>212</i>&nbsp;        } else if (propName.equals(INIT_TIMEOUT)) {</b>
+<b class="nc"><i>213</i>&nbsp;            if (timeout != DEFAULT_INIT_TIMEOUT) {</b>
+<b class="nc"><i>214</i>&nbsp;                timeout = DEFAULT_INIT_TIMEOUT;</b>
+<b class="nc"><i>215</i>&nbsp;                resolver = null;</b>
+<i>216</i>&nbsp;            }
+<b class="nc"><i>217</i>&nbsp;        } else if (propName.equals(RETRIES)) {</b>
+<b class="nc"><i>218</i>&nbsp;            if (retries != DEFAULT_RETRIES) {</b>
+<b class="nc"><i>219</i>&nbsp;                retries = DEFAULT_RETRIES;</b>
+<b class="nc"><i>220</i>&nbsp;                resolver = null;</b>
+<i>221</i>&nbsp;            }
+<i>222</i>&nbsp;        }
+<i>223</i>&nbsp;
+<b class="nc"><i>224</i>&nbsp;        if (!envShared) {</b>
+<b class="nc"><i>225</i>&nbsp;            return environment.remove(propName);</b>
+<b class="nc"><i>226</i>&nbsp;        } else if (environment.get(propName) != null) {</b>
+<i>227</i>&nbsp;            // copy-on-write
+<b class="nc"><i>228</i>&nbsp;            environment = (Hashtable&lt;Object,Object&gt;) environment.clone();</b>
+<b class="nc"><i>229</i>&nbsp;            envShared = false;</b>
+<b class="nc"><i>230</i>&nbsp;            return environment.remove(propName);</b>
+<i>231</i>&nbsp;        } else {
+<b class="nc"><i>232</i>&nbsp;            return null;</b>
+<i>233</i>&nbsp;        }
+<i>234</i>&nbsp;    }
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;    /*
+<i>237</i>&nbsp;     * Update PROVIDER_URL property.  Call this only when environment
+<i>238</i>&nbsp;     * is not being shared.
+<i>239</i>&nbsp;     */
+<i>240</i>&nbsp;    void setProviderUrl(String url) {
+<i>241</i>&nbsp;        // assert !envShared;
+<b class="nc"><i>242</i>&nbsp;        environment.put(Context.PROVIDER_URL, url);</b>
+<i>243</i>&nbsp;    }
+<i>244</i>&nbsp;
+<i>245</i>&nbsp;    /*
+<i>246</i>&nbsp;     * Read environment properties and set parameters.
+<i>247</i>&nbsp;     */
+<i>248</i>&nbsp;    private void initFromEnvironment()
+<i>249</i>&nbsp;            throws InvalidAttributeIdentifierException {
+<i>250</i>&nbsp;
+<b class="nc"><i>251</i>&nbsp;        lookupCT = getLookupCT((String) environment.get(LOOKUP_ATTR));</b>
+<b class="nc"><i>252</i>&nbsp;        authoritative = &quot;true&quot;.equalsIgnoreCase((String)</b>
+<b class="nc"><i>253</i>&nbsp;                                       environment.get(Context.AUTHORITATIVE));</b>
+<b class="nc"><i>254</i>&nbsp;        String val = (String) environment.get(RECURSION);</b>
+<b class="nc"><i>255</i>&nbsp;        recursion = ((val == null) ||</b>
+<b class="nc"><i>256</i>&nbsp;                     &quot;true&quot;.equalsIgnoreCase(val));</b>
+<b class="nc"><i>257</i>&nbsp;        val = (String) environment.get(INIT_TIMEOUT);</b>
+<b class="nc"><i>258</i>&nbsp;        timeout = (val == null)</b>
+<i>259</i>&nbsp;            ? DEFAULT_INIT_TIMEOUT
+<b class="nc"><i>260</i>&nbsp;            : Integer.parseInt(val);</b>
+<b class="nc"><i>261</i>&nbsp;        val = (String) environment.get(RETRIES);</b>
+<b class="nc"><i>262</i>&nbsp;        retries = (val == null)</b>
+<i>263</i>&nbsp;            ? DEFAULT_RETRIES
+<b class="nc"><i>264</i>&nbsp;            : Integer.parseInt(val);</b>
+<i>265</i>&nbsp;    }
+<i>266</i>&nbsp;
+<i>267</i>&nbsp;    private CT getLookupCT(String attrId)
+<i>268</i>&nbsp;            throws InvalidAttributeIdentifierException {
+<b class="nc"><i>269</i>&nbsp;        return (attrId == null)</b>
+<i>270</i>&nbsp;            ? new CT(ResourceRecord.CLASS_INTERNET, ResourceRecord.TYPE_TXT)
+<b class="nc"><i>271</i>&nbsp;            : fromAttrId(attrId);</b>
+<i>272</i>&nbsp;    }
+<i>273</i>&nbsp;
+<i>274</i>&nbsp;
+<i>275</i>&nbsp;    //---------- Naming operations
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;    public Object c_lookup(Name name, Continuation cont)
+<i>278</i>&nbsp;            throws NamingException {
+<i>279</i>&nbsp;
+<b class="nc"><i>280</i>&nbsp;        cont.setSuccess();</b>
+<b class="nc"><i>281</i>&nbsp;        if (name.isEmpty()) {</b>
+<b class="nc"><i>282</i>&nbsp;            DnsContext ctx = new DnsContext(this);</b>
+<b class="nc"><i>283</i>&nbsp;            ctx.resolver = new Resolver(servers, timeout, retries);</b>
+<i>284</i>&nbsp;                                                // clone for parallelism
+<b class="nc"><i>285</i>&nbsp;            return ctx;</b>
+<i>286</i>&nbsp;        }
+<i>287</i>&nbsp;        try {
+<b class="nc"><i>288</i>&nbsp;            DnsName fqdn = fullyQualify(name);</b>
+<b class="nc"><i>289</i>&nbsp;            ResourceRecords rrs =</b>
+<b class="nc"><i>290</i>&nbsp;                getResolver().query(fqdn, lookupCT.rrclass, lookupCT.rrtype,</b>
+<i>291</i>&nbsp;                                    recursion, authoritative);
+<b class="nc"><i>292</i>&nbsp;            Attributes attrs = rrsToAttrs(rrs, null);</b>
+<b class="nc"><i>293</i>&nbsp;            DnsContext ctx = new DnsContext(this, fqdn);</b>
+<b class="nc"><i>294</i>&nbsp;            return DirectoryManager.getObjectInstance(ctx, name, this,</b>
+<i>295</i>&nbsp;                                                      environment, attrs);
+<b class="nc"><i>296</i>&nbsp;        } catch (NamingException e) {</b>
+<b class="nc"><i>297</i>&nbsp;            cont.setError(this, name);</b>
+<b class="nc"><i>298</i>&nbsp;            throw cont.fillInException(e);</b>
+<b class="nc"><i>299</i>&nbsp;        } catch (Exception e) {</b>
+<b class="nc"><i>300</i>&nbsp;            cont.setError(this, name);</b>
+<b class="nc"><i>301</i>&nbsp;            NamingException ne = new NamingException(</b>
+<i>302</i>&nbsp;                    &quot;Problem generating object using object factory&quot;);
+<b class="nc"><i>303</i>&nbsp;            ne.setRootCause(e);</b>
+<b class="nc"><i>304</i>&nbsp;            throw cont.fillInException(ne);</b>
+<i>305</i>&nbsp;        }
+<i>306</i>&nbsp;    }
+<i>307</i>&nbsp;
+<i>308</i>&nbsp;    public Object c_lookupLink(Name name, Continuation cont)
+<i>309</i>&nbsp;            throws NamingException {
+<b class="nc"><i>310</i>&nbsp;        return c_lookup(name, cont);</b>
+<i>311</i>&nbsp;    }
+<i>312</i>&nbsp;
+<i>313</i>&nbsp;    public NamingEnumeration&lt;NameClassPair&gt; c_list(Name name, Continuation cont)
+<i>314</i>&nbsp;            throws NamingException {
+<b class="nc"><i>315</i>&nbsp;        cont.setSuccess();</b>
+<i>316</i>&nbsp;        try {
+<b class="nc"><i>317</i>&nbsp;            DnsName fqdn = fullyQualify(name);</b>
+<b class="nc"><i>318</i>&nbsp;            NameNode nnode = getNameNode(fqdn);</b>
+<b class="nc"><i>319</i>&nbsp;            DnsContext ctx = new DnsContext(this, fqdn);</b>
+<b class="nc"><i>320</i>&nbsp;            return new NameClassPairEnumeration(ctx, nnode.getChildren());</b>
+<i>321</i>&nbsp;
+<b class="nc"><i>322</i>&nbsp;        } catch (NamingException e) {</b>
+<b class="nc"><i>323</i>&nbsp;            cont.setError(this, name);</b>
+<b class="nc"><i>324</i>&nbsp;            throw cont.fillInException(e);</b>
+<i>325</i>&nbsp;        }
+<i>326</i>&nbsp;    }
+<i>327</i>&nbsp;
+<i>328</i>&nbsp;    public NamingEnumeration&lt;Binding&gt; c_listBindings(Name name, Continuation cont)
+<i>329</i>&nbsp;            throws NamingException {
+<b class="nc"><i>330</i>&nbsp;        cont.setSuccess();</b>
+<i>331</i>&nbsp;        try {
+<b class="nc"><i>332</i>&nbsp;            DnsName fqdn = fullyQualify(name);</b>
+<b class="nc"><i>333</i>&nbsp;            NameNode nnode = getNameNode(fqdn);</b>
+<b class="nc"><i>334</i>&nbsp;            DnsContext ctx = new DnsContext(this, fqdn);</b>
+<b class="nc"><i>335</i>&nbsp;            return new BindingEnumeration(ctx, nnode.getChildren());</b>
+<i>336</i>&nbsp;
+<b class="nc"><i>337</i>&nbsp;        } catch (NamingException e) {</b>
+<b class="nc"><i>338</i>&nbsp;            cont.setError(this, name);</b>
+<b class="nc"><i>339</i>&nbsp;            throw cont.fillInException(e);</b>
+<i>340</i>&nbsp;        }
+<i>341</i>&nbsp;    }
+<i>342</i>&nbsp;
+<i>343</i>&nbsp;    public void c_bind(Name name, Object obj, Continuation cont)
+<i>344</i>&nbsp;            throws NamingException {
+<b class="nc"><i>345</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>346</i>&nbsp;        throw cont.fillInException(</b>
+<i>347</i>&nbsp;                new OperationNotSupportedException());
+<i>348</i>&nbsp;    }
+<i>349</i>&nbsp;
+<i>350</i>&nbsp;    public void c_rebind(Name name, Object obj, Continuation cont)
+<i>351</i>&nbsp;            throws NamingException {
+<b class="nc"><i>352</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>353</i>&nbsp;        throw cont.fillInException(</b>
+<i>354</i>&nbsp;                new OperationNotSupportedException());
+<i>355</i>&nbsp;    }
+<i>356</i>&nbsp;
+<i>357</i>&nbsp;    public void c_unbind(Name name, Continuation cont)
+<i>358</i>&nbsp;            throws NamingException {
+<b class="nc"><i>359</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>360</i>&nbsp;        throw cont.fillInException(</b>
+<i>361</i>&nbsp;                new OperationNotSupportedException());
+<i>362</i>&nbsp;    }
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;    public void c_rename(Name oldname, Name newname, Continuation cont)
+<i>365</i>&nbsp;            throws NamingException {
+<b class="nc"><i>366</i>&nbsp;        cont.setError(this, oldname);</b>
+<b class="nc"><i>367</i>&nbsp;        throw cont.fillInException(</b>
+<i>368</i>&nbsp;                new OperationNotSupportedException());
+<i>369</i>&nbsp;    }
+<i>370</i>&nbsp;
+<i>371</i>&nbsp;    public Context c_createSubcontext(Name name, Continuation cont)
+<i>372</i>&nbsp;            throws NamingException {
+<b class="nc"><i>373</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>374</i>&nbsp;        throw cont.fillInException(</b>
+<i>375</i>&nbsp;                new OperationNotSupportedException());
+<i>376</i>&nbsp;    }
+<i>377</i>&nbsp;
+<i>378</i>&nbsp;    public void c_destroySubcontext(Name name, Continuation cont)
+<i>379</i>&nbsp;            throws NamingException {
+<b class="nc"><i>380</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>381</i>&nbsp;        throw cont.fillInException(</b>
+<i>382</i>&nbsp;                new OperationNotSupportedException());
+<i>383</i>&nbsp;    }
+<i>384</i>&nbsp;
+<i>385</i>&nbsp;    public NameParser c_getNameParser(Name name, Continuation cont)
+<i>386</i>&nbsp;            throws NamingException {
+<b class="nc"><i>387</i>&nbsp;        cont.setSuccess();</b>
+<b class="nc"><i>388</i>&nbsp;        return nameParser;</b>
+<i>389</i>&nbsp;    }
+<i>390</i>&nbsp;
+<i>391</i>&nbsp;
+<i>392</i>&nbsp;    //---------- Directory operations
+<i>393</i>&nbsp;
+<i>394</i>&nbsp;    public void c_bind(Name name,
+<i>395</i>&nbsp;                       Object obj,
+<i>396</i>&nbsp;                       Attributes attrs,
+<i>397</i>&nbsp;                       Continuation cont)
+<i>398</i>&nbsp;            throws NamingException {
+<b class="nc"><i>399</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>400</i>&nbsp;        throw cont.fillInException(</b>
+<i>401</i>&nbsp;                new OperationNotSupportedException());
+<i>402</i>&nbsp;    }
+<i>403</i>&nbsp;
+<i>404</i>&nbsp;    public void c_rebind(Name name,
+<i>405</i>&nbsp;                         Object obj,
+<i>406</i>&nbsp;                         Attributes attrs,
+<i>407</i>&nbsp;                         Continuation cont)
+<i>408</i>&nbsp;            throws NamingException {
+<b class="nc"><i>409</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>410</i>&nbsp;        throw cont.fillInException(</b>
+<i>411</i>&nbsp;                new OperationNotSupportedException());
+<i>412</i>&nbsp;    }
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;    public DirContext c_createSubcontext(Name name,
+<i>415</i>&nbsp;                                         Attributes attrs,
+<i>416</i>&nbsp;                                         Continuation cont)
+<i>417</i>&nbsp;            throws NamingException {
+<b class="nc"><i>418</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>419</i>&nbsp;        throw cont.fillInException(</b>
+<i>420</i>&nbsp;                new OperationNotSupportedException());
+<i>421</i>&nbsp;    }
+<i>422</i>&nbsp;
+<i>423</i>&nbsp;    public Attributes c_getAttributes(Name name,
+<i>424</i>&nbsp;                                      String[] attrIds,
+<i>425</i>&nbsp;                                      Continuation cont)
+<i>426</i>&nbsp;            throws NamingException {
+<i>427</i>&nbsp;
+<b class="nc"><i>428</i>&nbsp;        cont.setSuccess();</b>
+<i>429</i>&nbsp;        try {
+<b class="nc"><i>430</i>&nbsp;            DnsName fqdn = fullyQualify(name);</b>
+<b class="nc"><i>431</i>&nbsp;            CT[] cts = attrIdsToClassesAndTypes(attrIds);</b>
+<b class="nc"><i>432</i>&nbsp;            CT ct = getClassAndTypeToQuery(cts);</b>
+<b class="nc"><i>433</i>&nbsp;            ResourceRecords rrs =</b>
+<b class="nc"><i>434</i>&nbsp;                getResolver().query(fqdn, ct.rrclass, ct.rrtype,</b>
+<i>435</i>&nbsp;                                    recursion, authoritative);
+<b class="nc"><i>436</i>&nbsp;            return rrsToAttrs(rrs, cts);</b>
+<i>437</i>&nbsp;
+<b class="nc"><i>438</i>&nbsp;        } catch (NamingException e) {</b>
+<b class="nc"><i>439</i>&nbsp;            cont.setError(this, name);</b>
+<b class="nc"><i>440</i>&nbsp;            throw cont.fillInException(e);</b>
+<i>441</i>&nbsp;        }
+<i>442</i>&nbsp;    }
+<i>443</i>&nbsp;
+<i>444</i>&nbsp;    public void c_modifyAttributes(Name name,
+<i>445</i>&nbsp;                                   int mod_op,
+<i>446</i>&nbsp;                                   Attributes attrs,
+<i>447</i>&nbsp;                                   Continuation cont)
+<i>448</i>&nbsp;            throws NamingException {
+<b class="nc"><i>449</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>450</i>&nbsp;        throw cont.fillInException(</b>
+<i>451</i>&nbsp;                new OperationNotSupportedException());
+<i>452</i>&nbsp;    }
+<i>453</i>&nbsp;
+<i>454</i>&nbsp;    public void c_modifyAttributes(Name name,
+<i>455</i>&nbsp;                                   ModificationItem[] mods,
+<i>456</i>&nbsp;                                   Continuation cont)
+<i>457</i>&nbsp;            throws NamingException {
+<b class="nc"><i>458</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>459</i>&nbsp;        throw cont.fillInException(</b>
+<i>460</i>&nbsp;                new OperationNotSupportedException());
+<i>461</i>&nbsp;    }
+<i>462</i>&nbsp;
+<i>463</i>&nbsp;    public NamingEnumeration&lt;SearchResult&gt; c_search(Name name,
+<i>464</i>&nbsp;                                      Attributes matchingAttributes,
+<i>465</i>&nbsp;                                      String[] attributesToReturn,
+<i>466</i>&nbsp;                                      Continuation cont)
+<i>467</i>&nbsp;            throws NamingException {
+<b class="nc"><i>468</i>&nbsp;        throw new OperationNotSupportedException();</b>
+<i>469</i>&nbsp;    }
+<i>470</i>&nbsp;
+<i>471</i>&nbsp;    public NamingEnumeration&lt;SearchResult&gt; c_search(Name name,
+<i>472</i>&nbsp;                                      String filter,
+<i>473</i>&nbsp;                                      SearchControls cons,
+<i>474</i>&nbsp;                                      Continuation cont)
+<i>475</i>&nbsp;            throws NamingException {
+<b class="nc"><i>476</i>&nbsp;        throw new OperationNotSupportedException();</b>
+<i>477</i>&nbsp;    }
+<i>478</i>&nbsp;
+<i>479</i>&nbsp;    public NamingEnumeration&lt;SearchResult&gt; c_search(Name name,
+<i>480</i>&nbsp;                                      String filterExpr,
+<i>481</i>&nbsp;                                      Object[] filterArgs,
+<i>482</i>&nbsp;                                      SearchControls cons,
+<i>483</i>&nbsp;                                      Continuation cont)
+<i>484</i>&nbsp;            throws NamingException {
+<b class="nc"><i>485</i>&nbsp;        throw new OperationNotSupportedException();</b>
+<i>486</i>&nbsp;    }
+<i>487</i>&nbsp;
+<i>488</i>&nbsp;    public DirContext c_getSchema(Name name, Continuation cont)
+<i>489</i>&nbsp;            throws NamingException {
+<b class="nc"><i>490</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>491</i>&nbsp;        throw cont.fillInException(</b>
+<i>492</i>&nbsp;                new OperationNotSupportedException());
+<i>493</i>&nbsp;    }
+<i>494</i>&nbsp;
+<i>495</i>&nbsp;    public DirContext c_getSchemaClassDefinition(Name name, Continuation cont)
+<i>496</i>&nbsp;            throws NamingException {
+<b class="nc"><i>497</i>&nbsp;        cont.setError(this, name);</b>
+<b class="nc"><i>498</i>&nbsp;        throw cont.fillInException(</b>
+<i>499</i>&nbsp;                new OperationNotSupportedException());
+<i>500</i>&nbsp;    }
+<i>501</i>&nbsp;
+<i>502</i>&nbsp;
+<i>503</i>&nbsp;    //---------- Name-related operations
+<i>504</i>&nbsp;
+<i>505</i>&nbsp;    public String getNameInNamespace() {
+<b class="nc"><i>506</i>&nbsp;        return domain.toString();</b>
+<i>507</i>&nbsp;    }
+<i>508</i>&nbsp;
+<i>509</i>&nbsp;    public Name composeName(Name name, Name prefix) throws NamingException {
+<i>510</i>&nbsp;        Name result;
+<i>511</i>&nbsp;
+<i>512</i>&nbsp;        // Any name that&#39;s not a CompositeName is assumed to be a DNS
+<i>513</i>&nbsp;        // compound name.  Convert each to a DnsName for syntax checking.
+<b class="nc"><i>514</i>&nbsp;        if (!(prefix instanceof DnsName || prefix instanceof CompositeName)) {</b>
+<b class="nc"><i>515</i>&nbsp;            prefix = (new DnsName()).addAll(prefix);</b>
+<i>516</i>&nbsp;        }
+<b class="nc"><i>517</i>&nbsp;        if (!(name instanceof DnsName || name instanceof CompositeName)) {</b>
+<b class="nc"><i>518</i>&nbsp;            name = (new DnsName()).addAll(name);</b>
+<i>519</i>&nbsp;        }
+<i>520</i>&nbsp;
+<i>521</i>&nbsp;        // Each of prefix and name is now either a DnsName or a CompositeName.
+<i>522</i>&nbsp;
+<i>523</i>&nbsp;        // If we have two DnsNames, simply join them together.
+<b class="nc"><i>524</i>&nbsp;        if ((prefix instanceof DnsName) &amp;&amp; (name instanceof DnsName)) {</b>
+<b class="nc"><i>525</i>&nbsp;            result = (DnsName) (prefix.clone());</b>
+<b class="nc"><i>526</i>&nbsp;            result.addAll(name);</b>
+<b class="nc"><i>527</i>&nbsp;            return new CompositeName().add(result.toString());</b>
+<i>528</i>&nbsp;        }
+<i>529</i>&nbsp;
+<i>530</i>&nbsp;        // Wrap compound names in composite names.
+<b class="nc"><i>531</i>&nbsp;        Name prefixC = (prefix instanceof CompositeName)</b>
+<i>532</i>&nbsp;            ? prefix
+<b class="nc"><i>533</i>&nbsp;            : new CompositeName().add(prefix.toString());</b>
+<b class="nc"><i>534</i>&nbsp;        Name nameC = (name instanceof CompositeName)</b>
+<i>535</i>&nbsp;            ? name
+<b class="nc"><i>536</i>&nbsp;            : new CompositeName().add(name.toString());</b>
+<b class="nc"><i>537</i>&nbsp;        int prefixLast = prefixC.size() - 1;</b>
+<i>538</i>&nbsp;
+<i>539</i>&nbsp;        // Let toolkit do the work at namespace boundaries.
+<b class="nc"><i>540</i>&nbsp;        if (nameC.isEmpty() || nameC.get(0).equals(&quot;&quot;) ||</b>
+<b class="nc"><i>541</i>&nbsp;                prefixC.isEmpty() || prefixC.get(prefixLast).equals(&quot;&quot;)) {</b>
+<b class="nc"><i>542</i>&nbsp;            return super.composeName(nameC, prefixC);</b>
+<i>543</i>&nbsp;        }
+<i>544</i>&nbsp;
+<b class="nc"><i>545</i>&nbsp;        result = (prefix == prefixC)</b>
+<b class="nc"><i>546</i>&nbsp;            ? (CompositeName) prefixC.clone()</b>
+<i>547</i>&nbsp;            : prefixC;                  // prefixC is already a clone
+<b class="nc"><i>548</i>&nbsp;        result.addAll(nameC);</b>
+<i>549</i>&nbsp;
+<b class="nc"><i>550</i>&nbsp;        if (parentIsDns) {</b>
+<b class="nc"><i>551</i>&nbsp;            DnsName dnsComp = (prefix instanceof DnsName)</b>
+<b class="nc"><i>552</i>&nbsp;                           ? (DnsName) prefix.clone()</b>
+<b class="nc"><i>553</i>&nbsp;                           : new DnsName(prefixC.get(prefixLast));</b>
+<b class="nc"><i>554</i>&nbsp;            dnsComp.addAll((name instanceof DnsName)</b>
+<i>555</i>&nbsp;                           ? name
+<b class="nc"><i>556</i>&nbsp;                           : new DnsName(nameC.get(0)));</b>
+<b class="nc"><i>557</i>&nbsp;            result.remove(prefixLast + 1);</b>
+<b class="nc"><i>558</i>&nbsp;            result.remove(prefixLast);</b>
+<b class="nc"><i>559</i>&nbsp;            result.add(prefixLast, dnsComp.toString());</b>
+<i>560</i>&nbsp;        }
+<b class="nc"><i>561</i>&nbsp;        return result;</b>
+<i>562</i>&nbsp;    }
+<i>563</i>&nbsp;
+<i>564</i>&nbsp;
+<i>565</i>&nbsp;    //---------- Helper methods
+<i>566</i>&nbsp;
+<i>567</i>&nbsp;    /*
+<i>568</i>&nbsp;     * Resolver is not created until needed, to allow time for updates
+<i>569</i>&nbsp;     * to the environment.
+<i>570</i>&nbsp;     */
+<i>571</i>&nbsp;    private synchronized Resolver getResolver() throws NamingException {
+<b class="nc"><i>572</i>&nbsp;        if (resolver == null) {</b>
+<b class="nc"><i>573</i>&nbsp;            resolver = new Resolver(servers, timeout, retries);</b>
+<i>574</i>&nbsp;        }
+<b class="nc"><i>575</i>&nbsp;        return resolver;</b>
+<i>576</i>&nbsp;    }
+<i>577</i>&nbsp;
+<i>578</i>&nbsp;    /*
+<i>579</i>&nbsp;     * Returns the fully-qualified domain name of a name given
+<i>580</i>&nbsp;     * relative to this context.  Result includes a root label (an
+<i>581</i>&nbsp;     * empty component at position 0).
+<i>582</i>&nbsp;     */
+<i>583</i>&nbsp;    DnsName fullyQualify(Name name) throws NamingException {
+<b class="nc"><i>584</i>&nbsp;        if (name.isEmpty()) {</b>
+<b class="nc"><i>585</i>&nbsp;            return domain;</b>
+<i>586</i>&nbsp;        }
+<b class="nc"><i>587</i>&nbsp;        DnsName dnsName = (name instanceof CompositeName)</b>
+<b class="nc"><i>588</i>&nbsp;            ? new DnsName(name.get(0))                  // parse name</b>
+<b class="nc"><i>589</i>&nbsp;            : (DnsName) (new DnsName()).addAll(name);   // clone &amp; check syntax</b>
+<i>590</i>&nbsp;
+<b class="nc"><i>591</i>&nbsp;        if (dnsName.hasRootLabel()) {</b>
+<i>592</i>&nbsp;            // Be overly generous and allow root label if we&#39;re in root domain.
+<b class="nc"><i>593</i>&nbsp;            if (domain.size() == 1) {</b>
+<b class="nc"><i>594</i>&nbsp;                return dnsName;</b>
+<i>595</i>&nbsp;            } else {
+<b class="nc"><i>596</i>&nbsp;                throw new InvalidNameException(</b>
+<i>597</i>&nbsp;                       &quot;DNS name &quot; + dnsName + &quot; not relative to &quot; + domain);
+<i>598</i>&nbsp;            }
+<i>599</i>&nbsp;        }
+<b class="nc"><i>600</i>&nbsp;        return (DnsName) dnsName.addAll(0, domain);</b>
+<i>601</i>&nbsp;    }
+<i>602</i>&nbsp;
+<i>603</i>&nbsp;    /*
+<i>604</i>&nbsp;     * Converts resource records to an attribute set.  Only resource
+<i>605</i>&nbsp;     * records in the answer section are used, and only those that
+<i>606</i>&nbsp;     * match the classes and types in cts (see classAndTypeMatch()
+<i>607</i>&nbsp;     * for matching rules).
+<i>608</i>&nbsp;     */
+<i>609</i>&nbsp;    private static Attributes rrsToAttrs(ResourceRecords rrs, CT[] cts) {
+<i>610</i>&nbsp;
+<b class="nc"><i>611</i>&nbsp;        BasicAttributes attrs = new BasicAttributes(true);</b>
+<i>612</i>&nbsp;
+<b class="nc"><i>613</i>&nbsp;        for (int i = 0; i &lt; rrs.answer.size(); i++) {</b>
+<b class="nc"><i>614</i>&nbsp;            ResourceRecord rr = rrs.answer.elementAt(i);</b>
+<b class="nc"><i>615</i>&nbsp;            int rrtype  = rr.getType();</b>
+<b class="nc"><i>616</i>&nbsp;            int rrclass = rr.getRrclass();</b>
+<i>617</i>&nbsp;
+<b class="nc"><i>618</i>&nbsp;            if (!classAndTypeMatch(rrclass, rrtype, cts)) {</b>
+<b class="nc"><i>619</i>&nbsp;                continue;</b>
+<i>620</i>&nbsp;            }
+<i>621</i>&nbsp;
+<b class="nc"><i>622</i>&nbsp;            String attrId = toAttrId(rrclass, rrtype);</b>
+<b class="nc"><i>623</i>&nbsp;            Attribute attr = attrs.get(attrId);</b>
+<b class="nc"><i>624</i>&nbsp;            if (attr == null) {</b>
+<b class="nc"><i>625</i>&nbsp;                attr = new BasicAttribute(attrId);</b>
+<b class="nc"><i>626</i>&nbsp;                attrs.put(attr);</b>
+<i>627</i>&nbsp;            }
+<b class="nc"><i>628</i>&nbsp;            attr.add(rr.getRdata());</b>
+<i>629</i>&nbsp;        }
+<b class="nc"><i>630</i>&nbsp;        return attrs;</b>
+<i>631</i>&nbsp;    }
+<i>632</i>&nbsp;
+<i>633</i>&nbsp;    /*
+<i>634</i>&nbsp;     * Returns true if rrclass and rrtype match some element of cts.
+<i>635</i>&nbsp;     * A match occurs if corresponding classes and types are equal,
+<i>636</i>&nbsp;     * or if the array value is ANY.  If cts is null, then any class
+<i>637</i>&nbsp;     * and type match.
+<i>638</i>&nbsp;     */
+<i>639</i>&nbsp;    private static boolean classAndTypeMatch(int rrclass, int rrtype,
+<i>640</i>&nbsp;                                             CT[] cts) {
+<b class="nc"><i>641</i>&nbsp;        if (cts == null) {</b>
+<b class="nc"><i>642</i>&nbsp;            return true;</b>
+<i>643</i>&nbsp;        }
+<b class="nc"><i>644</i>&nbsp;        for (int i = 0; i &lt; cts.length; i++) {</b>
+<b class="nc"><i>645</i>&nbsp;            CT ct = cts[i];</b>
+<b class="nc"><i>646</i>&nbsp;            boolean classMatch = (ct.rrclass == ANY) ||</b>
+<i>647</i>&nbsp;                                 (ct.rrclass == rrclass);
+<b class="nc"><i>648</i>&nbsp;            boolean typeMatch  = (ct.rrtype == ANY) ||</b>
+<i>649</i>&nbsp;                                 (ct.rrtype == rrtype);
+<b class="nc"><i>650</i>&nbsp;            if (classMatch &amp;&amp; typeMatch) {</b>
+<b class="nc"><i>651</i>&nbsp;                return true;</b>
+<i>652</i>&nbsp;            }
+<i>653</i>&nbsp;        }
+<b class="nc"><i>654</i>&nbsp;        return false;</b>
+<i>655</i>&nbsp;    }
+<i>656</i>&nbsp;
+<i>657</i>&nbsp;    /*
+<i>658</i>&nbsp;     * Returns the attribute ID for a resource record given its class
+<i>659</i>&nbsp;     * and type.  If the record is in the internet class, the
+<i>660</i>&nbsp;     * corresponding attribute ID is the record&#39;s type name (or the
+<i>661</i>&nbsp;     * integer type value if the name is not known).  If the record is
+<i>662</i>&nbsp;     * not in the internet class, the class name (or integer class
+<i>663</i>&nbsp;     * value) is prepended to the attribute ID, separated by a space.
+<i>664</i>&nbsp;     *
+<i>665</i>&nbsp;     * A class or type value of ANY represents an indeterminate class
+<i>666</i>&nbsp;     * or type, and is represented within the attribute ID by &quot;*&quot;.
+<i>667</i>&nbsp;     * For example, the attribute ID &quot;IN *&quot; represents
+<i>668</i>&nbsp;     * any type in the internet class, and &quot;* NS&quot; represents an NS
+<i>669</i>&nbsp;     * record of any class.
+<i>670</i>&nbsp;     */
+<i>671</i>&nbsp;    private static String toAttrId(int rrclass, int rrtype) {
+<b class="nc"><i>672</i>&nbsp;        String attrId = ResourceRecord.getTypeName(rrtype);</b>
+<b class="nc"><i>673</i>&nbsp;        if (rrclass != ResourceRecord.CLASS_INTERNET) {</b>
+<b class="nc"><i>674</i>&nbsp;            attrId = ResourceRecord.getRrclassName(rrclass) + &quot; &quot; + attrId;</b>
+<i>675</i>&nbsp;        }
+<b class="nc"><i>676</i>&nbsp;        return attrId;</b>
+<i>677</i>&nbsp;    }
+<i>678</i>&nbsp;
+<i>679</i>&nbsp;    /*
+<i>680</i>&nbsp;     * Returns the class and type values corresponding to an attribute
+<i>681</i>&nbsp;     * ID.  An indeterminate class or type is represented by ANY.  See
+<i>682</i>&nbsp;     * toAttrId() for the format of attribute IDs.
+<i>683</i>&nbsp;     *
+<i>684</i>&nbsp;     * @throws InvalidAttributeIdentifierException
+<i>685</i>&nbsp;     *          if class or type is unknown
+<i>686</i>&nbsp;     */
+<i>687</i>&nbsp;    private static CT fromAttrId(String attrId)
+<i>688</i>&nbsp;            throws InvalidAttributeIdentifierException {
+<i>689</i>&nbsp;
+<b class="nc"><i>690</i>&nbsp;        if (attrId.equals(&quot;&quot;)) {</b>
+<b class="nc"><i>691</i>&nbsp;            throw new InvalidAttributeIdentifierException(</b>
+<i>692</i>&nbsp;                    &quot;Attribute ID cannot be empty&quot;);
+<i>693</i>&nbsp;        }
+<i>694</i>&nbsp;        int rrclass;
+<i>695</i>&nbsp;        int rrtype;
+<b class="nc"><i>696</i>&nbsp;        int space = attrId.indexOf(&#39; &#39;);</b>
+<i>697</i>&nbsp;
+<i>698</i>&nbsp;        // class
+<b class="nc"><i>699</i>&nbsp;        if (space &lt; 0) {</b>
+<b class="nc"><i>700</i>&nbsp;            rrclass = ResourceRecord.CLASS_INTERNET;</b>
+<i>701</i>&nbsp;        } else {
+<b class="nc"><i>702</i>&nbsp;            String className = attrId.substring(0, space);</b>
+<b class="nc"><i>703</i>&nbsp;            rrclass = ResourceRecord.getRrclass(className);</b>
+<b class="nc"><i>704</i>&nbsp;            if (rrclass &lt; 0) {</b>
+<b class="nc"><i>705</i>&nbsp;                throw new InvalidAttributeIdentifierException(</b>
+<i>706</i>&nbsp;                        &quot;Unknown resource record class &#39;&quot; + className + &#39;\&#39;&#39;);
+<i>707</i>&nbsp;            }
+<i>708</i>&nbsp;        }
+<i>709</i>&nbsp;
+<i>710</i>&nbsp;        // type
+<b class="nc"><i>711</i>&nbsp;        String typeName = attrId.substring(space + 1);</b>
+<b class="nc"><i>712</i>&nbsp;        rrtype = ResourceRecord.getType(typeName);</b>
+<b class="nc"><i>713</i>&nbsp;        if (rrtype &lt; 0) {</b>
+<b class="nc"><i>714</i>&nbsp;            throw new InvalidAttributeIdentifierException(</b>
+<i>715</i>&nbsp;                    &quot;Unknown resource record type &#39;&quot; + typeName + &#39;\&#39;&#39;);
+<i>716</i>&nbsp;        }
+<i>717</i>&nbsp;
+<b class="nc"><i>718</i>&nbsp;        return new CT(rrclass, rrtype);</b>
+<i>719</i>&nbsp;    }
+<i>720</i>&nbsp;
+<i>721</i>&nbsp;    /*
+<i>722</i>&nbsp;     * Returns an array of the classes and types corresponding to a
+<i>723</i>&nbsp;     * set of attribute IDs.  See toAttrId() for the format of
+<i>724</i>&nbsp;     * attribute IDs, and classAndTypeMatch() for the format of the
+<i>725</i>&nbsp;     * array returned.
+<i>726</i>&nbsp;     */
+<i>727</i>&nbsp;    private static CT[] attrIdsToClassesAndTypes(String[] attrIds)
+<i>728</i>&nbsp;            throws InvalidAttributeIdentifierException {
+<b class="nc"><i>729</i>&nbsp;        if (attrIds == null) {</b>
+<b class="nc"><i>730</i>&nbsp;            return null;</b>
+<i>731</i>&nbsp;        }
+<b class="nc"><i>732</i>&nbsp;        CT[] cts = new CT[attrIds.length];</b>
+<i>733</i>&nbsp;
+<b class="nc"><i>734</i>&nbsp;        for (int i = 0; i &lt; attrIds.length; i++) {</b>
+<b class="nc"><i>735</i>&nbsp;            cts[i] = fromAttrId(attrIds[i]);</b>
+<i>736</i>&nbsp;        }
+<b class="nc"><i>737</i>&nbsp;        return cts;</b>
+<i>738</i>&nbsp;    }
+<i>739</i>&nbsp;
+<i>740</i>&nbsp;    /*
+<i>741</i>&nbsp;     * Returns the most restrictive resource record class and type
+<i>742</i>&nbsp;     * that may be used to query for records matching cts.
+<i>743</i>&nbsp;     * See classAndTypeMatch() for matching rules.
+<i>744</i>&nbsp;     */
+<i>745</i>&nbsp;    private static CT getClassAndTypeToQuery(CT[] cts) {
+<i>746</i>&nbsp;        int rrclass;
+<i>747</i>&nbsp;        int rrtype;
+<i>748</i>&nbsp;
+<b class="nc"><i>749</i>&nbsp;        if (cts == null) {</b>
+<i>750</i>&nbsp;            // Query all records.
+<b class="nc"><i>751</i>&nbsp;            rrclass = ANY;</b>
+<b class="nc"><i>752</i>&nbsp;            rrtype  = ANY;</b>
+<b class="nc"><i>753</i>&nbsp;        } else if (cts.length == 0) {</b>
+<i>754</i>&nbsp;            // No records are requested, but we need to ask for something.
+<b class="nc"><i>755</i>&nbsp;            rrclass = ResourceRecord.CLASS_INTERNET;</b>
+<b class="nc"><i>756</i>&nbsp;            rrtype  = ANY;</b>
+<i>757</i>&nbsp;        } else {
+<b class="nc"><i>758</i>&nbsp;            rrclass = cts[0].rrclass;</b>
+<b class="nc"><i>759</i>&nbsp;            rrtype  = cts[0].rrtype;</b>
+<b class="nc"><i>760</i>&nbsp;            for (int i = 1; i &lt; cts.length; i++) {</b>
+<b class="nc"><i>761</i>&nbsp;                if (rrclass != cts[i].rrclass) {</b>
+<b class="nc"><i>762</i>&nbsp;                    rrclass = ANY;</b>
+<i>763</i>&nbsp;                }
+<b class="nc"><i>764</i>&nbsp;                if (rrtype != cts[i].rrtype) {</b>
+<b class="nc"><i>765</i>&nbsp;                    rrtype = ANY;</b>
+<i>766</i>&nbsp;                }
+<i>767</i>&nbsp;            }
+<i>768</i>&nbsp;        }
+<b class="nc"><i>769</i>&nbsp;        return new CT(rrclass, rrtype);</b>
+<i>770</i>&nbsp;    }
+<i>771</i>&nbsp;
+<i>772</i>&nbsp;
+<i>773</i>&nbsp;    //---------- Support for list operations
+<i>774</i>&nbsp;
+<i>775</i>&nbsp;    /*
+<i>776</i>&nbsp;     * Synchronization notes:
+<i>777</i>&nbsp;     *
+<i>778</i>&nbsp;     * Any access to zoneTree that walks the tree, whether it modifies
+<i>779</i>&nbsp;     * the tree or not, is synchronized on zoneTree.
+<i>780</i>&nbsp;     * [%%% Note:  a read/write lock would allow increased concurrency.]
+<i>781</i>&nbsp;     * The depth of a ZoneNode can thereafter be accessed without
+<i>782</i>&nbsp;     * further synchronization.  Access to other fields and methods
+<i>783</i>&nbsp;     * should be synchronized on the node itself.
+<i>784</i>&nbsp;     *
+<i>785</i>&nbsp;     * A zone&#39;s contents is a NameNode tree that, once created, is never
+<i>786</i>&nbsp;     * modified.  The only synchronization needed is to ensure that it
+<i>787</i>&nbsp;     * gets flushed into shared memory after being created, which is
+<i>788</i>&nbsp;     * accomplished by ZoneNode.populate().  The contents are accessed
+<i>789</i>&nbsp;     * via a soft reference, so a ZoneNode may be seen to be populated
+<i>790</i>&nbsp;     * one moment and unpopulated the next.
+<i>791</i>&nbsp;     */
+<i>792</i>&nbsp;
+<i>793</i>&nbsp;    /*
+<i>794</i>&nbsp;     * Returns the node in the zone tree corresponding to a
+<i>795</i>&nbsp;     * fully-qualified domain name.  If the desired portion of the
+<i>796</i>&nbsp;     * tree has not yet been populated or has been outdated, a zone
+<i>797</i>&nbsp;     * transfer is done to populate the tree.
+<i>798</i>&nbsp;     */
+<i>799</i>&nbsp;    private NameNode getNameNode(DnsName fqdn) throws NamingException {
+<b class="nc"><i>800</i>&nbsp;        dprint(&quot;getNameNode(&quot; + fqdn + &quot;)&quot;);</b>
+<i>801</i>&nbsp;
+<i>802</i>&nbsp;        // Find deepest related zone in zone tree.
+<i>803</i>&nbsp;        ZoneNode znode;
+<i>804</i>&nbsp;        DnsName zone;
+<b class="nc"><i>805</i>&nbsp;        synchronized (zoneTree) {</b>
+<b class="nc"><i>806</i>&nbsp;            znode = zoneTree.getDeepestPopulated(fqdn);</b>
+<b class="nc"><i>807</i>&nbsp;        }</b>
+<b class="nc"><i>808</i>&nbsp;        dprint(&quot;Deepest related zone in zone tree: &quot; +</b>
+<b class="nc"><i>809</i>&nbsp;               ((znode != null) ? znode.getLabel() : &quot;[none]&quot;));</b>
+<i>810</i>&nbsp;
+<i>811</i>&nbsp;        NameNode topOfZone;
+<i>812</i>&nbsp;        NameNode nnode;
+<i>813</i>&nbsp;
+<b class="nc"><i>814</i>&nbsp;        if (znode != null) {</b>
+<b class="nc"><i>815</i>&nbsp;            synchronized (znode) {</b>
+<b class="nc"><i>816</i>&nbsp;                topOfZone = znode.getContents();</b>
+<b class="nc"><i>817</i>&nbsp;            }</b>
+<i>818</i>&nbsp;            // If fqdn is in znode&#39;s zone, is not at a zone cut, and
+<i>819</i>&nbsp;            // is current, we&#39;re done.
+<b class="nc"><i>820</i>&nbsp;            if (topOfZone != null) {</b>
+<b class="nc"><i>821</i>&nbsp;                nnode = topOfZone.get(fqdn, znode.depth() + 1); // +1 for root</b>
+<i>822</i>&nbsp;
+<b class="nc"><i>823</i>&nbsp;                if ((nnode != null) &amp;&amp; !nnode.isZoneCut()) {</b>
+<b class="nc"><i>824</i>&nbsp;                    dprint(&quot;Found node &quot; + fqdn + &quot; in zone tree&quot;);</b>
+<b class="nc"><i>825</i>&nbsp;                    zone = (DnsName)</b>
+<b class="nc"><i>826</i>&nbsp;                        fqdn.getPrefix(znode.depth() + 1);      // +1 for root</b>
+<b class="nc"><i>827</i>&nbsp;                    boolean current = isZoneCurrent(znode, zone);</b>
+<b class="nc"><i>828</i>&nbsp;                    boolean restart = false;</b>
+<i>829</i>&nbsp;
+<b class="nc"><i>830</i>&nbsp;                    synchronized (znode) {</b>
+<b class="nc"><i>831</i>&nbsp;                        if (topOfZone != znode.getContents()) {</b>
+<i>832</i>&nbsp;                            // Zone was modified while we were examining it.
+<i>833</i>&nbsp;                            // All bets are off.
+<b class="nc"><i>834</i>&nbsp;                            restart = true;</b>
+<b class="nc"><i>835</i>&nbsp;                        } else if (!current) {</b>
+<b class="nc"><i>836</i>&nbsp;                            znode.depopulate();</b>
+<i>837</i>&nbsp;                        } else {
+<b class="nc"><i>838</i>&nbsp;                            return nnode;                       // cache hit!</b>
+<i>839</i>&nbsp;                        }
+<b class="nc"><i>840</i>&nbsp;                    }</b>
+<b class="nc"><i>841</i>&nbsp;                    dprint(&quot;Zone not current; discarding node&quot;);</b>
+<b class="nc"><i>842</i>&nbsp;                    if (restart) {</b>
+<b class="nc"><i>843</i>&nbsp;                        return getNameNode(fqdn);</b>
+<i>844</i>&nbsp;                    }
+<i>845</i>&nbsp;                }
+<i>846</i>&nbsp;            }
+<i>847</i>&nbsp;        }
+<i>848</i>&nbsp;
+<i>849</i>&nbsp;        // Cache miss...  do it the expensive way.
+<b class="nc"><i>850</i>&nbsp;        dprint(&quot;Adding node &quot; + fqdn + &quot; to zone tree&quot;);</b>
+<i>851</i>&nbsp;
+<i>852</i>&nbsp;        // Find fqdn&#39;s zone and add it to the tree.
+<b class="nc"><i>853</i>&nbsp;        zone = getResolver().findZoneName(fqdn, ResourceRecord.CLASS_INTERNET,</b>
+<i>854</i>&nbsp;                                          recursion);
+<b class="nc"><i>855</i>&nbsp;        dprint(&quot;Node&#39;s zone is &quot; + zone);</b>
+<b class="nc"><i>856</i>&nbsp;        synchronized (zoneTree) {</b>
+<b class="nc"><i>857</i>&nbsp;            znode = (ZoneNode) zoneTree.add(zone, 1);   // &quot;1&quot; to skip root</b>
+<b class="nc"><i>858</i>&nbsp;        }</b>
+<i>859</i>&nbsp;
+<i>860</i>&nbsp;        // If znode is now populated we know -- because the first half of
+<i>861</i>&nbsp;        // getNodeName() didn&#39;t find it -- that it was populated by another
+<i>862</i>&nbsp;        // thread during this method call.  Assume then that it&#39;s current.
+<i>863</i>&nbsp;
+<b class="nc"><i>864</i>&nbsp;        synchronized (znode) {</b>
+<b class="nc"><i>865</i>&nbsp;            topOfZone = znode.isPopulated()</b>
+<b class="nc"><i>866</i>&nbsp;                ? znode.getContents()</b>
+<b class="nc"><i>867</i>&nbsp;                : populateZone(znode, zone);</b>
+<b class="nc"><i>868</i>&nbsp;        }</b>
+<i>869</i>&nbsp;        // Desired node should now be in znode&#39;s populated zone.  Find it.
+<b class="nc"><i>870</i>&nbsp;        nnode = topOfZone.get(fqdn, zone.size());</b>
+<b class="nc"><i>871</i>&nbsp;        if (nnode == null) {</b>
+<b class="nc"><i>872</i>&nbsp;            throw new ConfigurationException(</b>
+<i>873</i>&nbsp;                    &quot;DNS error: node not found in its own zone&quot;);
+<i>874</i>&nbsp;        }
+<b class="nc"><i>875</i>&nbsp;        dprint(&quot;Found node in newly-populated zone&quot;);</b>
+<b class="nc"><i>876</i>&nbsp;        return nnode;</b>
+<i>877</i>&nbsp;    }
+<i>878</i>&nbsp;
+<i>879</i>&nbsp;    /*
+<i>880</i>&nbsp;     * Does a zone transfer to [re]populate a zone in the zone tree.
+<i>881</i>&nbsp;     * Returns the zone&#39;s new contents.
+<i>882</i>&nbsp;     */
+<i>883</i>&nbsp;    private NameNode populateZone(ZoneNode znode, DnsName zone)
+<i>884</i>&nbsp;            throws NamingException {
+<b class="nc"><i>885</i>&nbsp;        dprint(&quot;Populating zone &quot; + zone);</b>
+<i>886</i>&nbsp;        // assert Thread.holdsLock(znode);
+<b class="nc"><i>887</i>&nbsp;        ResourceRecords rrs =</b>
+<b class="nc"><i>888</i>&nbsp;            getResolver().queryZone(zone,</b>
+<i>889</i>&nbsp;                                    ResourceRecord.CLASS_INTERNET, recursion);
+<b class="nc"><i>890</i>&nbsp;        dprint(&quot;zone xfer complete: &quot; + rrs.answer.size() + &quot; records&quot;);</b>
+<b class="nc"><i>891</i>&nbsp;        return znode.populate(zone, rrs);</b>
+<i>892</i>&nbsp;    }
+<i>893</i>&nbsp;
+<i>894</i>&nbsp;    /*
+<i>895</i>&nbsp;     * Determine if a ZoneNode&#39;s data is current.
+<i>896</i>&nbsp;     * We base this on a comparison between the cached serial
+<i>897</i>&nbsp;     * number and the latest SOA record.
+<i>898</i>&nbsp;     *
+<i>899</i>&nbsp;     * If there is no SOA record, znode is not (or is no longer) a zone:
+<i>900</i>&nbsp;     * depopulate znode and return false.
+<i>901</i>&nbsp;     *
+<i>902</i>&nbsp;     * Since this method may perform a network operation, it is best
+<i>903</i>&nbsp;     * to call it with znode unlocked.  Caller must then note that the
+<i>904</i>&nbsp;     * result may be outdated by the time this method returns.
+<i>905</i>&nbsp;     */
+<i>906</i>&nbsp;    private boolean isZoneCurrent(ZoneNode znode, DnsName zone)
+<i>907</i>&nbsp;            throws NamingException {
+<i>908</i>&nbsp;        // former version:  return !znode.isExpired();
+<i>909</i>&nbsp;
+<b class="nc"><i>910</i>&nbsp;        if (!znode.isPopulated()) {</b>
+<b class="nc"><i>911</i>&nbsp;            return false;</b>
+<i>912</i>&nbsp;        }
+<b class="nc"><i>913</i>&nbsp;        ResourceRecord soa =</b>
+<b class="nc"><i>914</i>&nbsp;            getResolver().findSoa(zone, ResourceRecord.CLASS_INTERNET,</b>
+<i>915</i>&nbsp;                                  recursion);
+<b class="nc"><i>916</i>&nbsp;        synchronized (znode) {</b>
+<b class="nc"><i>917</i>&nbsp;            if (soa == null) {</b>
+<b class="nc"><i>918</i>&nbsp;                znode.depopulate();</b>
+<i>919</i>&nbsp;            }
+<b class="nc"><i>920</i>&nbsp;            return (znode.isPopulated() &amp;&amp;</b>
+<b class="nc"><i>921</i>&nbsp;                    znode.compareSerialNumberTo(soa) &gt;= 0);</b>
+<b class="nc"><i>922</i>&nbsp;        }</b>
+<i>923</i>&nbsp;    }
+<i>924</i>&nbsp;
+<i>925</i>&nbsp;
+<i>926</i>&nbsp;    //---------- Debugging
+<i>927</i>&nbsp;
+<i>928</i>&nbsp;    private static final boolean debug = false;
+<i>929</i>&nbsp;
+<i>930</i>&nbsp;    private static final void dprint(String msg) {
+<i>931</i>&nbsp;        if (debug) {
+<i>932</i>&nbsp;            System.err.println(&quot;** &quot; + msg);
+<i>933</i>&nbsp;        }
+<i>934</i>&nbsp;    }
+<i>935</i>&nbsp;}
+<i>936</i>&nbsp;
+<i>937</i>&nbsp;
+<i>938</i>&nbsp;//----------
+<i>939</i>&nbsp;
+<i>940</i>&nbsp;/*
+<i>941</i>&nbsp; * A pairing of a resource record class and a resource record type.
+<i>942</i>&nbsp; * A value of ANY in either field represents an indeterminate value.
+<i>943</i>&nbsp; */
+<i>944</i>&nbsp;class CT {
+<i>945</i>&nbsp;    int rrclass;
+<i>946</i>&nbsp;    int rrtype;
+<i>947</i>&nbsp;
+<i>948</i>&nbsp;    CT(int rrclass, int rrtype) {
+<i>949</i>&nbsp;        this.rrclass = rrclass;
+<i>950</i>&nbsp;        this.rrtype = rrtype;
+<i>951</i>&nbsp;    }
+<i>952</i>&nbsp;}
+<i>953</i>&nbsp;
+<i>954</i>&nbsp;
+<i>955</i>&nbsp;//----------
+<i>956</i>&nbsp;
+<i>957</i>&nbsp;/*
+<i>958</i>&nbsp; * Common base class for NameClassPairEnumeration and BindingEnumeration.
+<i>959</i>&nbsp; */
+<i>960</i>&nbsp;abstract class BaseNameClassPairEnumeration&lt;T&gt; implements NamingEnumeration&lt;T&gt; {
+<i>961</i>&nbsp;
+<i>962</i>&nbsp;    protected Enumeration&lt;NameNode&gt; nodes;    // nodes to be enumerated, or null if none
+<i>963</i>&nbsp;    protected DnsContext ctx;       // context being enumerated
+<i>964</i>&nbsp;
+<i>965</i>&nbsp;    BaseNameClassPairEnumeration(DnsContext ctx, Hashtable&lt;String,NameNode&gt; nodes) {
+<i>966</i>&nbsp;        this.ctx = ctx;
+<i>967</i>&nbsp;        this.nodes = (nodes != null)
+<i>968</i>&nbsp;            ? nodes.elements()
+<i>969</i>&nbsp;            : null;
+<i>970</i>&nbsp;    }
+<i>971</i>&nbsp;
+<i>972</i>&nbsp;    /*
+<i>973</i>&nbsp;     * ctx will be set to null when no longer needed by the enumeration.
+<i>974</i>&nbsp;     */
+<i>975</i>&nbsp;    public final void close() {
+<i>976</i>&nbsp;        nodes = null;
+<i>977</i>&nbsp;        ctx = null;
+<i>978</i>&nbsp;    }
+<i>979</i>&nbsp;
+<i>980</i>&nbsp;    public final boolean hasMore() {
+<i>981</i>&nbsp;        boolean more = ((nodes != null) &amp;&amp; nodes.hasMoreElements());
+<i>982</i>&nbsp;        if (!more) {
+<i>983</i>&nbsp;            close();
+<i>984</i>&nbsp;        }
+<i>985</i>&nbsp;        return more;
+<i>986</i>&nbsp;    }
+<i>987</i>&nbsp;
+<i>988</i>&nbsp;    public final boolean hasMoreElements() {
+<i>989</i>&nbsp;        return hasMore();
+<i>990</i>&nbsp;    }
+<i>991</i>&nbsp;
+<i>992</i>&nbsp;    abstract public T next() throws NamingException;
+<i>993</i>&nbsp;
+<i>994</i>&nbsp;    public final T nextElement() {
+<i>995</i>&nbsp;        try {
+<i>996</i>&nbsp;            return next();
+<i>997</i>&nbsp;        } catch (NamingException e) {
+<i>998</i>&nbsp;            java.util.NoSuchElementException nsee =
+<i>999</i>&nbsp;                    new java.util.NoSuchElementException();
+<i>1000</i>&nbsp;            nsee.initCause(e);
+<i>1001</i>&nbsp;            throw nsee;
+<i>1002</i>&nbsp;        }
+<i>1003</i>&nbsp;    }
+<i>1004</i>&nbsp;}
+<i>1005</i>&nbsp;
+<i>1006</i>&nbsp;/*
+<i>1007</i>&nbsp; * An enumeration of name/classname pairs.
+<i>1008</i>&nbsp; *
+<i>1009</i>&nbsp; * Nodes that have children or that are zone cuts are returned with
+<i>1010</i>&nbsp; * classname DirContext.  Other nodes are returned with classname
+<i>1011</i>&nbsp; * Object even though they are DirContexts as well, since this might
+<i>1012</i>&nbsp; * make the namespace easier to browse.
+<i>1013</i>&nbsp; */
+<i>1014</i>&nbsp;final class NameClassPairEnumeration
+<i>1015</i>&nbsp;        extends BaseNameClassPairEnumeration&lt;NameClassPair&gt;
+<i>1016</i>&nbsp;        implements NamingEnumeration&lt;NameClassPair&gt; {
+<i>1017</i>&nbsp;
+<i>1018</i>&nbsp;    NameClassPairEnumeration(DnsContext ctx, Hashtable&lt;String,NameNode&gt; nodes) {
+<i>1019</i>&nbsp;        super(ctx, nodes);
+<i>1020</i>&nbsp;    }
+<i>1021</i>&nbsp;
+<i>1022</i>&nbsp;    @Override
+<i>1023</i>&nbsp;    public NameClassPair next() throws NamingException {
+<i>1024</i>&nbsp;        if (!hasMore()) {
+<i>1025</i>&nbsp;            throw new java.util.NoSuchElementException();
+<i>1026</i>&nbsp;        }
+<i>1027</i>&nbsp;        NameNode nnode = nodes.nextElement();
+<i>1028</i>&nbsp;        String className = (nnode.isZoneCut() ||
+<i>1029</i>&nbsp;                            (nnode.getChildren() != null))
+<i>1030</i>&nbsp;            ? &quot;javax.naming.directory.DirContext&quot;
+<i>1031</i>&nbsp;            : &quot;java.lang.Object&quot;;
+<i>1032</i>&nbsp;
+<i>1033</i>&nbsp;        String label = nnode.getLabel();
+<i>1034</i>&nbsp;        Name compName = (new DnsName()).add(label);
+<i>1035</i>&nbsp;        Name cname = (new CompositeName()).add(compName.toString());
+<i>1036</i>&nbsp;
+<i>1037</i>&nbsp;        NameClassPair ncp = new NameClassPair(cname.toString(), className);
+<i>1038</i>&nbsp;        ncp.setNameInNamespace(ctx.fullyQualify(cname).toString());
+<i>1039</i>&nbsp;        return ncp;
+<i>1040</i>&nbsp;    }
+<i>1041</i>&nbsp;}
+<i>1042</i>&nbsp;
+<i>1043</i>&nbsp;/*
+<i>1044</i>&nbsp; * An enumeration of Bindings.
+<i>1045</i>&nbsp; */
+<i>1046</i>&nbsp;final class BindingEnumeration extends BaseNameClassPairEnumeration&lt;Binding&gt;
+<i>1047</i>&nbsp;                         implements NamingEnumeration&lt;Binding&gt; {
+<i>1048</i>&nbsp;
+<i>1049</i>&nbsp;    BindingEnumeration(DnsContext ctx, Hashtable&lt;String,NameNode&gt; nodes) {
+<i>1050</i>&nbsp;        super(ctx, nodes);
+<i>1051</i>&nbsp;    }
+<i>1052</i>&nbsp;
+<i>1053</i>&nbsp;    // Finalizer not needed since it&#39;s safe to leave ctx unclosed.
+<i>1054</i>&nbsp;//  protected void finalize() {
+<i>1055</i>&nbsp;//      close();
+<i>1056</i>&nbsp;//  }
+<i>1057</i>&nbsp;
+<i>1058</i>&nbsp;    @Override
+<i>1059</i>&nbsp;    public Binding next() throws NamingException {
+<i>1060</i>&nbsp;        if (!hasMore()) {
+<i>1061</i>&nbsp;            throw (new java.util.NoSuchElementException());
+<i>1062</i>&nbsp;        }
+<i>1063</i>&nbsp;        NameNode nnode = nodes.nextElement();
+<i>1064</i>&nbsp;
+<i>1065</i>&nbsp;        String label = nnode.getLabel();
+<i>1066</i>&nbsp;        Name compName = (new DnsName()).add(label);
+<i>1067</i>&nbsp;        String compNameStr = compName.toString();
+<i>1068</i>&nbsp;        Name cname = (new CompositeName()).add(compNameStr);
+<i>1069</i>&nbsp;        String cnameStr = cname.toString();
+<i>1070</i>&nbsp;
+<i>1071</i>&nbsp;        DnsName fqdn = ctx.fullyQualify(compName);
+<i>1072</i>&nbsp;
+<i>1073</i>&nbsp;        // Clone ctx to create the child context.
+<i>1074</i>&nbsp;        DnsContext child = new DnsContext(ctx, fqdn);
+<i>1075</i>&nbsp;
+<i>1076</i>&nbsp;        try {
+<i>1077</i>&nbsp;            Object obj = DirectoryManager.getObjectInstance(
+<i>1078</i>&nbsp;                    child, cname, ctx, child.environment, null);
+<i>1079</i>&nbsp;            Binding binding = new Binding(cnameStr, obj);
+<i>1080</i>&nbsp;            binding.setNameInNamespace(ctx.fullyQualify(cname).toString());
+<i>1081</i>&nbsp;            return binding;
+<i>1082</i>&nbsp;        } catch (Exception e) {
+<i>1083</i>&nbsp;            NamingException ne = new NamingException(
+<i>1084</i>&nbsp;                    &quot;Problem generating object using object factory&quot;);
+<i>1085</i>&nbsp;            ne.setRootCause(e);
+<i>1086</i>&nbsp;            throw ne;
+<i>1087</i>&nbsp;        }
+<i>1088</i>&nbsp;    }
+<i>1089</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

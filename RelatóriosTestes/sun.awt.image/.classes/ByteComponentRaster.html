@@ -1,0 +1,1061 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ByteComponentRaster</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.awt.image</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ByteComponentRaster (sun.awt.image)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ByteComponentRaster</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 25)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 243)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.awt.image;
+<i>27</i>&nbsp;import java.awt.image.Raster;
+<i>28</i>&nbsp;import java.awt.image.WritableRaster;
+<i>29</i>&nbsp;import java.awt.image.RasterFormatException;
+<i>30</i>&nbsp;import java.awt.image.SampleModel;
+<i>31</i>&nbsp;import java.awt.image.ComponentSampleModel;
+<i>32</i>&nbsp;import java.awt.image.SinglePixelPackedSampleModel;
+<i>33</i>&nbsp;import java.awt.image.DataBufferByte;
+<i>34</i>&nbsp;import java.awt.Rectangle;
+<i>35</i>&nbsp;import java.awt.Point;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;/**
+<i>38</i>&nbsp; * This class defines a Raster with pixels consisting of one or more 8-bit
+<i>39</i>&nbsp; * data elements stored in close proximity to each other in a single byte
+<i>40</i>&nbsp; * array.
+<i>41</i>&nbsp; * The bit precision per data element is that
+<i>42</i>&nbsp; * of the data type (that is, the bit precision for this Raster is 8).
+<i>43</i>&nbsp; * There is only one pixel stride and one scanline stride for all
+<i>44</i>&nbsp; * bands.  This type of Raster can be used with a
+<i>45</i>&nbsp; * ComponentColorModel if there are multiple bands, or an
+<i>46</i>&nbsp; * IndexColorModel if there is only one band.
+<i>47</i>&nbsp; * &lt;p&gt;
+<i>48</i>&nbsp; * For example, 3-3-2 RGB image data can be represented by a
+<i>49</i>&nbsp; * ByteComponentRaster using a SinglePixelPackedSampleModel and
+<i>50</i>&nbsp; * a ComponentColorModel.
+<i>51</i>&nbsp; *
+<i>52</i>&nbsp; */
+<i>53</i>&nbsp;public class ByteComponentRaster extends SunWritableRaster {
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    /** private band offset for use by native code */
+<i>56</i>&nbsp;    protected int bandOffset;
+<i>57</i>&nbsp;
+<i>58</i>&nbsp;    /** Data offsets for each band of image data. */
+<i>59</i>&nbsp;    protected int[]         dataOffsets;
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;    /** Scanline stride of the image data contained in this Raster. */
+<i>62</i>&nbsp;    protected int           scanlineStride;
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    /** Pixel stride of the image data contained in this Raster. */
+<i>65</i>&nbsp;    protected int           pixelStride;
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;    /** The image data array. */
+<i>68</i>&nbsp;    protected byte[]        data;
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    int type;
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    /** A cached copy of minX + width for use in bounds checks. */
+<i>73</i>&nbsp;    private int maxX;
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    /** A cached copy of minY + height for use in bounds checks. */
+<i>76</i>&nbsp;    private int maxY;
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    private static native void initIDs();
+<i>79</i>&nbsp;    static {
+<i>80</i>&nbsp;        /* ensure that the necessary native libraries are loaded */
+<i>81</i>&nbsp;        NativeLibLoader.loadLibraries();
+<b class="nc"><i>82</i>&nbsp;        initIDs();</b>
+<b class="nc"><i>83</i>&nbsp;    }</b>
+<i>84</i>&nbsp;
+<i>85</i>&nbsp;    /**
+<i>86</i>&nbsp;     * Constructs a ByteComponentRaster with the given SampleModel.
+<i>87</i>&nbsp;     * The Raster&#39;s upper left corner is origin and it is the same
+<i>88</i>&nbsp;     * size as the SampleModel.  A DataBuffer large enough to describe the
+<i>89</i>&nbsp;     * Raster is automatically created.  SampleModel must be of type
+<i>90</i>&nbsp;     * SinglePixelPackedSampleModel or ComponentSampleModel.
+<i>91</i>&nbsp;     * @param sampleModel     The SampleModel that specifies the layout.
+<i>92</i>&nbsp;     * @param origin          The Point that specified the origin.
+<i>93</i>&nbsp;     */
+<i>94</i>&nbsp;    public ByteComponentRaster(SampleModel sampleModel, Point origin) {
+<i>95</i>&nbsp;        this(sampleModel,
+<b class="nc"><i>96</i>&nbsp;             (DataBufferByte) sampleModel.createDataBuffer(),</b>
+<b class="nc"><i>97</i>&nbsp;             new Rectangle(origin.x,</b>
+<i>98</i>&nbsp;                           origin.y,
+<i>99</i>&nbsp;                           sampleModel.getWidth(),
+<b class="nc"><i>100</i>&nbsp;                           sampleModel.getHeight()),</b>
+<b class="nc"><i>101</i>&nbsp;             origin,</b>
+<i>102</i>&nbsp;             null);
+<i>103</i>&nbsp;    }
+<i>104</i>&nbsp;
+<i>105</i>&nbsp;    /**
+<i>106</i>&nbsp;     * Constructs a ByteComponentRaster with the given SampleModel
+<i>107</i>&nbsp;     * and DataBuffer.  The Raster&#39;s upper left corner is origin and
+<i>108</i>&nbsp;     * it is the same size as the SampleModel.  The DataBuffer is not
+<i>109</i>&nbsp;     * initialized and must be a DataBufferByte compatible with SampleModel.
+<i>110</i>&nbsp;     * SampleModel must be of type SinglePixelPackedSampleModel
+<i>111</i>&nbsp;     * or ComponentSampleModel.
+<i>112</i>&nbsp;     * @param sampleModel     The SampleModel that specifies the layout.
+<i>113</i>&nbsp;     * @param dataBuffer      The DataBufferByte that contains the image data.
+<i>114</i>&nbsp;     * @param origin          The Point that specifies the origin.
+<i>115</i>&nbsp;     */
+<i>116</i>&nbsp;    public ByteComponentRaster(SampleModel sampleModel,
+<i>117</i>&nbsp;                               DataBufferByte dataBuffer,
+<i>118</i>&nbsp;                               Point origin)
+<i>119</i>&nbsp;    {
+<b class="nc"><i>120</i>&nbsp;        this(sampleModel,</b>
+<i>121</i>&nbsp;             dataBuffer,
+<i>122</i>&nbsp;             new Rectangle(origin.x,
+<i>123</i>&nbsp;                           origin.y,
+<b class="nc"><i>124</i>&nbsp;                           sampleModel.getWidth(),</b>
+<b class="nc"><i>125</i>&nbsp;                           sampleModel.getHeight()),</b>
+<i>126</i>&nbsp;             origin,
+<i>127</i>&nbsp;             null);
+<i>128</i>&nbsp;    }
+<i>129</i>&nbsp;
+<i>130</i>&nbsp;    /**
+<i>131</i>&nbsp;     * Constructs a ByteComponentRaster with the given SampleModel,
+<i>132</i>&nbsp;     * DataBuffer, and parent.  DataBuffer must be a DataBufferByte and
+<i>133</i>&nbsp;     * SampleModel must be of type SinglePixelPackedSampleModel
+<i>134</i>&nbsp;     * or ComponentSampleModel.
+<i>135</i>&nbsp;     * When translated into the base Raster&#39;s
+<i>136</i>&nbsp;     * coordinate system, aRegion must be contained by the base Raster.
+<i>137</i>&nbsp;     * Origin is the coordinate in the new Raster&#39;s coordinate system of
+<i>138</i>&nbsp;     * the origin of the base Raster.  (The base Raster is the Raster&#39;s
+<i>139</i>&nbsp;     * ancestor which has no parent.)
+<i>140</i>&nbsp;     *
+<i>141</i>&nbsp;     * Note that this constructor should generally be called by other
+<i>142</i>&nbsp;     * constructors or create methods, it should not be used directly.
+<i>143</i>&nbsp;     * @param sampleModel     The SampleModel that specifies the layout.
+<i>144</i>&nbsp;     * @param dataBuffer      The DataBufferByte that contains the image data.
+<i>145</i>&nbsp;     * @param aRegion         The Rectangle that specifies the image area.
+<i>146</i>&nbsp;     * @param origin          The Point that specifies the origin.
+<i>147</i>&nbsp;     * @param parent          The parent (if any) of this raster.
+<i>148</i>&nbsp;     */
+<i>149</i>&nbsp;    public ByteComponentRaster(SampleModel sampleModel,
+<i>150</i>&nbsp;                               DataBufferByte dataBuffer,
+<i>151</i>&nbsp;                               Rectangle aRegion,
+<i>152</i>&nbsp;                               Point origin,
+<i>153</i>&nbsp;                               ByteComponentRaster parent)
+<b class="nc"><i>154</i>&nbsp;    {</b>
+<b class="nc"><i>155</i>&nbsp;        super(sampleModel, dataBuffer, aRegion, origin, parent);</b>
+<b class="nc"><i>156</i>&nbsp;        this.maxX = minX + width;</b>
+<i>157</i>&nbsp;        this.maxY = minY + height;
+<b class="nc"><i>158</i>&nbsp;</b>
+<b class="nc"><i>159</i>&nbsp;        this.data = stealData(dataBuffer, 0);</b>
+<i>160</i>&nbsp;        if (dataBuffer.getNumBanks() != 1) {
+<i>161</i>&nbsp;            throw new
+<i>162</i>&nbsp;                RasterFormatException(&quot;DataBuffer for ByteComponentRasters&quot;+
+<b class="nc"><i>163</i>&nbsp;                                      &quot; must only have 1 bank.&quot;);</b>
+<b class="nc"><i>164</i>&nbsp;        }</b>
+<b class="nc"><i>165</i>&nbsp;        int dbOffset = dataBuffer.getOffset();</b>
+<b class="nc"><i>166</i>&nbsp;</b>
+<i>167</i>&nbsp;        if (sampleModel instanceof ComponentSampleModel) {
+<i>168</i>&nbsp;            ComponentSampleModel ism = (ComponentSampleModel)sampleModel;
+<i>169</i>&nbsp;            this.type = IntegerComponentRaster.TYPE_BYTE_SAMPLES;
+<b class="nc"><i>170</i>&nbsp;            this.scanlineStride = ism.getScanlineStride();</b>
+<i>171</i>&nbsp;            this.pixelStride = ism.getPixelStride();
+<b class="nc"><i>172</i>&nbsp;            this.dataOffsets = ism.getBandOffsets();</b>
+<b class="nc"><i>173</i>&nbsp;            int xOffset = aRegion.x - origin.x;</b>
+<b class="nc"><i>174</i>&nbsp;            int yOffset = aRegion.y - origin.y;</b>
+<b class="nc"><i>175</i>&nbsp;            for (int i = 0; i &lt; getNumDataElements(); i++) {</b>
+<b class="nc"><i>176</i>&nbsp;                dataOffsets[i] += dbOffset +</b>
+<b class="nc"><i>177</i>&nbsp;                    xOffset*pixelStride+yOffset*scanlineStride;</b>
+<b class="nc"><i>178</i>&nbsp;            }</b>
+<b class="nc"><i>179</i>&nbsp;        } else if (sampleModel instanceof SinglePixelPackedSampleModel) {</b>
+<b class="nc"><i>180</i>&nbsp;            SinglePixelPackedSampleModel sppsm =</b>
+<b class="nc"><i>181</i>&nbsp;                    (SinglePixelPackedSampleModel)sampleModel;</b>
+<i>182</i>&nbsp;            this.type = IntegerComponentRaster.TYPE_BYTE_PACKED_SAMPLES;
+<i>183</i>&nbsp;            this.scanlineStride = sppsm.getScanlineStride();
+<b class="nc"><i>184</i>&nbsp;            this.pixelStride    = 1;</b>
+<b class="nc"><i>185</i>&nbsp;            this.dataOffsets = new int[1];</b>
+<i>186</i>&nbsp;            this.dataOffsets[0] = dbOffset;
+<b class="nc"><i>187</i>&nbsp;            int xOffset = aRegion.x - origin.x;</b>
+<b class="nc"><i>188</i>&nbsp;            int yOffset = aRegion.y - origin.y;</b>
+<b class="nc"><i>189</i>&nbsp;            dataOffsets[0] += xOffset*pixelStride+yOffset*scanlineStride;</b>
+<b class="nc"><i>190</i>&nbsp;        } else {</b>
+<b class="nc"><i>191</i>&nbsp;            throw new RasterFormatException(&quot;IntegerComponentRasters must &quot; +</b>
+<b class="nc"><i>192</i>&nbsp;                &quot;have ComponentSampleModel or SinglePixelPackedSampleModel&quot;);</b>
+<b class="nc"><i>193</i>&nbsp;        }</b>
+<b class="nc"><i>194</i>&nbsp;        this.bandOffset = this.dataOffsets[0];</b>
+<b class="nc"><i>195</i>&nbsp;</b>
+<b class="nc"><i>196</i>&nbsp;        verify();</b>
+<i>197</i>&nbsp;    }
+<i>198</i>&nbsp;
+<b class="nc"><i>199</i>&nbsp;    /**</b>
+<i>200</i>&nbsp;     * Returns a copy of the data offsets array. For each band the data offset
+<b class="nc"><i>201</i>&nbsp;     * is the index into the band&#39;s data array, of the first sample of the</b>
+<i>202</i>&nbsp;     * band.
+<i>203</i>&nbsp;     */
+<i>204</i>&nbsp;    public int[] getDataOffsets() {
+<i>205</i>&nbsp;        return dataOffsets.clone();
+<i>206</i>&nbsp;    }
+<i>207</i>&nbsp;
+<i>208</i>&nbsp;    /**
+<i>209</i>&nbsp;     * Returns the data offset for the specified band.  The data offset
+<b class="nc"><i>210</i>&nbsp;     * is the index into the data array</b>
+<i>211</i>&nbsp;     * in which the first sample of the first scanline is stored.
+<i>212</i>&nbsp;     * @param band  The band whose offset is returned.
+<i>213</i>&nbsp;     */
+<i>214</i>&nbsp;    public int getDataOffset(int band) {
+<i>215</i>&nbsp;        return dataOffsets[band];
+<i>216</i>&nbsp;    }
+<i>217</i>&nbsp;
+<i>218</i>&nbsp;    /**
+<i>219</i>&nbsp;     * Returns the scanline stride -- the number of data array elements between
+<b class="nc"><i>220</i>&nbsp;     * a given sample and the sample in the same column of the next row in the</b>
+<i>221</i>&nbsp;     * same band.
+<i>222</i>&nbsp;     */
+<i>223</i>&nbsp;    public int getScanlineStride() {
+<i>224</i>&nbsp;        return scanlineStride;
+<i>225</i>&nbsp;    }
+<i>226</i>&nbsp;
+<i>227</i>&nbsp;    /**
+<i>228</i>&nbsp;     * Returns pixel stride -- the number of data array elements between two
+<b class="nc"><i>229</i>&nbsp;     * samples for the same band on the same scanline.</b>
+<i>230</i>&nbsp;     */
+<i>231</i>&nbsp;    public int getPixelStride() {
+<i>232</i>&nbsp;        return pixelStride;
+<i>233</i>&nbsp;    }
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;    /**
+<i>236</i>&nbsp;     * Returns a reference to the data array.
+<b class="nc"><i>237</i>&nbsp;     */</b>
+<i>238</i>&nbsp;    public byte[] getDataStorage() {
+<i>239</i>&nbsp;        return data;
+<i>240</i>&nbsp;    }
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;    /**
+<i>243</i>&nbsp;     * Returns the data elements for all bands at the specified
+<b class="nc"><i>244</i>&nbsp;     * location.</b>
+<i>245</i>&nbsp;     * An ArrayIndexOutOfBounds exception will be thrown at runtime
+<i>246</i>&nbsp;     * if the pixel coordinate is out of bounds.
+<i>247</i>&nbsp;     * A ClassCastException will be thrown if the input object is non null
+<i>248</i>&nbsp;     * and references anything other than an array of transferType.
+<i>249</i>&nbsp;     * @param x        The X coordinate of the pixel location.
+<i>250</i>&nbsp;     * @param y        The Y coordinate of the pixel location.
+<i>251</i>&nbsp;     * @param obj      An object reference to an array of type defined by
+<i>252</i>&nbsp;     *                 getTransferType() and length getNumDataElements().
+<i>253</i>&nbsp;     *                 If null an array of appropriate type and size will be
+<i>254</i>&nbsp;     *                 allocated.
+<i>255</i>&nbsp;     * @return         An object reference to an array of type defined by
+<i>256</i>&nbsp;     *                 getTransferType() with the request pixel data.
+<i>257</i>&nbsp;     */
+<i>258</i>&nbsp;    public Object getDataElements(int x, int y, Object obj) {
+<i>259</i>&nbsp;        if ((x &lt; this.minX) || (y &lt; this.minY) ||
+<i>260</i>&nbsp;            (x &gt;= this.maxX) || (y &gt;= this.maxY)) {
+<i>261</i>&nbsp;            throw new ArrayIndexOutOfBoundsException
+<i>262</i>&nbsp;                (&quot;Coordinate out of bounds!&quot;);
+<i>263</i>&nbsp;        }
+<b class="nc"><i>264</i>&nbsp;        byte outData[];</b>
+<i>265</i>&nbsp;        if (obj == null) {
+<b class="nc"><i>266</i>&nbsp;            outData = new byte[numDataElements];</b>
+<i>267</i>&nbsp;        } else {
+<i>268</i>&nbsp;            outData = (byte[])obj;
+<i>269</i>&nbsp;        }
+<b class="nc"><i>270</i>&nbsp;        int off = (y-minY)*scanlineStride +</b>
+<b class="nc"><i>271</i>&nbsp;                  (x-minX)*pixelStride;</b>
+<i>272</i>&nbsp;
+<b class="nc"><i>273</i>&nbsp;        for (int band = 0; band &lt; numDataElements; band++) {</b>
+<i>274</i>&nbsp;            outData[band] = data[dataOffsets[band] + off];
+<b class="nc"><i>275</i>&nbsp;        }</b>
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;        return outData;
+<b class="nc"><i>278</i>&nbsp;    }</b>
+<b class="nc"><i>279</i>&nbsp;</b>
+<i>280</i>&nbsp;    /**
+<i>281</i>&nbsp;     * Returns an array of data elements from the specified rectangular
+<b class="nc"><i>282</i>&nbsp;     * region.</b>
+<i>283</i>&nbsp;     * An ArrayIndexOutOfBounds exception will be thrown at runtime
+<i>284</i>&nbsp;     * if the pixel coordinates are out of bounds.
+<i>285</i>&nbsp;     * A ClassCastException will be thrown if the input object is non null
+<i>286</i>&nbsp;     * and references anything other than an array of transferType.
+<i>287</i>&nbsp;     * &lt;pre&gt;
+<i>288</i>&nbsp;     *       byte[] bandData = (byte[])raster.getDataElements(x, y, w, h, null);
+<i>289</i>&nbsp;     *       int numDataElements = raster.getNumDataElements();
+<i>290</i>&nbsp;     *       byte[] pixel = new byte[numDataElements];
+<i>291</i>&nbsp;     *       // To find a data element at location (x2, y2)
+<i>292</i>&nbsp;     *       System.arraycopy(bandData, ((y2-y)*w + (x2-x))*numDataElements,
+<i>293</i>&nbsp;     *                        pixel, 0, numDataElements);
+<i>294</i>&nbsp;     * &lt;/pre&gt;
+<i>295</i>&nbsp;     * @param x        The X coordinate of the upper left pixel location.
+<i>296</i>&nbsp;     * @param y        The Y coordinate of the upper left pixel location.
+<i>297</i>&nbsp;     * @param w        Width of the pixel rectangle.
+<i>298</i>&nbsp;     * @param h        Height of the pixel rectangle.
+<i>299</i>&nbsp;     * @param obj      An object reference to an array of type defined by
+<i>300</i>&nbsp;     *                 getTransferType() and length w*h*getNumDataElements().
+<i>301</i>&nbsp;     *                 If null an array of appropriate type and size will be
+<i>302</i>&nbsp;     *                 allocated.
+<i>303</i>&nbsp;     * @return         An object reference to an array of type defined by
+<i>304</i>&nbsp;     *                 getTransferType() with the request pixel data.
+<i>305</i>&nbsp;     */
+<i>306</i>&nbsp;    public Object getDataElements(int x, int y, int w, int h, Object obj) {
+<i>307</i>&nbsp;        if ((x &lt; this.minX) || (y &lt; this.minY) ||
+<i>308</i>&nbsp;            (x + w &gt; this.maxX) || (y + h &gt; this.maxY)) {
+<i>309</i>&nbsp;            throw new ArrayIndexOutOfBoundsException
+<i>310</i>&nbsp;                (&quot;Coordinate out of bounds!&quot;);
+<i>311</i>&nbsp;        }
+<b class="nc"><i>312</i>&nbsp;        byte outData[];</b>
+<i>313</i>&nbsp;        if (obj == null) {
+<b class="nc"><i>314</i>&nbsp;            outData = new byte[w*h*numDataElements];</b>
+<i>315</i>&nbsp;        } else {
+<i>316</i>&nbsp;            outData = (byte[])obj;
+<i>317</i>&nbsp;        }
+<b class="nc"><i>318</i>&nbsp;</b>
+<b class="nc"><i>319</i>&nbsp;        int yoff = (y-minY)*scanlineStride +</b>
+<i>320</i>&nbsp;                   (x-minX)*pixelStride;
+<b class="nc"><i>321</i>&nbsp;        int xoff;</b>
+<i>322</i>&nbsp;        int off = 0;
+<i>323</i>&nbsp;        int xstart;
+<b class="nc"><i>324</i>&nbsp;        int ystart;</b>
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;        for (ystart=0; ystart &lt; h; ystart++, yoff += scanlineStride) {
+<b class="nc"><i>327</i>&nbsp;            xoff = yoff;</b>
+<i>328</i>&nbsp;            for (xstart=0; xstart &lt; w; xstart++, xoff += pixelStride) {
+<i>329</i>&nbsp;                for (int c = 0; c &lt; numDataElements; c++) {
+<i>330</i>&nbsp;                    outData[off++] = data[dataOffsets[c] + xoff];
+<b class="nc"><i>331</i>&nbsp;                }</b>
+<b class="nc"><i>332</i>&nbsp;            }</b>
+<b class="nc"><i>333</i>&nbsp;        }</b>
+<b class="nc"><i>334</i>&nbsp;</b>
+<b class="nc"><i>335</i>&nbsp;        return outData;</b>
+<i>336</i>&nbsp;    }
+<i>337</i>&nbsp;
+<i>338</i>&nbsp;    /**
+<i>339</i>&nbsp;     * Returns a byte array of data elements from the specified rectangular
+<b class="nc"><i>340</i>&nbsp;     * region for the specified band.</b>
+<i>341</i>&nbsp;     * An ArrayIndexOutOfBounds exception will be thrown at runtime
+<i>342</i>&nbsp;     * if the pixel coordinates are out of bounds.
+<i>343</i>&nbsp;     * &lt;pre&gt;
+<i>344</i>&nbsp;     *       byte[] bandData = raster.getByteData(x, y, w, h, null);
+<i>345</i>&nbsp;     *       // To find the data element at location (x2, y2)
+<i>346</i>&nbsp;     *       byte bandElement = bandData[((y2-y)*w + (x2-x))];
+<i>347</i>&nbsp;     * &lt;/pre&gt;
+<i>348</i>&nbsp;     * @param x        The X coordinate of the upper left pixel location.
+<i>349</i>&nbsp;     * @param y        The Y coordinate of the upper left pixel location.
+<i>350</i>&nbsp;     * @param w        Width of the pixel rectangle.
+<i>351</i>&nbsp;     * @param h        Height of the pixel rectangle.
+<i>352</i>&nbsp;     * @param band     The band to return.
+<i>353</i>&nbsp;     * @param outData  If non-null, data elements for all bands
+<i>354</i>&nbsp;     *                 at the specified location are returned in this array.
+<i>355</i>&nbsp;     * @return         Data array with data elements for all bands.
+<i>356</i>&nbsp;     */
+<i>357</i>&nbsp;    public byte[] getByteData(int x, int y, int w, int h,
+<i>358</i>&nbsp;                              int band, byte[] outData) {
+<i>359</i>&nbsp;        // Bounds check for &#39;band&#39; will be performed automatically
+<i>360</i>&nbsp;        if ((x &lt; this.minX) || (y &lt; this.minY) ||
+<i>361</i>&nbsp;            (x + w &gt; this.maxX) || (y + h &gt; this.maxY)) {
+<i>362</i>&nbsp;            throw new ArrayIndexOutOfBoundsException
+<i>363</i>&nbsp;                (&quot;Coordinate out of bounds!&quot;);
+<i>364</i>&nbsp;        }
+<b class="nc"><i>365</i>&nbsp;        if (outData == null) {</b>
+<i>366</i>&nbsp;            outData = new byte[scanlineStride*h];
+<b class="nc"><i>367</i>&nbsp;        }</b>
+<i>368</i>&nbsp;        int yoff = (y-minY)*scanlineStride +
+<i>369</i>&nbsp;                   (x-minX)*pixelStride + dataOffsets[band];
+<b class="nc"><i>370</i>&nbsp;        int xoff;</b>
+<b class="nc"><i>371</i>&nbsp;        int off = 0;</b>
+<i>372</i>&nbsp;        int xstart;
+<b class="nc"><i>373</i>&nbsp;        int ystart;</b>
+<i>374</i>&nbsp;
+<i>375</i>&nbsp;        if (pixelStride == 1) {
+<b class="nc"><i>376</i>&nbsp;            if (scanlineStride == w) {</b>
+<i>377</i>&nbsp;                System.arraycopy(data, yoff, outData, 0, w*h);
+<i>378</i>&nbsp;            }
+<i>379</i>&nbsp;            else {
+<b class="nc"><i>380</i>&nbsp;                for (ystart=0; ystart &lt; h; ystart++, yoff += scanlineStride) {</b>
+<b class="nc"><i>381</i>&nbsp;                    System.arraycopy(data, yoff, outData, off, w);</b>
+<b class="nc"><i>382</i>&nbsp;                    off += w;</b>
+<i>383</i>&nbsp;                }
+<i>384</i>&nbsp;            }
+<b class="nc"><i>385</i>&nbsp;        }</b>
+<b class="nc"><i>386</i>&nbsp;        else {</b>
+<b class="nc"><i>387</i>&nbsp;            for (ystart=0; ystart &lt; h; ystart++, yoff += scanlineStride) {</b>
+<i>388</i>&nbsp;                xoff = yoff;
+<i>389</i>&nbsp;                for (xstart=0; xstart &lt; w; xstart++, xoff += pixelStride) {
+<i>390</i>&nbsp;                    outData[off++] = data[xoff];
+<i>391</i>&nbsp;                }
+<b class="nc"><i>392</i>&nbsp;            }</b>
+<b class="nc"><i>393</i>&nbsp;        }</b>
+<b class="nc"><i>394</i>&nbsp;</b>
+<b class="nc"><i>395</i>&nbsp;        return outData;</b>
+<i>396</i>&nbsp;    }
+<i>397</i>&nbsp;
+<i>398</i>&nbsp;    /**
+<i>399</i>&nbsp;     * Returns a byte array of data elements from the specified rectangular
+<b class="nc"><i>400</i>&nbsp;     * region.</b>
+<i>401</i>&nbsp;     * An ArrayIndexOutOfBounds exception will be thrown at runtime
+<i>402</i>&nbsp;     * if the pixel coordinates are out of bounds.
+<i>403</i>&nbsp;     * &lt;pre&gt;
+<i>404</i>&nbsp;     *       byte[] bandData = raster.getByteData(x, y, w, h, null);
+<i>405</i>&nbsp;     *       int numDataElements = raster.getnumDataElements();
+<i>406</i>&nbsp;     *       byte[] pixel = new byte[numDataElements];
+<i>407</i>&nbsp;     *       // To find a data element at location (x2, y2)
+<i>408</i>&nbsp;     *       System.arraycopy(bandData, ((y2-y)*w + (x2-x))*numDataElements,
+<i>409</i>&nbsp;     *                        pixel, 0, numDataElements);
+<i>410</i>&nbsp;     * &lt;/pre&gt;
+<i>411</i>&nbsp;     * @param x        The X coordinate of the upper left pixel location.
+<i>412</i>&nbsp;     * @param y        The Y coordinate of the upper left pixel location.
+<i>413</i>&nbsp;     * @param w        Width of the pixel rectangle.
+<i>414</i>&nbsp;     * @param h        Height of the pixel rectangle.
+<i>415</i>&nbsp;     * @param outData  If non-null, data elements for all bands
+<i>416</i>&nbsp;     *                 at the specified location are returned in this array.
+<i>417</i>&nbsp;     * @return         Data array with data elements for all bands.
+<i>418</i>&nbsp;     */
+<i>419</i>&nbsp;    public byte[] getByteData(int x, int y, int w, int h, byte[] outData) {
+<i>420</i>&nbsp;        if ((x &lt; this.minX) || (y &lt; this.minY) ||
+<i>421</i>&nbsp;            (x + w &gt; this.maxX) || (y + h &gt; this.maxY)) {
+<i>422</i>&nbsp;            throw new ArrayIndexOutOfBoundsException
+<i>423</i>&nbsp;                (&quot;Coordinate out of bounds!&quot;);
+<i>424</i>&nbsp;        }
+<b class="nc"><i>425</i>&nbsp;        if (outData == null) {</b>
+<i>426</i>&nbsp;            outData = new byte[numDataElements*scanlineStride*h];
+<b class="nc"><i>427</i>&nbsp;        }</b>
+<i>428</i>&nbsp;        int yoff = (y-minY)*scanlineStride +
+<i>429</i>&nbsp;                   (x-minX)*pixelStride;
+<b class="nc"><i>430</i>&nbsp;        int xoff;</b>
+<b class="nc"><i>431</i>&nbsp;        int off = 0;</b>
+<i>432</i>&nbsp;        int xstart;
+<b class="nc"><i>433</i>&nbsp;        int ystart;</b>
+<i>434</i>&nbsp;
+<i>435</i>&nbsp;        // REMIND: Should keep track if dataOffsets are in a nice order
+<b class="nc"><i>436</i>&nbsp;        for (ystart=0; ystart &lt; h; ystart++, yoff += scanlineStride) {</b>
+<i>437</i>&nbsp;            xoff = yoff;
+<i>438</i>&nbsp;            for (xstart=0; xstart &lt; w; xstart++, xoff += pixelStride) {
+<i>439</i>&nbsp;                for (int c = 0; c &lt; numDataElements; c++) {
+<i>440</i>&nbsp;                    outData[off++] = data[dataOffsets[c] + xoff];
+<b class="nc"><i>441</i>&nbsp;                }</b>
+<b class="nc"><i>442</i>&nbsp;            }</b>
+<b class="nc"><i>443</i>&nbsp;        }</b>
+<b class="nc"><i>444</i>&nbsp;</b>
+<b class="nc"><i>445</i>&nbsp;        return outData;</b>
+<i>446</i>&nbsp;    }
+<i>447</i>&nbsp;
+<i>448</i>&nbsp;    /**
+<i>449</i>&nbsp;     * Stores the data elements for all bands at the specified location.
+<b class="nc"><i>450</i>&nbsp;     * An ArrayIndexOutOfBounds exception will be thrown at runtime</b>
+<i>451</i>&nbsp;     * if the pixel coordinate is out of bounds.
+<i>452</i>&nbsp;     * A ClassCastException will be thrown if the input object is non null
+<i>453</i>&nbsp;     * and references anything other than an array of transferType.
+<i>454</i>&nbsp;     * @param x        The X coordinate of the pixel location.
+<i>455</i>&nbsp;     * @param y        The Y coordinate of the pixel location.
+<i>456</i>&nbsp;     * @param obj      An object reference to an array of type defined by
+<i>457</i>&nbsp;     *                 getTransferType() and length getNumDataElements()
+<i>458</i>&nbsp;     *                 containing the pixel data to place at x,y.
+<i>459</i>&nbsp;     */
+<i>460</i>&nbsp;    public void setDataElements(int x, int y, Object obj) {
+<i>461</i>&nbsp;        if ((x &lt; this.minX) || (y &lt; this.minY) ||
+<i>462</i>&nbsp;            (x &gt;= this.maxX) || (y &gt;= this.maxY)) {
+<i>463</i>&nbsp;            throw new ArrayIndexOutOfBoundsException
+<i>464</i>&nbsp;                (&quot;Coordinate out of bounds!&quot;);
+<i>465</i>&nbsp;        }
+<b class="nc"><i>466</i>&nbsp;        byte inData[] = (byte[])obj;</b>
+<i>467</i>&nbsp;        int off = (y-minY)*scanlineStride +
+<b class="nc"><i>468</i>&nbsp;                  (x-minX)*pixelStride;</b>
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;        for (int i = 0; i &lt; numDataElements; i++) {
+<b class="nc"><i>471</i>&nbsp;            data[dataOffsets[i] + off] = inData[i];</b>
+<b class="nc"><i>472</i>&nbsp;        }</b>
+<i>473</i>&nbsp;
+<i>474</i>&nbsp;        markDirty();
+<b class="nc"><i>475</i>&nbsp;    }</b>
+<b class="nc"><i>476</i>&nbsp;</b>
+<i>477</i>&nbsp;    /**
+<i>478</i>&nbsp;     * Stores the Raster data at the specified location.
+<b class="nc"><i>479</i>&nbsp;     * An ArrayIndexOutOfBounds exception will be thrown at runtime</b>
+<i>480</i>&nbsp;     * if the pixel coordinates are out of bounds.
+<i>481</i>&nbsp;     * @param x          The X coordinate of the pixel location.
+<i>482</i>&nbsp;     * @param y          The Y coordinate of the pixel location.
+<i>483</i>&nbsp;     * @param inRaster   Raster of data to place at x,y location.
+<i>484</i>&nbsp;     */
+<i>485</i>&nbsp;    public void setDataElements(int x, int y, Raster inRaster) {
+<i>486</i>&nbsp;        int dstOffX = inRaster.getMinX() + x;
+<i>487</i>&nbsp;        int dstOffY = inRaster.getMinY() + y;
+<i>488</i>&nbsp;        int width  = inRaster.getWidth();
+<i>489</i>&nbsp;        int height = inRaster.getHeight();
+<i>490</i>&nbsp;        if ((dstOffX &lt; this.minX) || (dstOffY &lt; this.minY) ||
+<b class="nc"><i>491</i>&nbsp;            (dstOffX + width &gt; this.maxX) || (dstOffY + height &gt; this.maxY)) {</b>
+<b class="nc"><i>492</i>&nbsp;            throw new ArrayIndexOutOfBoundsException</b>
+<b class="nc"><i>493</i>&nbsp;                (&quot;Coordinate out of bounds!&quot;);</b>
+<b class="nc"><i>494</i>&nbsp;        }</b>
+<b class="nc"><i>495</i>&nbsp;</b>
+<i>496</i>&nbsp;        setDataElements(dstOffX, dstOffY, width, height, inRaster);
+<b class="nc"><i>497</i>&nbsp;    }</b>
+<i>498</i>&nbsp;
+<i>499</i>&nbsp;    /**
+<i>500</i>&nbsp;     * Stores the Raster data at the specified location.
+<b class="nc"><i>501</i>&nbsp;     * @param dstX The absolute X coordinate of the destination pixel</b>
+<i>502</i>&nbsp;     * that will receive a copy of the upper-left pixel of the
+<i>503</i>&nbsp;     * inRaster
+<i>504</i>&nbsp;     * @param dstY The absolute Y coordinate of the destination pixel
+<i>505</i>&nbsp;     * that will receive a copy of the upper-left pixel of the
+<i>506</i>&nbsp;     * inRaster
+<i>507</i>&nbsp;     * @param width      The number of pixels to store horizontally
+<i>508</i>&nbsp;     * @param height     The number of pixels to store vertically
+<i>509</i>&nbsp;     * @param inRaster   Raster of data to place at x,y location.
+<i>510</i>&nbsp;     */
+<i>511</i>&nbsp;    private void setDataElements(int dstX, int dstY,
+<i>512</i>&nbsp;                                 int width, int height,
+<i>513</i>&nbsp;                                 Raster inRaster) {
+<i>514</i>&nbsp;        // Assume bounds checking has been performed previously
+<i>515</i>&nbsp;        if (width &lt;= 0 || height &lt;= 0) {
+<i>516</i>&nbsp;            return;
+<i>517</i>&nbsp;        }
+<i>518</i>&nbsp;
+<i>519</i>&nbsp;        int srcOffX = inRaster.getMinX();
+<b class="nc"><i>520</i>&nbsp;        int srcOffY = inRaster.getMinY();</b>
+<i>521</i>&nbsp;        Object tdata = null;
+<i>522</i>&nbsp;
+<i>523</i>&nbsp;        if (inRaster instanceof ByteComponentRaster) {
+<b class="nc"><i>524</i>&nbsp;            ByteComponentRaster bct = (ByteComponentRaster) inRaster;</b>
+<b class="nc"><i>525</i>&nbsp;            byte[] bdata = bct.getDataStorage();</b>
+<b class="nc"><i>526</i>&nbsp;            // REMIND: Do something faster!</b>
+<i>527</i>&nbsp;            if (numDataElements == 1) {
+<b class="nc"><i>528</i>&nbsp;                int toff = bct.getDataOffset(0);</b>
+<b class="nc"><i>529</i>&nbsp;                int tss  = bct.getScanlineStride();</b>
+<b class="nc"><i>530</i>&nbsp;</b>
+<i>531</i>&nbsp;                int srcOffset = toff;
+<b class="nc"><i>532</i>&nbsp;                int dstOffset = dataOffsets[0]+(dstY-minY)*scanlineStride+</b>
+<b class="nc"><i>533</i>&nbsp;                                               (dstX-minX);</b>
+<b class="nc"><i>534</i>&nbsp;</b>
+<i>535</i>&nbsp;
+<b class="nc"><i>536</i>&nbsp;                if (pixelStride == bct.getPixelStride()) {</b>
+<b class="nc"><i>537</i>&nbsp;                    width *= pixelStride;</b>
+<i>538</i>&nbsp;                    for (int tmpY=0; tmpY &lt; height; tmpY++) {
+<i>539</i>&nbsp;                        System.arraycopy(bdata, srcOffset,
+<i>540</i>&nbsp;                                         data, dstOffset, width);
+<b class="nc"><i>541</i>&nbsp;                        srcOffset += tss;</b>
+<b class="nc"><i>542</i>&nbsp;                        dstOffset += scanlineStride;</b>
+<b class="nc"><i>543</i>&nbsp;                    }</b>
+<b class="nc"><i>544</i>&nbsp;                    markDirty();</b>
+<i>545</i>&nbsp;                    return;
+<b class="nc"><i>546</i>&nbsp;                }</b>
+<b class="nc"><i>547</i>&nbsp;            }</b>
+<i>548</i>&nbsp;        }
+<b class="nc"><i>549</i>&nbsp;</b>
+<i>550</i>&nbsp;        for (int startY=0; startY &lt; height; startY++) {
+<i>551</i>&nbsp;            // Grab one scanline at a time
+<i>552</i>&nbsp;            tdata = inRaster.getDataElements(srcOffX, srcOffY+startY,
+<i>553</i>&nbsp;                                             width, 1, tdata);
+<i>554</i>&nbsp;            setDataElements(dstX, dstY+startY, width, 1, tdata);
+<b class="nc"><i>555</i>&nbsp;        }</b>
+<i>556</i>&nbsp;    }
+<b class="nc"><i>557</i>&nbsp;</b>
+<i>558</i>&nbsp;    /**
+<b class="nc"><i>559</i>&nbsp;     * Stores an array of data elements into the specified rectangular</b>
+<i>560</i>&nbsp;     * region.
+<i>561</i>&nbsp;     * An ArrayIndexOutOfBounds exception will be thrown at runtime
+<i>562</i>&nbsp;     * if the pixel coordinates are out of bounds.
+<i>563</i>&nbsp;     * A ClassCastException will be thrown if the input object is non null
+<i>564</i>&nbsp;     * and references anything other than an array of transferType.
+<i>565</i>&nbsp;     * The data elements in the
+<i>566</i>&nbsp;     * data array are assumed to be packed.  That is, a data element
+<i>567</i>&nbsp;     * for the nth band at location (x2, y2) would be found at:
+<i>568</i>&nbsp;     * &lt;pre&gt;
+<i>569</i>&nbsp;     *      inData[((y2-y)*w + (x2-x))*numDataElements + n]
+<i>570</i>&nbsp;     * &lt;/pre&gt;
+<i>571</i>&nbsp;     * @param x        The X coordinate of the upper left pixel location.
+<i>572</i>&nbsp;     * @param y        The Y coordinate of the upper left pixel location.
+<i>573</i>&nbsp;     * @param w        Width of the pixel rectangle.
+<i>574</i>&nbsp;     * @param h        Height of the pixel rectangle.
+<i>575</i>&nbsp;     * @param obj      An object reference to an array of type defined by
+<i>576</i>&nbsp;     *                 getTransferType() and length w*h*getNumDataElements()
+<i>577</i>&nbsp;     *                 containing the pixel data to place between x,y and
+<i>578</i>&nbsp;     *                 x+h, y+h.
+<i>579</i>&nbsp;     */
+<i>580</i>&nbsp;    public void setDataElements(int x, int y, int w, int h, Object obj) {
+<i>581</i>&nbsp;        if ((x &lt; this.minX) || (y &lt; this.minY) ||
+<i>582</i>&nbsp;            (x + w &gt; this.maxX) || (y + h &gt; this.maxY)) {
+<i>583</i>&nbsp;            throw new ArrayIndexOutOfBoundsException
+<i>584</i>&nbsp;                (&quot;Coordinate out of bounds!&quot;);
+<i>585</i>&nbsp;        }
+<b class="nc"><i>586</i>&nbsp;        byte inData[] = (byte[])obj;</b>
+<i>587</i>&nbsp;        int yoff = (y-minY)*scanlineStride +
+<b class="nc"><i>588</i>&nbsp;                   (x-minX)*pixelStride;</b>
+<i>589</i>&nbsp;        int xoff;
+<i>590</i>&nbsp;        int off = 0;
+<b class="nc"><i>591</i>&nbsp;        int xstart;</b>
+<b class="nc"><i>592</i>&nbsp;        int ystart;</b>
+<i>593</i>&nbsp;
+<i>594</i>&nbsp;        if (numDataElements == 1) {
+<b class="nc"><i>595</i>&nbsp;            int srcOffset = 0;</b>
+<i>596</i>&nbsp;            int dstOffset = yoff + dataOffsets[0];
+<i>597</i>&nbsp;            for (ystart=0; ystart &lt; h; ystart++) {
+<i>598</i>&nbsp;                xoff = yoff;
+<b class="nc"><i>599</i>&nbsp;                System.arraycopy(inData, srcOffset,</b>
+<b class="nc"><i>600</i>&nbsp;                                 data, dstOffset, w);</b>
+<b class="nc"><i>601</i>&nbsp;</b>
+<b class="nc"><i>602</i>&nbsp;                srcOffset += w;</b>
+<b class="nc"><i>603</i>&nbsp;                dstOffset += scanlineStride;</b>
+<b class="nc"><i>604</i>&nbsp;            }</b>
+<i>605</i>&nbsp;            markDirty();
+<i>606</i>&nbsp;            return;
+<b class="nc"><i>607</i>&nbsp;        }</b>
+<b class="nc"><i>608</i>&nbsp;</b>
+<i>609</i>&nbsp;        for (ystart=0; ystart &lt; h; ystart++, yoff += scanlineStride) {
+<b class="nc"><i>610</i>&nbsp;            xoff = yoff;</b>
+<i>611</i>&nbsp;            for (xstart=0; xstart &lt; w; xstart++, xoff += pixelStride) {
+<i>612</i>&nbsp;                for (int c = 0; c &lt; numDataElements; c++) {
+<i>613</i>&nbsp;                    data[dataOffsets[c] + xoff] = inData[off++];
+<b class="nc"><i>614</i>&nbsp;                }</b>
+<b class="nc"><i>615</i>&nbsp;            }</b>
+<b class="nc"><i>616</i>&nbsp;        }</b>
+<b class="nc"><i>617</i>&nbsp;</b>
+<b class="nc"><i>618</i>&nbsp;        markDirty();</b>
+<i>619</i>&nbsp;    }
+<i>620</i>&nbsp;
+<i>621</i>&nbsp;    /**
+<i>622</i>&nbsp;     * Stores a byte array of data elements into the specified rectangular
+<b class="nc"><i>623</i>&nbsp;     * region for the specified band.</b>
+<i>624</i>&nbsp;     * An ArrayIndexOutOfBounds exception will be thrown at runtime
+<i>625</i>&nbsp;     * if the pixel coordinates are out of bounds.
+<i>626</i>&nbsp;     * The data elements in the
+<i>627</i>&nbsp;     * data array are assumed to be packed.  That is, a data element
+<i>628</i>&nbsp;     * at location (x2, y2) would be found at:
+<i>629</i>&nbsp;     * &lt;pre&gt;
+<i>630</i>&nbsp;     *      inData[((y2-y)*w + (x2-x)) + n]
+<i>631</i>&nbsp;     * &lt;/pre&gt;
+<i>632</i>&nbsp;     * @param x        The X coordinate of the upper left pixel location.
+<i>633</i>&nbsp;     * @param y        The Y coordinate of the upper left pixel location.
+<i>634</i>&nbsp;     * @param w        Width of the pixel rectangle.
+<i>635</i>&nbsp;     * @param h        Height of the pixel rectangle.
+<i>636</i>&nbsp;     * @param band     The band to set.
+<i>637</i>&nbsp;     * @param inData   The data elements to be stored.
+<i>638</i>&nbsp;     */
+<i>639</i>&nbsp;    public void putByteData(int x, int y, int w, int h,
+<i>640</i>&nbsp;                            int band, byte[] inData) {
+<i>641</i>&nbsp;        // Bounds check for &#39;band&#39; will be performed automatically
+<i>642</i>&nbsp;        if ((x &lt; this.minX) || (y &lt; this.minY) ||
+<i>643</i>&nbsp;            (x + w &gt; this.maxX) || (y + h &gt; this.maxY)) {
+<i>644</i>&nbsp;            throw new ArrayIndexOutOfBoundsException
+<i>645</i>&nbsp;                (&quot;Coordinate out of bounds!&quot;);
+<i>646</i>&nbsp;        }
+<b class="nc"><i>647</i>&nbsp;        int yoff = (y-minY)*scanlineStride +</b>
+<i>648</i>&nbsp;                   (x-minX)*pixelStride + dataOffsets[band];
+<b class="nc"><i>649</i>&nbsp;        int xoff;</b>
+<i>650</i>&nbsp;        int off = 0;
+<i>651</i>&nbsp;        int xstart;
+<b class="nc"><i>652</i>&nbsp;        int ystart;</b>
+<i>653</i>&nbsp;
+<i>654</i>&nbsp;        if (pixelStride == 1) {
+<b class="nc"><i>655</i>&nbsp;            if (scanlineStride == w) {</b>
+<i>656</i>&nbsp;                System.arraycopy(inData, 0, data, yoff, w*h);
+<i>657</i>&nbsp;            }
+<i>658</i>&nbsp;            else {
+<b class="nc"><i>659</i>&nbsp;                for (ystart=0; ystart &lt; h; ystart++, yoff += scanlineStride) {</b>
+<b class="nc"><i>660</i>&nbsp;                    System.arraycopy(inData, off, data, yoff, w);</b>
+<b class="nc"><i>661</i>&nbsp;                    off += w;</b>
+<i>662</i>&nbsp;                }
+<i>663</i>&nbsp;            }
+<b class="nc"><i>664</i>&nbsp;        }</b>
+<b class="nc"><i>665</i>&nbsp;        else {</b>
+<b class="nc"><i>666</i>&nbsp;            for (ystart=0; ystart &lt; h; ystart++, yoff += scanlineStride) {</b>
+<i>667</i>&nbsp;                xoff = yoff;
+<i>668</i>&nbsp;                for (xstart=0; xstart &lt; w; xstart++, xoff += pixelStride) {
+<i>669</i>&nbsp;                    data[xoff] = inData[off++];
+<i>670</i>&nbsp;                }
+<b class="nc"><i>671</i>&nbsp;            }</b>
+<b class="nc"><i>672</i>&nbsp;        }</b>
+<b class="nc"><i>673</i>&nbsp;</b>
+<b class="nc"><i>674</i>&nbsp;        markDirty();</b>
+<i>675</i>&nbsp;    }
+<i>676</i>&nbsp;
+<i>677</i>&nbsp;    /**
+<i>678</i>&nbsp;     * Stores a byte array of data elements into the specified rectangular
+<b class="nc"><i>679</i>&nbsp;     * region.</b>
+<i>680</i>&nbsp;     * An ArrayIndexOutOfBounds exception will be thrown at runtime
+<i>681</i>&nbsp;     * if the pixel coordinates are out of bounds.
+<i>682</i>&nbsp;     * The data elements in the
+<i>683</i>&nbsp;     * data array are assumed to be packed.  That is, a data element
+<i>684</i>&nbsp;     * for the nth band at location (x2, y2) would be found at:
+<i>685</i>&nbsp;     * &lt;pre&gt;
+<i>686</i>&nbsp;     *      inData[((y2-y)*w + (x2-x))*numDataElements + n]
+<i>687</i>&nbsp;     * &lt;/pre&gt;
+<i>688</i>&nbsp;     * @param x        The X coordinate of the upper left pixel location.
+<i>689</i>&nbsp;     * @param y        The Y coordinate of the upper left pixel location.
+<i>690</i>&nbsp;     * @param w        Width of the pixel rectangle.
+<i>691</i>&nbsp;     * @param h        Height of the pixel rectangle.
+<i>692</i>&nbsp;     * @param inData   The data elements to be stored.
+<i>693</i>&nbsp;     */
+<i>694</i>&nbsp;    public void putByteData(int x, int y, int w, int h, byte[] inData) {
+<i>695</i>&nbsp;        if ((x &lt; this.minX) || (y &lt; this.minY) ||
+<i>696</i>&nbsp;            (x + w &gt; this.maxX) || (y + h &gt; this.maxY)) {
+<i>697</i>&nbsp;            throw new ArrayIndexOutOfBoundsException
+<i>698</i>&nbsp;                (&quot;Coordinate out of bounds!&quot;);
+<i>699</i>&nbsp;        }
+<b class="nc"><i>700</i>&nbsp;        int yoff = (y-minY)*scanlineStride +</b>
+<i>701</i>&nbsp;                   (x-minX)*pixelStride;
+<b class="nc"><i>702</i>&nbsp;</b>
+<i>703</i>&nbsp;        int xoff;
+<i>704</i>&nbsp;        int off = 0;
+<b class="nc"><i>705</i>&nbsp;        int xstart;</b>
+<i>706</i>&nbsp;        int ystart;
+<i>707</i>&nbsp;
+<i>708</i>&nbsp;        if (numDataElements == 1) {
+<b class="nc"><i>709</i>&nbsp;            yoff += dataOffsets[0];</b>
+<i>710</i>&nbsp;            if (pixelStride == 1) {
+<i>711</i>&nbsp;                if (scanlineStride == w) {
+<i>712</i>&nbsp;                    System.arraycopy(inData, 0, data, yoff, w*h);
+<b class="nc"><i>713</i>&nbsp;                }</b>
+<b class="nc"><i>714</i>&nbsp;                else {</b>
+<b class="nc"><i>715</i>&nbsp;                    for (ystart=0; ystart &lt; h; ystart++) {</b>
+<b class="nc"><i>716</i>&nbsp;                        System.arraycopy(inData, off, data, yoff, w);</b>
+<b class="nc"><i>717</i>&nbsp;                        off += w;</b>
+<i>718</i>&nbsp;                        yoff += scanlineStride;
+<i>719</i>&nbsp;                    }
+<b class="nc"><i>720</i>&nbsp;                }</b>
+<b class="nc"><i>721</i>&nbsp;            }</b>
+<b class="nc"><i>722</i>&nbsp;            else {</b>
+<b class="nc"><i>723</i>&nbsp;                for (ystart=0; ystart &lt; h; ystart++, yoff += scanlineStride) {</b>
+<i>724</i>&nbsp;                    xoff = yoff;
+<i>725</i>&nbsp;                    for (xstart=0; xstart &lt; w; xstart++, xoff += pixelStride) {
+<i>726</i>&nbsp;                        data[xoff] = inData[off++];
+<i>727</i>&nbsp;                    }
+<b class="nc"><i>728</i>&nbsp;                }</b>
+<b class="nc"><i>729</i>&nbsp;            }</b>
+<b class="nc"><i>730</i>&nbsp;        }</b>
+<b class="nc"><i>731</i>&nbsp;        else {</b>
+<i>732</i>&nbsp;            for (ystart=0; ystart &lt; h; ystart++, yoff += scanlineStride) {
+<i>733</i>&nbsp;                xoff = yoff;
+<i>734</i>&nbsp;                for (xstart=0; xstart &lt; w; xstart++, xoff += pixelStride) {
+<i>735</i>&nbsp;                    for (int c = 0; c &lt; numDataElements; c++) {
+<i>736</i>&nbsp;                        data[dataOffsets[c] + xoff] = inData[off++];
+<b class="nc"><i>737</i>&nbsp;                    }</b>
+<b class="nc"><i>738</i>&nbsp;                }</b>
+<b class="nc"><i>739</i>&nbsp;            }</b>
+<b class="nc"><i>740</i>&nbsp;        }</b>
+<b class="nc"><i>741</i>&nbsp;</b>
+<i>742</i>&nbsp;        markDirty();
+<i>743</i>&nbsp;    }
+<i>744</i>&nbsp;
+<i>745</i>&nbsp;    /**
+<i>746</i>&nbsp;     * Creates a subraster given a region of the raster.  The x and y
+<b class="nc"><i>747</i>&nbsp;     * coordinates specify the horizontal and vertical offsets</b>
+<i>748</i>&nbsp;     * from the upper-left corner of this raster to the upper-left corner
+<i>749</i>&nbsp;     * of the subraster.  A subset of the bands of the parent Raster may
+<i>750</i>&nbsp;     * be specified.  If this is null, then all the bands are present in the
+<i>751</i>&nbsp;     * subRaster. A translation to the subRaster may also be specified.
+<i>752</i>&nbsp;     * Note that the subraster will reference the same
+<i>753</i>&nbsp;     * DataBuffer as the parent raster, but using different offsets.
+<i>754</i>&nbsp;     * @param x               X offset.
+<i>755</i>&nbsp;     * @param y               Y offset.
+<i>756</i>&nbsp;     * @param width           Width (in pixels) of the subraster.
+<i>757</i>&nbsp;     * @param height          Height (in pixels) of the subraster.
+<i>758</i>&nbsp;     * @param x0              Translated X origin of the subraster.
+<i>759</i>&nbsp;     * @param y0              Translated Y origin of the subraster.
+<i>760</i>&nbsp;     * @param bandList        Array of band indices.
+<i>761</i>&nbsp;     * @exception RasterFormatException
+<i>762</i>&nbsp;     *            if the specified bounding box is outside of the parent raster.
+<i>763</i>&nbsp;     */
+<i>764</i>&nbsp;    public Raster createChild(int x, int y,
+<i>765</i>&nbsp;                              int width, int height,
+<i>766</i>&nbsp;                              int x0, int y0, int[] bandList) {
+<i>767</i>&nbsp;        WritableRaster newRaster = createWritableChild(x, y,
+<i>768</i>&nbsp;                                                       width, height,
+<i>769</i>&nbsp;                                                       x0, y0,
+<i>770</i>&nbsp;                                                       bandList);
+<i>771</i>&nbsp;        return (Raster) newRaster;
+<b class="nc"><i>772</i>&nbsp;    }</b>
+<i>773</i>&nbsp;
+<i>774</i>&nbsp;    /**
+<i>775</i>&nbsp;     * Creates a Writable subRaster given a region of the Raster. The x and y
+<b class="nc"><i>776</i>&nbsp;     * coordinates specify the horizontal and vertical offsets</b>
+<i>777</i>&nbsp;     * from the upper-left corner of this Raster to the upper-left corner
+<i>778</i>&nbsp;     * of the subRaster.  A subset of the bands of the parent Raster may
+<i>779</i>&nbsp;     * be specified.  If this is null, then all the bands are present in the
+<i>780</i>&nbsp;     * subRaster. A translation to the subRaster may also be specified.
+<i>781</i>&nbsp;     * Note that the subRaster will reference the same
+<i>782</i>&nbsp;     * DataBuffer as the parent Raster, but using different offsets.
+<i>783</i>&nbsp;     * @param x               X offset.
+<i>784</i>&nbsp;     * @param y               Y offset.
+<i>785</i>&nbsp;     * @param width           Width (in pixels) of the subraster.
+<i>786</i>&nbsp;     * @param height          Height (in pixels) of the subraster.
+<i>787</i>&nbsp;     * @param x0              Translated X origin of the subraster.
+<i>788</i>&nbsp;     * @param y0              Translated Y origin of the subraster.
+<i>789</i>&nbsp;     * @param bandList        Array of band indices.
+<i>790</i>&nbsp;     * @exception RasterFormatException
+<i>791</i>&nbsp;     *            if the specified bounding box is outside of the parent Raster.
+<i>792</i>&nbsp;     */
+<i>793</i>&nbsp;    public WritableRaster createWritableChild(int x, int y,
+<i>794</i>&nbsp;                                              int width, int height,
+<i>795</i>&nbsp;                                              int x0, int y0,
+<i>796</i>&nbsp;                                              int[] bandList) {
+<i>797</i>&nbsp;        if (x &lt; this.minX) {
+<i>798</i>&nbsp;            throw new RasterFormatException(&quot;x lies outside the raster&quot;);
+<i>799</i>&nbsp;        }
+<i>800</i>&nbsp;        if (y &lt; this.minY) {
+<i>801</i>&nbsp;            throw new RasterFormatException(&quot;y lies outside the raster&quot;);
+<b class="nc"><i>802</i>&nbsp;        }</b>
+<b class="nc"><i>803</i>&nbsp;        if ((x+width &lt; x) || (x+width &gt; this.minX + this.width)) {</b>
+<i>804</i>&nbsp;            throw new RasterFormatException(&quot;(x + width) is outside of Raster&quot;);
+<b class="nc"><i>805</i>&nbsp;        }</b>
+<b class="nc"><i>806</i>&nbsp;        if ((y+height &lt; y) || (y+height &gt; this.minY + this.height)) {</b>
+<i>807</i>&nbsp;            throw new RasterFormatException(&quot;(y + height) is outside of Raster&quot;);
+<b class="nc"><i>808</i>&nbsp;        }</b>
+<b class="nc"><i>809</i>&nbsp;</b>
+<i>810</i>&nbsp;        SampleModel sm;
+<b class="nc"><i>811</i>&nbsp;</b>
+<b class="nc"><i>812</i>&nbsp;        if (bandList != null)</b>
+<i>813</i>&nbsp;            sm = sampleModel.createSubsetSampleModel(bandList);
+<i>814</i>&nbsp;        else
+<i>815</i>&nbsp;            sm = sampleModel;
+<i>816</i>&nbsp;
+<b class="nc"><i>817</i>&nbsp;        int deltaX = x0 - x;</b>
+<b class="nc"><i>818</i>&nbsp;        int deltaY = y0 - y;</b>
+<i>819</i>&nbsp;
+<b class="nc"><i>820</i>&nbsp;        return new ByteComponentRaster(sm,</b>
+<i>821</i>&nbsp;                                       (DataBufferByte) dataBuffer,
+<b class="nc"><i>822</i>&nbsp;                                       new Rectangle(x0, y0, width, height),</b>
+<b class="nc"><i>823</i>&nbsp;                                       new Point(sampleModelTranslateX+deltaX,</b>
+<i>824</i>&nbsp;                                                 sampleModelTranslateY+deltaY),
+<b class="nc"><i>825</i>&nbsp;                                       this);</b>
+<i>826</i>&nbsp;    }
+<i>827</i>&nbsp;
+<i>828</i>&nbsp;    /**
+<i>829</i>&nbsp;     * Creates a Raster with the same layout but using a different
+<i>830</i>&nbsp;     * width and height, and with new zeroed data arrays.
+<i>831</i>&nbsp;     */
+<i>832</i>&nbsp;    public WritableRaster createCompatibleWritableRaster(int w, int h) {
+<i>833</i>&nbsp;        if (w &lt;= 0 || h &lt;=0) {
+<i>834</i>&nbsp;            throw new RasterFormatException(&quot;negative &quot;+
+<i>835</i>&nbsp;                                          ((w &lt;= 0) ? &quot;width&quot; : &quot;height&quot;));
+<i>836</i>&nbsp;        }
+<i>837</i>&nbsp;
+<b class="nc"><i>838</i>&nbsp;        SampleModel sm = sampleModel.createCompatibleSampleModel(w, h);</b>
+<b class="nc"><i>839</i>&nbsp;</b>
+<i>840</i>&nbsp;        return new ByteComponentRaster(sm , new Point(0,0));
+<i>841</i>&nbsp;
+<i>842</i>&nbsp;    }
+<b class="nc"><i>843</i>&nbsp;</b>
+<i>844</i>&nbsp;    /**
+<b class="nc"><i>845</i>&nbsp;     * Creates a Raster with the same layout and the same</b>
+<i>846</i>&nbsp;     * width and height, and with new zeroed data arrays.  If
+<i>847</i>&nbsp;     * the Raster is a subRaster, this will call
+<i>848</i>&nbsp;     * createCompatibleRaster(width, height).
+<i>849</i>&nbsp;     */
+<i>850</i>&nbsp;    public WritableRaster createCompatibleWritableRaster() {
+<i>851</i>&nbsp;        return createCompatibleWritableRaster(width,height);
+<i>852</i>&nbsp;    }
+<i>853</i>&nbsp;
+<i>854</i>&nbsp;    /**
+<i>855</i>&nbsp;     * Verify that the layout parameters are consistent with the data.
+<b class="nc"><i>856</i>&nbsp;     *</b>
+<i>857</i>&nbsp;     * The method verifies whether scanline stride and pixel stride do not
+<i>858</i>&nbsp;     * cause an integer overflow during calculation of a position of the pixel
+<i>859</i>&nbsp;     * in data buffer. It also verifies whether the data buffer has enough data
+<i>860</i>&nbsp;     *  to correspond the raster layout attributes.
+<i>861</i>&nbsp;     *
+<i>862</i>&nbsp;     * @throws RasterFormatException if an integer overflow is detected,
+<i>863</i>&nbsp;     * or if data buffer has not enough capacity.
+<i>864</i>&nbsp;     */
+<i>865</i>&nbsp;    protected final void verify() {
+<i>866</i>&nbsp;        /* Need to re-verify the dimensions since a sample model may be
+<i>867</i>&nbsp;         * specified to the constructor
+<i>868</i>&nbsp;         */
+<i>869</i>&nbsp;        if (width &lt;= 0 || height &lt;= 0 ||
+<i>870</i>&nbsp;            height &gt; (Integer.MAX_VALUE / width))
+<i>871</i>&nbsp;        {
+<i>872</i>&nbsp;            throw new RasterFormatException(&quot;Invalid raster dimension&quot;);
+<i>873</i>&nbsp;        }
+<b class="nc"><i>874</i>&nbsp;</b>
+<i>875</i>&nbsp;        for (int i = 0; i &lt; dataOffsets.length; i++) {
+<i>876</i>&nbsp;            if (dataOffsets[i] &lt; 0) {
+<b class="nc"><i>877</i>&nbsp;                throw new RasterFormatException(&quot;Data offsets for band &quot; + i</b>
+<i>878</i>&nbsp;                            + &quot;(&quot; + dataOffsets[i]
+<i>879</i>&nbsp;                            + &quot;) must be &gt;= 0&quot;);
+<b class="nc"><i>880</i>&nbsp;            }</b>
+<b class="nc"><i>881</i>&nbsp;        }</b>
+<b class="nc"><i>882</i>&nbsp;</b>
+<i>883</i>&nbsp;        if ((long)minX - sampleModelTranslateX &lt; 0 ||
+<i>884</i>&nbsp;            (long)minY - sampleModelTranslateY &lt; 0) {
+<i>885</i>&nbsp;
+<i>886</i>&nbsp;            throw new RasterFormatException(&quot;Incorrect origin/translate: (&quot; +
+<i>887</i>&nbsp;                    minX + &quot;, &quot; + minY + &quot;) / (&quot; +
+<b class="nc"><i>888</i>&nbsp;                    sampleModelTranslateX + &quot;, &quot; + sampleModelTranslateY + &quot;)&quot;);</b>
+<i>889</i>&nbsp;        }
+<i>890</i>&nbsp;
+<b class="nc"><i>891</i>&nbsp;        // we can be sure that width and height are greater than 0</b>
+<i>892</i>&nbsp;        if (scanlineStride &lt; 0 ||
+<i>893</i>&nbsp;            scanlineStride &gt; (Integer.MAX_VALUE / height))
+<i>894</i>&nbsp;        {
+<i>895</i>&nbsp;            // integer overflow
+<i>896</i>&nbsp;            throw new RasterFormatException(&quot;Incorrect scanline stride: &quot;
+<b class="nc"><i>897</i>&nbsp;                    + scanlineStride);</b>
+<i>898</i>&nbsp;        }
+<i>899</i>&nbsp;
+<i>900</i>&nbsp;        if (height &gt; 1 || minY - sampleModelTranslateY &gt; 0) {
+<b class="nc"><i>901</i>&nbsp;            // buffer should contain at least one scanline</b>
+<i>902</i>&nbsp;            if (scanlineStride &gt; data.length) {
+<i>903</i>&nbsp;                throw new RasterFormatException(&quot;Incorrect scanline stride: &quot;
+<i>904</i>&nbsp;                        + scanlineStride);
+<b class="nc"><i>905</i>&nbsp;            }</b>
+<i>906</i>&nbsp;        }
+<b class="nc"><i>907</i>&nbsp;</b>
+<b class="nc"><i>908</i>&nbsp;        int lastScanOffset = (height - 1) * scanlineStride;</b>
+<i>909</i>&nbsp;
+<i>910</i>&nbsp;        if (pixelStride &lt; 0 ||
+<i>911</i>&nbsp;            pixelStride &gt; (Integer.MAX_VALUE / width) ||
+<i>912</i>&nbsp;            pixelStride &gt; data.length)
+<b class="nc"><i>913</i>&nbsp;        {</b>
+<i>914</i>&nbsp;            // integer overflow
+<b class="nc"><i>915</i>&nbsp;            throw new RasterFormatException(&quot;Incorrect pixel stride: &quot;</b>
+<i>916</i>&nbsp;                    + pixelStride);
+<i>917</i>&nbsp;        }
+<i>918</i>&nbsp;        int lastPixelOffset = (width - 1) * pixelStride;
+<i>919</i>&nbsp;
+<b class="nc"><i>920</i>&nbsp;        if (lastPixelOffset &gt; (Integer.MAX_VALUE - lastScanOffset)) {</b>
+<i>921</i>&nbsp;            // integer overflow
+<i>922</i>&nbsp;            throw new RasterFormatException(&quot;Incorrect raster attributes&quot;);
+<b class="nc"><i>923</i>&nbsp;        }</b>
+<i>924</i>&nbsp;        lastPixelOffset += lastScanOffset;
+<b class="nc"><i>925</i>&nbsp;</b>
+<i>926</i>&nbsp;        int index;
+<b class="nc"><i>927</i>&nbsp;        int maxIndex = 0;</b>
+<i>928</i>&nbsp;        for (int i = 0; i &lt; numDataElements; i++) {
+<b class="nc"><i>929</i>&nbsp;            if (dataOffsets[i] &gt; (Integer.MAX_VALUE - lastPixelOffset)) {</b>
+<i>930</i>&nbsp;                throw new RasterFormatException(&quot;Incorrect band offset: &quot;
+<i>931</i>&nbsp;                            + dataOffsets[i]);
+<b class="nc"><i>932</i>&nbsp;</b>
+<b class="nc"><i>933</i>&nbsp;            }</b>
+<b class="nc"><i>934</i>&nbsp;</b>
+<b class="nc"><i>935</i>&nbsp;            index = lastPixelOffset + dataOffsets[i];</b>
+<i>936</i>&nbsp;
+<i>937</i>&nbsp;            if (index &gt; maxIndex) {
+<i>938</i>&nbsp;                maxIndex = index;
+<i>939</i>&nbsp;            }
+<b class="nc"><i>940</i>&nbsp;        }</b>
+<i>941</i>&nbsp;        if (data.length &lt;= maxIndex) {
+<b class="nc"><i>942</i>&nbsp;            throw new RasterFormatException(&quot;Data array too small (should be &gt; &quot;</b>
+<b class="nc"><i>943</i>&nbsp;                    + maxIndex + &quot; )&quot;);</b>
+<i>944</i>&nbsp;        }
+<i>945</i>&nbsp;    }
+<b class="nc"><i>946</i>&nbsp;</b>
+<b class="nc"><i>947</i>&nbsp;    public String toString() {</b>
+<i>948</i>&nbsp;        return new String (&quot;ByteComponentRaster: width = &quot;+width+&quot; height = &quot;
+<i>949</i>&nbsp;                           + height
+<i>950</i>&nbsp;                           +&quot; #numDataElements &quot;+numDataElements
+<i>951</i>&nbsp;                           //  +&quot; xOff = &quot;+xOffset+&quot; yOff = &quot;+yOffset
+<i>952</i>&nbsp;                           +&quot; dataOff[0] = &quot;+dataOffsets[0]);
+<b class="nc"><i>953</i>&nbsp;    }</b>
+<i>954</i>&nbsp;
+<i>955</i>&nbsp;//    /**
+<i>956</i>&nbsp;//     * For debugging...  prints a region of a one-band ByteComponentRaster
+<i>957</i>&nbsp;//     */
+<i>958</i>&nbsp;//    public void print(int x, int y, int w, int h) {
+<i>959</i>&nbsp;//        // REMIND:  Only works for 1 band!
+<i>960</i>&nbsp;//        System.out.println(this);
+<i>961</i>&nbsp;//        int offset = dataOffsets[0] + y*scanlineStride + x*pixelStride;
+<i>962</i>&nbsp;//        int off;
+<i>963</i>&nbsp;//        for (int yoff=0; yoff &lt; h; yoff++, offset += scanlineStride) {
+<i>964</i>&nbsp;//            off = offset;
+<i>965</i>&nbsp;//            System.out.print(&quot;Line &quot;+(y+yoff)+&quot;: &quot;);
+<i>966</i>&nbsp;//            for (int xoff = 0; xoff &lt; w; xoff++, off+= pixelStride) {
+<i>967</i>&nbsp;//                String s = Integer.toHexString(data[off]);
+<i>968</i>&nbsp;//                if (s.length() == 8) {
+<i>969</i>&nbsp;//                    s = s.substring(6,8);
+<i>970</i>&nbsp;//                }
+<i>971</i>&nbsp;//                System.out.print(s+&quot; &quot;);
+<i>972</i>&nbsp;//            }
+<i>973</i>&nbsp;//            System.out.println(&quot;&quot;);
+<i>974</i>&nbsp;//        }
+<i>975</i>&nbsp;//    }
+<i>976</i>&nbsp;
+<i>977</i>&nbsp;
+<i>978</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

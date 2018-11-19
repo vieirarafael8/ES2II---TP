@@ -1,0 +1,683 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Parser</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.jstat</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Parser (sun.tools.jstat)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Parser</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 33)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 218)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2004, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.jstat;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.*;
+<i>29</i>&nbsp;import java.util.*;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;/**
+<i>32</i>&nbsp; * A class implementing a simple predictive parser for output format
+<i>33</i>&nbsp; * specification language for the jstat command.
+<i>34</i>&nbsp; *
+<i>35</i>&nbsp; * @author Brian Doherty
+<i>36</i>&nbsp; * @since 1.5
+<i>37</i>&nbsp; */
+<i>38</i>&nbsp;public class Parser {
+<i>39</i>&nbsp;
+<b class="nc"><i>40</i>&nbsp;    private static boolean pdebug = Boolean.getBoolean(&quot;jstat.parser.debug&quot;);</b>
+<b class="nc"><i>41</i>&nbsp;    private static boolean ldebug = Boolean.getBoolean(&quot;jstat.lex.debug&quot;);</b>
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;    private static final char OPENBLOCK = &#39;{&#39;;
+<i>44</i>&nbsp;    private static final char CLOSEBLOCK = &#39;}&#39;;
+<i>45</i>&nbsp;    private static final char DOUBLEQUOTE = &#39;&quot;&#39;;
+<i>46</i>&nbsp;    private static final char PERCENT_CHAR = &#39;%&#39;;
+<i>47</i>&nbsp;    private static final char OPENPAREN = &#39;(&#39;;
+<i>48</i>&nbsp;    private static final char CLOSEPAREN = &#39;)&#39;;
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;    private static final char OPERATOR_PLUS = &#39;+&#39;;
+<i>51</i>&nbsp;    private static final char OPERATOR_MINUS = &#39;-&#39;;
+<i>52</i>&nbsp;    private static final char OPERATOR_MULTIPLY = &#39;*&#39;;
+<i>53</i>&nbsp;    private static final char OPERATOR_DIVIDE = &#39;/&#39;;
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    private static final String OPTION = &quot;option&quot;;
+<i>56</i>&nbsp;    private static final String COLUMN = &quot;column&quot;;
+<i>57</i>&nbsp;    private static final String DATA = &quot;data&quot;;
+<i>58</i>&nbsp;    private static final String HEADER = &quot;header&quot;;
+<i>59</i>&nbsp;    private static final String WIDTH = &quot;width&quot;;
+<i>60</i>&nbsp;    private static final String FORMAT = &quot;format&quot;;
+<i>61</i>&nbsp;    private static final String ALIGN = &quot;align&quot;;
+<i>62</i>&nbsp;    private static final String SCALE = &quot;scale&quot;;
+<i>63</i>&nbsp;    private static final String REQUIRED = &quot;required&quot;;
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    private static final String START = OPTION;
+<b class="nc"><i>66</i>&nbsp;</b>
+<b class="nc"><i>67</i>&nbsp;    private static final Set&lt;String&gt; scaleKeyWords = Scale.keySet();</b>
+<b class="nc"><i>68</i>&nbsp;    private static final Set&lt;String&gt; alignKeyWords = Alignment.keySet();</b>
+<i>69</i>&nbsp;    private static final Set&lt;String&gt; boolKeyWords = Set.of(&quot;true&quot;, &quot;false&quot;);
+<i>70</i>&nbsp;    private static String[] otherKeyWords = {
+<i>71</i>&nbsp;        OPTION, COLUMN, DATA, HEADER, WIDTH, FORMAT, ALIGN, SCALE, REQUIRED
+<b class="nc"><i>72</i>&nbsp;    };</b>
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    private static char[] infixOps = {
+<i>75</i>&nbsp;        OPERATOR_PLUS, OPERATOR_MINUS, OPERATOR_MULTIPLY, OPERATOR_DIVIDE
+<b class="nc"><i>76</i>&nbsp;    };</b>
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    private static char[] delimiters = {
+<i>79</i>&nbsp;        OPENBLOCK, CLOSEBLOCK, PERCENT_CHAR, OPENPAREN, CLOSEPAREN
+<i>80</i>&nbsp;    };
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;    private static Set&lt;String&gt; reservedWords;
+<i>84</i>&nbsp;
+<i>85</i>&nbsp;    private StreamTokenizer st;
+<i>86</i>&nbsp;    private String filename;
+<i>87</i>&nbsp;    private Token lookahead;
+<i>88</i>&nbsp;    private Token previous;
+<i>89</i>&nbsp;    private int columnCount;
+<b class="nc"><i>90</i>&nbsp;    private OptionFormat optionFormat;</b>
+<b class="nc"><i>91</i>&nbsp;</b>
+<b class="nc"><i>92</i>&nbsp;    public Parser(String filename) throws FileNotFoundException {</b>
+<i>93</i>&nbsp;        this.filename = filename;
+<i>94</i>&nbsp;        Reader r = new BufferedReader(new FileReader(filename));
+<b class="nc"><i>95</i>&nbsp;    }</b>
+<b class="nc"><i>96</i>&nbsp;</b>
+<i>97</i>&nbsp;    public Parser(Reader r) {
+<i>98</i>&nbsp;        st = new StreamTokenizer(r);
+<b class="nc"><i>99</i>&nbsp;</b>
+<b class="nc"><i>100</i>&nbsp;        // allow both c++ style comments</b>
+<b class="nc"><i>101</i>&nbsp;        st.ordinaryChar(&#39;/&#39;);</b>
+<b class="nc"><i>102</i>&nbsp;        st.wordChars(&#39;_&#39;,&#39;_&#39;);</b>
+<i>103</i>&nbsp;        st.slashSlashComments(true);
+<b class="nc"><i>104</i>&nbsp;        st.slashStarComments(true);</b>
+<b class="nc"><i>105</i>&nbsp;</b>
+<b class="nc"><i>106</i>&nbsp;        reservedWords = new HashSet&lt;String&gt;();</b>
+<i>107</i>&nbsp;        for (int i = 0; i &lt; otherKeyWords.length; i++) {
+<i>108</i>&nbsp;            reservedWords.add(otherKeyWords[i]);
+<b class="nc"><i>109</i>&nbsp;        }</b>
+<b class="nc"><i>110</i>&nbsp;</b>
+<i>111</i>&nbsp;        for (int i = 0; i &lt; delimiters.length; i++ ) {
+<i>112</i>&nbsp;            st.ordinaryChar(delimiters[i]);
+<b class="nc"><i>113</i>&nbsp;        }</b>
+<b class="nc"><i>114</i>&nbsp;</b>
+<i>115</i>&nbsp;        for (int i = 0; i &lt; infixOps.length; i++ ) {
+<i>116</i>&nbsp;            st.ordinaryChar(infixOps[i]);
+<i>117</i>&nbsp;        }
+<i>118</i>&nbsp;    }
+<i>119</i>&nbsp;
+<i>120</i>&nbsp;    /**
+<i>121</i>&nbsp;     * push back the lookahead token and restore the lookahead token
+<i>122</i>&nbsp;     * to the previous token.
+<b class="nc"><i>123</i>&nbsp;     */</b>
+<b class="nc"><i>124</i>&nbsp;    private void pushBack() {</b>
+<i>125</i>&nbsp;        lookahead = previous;
+<i>126</i>&nbsp;        st.pushBack();
+<i>127</i>&nbsp;    }
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    /**
+<i>130</i>&nbsp;     * retrieve the next token, placing the token value in the lookahead
+<i>131</i>&nbsp;     * member variable, storing its previous value in the previous member
+<i>132</i>&nbsp;     * variable.
+<b class="nc"><i>133</i>&nbsp;     */</b>
+<b class="nc"><i>134</i>&nbsp;    private void nextToken() throws ParserException, IOException {</b>
+<b class="nc"><i>135</i>&nbsp;        int t = st.nextToken();</b>
+<b class="nc"><i>136</i>&nbsp;        previous = lookahead;</b>
+<i>137</i>&nbsp;        lookahead = new Token(st.ttype, st.sval, st.nval);
+<i>138</i>&nbsp;        log(ldebug, &quot;lookahead = &quot; + lookahead);
+<i>139</i>&nbsp;    }
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;    /**
+<i>142</i>&nbsp;     * match one of the token values in the given set of key words
+<i>143</i>&nbsp;     * token is assumed to be of type TT_WORD, and the set is assumed
+<i>144</i>&nbsp;     * to contain String objects.
+<b class="nc"><i>145</i>&nbsp;     */</b>
+<b class="nc"><i>146</i>&nbsp;    private Token matchOne(Set&lt;String&gt; keyWords) throws ParserException, IOException {</b>
+<b class="nc"><i>147</i>&nbsp;        if ((lookahead.ttype == StreamTokenizer.TT_WORD)</b>
+<b class="nc"><i>148</i>&nbsp;                &amp;&amp; keyWords.contains(lookahead.sval)) {</b>
+<b class="nc"><i>149</i>&nbsp;            Token t = lookahead;</b>
+<i>150</i>&nbsp;            nextToken();
+<b class="nc"><i>151</i>&nbsp;            return t;</b>
+<i>152</i>&nbsp;        }
+<i>153</i>&nbsp;        throw new SyntaxException(st.lineno(), keyWords, lookahead);
+<i>154</i>&nbsp;    }
+<i>155</i>&nbsp;
+<i>156</i>&nbsp;    /**
+<i>157</i>&nbsp;     * match a token with TT_TYPE=type, and the token value is a given sequence
+<i>158</i>&nbsp;     * of characters.
+<i>159</i>&nbsp;     */
+<b class="nc"><i>160</i>&nbsp;    private void match(int ttype, String token)</b>
+<b class="nc"><i>161</i>&nbsp;                 throws ParserException, IOException {</b>
+<i>162</i>&nbsp;        if (lookahead.ttype == ttype &amp;&amp; lookahead.sval.compareTo(token) == 0) {
+<b class="nc"><i>163</i>&nbsp;            nextToken();</b>
+<i>164</i>&nbsp;        } else {
+<i>165</i>&nbsp;           throw new SyntaxException(st.lineno(), new Token(ttype, token),
+<i>166</i>&nbsp;                                     lookahead);
+<i>167</i>&nbsp;        }
+<i>168</i>&nbsp;    }
+<i>169</i>&nbsp;
+<i>170</i>&nbsp;    /**
+<i>171</i>&nbsp;     * match a token with TT_TYPE=type
+<b class="nc"><i>172</i>&nbsp;     */</b>
+<b class="nc"><i>173</i>&nbsp;    private void match(int ttype) throws ParserException, IOException {</b>
+<i>174</i>&nbsp;        if (lookahead.ttype == ttype) {
+<b class="nc"><i>175</i>&nbsp;            nextToken();</b>
+<i>176</i>&nbsp;        } else {
+<i>177</i>&nbsp;           throw new SyntaxException(st.lineno(), new Token(ttype), lookahead);
+<i>178</i>&nbsp;        }
+<i>179</i>&nbsp;    }
+<i>180</i>&nbsp;
+<i>181</i>&nbsp;    /**
+<i>182</i>&nbsp;     * match a token with TT_TYPE=char, where the token value is the given char.
+<b class="nc"><i>183</i>&nbsp;     */</b>
+<b class="nc"><i>184</i>&nbsp;    private void match(char ttype) throws ParserException, IOException {</b>
+<i>185</i>&nbsp;      if (lookahead.ttype == (int)ttype) {
+<i>186</i>&nbsp;          nextToken();
+<b class="nc"><i>187</i>&nbsp;      }</b>
+<i>188</i>&nbsp;      else {
+<i>189</i>&nbsp;          throw new SyntaxException(st.lineno(), new Token((int)ttype),
+<i>190</i>&nbsp;                                    lookahead);
+<i>191</i>&nbsp;      }
+<i>192</i>&nbsp;    }
+<i>193</i>&nbsp;
+<i>194</i>&nbsp;    /**
+<i>195</i>&nbsp;     * match a token with TT_TYPE=&#39;&quot;&#39;, where the token value is a sequence
+<i>196</i>&nbsp;     * of characters between matching quote characters.
+<b class="nc"><i>197</i>&nbsp;     */</b>
+<i>198</i>&nbsp;    private void matchQuotedString() throws ParserException, IOException {
+<i>199</i>&nbsp;        match(DOUBLEQUOTE);
+<i>200</i>&nbsp;    }
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;    /**
+<i>203</i>&nbsp;     * match a TT_NUMBER token that matches a parsed number value
+<b class="nc"><i>204</i>&nbsp;     */</b>
+<i>205</i>&nbsp;    private void matchNumber() throws ParserException, IOException {
+<i>206</i>&nbsp;        match(StreamTokenizer.TT_NUMBER);
+<i>207</i>&nbsp;    }
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    /**
+<i>210</i>&nbsp;     * match a TT_WORD token that matches an arbitrary, not quoted token.
+<b class="nc"><i>211</i>&nbsp;     */</b>
+<i>212</i>&nbsp;    private void matchID() throws ParserException, IOException {
+<i>213</i>&nbsp;        match(StreamTokenizer.TT_WORD);
+<i>214</i>&nbsp;    }
+<i>215</i>&nbsp;
+<i>216</i>&nbsp;    /**
+<i>217</i>&nbsp;     * match a TT_WORD token that matches the given string
+<b class="nc"><i>218</i>&nbsp;     */</b>
+<i>219</i>&nbsp;    private void match(String token) throws ParserException, IOException {
+<i>220</i>&nbsp;        match(StreamTokenizer.TT_WORD, token);
+<i>221</i>&nbsp;    }
+<i>222</i>&nbsp;
+<i>223</i>&nbsp;    /**
+<i>224</i>&nbsp;     * determine if the given word is a reserved key word
+<b class="nc"><i>225</i>&nbsp;     */</b>
+<i>226</i>&nbsp;    private boolean isReservedWord(String word) {
+<i>227</i>&nbsp;        return reservedWords.contains(word);
+<i>228</i>&nbsp;    }
+<i>229</i>&nbsp;
+<i>230</i>&nbsp;    /**
+<i>231</i>&nbsp;     * determine if the give work is a reserved key word
+<b class="nc"><i>232</i>&nbsp;     */</b>
+<b class="nc"><i>233</i>&nbsp;    private boolean isInfixOperator(char op) {</b>
+<b class="nc"><i>234</i>&nbsp;        for (int i = 0; i &lt; infixOps.length; i++) {</b>
+<i>235</i>&nbsp;            if (op == infixOps[i]) {
+<i>236</i>&nbsp;                return true;
+<b class="nc"><i>237</i>&nbsp;            }</b>
+<i>238</i>&nbsp;        }
+<i>239</i>&nbsp;        return false;
+<i>240</i>&nbsp;    }
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;    /**
+<i>243</i>&nbsp;     * scalestmt -&gt; &#39;scale&#39; scalespec
+<i>244</i>&nbsp;     * scalespec -&gt; &lt;see above scaleTerminals array&gt;
+<i>245</i>&nbsp;     */
+<b class="nc"><i>246</i>&nbsp;    private void scaleStmt(ColumnFormat cf)</b>
+<b class="nc"><i>247</i>&nbsp;                 throws ParserException, IOException {</b>
+<b class="nc"><i>248</i>&nbsp;        match(SCALE);</b>
+<b class="nc"><i>249</i>&nbsp;        Token t = matchOne(scaleKeyWords);</b>
+<b class="nc"><i>250</i>&nbsp;        cf.setScale(Scale.toScale(t.sval));</b>
+<i>251</i>&nbsp;        String scaleString = t.sval;
+<i>252</i>&nbsp;        log(pdebug, &quot;Parsed: scale -&gt; &quot; + scaleString);
+<i>253</i>&nbsp;    }
+<i>254</i>&nbsp;
+<i>255</i>&nbsp;    /**
+<i>256</i>&nbsp;     * alignstmt -&gt; &#39;align&#39; alignspec
+<i>257</i>&nbsp;     * alignspec -&gt; &lt;see above alignTerminals array&gt;
+<i>258</i>&nbsp;     */
+<b class="nc"><i>259</i>&nbsp;    private void alignStmt(ColumnFormat cf)</b>
+<b class="nc"><i>260</i>&nbsp;                 throws ParserException, IOException {</b>
+<b class="nc"><i>261</i>&nbsp;        match(ALIGN);</b>
+<b class="nc"><i>262</i>&nbsp;        Token t = matchOne(alignKeyWords);</b>
+<b class="nc"><i>263</i>&nbsp;        cf.setAlignment(Alignment.toAlignment(t.sval));</b>
+<i>264</i>&nbsp;        String alignString = t.sval;
+<i>265</i>&nbsp;        log(pdebug, &quot;Parsed: align -&gt; &quot; + alignString);
+<i>266</i>&nbsp;    }
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;    /**
+<i>269</i>&nbsp;     * headerstmt -&gt; &#39;header&#39; quotedstring
+<i>270</i>&nbsp;     */
+<b class="nc"><i>271</i>&nbsp;    private void headerStmt(ColumnFormat cf)</b>
+<b class="nc"><i>272</i>&nbsp;                 throws ParserException, IOException {</b>
+<b class="nc"><i>273</i>&nbsp;        match(HEADER);</b>
+<b class="nc"><i>274</i>&nbsp;        String headerString = lookahead.sval;</b>
+<b class="nc"><i>275</i>&nbsp;        matchQuotedString();</b>
+<i>276</i>&nbsp;        cf.setHeader(headerString);
+<i>277</i>&nbsp;        log(pdebug, &quot;Parsed: header -&gt; &quot; + headerString);
+<i>278</i>&nbsp;    }
+<i>279</i>&nbsp;
+<i>280</i>&nbsp;    /**
+<i>281</i>&nbsp;     * widthstmt -&gt; &#39;width&#39; integer
+<i>282</i>&nbsp;     */
+<b class="nc"><i>283</i>&nbsp;    private void widthStmt(ColumnFormat cf)</b>
+<b class="nc"><i>284</i>&nbsp;                 throws ParserException, IOException {</b>
+<b class="nc"><i>285</i>&nbsp;        match(WIDTH);</b>
+<b class="nc"><i>286</i>&nbsp;        double width = lookahead.nval;</b>
+<b class="nc"><i>287</i>&nbsp;        matchNumber();</b>
+<i>288</i>&nbsp;        cf.setWidth((int)width);
+<i>289</i>&nbsp;        log(pdebug, &quot;Parsed: width -&gt; &quot; + width );
+<i>290</i>&nbsp;    }
+<i>291</i>&nbsp;
+<i>292</i>&nbsp;    /**
+<i>293</i>&nbsp;     * formatstmt -&gt; &#39;format&#39; quotedstring
+<i>294</i>&nbsp;     */
+<b class="nc"><i>295</i>&nbsp;    private void formatStmt(ColumnFormat cf)</b>
+<b class="nc"><i>296</i>&nbsp;                 throws ParserException, IOException {</b>
+<b class="nc"><i>297</i>&nbsp;        match(FORMAT);</b>
+<b class="nc"><i>298</i>&nbsp;        String formatString = lookahead.sval;</b>
+<b class="nc"><i>299</i>&nbsp;        matchQuotedString();</b>
+<i>300</i>&nbsp;        cf.setFormat(formatString);
+<i>301</i>&nbsp;        log(pdebug, &quot;Parsed: format -&gt; &quot; + formatString);
+<i>302</i>&nbsp;    }
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;    /**
+<i>305</i>&nbsp;     *  Primary -&gt; Literal | Identifier | &#39;(&#39; Expression &#39;)&#39;
+<b class="nc"><i>306</i>&nbsp;     */</b>
+<i>307</i>&nbsp;    private Expression primary() throws ParserException, IOException {
+<b class="nc"><i>308</i>&nbsp;        Expression e = null;</b>
+<i>309</i>&nbsp;
+<b class="nc"><i>310</i>&nbsp;        switch (lookahead.ttype) {</b>
+<b class="nc"><i>311</i>&nbsp;        case OPENPAREN:</b>
+<b class="nc"><i>312</i>&nbsp;            match(OPENPAREN);</b>
+<b class="nc"><i>313</i>&nbsp;            e = expression();</b>
+<i>314</i>&nbsp;            match(CLOSEPAREN);
+<b class="nc"><i>315</i>&nbsp;            break;</b>
+<b class="nc"><i>316</i>&nbsp;        case StreamTokenizer.TT_WORD:</b>
+<b class="nc"><i>317</i>&nbsp;            String s = lookahead.sval;</b>
+<i>318</i>&nbsp;            if (isReservedWord(s)) {
+<i>319</i>&nbsp;                throw new SyntaxException(st.lineno(), &quot;IDENTIFIER&quot;,
+<b class="nc"><i>320</i>&nbsp;                                          &quot;Reserved Word: &quot; + lookahead.sval);</b>
+<b class="nc"><i>321</i>&nbsp;            }</b>
+<b class="nc"><i>322</i>&nbsp;            matchID();</b>
+<b class="nc"><i>323</i>&nbsp;            e = new Identifier(s);</b>
+<i>324</i>&nbsp;            log(pdebug, &quot;Parsed: ID -&gt; &quot; + s);
+<b class="nc"><i>325</i>&nbsp;            break;</b>
+<b class="nc"><i>326</i>&nbsp;        case StreamTokenizer.TT_NUMBER:</b>
+<b class="nc"><i>327</i>&nbsp;            double literal = lookahead.nval;</b>
+<b class="nc"><i>328</i>&nbsp;            matchNumber();</b>
+<b class="nc"><i>329</i>&nbsp;            e = new Literal(Double.valueOf(literal));</b>
+<i>330</i>&nbsp;            log(pdebug, &quot;Parsed: number -&gt; &quot; + literal);
+<b class="nc"><i>331</i>&nbsp;            break;</b>
+<i>332</i>&nbsp;        default:
+<b class="nc"><i>333</i>&nbsp;            throw new SyntaxException(st.lineno(), &quot;IDENTIFIER&quot;, lookahead);</b>
+<b class="nc"><i>334</i>&nbsp;        }</b>
+<i>335</i>&nbsp;        log(pdebug, &quot;Parsed: primary -&gt; &quot; + e);
+<i>336</i>&nbsp;        return e;
+<i>337</i>&nbsp;    }
+<i>338</i>&nbsp;
+<i>339</i>&nbsp;    /**
+<i>340</i>&nbsp;     * Unary -&gt; (&#39;+&#39;|&#39;-&#39;) Unary | Primary
+<b class="nc"><i>341</i>&nbsp;     */</b>
+<b class="nc"><i>342</i>&nbsp;    private Expression unary() throws ParserException, IOException {</b>
+<i>343</i>&nbsp;        Expression e = null;
+<i>344</i>&nbsp;        Operator op = null;
+<b class="nc"><i>345</i>&nbsp;</b>
+<i>346</i>&nbsp;        while (true) {
+<b class="nc"><i>347</i>&nbsp;            switch (lookahead.ttype) {</b>
+<b class="nc"><i>348</i>&nbsp;            case OPERATOR_PLUS:</b>
+<b class="nc"><i>349</i>&nbsp;                match(OPERATOR_PLUS);</b>
+<i>350</i>&nbsp;                op = Operator.PLUS;
+<b class="nc"><i>351</i>&nbsp;                break;</b>
+<b class="nc"><i>352</i>&nbsp;            case OPERATOR_MINUS:</b>
+<b class="nc"><i>353</i>&nbsp;                match(OPERATOR_MINUS);</b>
+<i>354</i>&nbsp;                op = Operator.MINUS;
+<b class="nc"><i>355</i>&nbsp;                break;</b>
+<b class="nc"><i>356</i>&nbsp;            default:</b>
+<b class="nc"><i>357</i>&nbsp;                e = primary();</b>
+<i>358</i>&nbsp;                log(pdebug, &quot;Parsed: unary -&gt; &quot; + e);
+<b class="nc"><i>359</i>&nbsp;                return e;</b>
+<b class="nc"><i>360</i>&nbsp;            }</b>
+<b class="nc"><i>361</i>&nbsp;            Expression e1 = new Expression();</b>
+<b class="nc"><i>362</i>&nbsp;            e1.setOperator(op);</b>
+<b class="nc"><i>363</i>&nbsp;            e1.setRight(e);</b>
+<b class="nc"><i>364</i>&nbsp;            log(pdebug, &quot;Parsed: unary -&gt; &quot; + e1);</b>
+<b class="nc"><i>365</i>&nbsp;            e1.setLeft(new Literal(Double.valueOf(0)));</b>
+<i>366</i>&nbsp;            e = e1;
+<i>367</i>&nbsp;        }
+<i>368</i>&nbsp;    }
+<i>369</i>&nbsp;
+<i>370</i>&nbsp;    /**
+<i>371</i>&nbsp;     *  MultExpression -&gt; Unary ((&#39;*&#39; | &#39;/&#39;) Unary)*
+<b class="nc"><i>372</i>&nbsp;     */</b>
+<b class="nc"><i>373</i>&nbsp;    private Expression multExpression() throws ParserException, IOException {</b>
+<i>374</i>&nbsp;        Expression e = unary();
+<i>375</i>&nbsp;        Operator op = null;
+<b class="nc"><i>376</i>&nbsp;</b>
+<i>377</i>&nbsp;        while (true) {
+<b class="nc"><i>378</i>&nbsp;            switch (lookahead.ttype) {</b>
+<b class="nc"><i>379</i>&nbsp;            case OPERATOR_MULTIPLY:</b>
+<b class="nc"><i>380</i>&nbsp;                match(OPERATOR_MULTIPLY);</b>
+<i>381</i>&nbsp;                op = Operator.MULTIPLY;
+<b class="nc"><i>382</i>&nbsp;                break;</b>
+<b class="nc"><i>383</i>&nbsp;            case OPERATOR_DIVIDE:</b>
+<b class="nc"><i>384</i>&nbsp;                match(OPERATOR_DIVIDE);</b>
+<i>385</i>&nbsp;                op = Operator.DIVIDE;
+<b class="nc"><i>386</i>&nbsp;                break;</b>
+<b class="nc"><i>387</i>&nbsp;            default:</b>
+<i>388</i>&nbsp;                log(pdebug, &quot;Parsed: multExpression -&gt; &quot; + e);
+<b class="nc"><i>389</i>&nbsp;                return e;</b>
+<b class="nc"><i>390</i>&nbsp;            }</b>
+<b class="nc"><i>391</i>&nbsp;            Expression e1 = new Expression();</b>
+<b class="nc"><i>392</i>&nbsp;            e1.setOperator(op);</b>
+<b class="nc"><i>393</i>&nbsp;            e1.setLeft(e);</b>
+<b class="nc"><i>394</i>&nbsp;            e1.setRight(unary());</b>
+<b class="nc"><i>395</i>&nbsp;            e = e1;</b>
+<i>396</i>&nbsp;            log(pdebug, &quot;Parsed: multExpression -&gt; &quot; + e);
+<i>397</i>&nbsp;        }
+<i>398</i>&nbsp;    }
+<i>399</i>&nbsp;
+<i>400</i>&nbsp;    /**
+<i>401</i>&nbsp;     *  AddExpression -&gt; MultExpression ((&#39;+&#39; | &#39;-&#39;) MultExpression)*
+<b class="nc"><i>402</i>&nbsp;     */</b>
+<b class="nc"><i>403</i>&nbsp;    private Expression addExpression() throws ParserException, IOException {</b>
+<i>404</i>&nbsp;        Expression e = multExpression();
+<i>405</i>&nbsp;        Operator op = null;
+<b class="nc"><i>406</i>&nbsp;</b>
+<i>407</i>&nbsp;        while (true) {
+<b class="nc"><i>408</i>&nbsp;            switch (lookahead.ttype) {</b>
+<b class="nc"><i>409</i>&nbsp;            case OPERATOR_PLUS:</b>
+<b class="nc"><i>410</i>&nbsp;                match(OPERATOR_PLUS);</b>
+<i>411</i>&nbsp;                op = Operator.PLUS;
+<b class="nc"><i>412</i>&nbsp;                break;</b>
+<b class="nc"><i>413</i>&nbsp;            case OPERATOR_MINUS:</b>
+<b class="nc"><i>414</i>&nbsp;                match(OPERATOR_MINUS);</b>
+<i>415</i>&nbsp;                op = Operator.MINUS;
+<b class="nc"><i>416</i>&nbsp;                break;</b>
+<b class="nc"><i>417</i>&nbsp;            default:</b>
+<i>418</i>&nbsp;                log(pdebug, &quot;Parsed: addExpression -&gt; &quot; + e);
+<b class="nc"><i>419</i>&nbsp;                return e;</b>
+<b class="nc"><i>420</i>&nbsp;            }</b>
+<b class="nc"><i>421</i>&nbsp;            Expression e1 = new Expression();</b>
+<b class="nc"><i>422</i>&nbsp;            e1.setOperator(op);</b>
+<b class="nc"><i>423</i>&nbsp;            e1.setLeft(e);</b>
+<b class="nc"><i>424</i>&nbsp;            e1.setRight(multExpression());</b>
+<b class="nc"><i>425</i>&nbsp;            e = e1;</b>
+<i>426</i>&nbsp;            log(pdebug, &quot;Parsed: addExpression -&gt; &quot; + e);
+<i>427</i>&nbsp;        }
+<i>428</i>&nbsp;    }
+<i>429</i>&nbsp;
+<i>430</i>&nbsp;    /**
+<i>431</i>&nbsp;     *  Expression -&gt; AddExpression
+<b class="nc"><i>432</i>&nbsp;     */</b>
+<b class="nc"><i>433</i>&nbsp;    private Expression expression() throws ParserException, IOException {</b>
+<b class="nc"><i>434</i>&nbsp;        Expression e = addExpression();</b>
+<i>435</i>&nbsp;        log(pdebug, &quot;Parsed: expression -&gt; &quot; + e);
+<i>436</i>&nbsp;        return e;
+<i>437</i>&nbsp;    }
+<i>438</i>&nbsp;
+<i>439</i>&nbsp;    /**
+<i>440</i>&nbsp;     * datastmt -&gt; &#39;data&#39; expression
+<b class="nc"><i>441</i>&nbsp;     */</b>
+<b class="nc"><i>442</i>&nbsp;    private void dataStmt(ColumnFormat cf) throws ParserException, IOException {</b>
+<b class="nc"><i>443</i>&nbsp;        match(DATA);</b>
+<b class="nc"><i>444</i>&nbsp;        Expression e = expression();</b>
+<i>445</i>&nbsp;        cf.setExpression(e);
+<i>446</i>&nbsp;        log(pdebug, &quot;Parsed: data -&gt; &quot; + e);
+<i>447</i>&nbsp;    }
+<i>448</i>&nbsp;
+<i>449</i>&nbsp;    /**
+<i>450</i>&nbsp;     * requiredstmt -&gt; &#39;required&#39; expression
+<i>451</i>&nbsp;     */
+<i>452</i>&nbsp;    private void requiredStmt(ColumnFormat cf) throws ParserException, IOException {
+<i>453</i>&nbsp;        match(REQUIRED);
+<i>454</i>&nbsp;        Token t = matchOne(boolKeyWords);
+<i>455</i>&nbsp;        cf.setRequired(Boolean.parseBoolean(t.sval));
+<i>456</i>&nbsp;        log(pdebug, &quot;Parsed: required -&gt; &quot; + cf.isRequired());
+<i>457</i>&nbsp;    }
+<i>458</i>&nbsp;
+<b class="nc"><i>459</i>&nbsp;    /**</b>
+<i>460</i>&nbsp;     * statementlist -&gt; optionalstmt statementlist
+<i>461</i>&nbsp;     * optionalstmt -&gt; &#39;data&#39; expression
+<i>462</i>&nbsp;     *                 &#39;header&#39; quotedstring
+<b class="nc"><i>463</i>&nbsp;     *                 &#39;width&#39; integer</b>
+<b class="nc"><i>464</i>&nbsp;     *                 &#39;format&#39; formatstring</b>
+<b class="nc"><i>465</i>&nbsp;     *                 &#39;align&#39; alignspec</b>
+<b class="nc"><i>466</i>&nbsp;     *                 &#39;scale&#39; scalespec</b>
+<b class="nc"><i>467</i>&nbsp;     *                 &#39;required&#39; boolean</b>
+<b class="nc"><i>468</i>&nbsp;     */</b>
+<b class="nc"><i>469</i>&nbsp;    private void statementList(ColumnFormat cf)</b>
+<b class="nc"><i>470</i>&nbsp;                 throws ParserException, IOException {</b>
+<b class="nc"><i>471</i>&nbsp;        while (true) {</b>
+<b class="nc"><i>472</i>&nbsp;            if (lookahead.ttype != StreamTokenizer.TT_WORD) {</b>
+<b class="nc"><i>473</i>&nbsp;                return;</b>
+<b class="nc"><i>474</i>&nbsp;            }</b>
+<i>475</i>&nbsp;
+<i>476</i>&nbsp;            if (lookahead.sval.compareTo(DATA) == 0) {
+<i>477</i>&nbsp;                dataStmt(cf);
+<i>478</i>&nbsp;            } else if (lookahead.sval.compareTo(HEADER) == 0) {
+<i>479</i>&nbsp;                headerStmt(cf);
+<i>480</i>&nbsp;            } else if (lookahead.sval.compareTo(WIDTH) == 0) {
+<i>481</i>&nbsp;                widthStmt(cf);
+<i>482</i>&nbsp;            } else if (lookahead.sval.compareTo(FORMAT) == 0) {
+<i>483</i>&nbsp;                formatStmt(cf);
+<i>484</i>&nbsp;            } else if (lookahead.sval.compareTo(ALIGN) == 0) {
+<i>485</i>&nbsp;                alignStmt(cf);
+<i>486</i>&nbsp;            } else if (lookahead.sval.compareTo(SCALE) == 0) {
+<i>487</i>&nbsp;                scaleStmt(cf);
+<i>488</i>&nbsp;            } else if (lookahead.sval.compareTo(REQUIRED) == 0) {
+<b class="nc"><i>489</i>&nbsp;                requiredStmt(cf);</b>
+<i>490</i>&nbsp;            } else {
+<i>491</i>&nbsp;                return;
+<i>492</i>&nbsp;            }
+<b class="nc"><i>493</i>&nbsp;        }</b>
+<b class="nc"><i>494</i>&nbsp;    }</b>
+<b class="nc"><i>495</i>&nbsp;</b>
+<b class="nc"><i>496</i>&nbsp;    /**</b>
+<b class="nc"><i>497</i>&nbsp;     * optionlist -&gt; columspec optionlist</b>
+<b class="nc"><i>498</i>&nbsp;     *               null</b>
+<b class="nc"><i>499</i>&nbsp;     * columspec -&gt; &#39;column&#39; &#39;{&#39; statementlist &#39;}&#39;</b>
+<b class="nc"><i>500</i>&nbsp;     */</b>
+<i>501</i>&nbsp;    private void optionList(OptionFormat of)
+<i>502</i>&nbsp;                 throws ParserException, IOException {
+<i>503</i>&nbsp;        while (true) {
+<i>504</i>&nbsp;            if (lookahead.ttype != StreamTokenizer.TT_WORD) {
+<i>505</i>&nbsp;                return;
+<i>506</i>&nbsp;            }
+<b class="nc"><i>507</i>&nbsp;</b>
+<b class="nc"><i>508</i>&nbsp;            match(COLUMN);</b>
+<b class="nc"><i>509</i>&nbsp;            match(OPENBLOCK);</b>
+<b class="nc"><i>510</i>&nbsp;            ColumnFormat cf = new ColumnFormat(columnCount++);</b>
+<b class="nc"><i>511</i>&nbsp;            statementList(cf);</b>
+<b class="nc"><i>512</i>&nbsp;              match(CLOSEBLOCK);</b>
+<b class="nc"><i>513</i>&nbsp;            cf.validate();</b>
+<b class="nc"><i>514</i>&nbsp;            of.addSubFormat(cf);</b>
+<i>515</i>&nbsp;        }
+<i>516</i>&nbsp;    }
+<i>517</i>&nbsp;
+<i>518</i>&nbsp;    /**
+<i>519</i>&nbsp;     * optionstmt -&gt; &#39;option&#39; ID &#39;{&#39; optionlist &#39;}&#39;
+<i>520</i>&nbsp;     */
+<i>521</i>&nbsp;    private OptionFormat optionStmt() throws ParserException, IOException {
+<b class="nc"><i>522</i>&nbsp;        match(OPTION);</b>
+<i>523</i>&nbsp;        String optionName=lookahead.sval;
+<i>524</i>&nbsp;        matchID();
+<i>525</i>&nbsp;        match(OPENBLOCK);
+<i>526</i>&nbsp;        OptionFormat of = new OptionFormat(optionName);
+<i>527</i>&nbsp;        optionList(of);
+<i>528</i>&nbsp;        match(CLOSEBLOCK);
+<b class="nc"><i>529</i>&nbsp;        return of;</b>
+<i>530</i>&nbsp;    }
+<b class="nc"><i>531</i>&nbsp;</b>
+<b class="nc"><i>532</i>&nbsp;    /**</b>
+<i>533</i>&nbsp;     * parse the specification for the given option identifier
+<b class="nc"><i>534</i>&nbsp;     */</b>
+<b class="nc"><i>535</i>&nbsp;    public OptionFormat parse(String option)</b>
+<i>536</i>&nbsp;                        throws ParserException, IOException {
+<i>537</i>&nbsp;        nextToken();
+<i>538</i>&nbsp;
+<b class="nc"><i>539</i>&nbsp;        /*</b>
+<i>540</i>&nbsp;         * this search stops on the first occurance of an option
+<b class="nc"><i>541</i>&nbsp;         * statement with a name matching the given option. Any</b>
+<b class="nc"><i>542</i>&nbsp;         * duplicate options are ignored.</b>
+<i>543</i>&nbsp;         */
+<b class="nc"><i>544</i>&nbsp;        while (lookahead.ttype != StreamTokenizer.TT_EOF) {</b>
+<b class="nc"><i>545</i>&nbsp;            // look for the start symbol</b>
+<i>546</i>&nbsp;            if ((lookahead.ttype != StreamTokenizer.TT_WORD)
+<i>547</i>&nbsp;                    || (lookahead.sval.compareTo(START) != 0)) {
+<b class="nc"><i>548</i>&nbsp;                // skip tokens until a start symbol is found</b>
+<i>549</i>&nbsp;                nextToken();
+<i>550</i>&nbsp;                continue;
+<b class="nc"><i>551</i>&nbsp;            }</b>
+<i>552</i>&nbsp;
+<i>553</i>&nbsp;            // check if the option name is the one we are interested in
+<i>554</i>&nbsp;            match(START);
+<b class="nc"><i>555</i>&nbsp;</b>
+<i>556</i>&nbsp;            if ((lookahead.ttype == StreamTokenizer.TT_WORD)
+<b class="nc"><i>557</i>&nbsp;                    &amp;&amp; (lookahead.sval.compareTo(option) == 0)) {</b>
+<i>558</i>&nbsp;                // this is the one we are looking for, parse it
+<b class="nc"><i>559</i>&nbsp;                pushBack();</b>
+<i>560</i>&nbsp;                return optionStmt();
+<b class="nc"><i>561</i>&nbsp;            } else {</b>
+<b class="nc"><i>562</i>&nbsp;                // not what we are looking for, start skipping tokens</b>
+<i>563</i>&nbsp;                nextToken();
+<b class="nc"><i>564</i>&nbsp;            }</b>
+<b class="nc"><i>565</i>&nbsp;        }</b>
+<i>566</i>&nbsp;        return null;
+<i>567</i>&nbsp;    }
+<i>568</i>&nbsp;
+<i>569</i>&nbsp;    public Set&lt;OptionFormat&gt; parseOptions() throws ParserException, IOException {
+<b class="nc"><i>570</i>&nbsp;        Set&lt;OptionFormat&gt; options = new HashSet&lt;OptionFormat&gt;();</b>
+<b class="nc"><i>571</i>&nbsp;</b>
+<b class="nc"><i>572</i>&nbsp;        nextToken();</b>
+<b class="nc"><i>573</i>&nbsp;</b>
+<i>574</i>&nbsp;        while (lookahead.ttype != StreamTokenizer.TT_EOF) {
+<i>575</i>&nbsp;            // look for the start symbol
+<i>576</i>&nbsp;            if ((lookahead.ttype != StreamTokenizer.TT_WORD)
+<b class="nc"><i>577</i>&nbsp;                    || (lookahead.sval.compareTo(START) != 0)) {</b>
+<i>578</i>&nbsp;                // skip tokens until a start symbol is found
+<i>579</i>&nbsp;                nextToken();
+<i>580</i>&nbsp;                continue;
+<b class="nc"><i>581</i>&nbsp;            }</b>
+<b class="nc"><i>582</i>&nbsp;</b>
+<i>583</i>&nbsp;            // note: if a duplicate option statement exists, then
+<i>584</i>&nbsp;            // first one encountered is the chosen definition.
+<i>585</i>&nbsp;            OptionFormat of = optionStmt();
+<i>586</i>&nbsp;            options.add(of);
+<i>587</i>&nbsp;        }
+<i>588</i>&nbsp;        return options;
+<i>589</i>&nbsp;    }
+<i>590</i>&nbsp;
+<i>591</i>&nbsp;    OptionFormat getOptionFormat() {
+<i>592</i>&nbsp;       return optionFormat;
+<i>593</i>&nbsp;    }
+<i>594</i>&nbsp;
+<i>595</i>&nbsp;    private void log(boolean logging, String s) {
+<i>596</i>&nbsp;        if (logging) {
+<i>597</i>&nbsp;            System.out.println(s);
+<i>598</i>&nbsp;        }
+<i>599</i>&nbsp;    }
+<i>600</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

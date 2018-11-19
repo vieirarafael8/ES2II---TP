@@ -1,0 +1,1001 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: GenericFileSystemView</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">javax.swing.filechooser</a> ]
+</div>
+
+<h1>Coverage Summary for Class: GenericFileSystemView (javax.swing.filechooser)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">GenericFileSystemView</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 9)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1998, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package javax.swing.filechooser;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.awt.Image;
+<i>29</i>&nbsp;import java.beans.PropertyChangeListener;
+<i>30</i>&nbsp;import java.io.File;
+<i>31</i>&nbsp;import java.io.FileNotFoundException;
+<i>32</i>&nbsp;import java.io.IOException;
+<i>33</i>&nbsp;import java.lang.ref.WeakReference;
+<i>34</i>&nbsp;import java.security.AccessController;
+<i>35</i>&nbsp;import java.security.PrivilegedAction;
+<i>36</i>&nbsp;import java.text.MessageFormat;
+<i>37</i>&nbsp;import java.util.ArrayList;
+<i>38</i>&nbsp;import java.util.List;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;import javax.swing.Icon;
+<i>41</i>&nbsp;import javax.swing.ImageIcon;
+<i>42</i>&nbsp;import javax.swing.JFileChooser;
+<i>43</i>&nbsp;import javax.swing.UIManager;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;import jdk.internal.ref.CleanerFactory;
+<i>46</i>&nbsp;import sun.awt.shell.ShellFolder;
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;/**
+<i>49</i>&nbsp; * FileSystemView is JFileChooser&#39;s gateway to the
+<i>50</i>&nbsp; * file system. Since the JDK1.1 File API doesn&#39;t allow
+<i>51</i>&nbsp; * access to such information as root partitions, file type
+<i>52</i>&nbsp; * information, or hidden file bits, this class is designed
+<i>53</i>&nbsp; * to intuit as much OS-specific file system information as
+<i>54</i>&nbsp; * possible.
+<i>55</i>&nbsp; *
+<i>56</i>&nbsp; * &lt;p&gt;
+<i>57</i>&nbsp; *
+<i>58</i>&nbsp; * Java Licensees may want to provide a different implementation of
+<i>59</i>&nbsp; * FileSystemView to better handle a given operating system.
+<i>60</i>&nbsp; *
+<i>61</i>&nbsp; * @author Jeff Dinkins
+<i>62</i>&nbsp; */
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;// PENDING(jeff) - need to provide a specification for
+<i>65</i>&nbsp;// how Mac/OS2/BeOS/etc file systems can modify FileSystemView
+<i>66</i>&nbsp;// to handle their particular type of file system.
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;public abstract class FileSystemView {
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    static FileSystemView windowsFileSystemView = null;
+<i>71</i>&nbsp;    static FileSystemView unixFileSystemView = null;
+<i>72</i>&nbsp;    //static FileSystemView macFileSystemView = null;
+<i>73</i>&nbsp;    static FileSystemView genericFileSystemView = null;
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    private boolean useSystemExtensionHiding =
+<i>76</i>&nbsp;            UIManager.getDefaults().getBoolean(&quot;FileChooser.useSystemExtensionHiding&quot;);
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    /**
+<i>79</i>&nbsp;     * Returns the file system view.
+<i>80</i>&nbsp;     * @return the file system view
+<i>81</i>&nbsp;     */
+<i>82</i>&nbsp;    public static FileSystemView getFileSystemView() {
+<i>83</i>&nbsp;        if(File.separatorChar == &#39;\\&#39;) {
+<i>84</i>&nbsp;            if(windowsFileSystemView == null) {
+<i>85</i>&nbsp;                windowsFileSystemView = new WindowsFileSystemView();
+<i>86</i>&nbsp;            }
+<i>87</i>&nbsp;            return windowsFileSystemView;
+<i>88</i>&nbsp;        }
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;        if(File.separatorChar == &#39;/&#39;) {
+<i>91</i>&nbsp;            if(unixFileSystemView == null) {
+<i>92</i>&nbsp;                unixFileSystemView = new UnixFileSystemView();
+<i>93</i>&nbsp;            }
+<i>94</i>&nbsp;            return unixFileSystemView;
+<i>95</i>&nbsp;        }
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;        // if(File.separatorChar == &#39;:&#39;) {
+<i>98</i>&nbsp;        //    if(macFileSystemView == null) {
+<i>99</i>&nbsp;        //      macFileSystemView = new MacFileSystemView();
+<i>100</i>&nbsp;        //    }
+<i>101</i>&nbsp;        //    return macFileSystemView;
+<i>102</i>&nbsp;        //}
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;        if(genericFileSystemView == null) {
+<i>105</i>&nbsp;            genericFileSystemView = new GenericFileSystemView();
+<i>106</i>&nbsp;        }
+<i>107</i>&nbsp;        return genericFileSystemView;
+<i>108</i>&nbsp;    }
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;    /**
+<i>111</i>&nbsp;     * Constructs a FileSystemView.
+<i>112</i>&nbsp;     */
+<i>113</i>&nbsp;    public FileSystemView() {
+<i>114</i>&nbsp;        final WeakReference&lt;FileSystemView&gt; weakReference = new WeakReference&lt;&gt;(this);
+<i>115</i>&nbsp;        final PropertyChangeListener pcl = evt -&gt; {
+<i>116</i>&nbsp;            final FileSystemView fsv = weakReference.get();
+<i>117</i>&nbsp;            if (fsv != null &amp;&amp; evt.getPropertyName().equals(&quot;lookAndFeel&quot;)) {
+<i>118</i>&nbsp;                fsv.useSystemExtensionHiding =
+<i>119</i>&nbsp;                        UIManager.getDefaults().getBoolean(
+<i>120</i>&nbsp;                                &quot;FileChooser.useSystemExtensionHiding&quot;);
+<i>121</i>&nbsp;            }
+<i>122</i>&nbsp;        };
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;        UIManager.addPropertyChangeListener(pcl);
+<i>125</i>&nbsp;        CleanerFactory.cleaner().register(this, () -&gt; {
+<i>126</i>&nbsp;            UIManager.removePropertyChangeListener(pcl);
+<i>127</i>&nbsp;        });
+<i>128</i>&nbsp;    }
+<i>129</i>&nbsp;
+<i>130</i>&nbsp;    /**
+<i>131</i>&nbsp;     * Determines if the given file is a root in the navigable tree(s).
+<i>132</i>&nbsp;     * Examples: Windows 98 has one root, the Desktop folder. DOS has one root
+<i>133</i>&nbsp;     * per drive letter, &lt;code&gt;C:\&lt;/code&gt;, &lt;code&gt;D:\&lt;/code&gt;, etc. Unix has one root,
+<i>134</i>&nbsp;     * the &lt;code&gt;&quot;/&quot;&lt;/code&gt; directory.
+<i>135</i>&nbsp;     *
+<i>136</i>&nbsp;     * The default implementation gets information from the &lt;code&gt;ShellFolder&lt;/code&gt; class.
+<i>137</i>&nbsp;     *
+<i>138</i>&nbsp;     * @param f a &lt;code&gt;File&lt;/code&gt; object representing a directory
+<i>139</i>&nbsp;     * @return &lt;code&gt;true&lt;/code&gt; if &lt;code&gt;f&lt;/code&gt; is a root in the navigable tree.
+<i>140</i>&nbsp;     * @see #isFileSystemRoot
+<i>141</i>&nbsp;     */
+<i>142</i>&nbsp;    public boolean isRoot(File f) {
+<i>143</i>&nbsp;        if (f == null || !f.isAbsolute()) {
+<i>144</i>&nbsp;            return false;
+<i>145</i>&nbsp;        }
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;        File[] roots = getRoots();
+<i>148</i>&nbsp;        for (File root : roots) {
+<i>149</i>&nbsp;            if (root.equals(f)) {
+<i>150</i>&nbsp;                return true;
+<i>151</i>&nbsp;            }
+<i>152</i>&nbsp;        }
+<i>153</i>&nbsp;        return false;
+<i>154</i>&nbsp;    }
+<i>155</i>&nbsp;
+<i>156</i>&nbsp;    /**
+<i>157</i>&nbsp;     * Returns true if the file (directory) can be visited.
+<i>158</i>&nbsp;     * Returns false if the directory cannot be traversed.
+<i>159</i>&nbsp;     *
+<i>160</i>&nbsp;     * @param f the &lt;code&gt;File&lt;/code&gt;
+<i>161</i>&nbsp;     * @return &lt;code&gt;true&lt;/code&gt; if the file/directory can be traversed, otherwise &lt;code&gt;false&lt;/code&gt;
+<i>162</i>&nbsp;     * @see JFileChooser#isTraversable
+<i>163</i>&nbsp;     * @see FileView#isTraversable
+<i>164</i>&nbsp;     * @since 1.4
+<i>165</i>&nbsp;     */
+<i>166</i>&nbsp;    public Boolean isTraversable(File f) {
+<i>167</i>&nbsp;        return Boolean.valueOf(f.isDirectory());
+<i>168</i>&nbsp;    }
+<i>169</i>&nbsp;
+<i>170</i>&nbsp;    /**
+<i>171</i>&nbsp;     * Name of a file, directory, or folder as it would be displayed in
+<i>172</i>&nbsp;     * a system file browser. Example from Windows: the &quot;M:\&quot; directory
+<i>173</i>&nbsp;     * displays as &quot;CD-ROM (M:)&quot;
+<i>174</i>&nbsp;     *
+<i>175</i>&nbsp;     * The default implementation gets information from the ShellFolder class.
+<i>176</i>&nbsp;     *
+<i>177</i>&nbsp;     * @param f a &lt;code&gt;File&lt;/code&gt; object
+<i>178</i>&nbsp;     * @return the file name as it would be displayed by a native file chooser
+<i>179</i>&nbsp;     * @see JFileChooser#getName
+<i>180</i>&nbsp;     * @since 1.4
+<i>181</i>&nbsp;     */
+<i>182</i>&nbsp;    public String getSystemDisplayName(File f) {
+<i>183</i>&nbsp;        if (f == null) {
+<i>184</i>&nbsp;            return null;
+<i>185</i>&nbsp;        }
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;        String name = f.getName();
+<i>188</i>&nbsp;
+<i>189</i>&nbsp;        if (!name.equals(&quot;..&quot;) &amp;&amp; !name.equals(&quot;.&quot;) &amp;&amp;
+<i>190</i>&nbsp;                (useSystemExtensionHiding || !isFileSystem(f) || isFileSystemRoot(f)) &amp;&amp;
+<i>191</i>&nbsp;                (f instanceof ShellFolder || f.exists())) {
+<i>192</i>&nbsp;
+<i>193</i>&nbsp;            try {
+<i>194</i>&nbsp;                name = getShellFolder(f).getDisplayName();
+<i>195</i>&nbsp;            } catch (FileNotFoundException e) {
+<i>196</i>&nbsp;                return null;
+<i>197</i>&nbsp;            }
+<i>198</i>&nbsp;
+<i>199</i>&nbsp;            if (name == null || name.length() == 0) {
+<i>200</i>&nbsp;                name = f.getPath(); // e.g. &quot;/&quot;
+<i>201</i>&nbsp;            }
+<i>202</i>&nbsp;        }
+<i>203</i>&nbsp;
+<i>204</i>&nbsp;        return name;
+<i>205</i>&nbsp;    }
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;    /**
+<i>208</i>&nbsp;     * Type description for a file, directory, or folder as it would be displayed in
+<i>209</i>&nbsp;     * a system file browser. Example from Windows: the &quot;Desktop&quot; folder
+<i>210</i>&nbsp;     * is described as &quot;Desktop&quot;.
+<i>211</i>&nbsp;     *
+<i>212</i>&nbsp;     * Override for platforms with native ShellFolder implementations.
+<i>213</i>&nbsp;     *
+<i>214</i>&nbsp;     * @param f a &lt;code&gt;File&lt;/code&gt; object
+<i>215</i>&nbsp;     * @return the file type description as it would be displayed by a native file chooser
+<i>216</i>&nbsp;     * or null if no native information is available.
+<i>217</i>&nbsp;     * @see JFileChooser#getTypeDescription
+<i>218</i>&nbsp;     * @since 1.4
+<i>219</i>&nbsp;     */
+<i>220</i>&nbsp;    public String getSystemTypeDescription(File f) {
+<i>221</i>&nbsp;        return null;
+<i>222</i>&nbsp;    }
+<i>223</i>&nbsp;
+<i>224</i>&nbsp;    /**
+<i>225</i>&nbsp;     * Icon for a file, directory, or folder as it would be displayed in
+<i>226</i>&nbsp;     * a system file browser. Example from Windows: the &quot;M:\&quot; directory
+<i>227</i>&nbsp;     * displays a CD-ROM icon.
+<i>228</i>&nbsp;     *
+<i>229</i>&nbsp;     * The default implementation gets information from the ShellFolder class.
+<i>230</i>&nbsp;     *
+<i>231</i>&nbsp;     * @param f a &lt;code&gt;File&lt;/code&gt; object
+<i>232</i>&nbsp;     * @return an icon as it would be displayed by a native file chooser
+<i>233</i>&nbsp;     * @see JFileChooser#getIcon
+<i>234</i>&nbsp;     * @since 1.4
+<i>235</i>&nbsp;     */
+<i>236</i>&nbsp;    public Icon getSystemIcon(File f) {
+<i>237</i>&nbsp;        if (f == null) {
+<i>238</i>&nbsp;            return null;
+<i>239</i>&nbsp;        }
+<i>240</i>&nbsp;
+<i>241</i>&nbsp;        ShellFolder sf;
+<i>242</i>&nbsp;
+<i>243</i>&nbsp;        try {
+<i>244</i>&nbsp;            sf = getShellFolder(f);
+<i>245</i>&nbsp;        } catch (FileNotFoundException e) {
+<i>246</i>&nbsp;            return null;
+<i>247</i>&nbsp;        }
+<i>248</i>&nbsp;
+<i>249</i>&nbsp;        Image img = sf.getIcon(false);
+<i>250</i>&nbsp;
+<i>251</i>&nbsp;        if (img != null) {
+<i>252</i>&nbsp;            return new ImageIcon(img, sf.getFolderType());
+<i>253</i>&nbsp;        } else {
+<i>254</i>&nbsp;            return UIManager.getIcon(f.isDirectory() ? &quot;FileView.directoryIcon&quot; : &quot;FileView.fileIcon&quot;);
+<i>255</i>&nbsp;        }
+<i>256</i>&nbsp;    }
+<i>257</i>&nbsp;
+<i>258</i>&nbsp;    /**
+<i>259</i>&nbsp;     * On Windows, a file can appear in multiple folders, other than its
+<i>260</i>&nbsp;     * parent directory in the filesystem. Folder could for example be the
+<i>261</i>&nbsp;     * &quot;Desktop&quot; folder which is not the same as file.getParentFile().
+<i>262</i>&nbsp;     *
+<i>263</i>&nbsp;     * @param folder a &lt;code&gt;File&lt;/code&gt; object representing a directory or special folder
+<i>264</i>&nbsp;     * @param file a &lt;code&gt;File&lt;/code&gt; object
+<i>265</i>&nbsp;     * @return &lt;code&gt;true&lt;/code&gt; if &lt;code&gt;folder&lt;/code&gt; is a directory or special folder and contains &lt;code&gt;file&lt;/code&gt;.
+<i>266</i>&nbsp;     * @since 1.4
+<i>267</i>&nbsp;     */
+<i>268</i>&nbsp;    public boolean isParent(File folder, File file) {
+<i>269</i>&nbsp;        if (folder == null || file == null) {
+<i>270</i>&nbsp;            return false;
+<i>271</i>&nbsp;        } else if (folder instanceof ShellFolder) {
+<i>272</i>&nbsp;                File parent = file.getParentFile();
+<i>273</i>&nbsp;                if (parent != null &amp;&amp; parent.equals(folder)) {
+<i>274</i>&nbsp;                    return true;
+<i>275</i>&nbsp;                }
+<i>276</i>&nbsp;            File[] children = getFiles(folder, false);
+<i>277</i>&nbsp;            for (File child : children) {
+<i>278</i>&nbsp;                if (file.equals(child)) {
+<i>279</i>&nbsp;                    return true;
+<i>280</i>&nbsp;                }
+<i>281</i>&nbsp;            }
+<i>282</i>&nbsp;            return false;
+<i>283</i>&nbsp;        } else {
+<i>284</i>&nbsp;            return folder.equals(file.getParentFile());
+<i>285</i>&nbsp;        }
+<i>286</i>&nbsp;    }
+<i>287</i>&nbsp;
+<i>288</i>&nbsp;    /**
+<i>289</i>&nbsp;     *
+<i>290</i>&nbsp;     * @param parent a &lt;code&gt;File&lt;/code&gt; object representing a directory or special folder
+<i>291</i>&nbsp;     * @param fileName a name of a file or folder which exists in &lt;code&gt;parent&lt;/code&gt;
+<i>292</i>&nbsp;     * @return a File object. This is normally constructed with &lt;code&gt;new
+<i>293</i>&nbsp;     * File(parent, fileName)&lt;/code&gt; except when parent and child are both
+<i>294</i>&nbsp;     * special folders, in which case the &lt;code&gt;File&lt;/code&gt; is a wrapper containing
+<i>295</i>&nbsp;     * a &lt;code&gt;ShellFolder&lt;/code&gt; object.
+<i>296</i>&nbsp;     * @since 1.4
+<i>297</i>&nbsp;     */
+<i>298</i>&nbsp;    public File getChild(File parent, String fileName) {
+<i>299</i>&nbsp;        if (parent instanceof ShellFolder) {
+<i>300</i>&nbsp;            File[] children = getFiles(parent, false);
+<i>301</i>&nbsp;            for (File child : children) {
+<i>302</i>&nbsp;                if (child.getName().equals(fileName)) {
+<i>303</i>&nbsp;                    return child;
+<i>304</i>&nbsp;                }
+<i>305</i>&nbsp;            }
+<i>306</i>&nbsp;        }
+<i>307</i>&nbsp;        return createFileObject(parent, fileName);
+<i>308</i>&nbsp;    }
+<i>309</i>&nbsp;
+<i>310</i>&nbsp;
+<i>311</i>&nbsp;    /**
+<i>312</i>&nbsp;     * Checks if &lt;code&gt;f&lt;/code&gt; represents a real directory or file as opposed to a
+<i>313</i>&nbsp;     * special folder such as &lt;code&gt;&quot;Desktop&quot;&lt;/code&gt;. Used by UI classes to decide if
+<i>314</i>&nbsp;     * a folder is selectable when doing directory choosing.
+<i>315</i>&nbsp;     *
+<i>316</i>&nbsp;     * @param f a &lt;code&gt;File&lt;/code&gt; object
+<i>317</i>&nbsp;     * @return &lt;code&gt;true&lt;/code&gt; if &lt;code&gt;f&lt;/code&gt; is a real file or directory.
+<i>318</i>&nbsp;     * @since 1.4
+<i>319</i>&nbsp;     */
+<i>320</i>&nbsp;    public boolean isFileSystem(File f) {
+<i>321</i>&nbsp;        if (f instanceof ShellFolder) {
+<i>322</i>&nbsp;            ShellFolder sf = (ShellFolder)f;
+<i>323</i>&nbsp;            // Shortcuts to directories are treated as not being file system objects,
+<i>324</i>&nbsp;            // so that they are never returned by JFileChooser.
+<i>325</i>&nbsp;            return sf.isFileSystem() &amp;&amp; !(sf.isLink() &amp;&amp; sf.isDirectory());
+<i>326</i>&nbsp;        } else {
+<i>327</i>&nbsp;            return true;
+<i>328</i>&nbsp;        }
+<i>329</i>&nbsp;    }
+<i>330</i>&nbsp;
+<i>331</i>&nbsp;    /**
+<i>332</i>&nbsp;     * Creates a new folder with a default folder name.
+<i>333</i>&nbsp;     *
+<i>334</i>&nbsp;     * @param containingDir a {@code File} object denoting directory to contain the new folder
+<i>335</i>&nbsp;     * @return a {@code File} object denoting the newly created folder
+<i>336</i>&nbsp;     * @throws IOException if new folder could not be created
+<i>337</i>&nbsp;     */
+<i>338</i>&nbsp;    public abstract File createNewFolder(File containingDir) throws IOException;
+<i>339</i>&nbsp;
+<i>340</i>&nbsp;    /**
+<i>341</i>&nbsp;     * Returns whether a file is hidden or not.
+<i>342</i>&nbsp;     *
+<i>343</i>&nbsp;     * @param f a {@code File} object
+<i>344</i>&nbsp;     * @return true if the given {@code File} denotes a hidden file
+<i>345</i>&nbsp;     */
+<i>346</i>&nbsp;    public boolean isHiddenFile(File f) {
+<i>347</i>&nbsp;        return f.isHidden();
+<i>348</i>&nbsp;    }
+<i>349</i>&nbsp;
+<i>350</i>&nbsp;
+<i>351</i>&nbsp;    /**
+<i>352</i>&nbsp;     * Is dir the root of a tree in the file system, such as a drive
+<i>353</i>&nbsp;     * or partition. Example: Returns true for &quot;C:\&quot; on Windows 98.
+<i>354</i>&nbsp;     *
+<i>355</i>&nbsp;     * @param dir a &lt;code&gt;File&lt;/code&gt; object representing a directory
+<i>356</i>&nbsp;     * @return &lt;code&gt;true&lt;/code&gt; if &lt;code&gt;f&lt;/code&gt; is a root of a filesystem
+<i>357</i>&nbsp;     * @see #isRoot
+<i>358</i>&nbsp;     * @since 1.4
+<i>359</i>&nbsp;     */
+<i>360</i>&nbsp;    public boolean isFileSystemRoot(File dir) {
+<i>361</i>&nbsp;        return ShellFolder.isFileSystemRoot(dir);
+<i>362</i>&nbsp;    }
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;    /**
+<i>365</i>&nbsp;     * Used by UI classes to decide whether to display a special icon
+<i>366</i>&nbsp;     * for drives or partitions, e.g. a &quot;hard disk&quot; icon.
+<i>367</i>&nbsp;     *
+<i>368</i>&nbsp;     * The default implementation has no way of knowing, so always returns false.
+<i>369</i>&nbsp;     *
+<i>370</i>&nbsp;     * @param dir a directory
+<i>371</i>&nbsp;     * @return &lt;code&gt;false&lt;/code&gt; always
+<i>372</i>&nbsp;     * @since 1.4
+<i>373</i>&nbsp;     */
+<i>374</i>&nbsp;    public boolean isDrive(File dir) {
+<i>375</i>&nbsp;        return false;
+<i>376</i>&nbsp;    }
+<i>377</i>&nbsp;
+<i>378</i>&nbsp;    /**
+<i>379</i>&nbsp;     * Used by UI classes to decide whether to display a special icon
+<i>380</i>&nbsp;     * for a floppy disk. Implies isDrive(dir).
+<i>381</i>&nbsp;     *
+<i>382</i>&nbsp;     * The default implementation has no way of knowing, so always returns false.
+<i>383</i>&nbsp;     *
+<i>384</i>&nbsp;     * @param dir a directory
+<i>385</i>&nbsp;     * @return &lt;code&gt;false&lt;/code&gt; always
+<i>386</i>&nbsp;     * @since 1.4
+<i>387</i>&nbsp;     */
+<i>388</i>&nbsp;    public boolean isFloppyDrive(File dir) {
+<i>389</i>&nbsp;        return false;
+<i>390</i>&nbsp;    }
+<i>391</i>&nbsp;
+<i>392</i>&nbsp;    /**
+<i>393</i>&nbsp;     * Used by UI classes to decide whether to display a special icon
+<i>394</i>&nbsp;     * for a computer node, e.g. &quot;My Computer&quot; or a network server.
+<i>395</i>&nbsp;     *
+<i>396</i>&nbsp;     * The default implementation has no way of knowing, so always returns false.
+<i>397</i>&nbsp;     *
+<i>398</i>&nbsp;     * @param dir a directory
+<i>399</i>&nbsp;     * @return &lt;code&gt;false&lt;/code&gt; always
+<i>400</i>&nbsp;     * @since 1.4
+<i>401</i>&nbsp;     */
+<i>402</i>&nbsp;    public boolean isComputerNode(File dir) {
+<i>403</i>&nbsp;        return ShellFolder.isComputerNode(dir);
+<i>404</i>&nbsp;    }
+<i>405</i>&nbsp;
+<i>406</i>&nbsp;
+<i>407</i>&nbsp;    /**
+<i>408</i>&nbsp;     * Returns all root partitions on this system. For example, on
+<i>409</i>&nbsp;     * Windows, this would be the &quot;Desktop&quot; folder, while on DOS this
+<i>410</i>&nbsp;     * would be the A: through Z: drives.
+<i>411</i>&nbsp;     *
+<i>412</i>&nbsp;     * @return an array of {@code File} objects representing all root partitions
+<i>413</i>&nbsp;     *         on this system
+<i>414</i>&nbsp;     */
+<i>415</i>&nbsp;    public File[] getRoots() {
+<i>416</i>&nbsp;        // Don&#39;t cache this array, because filesystem might change
+<i>417</i>&nbsp;        File[] roots = (File[])ShellFolder.get(&quot;roots&quot;);
+<i>418</i>&nbsp;
+<i>419</i>&nbsp;        for (int i = 0; i &lt; roots.length; i++) {
+<i>420</i>&nbsp;            if (isFileSystemRoot(roots[i])) {
+<i>421</i>&nbsp;                roots[i] = createFileSystemRoot(roots[i]);
+<i>422</i>&nbsp;            }
+<i>423</i>&nbsp;        }
+<i>424</i>&nbsp;        return roots;
+<i>425</i>&nbsp;    }
+<i>426</i>&nbsp;
+<i>427</i>&nbsp;
+<i>428</i>&nbsp;    // Providing default implementations for the remaining methods
+<i>429</i>&nbsp;    // because most OS file systems will likely be able to use this
+<i>430</i>&nbsp;    // code. If a given OS can&#39;t, override these methods in its
+<i>431</i>&nbsp;    // implementation.
+<i>432</i>&nbsp;
+<i>433</i>&nbsp;    /**
+<i>434</i>&nbsp;     * Returns the home directory.
+<i>435</i>&nbsp;     * @return the home directory
+<i>436</i>&nbsp;     */
+<i>437</i>&nbsp;    public File getHomeDirectory() {
+<i>438</i>&nbsp;        return createFileObject(System.getProperty(&quot;user.home&quot;));
+<i>439</i>&nbsp;    }
+<i>440</i>&nbsp;
+<i>441</i>&nbsp;    /**
+<i>442</i>&nbsp;     * Return the user&#39;s default starting directory for the file chooser.
+<i>443</i>&nbsp;     *
+<i>444</i>&nbsp;     * @return a &lt;code&gt;File&lt;/code&gt; object representing the default
+<i>445</i>&nbsp;     *         starting folder
+<i>446</i>&nbsp;     * @since 1.4
+<i>447</i>&nbsp;     */
+<i>448</i>&nbsp;    public File getDefaultDirectory() {
+<i>449</i>&nbsp;        File f = (File)ShellFolder.get(&quot;fileChooserDefaultFolder&quot;);
+<i>450</i>&nbsp;        if (isFileSystemRoot(f)) {
+<i>451</i>&nbsp;            f = createFileSystemRoot(f);
+<i>452</i>&nbsp;        }
+<i>453</i>&nbsp;        return f;
+<i>454</i>&nbsp;    }
+<i>455</i>&nbsp;
+<i>456</i>&nbsp;    /**
+<i>457</i>&nbsp;     * Returns a File object constructed in dir from the given filename.
+<i>458</i>&nbsp;     *
+<i>459</i>&nbsp;     * @param dir an abstract pathname denoting a directory
+<i>460</i>&nbsp;     * @param filename a {@code String} representation of a pathname
+<i>461</i>&nbsp;     * @return a {@code File} object created from {@code dir} and {@code filename}
+<i>462</i>&nbsp;     */
+<i>463</i>&nbsp;    public File createFileObject(File dir, String filename) {
+<i>464</i>&nbsp;        if(dir == null) {
+<i>465</i>&nbsp;            return new File(filename);
+<i>466</i>&nbsp;        } else {
+<i>467</i>&nbsp;            return new File(dir, filename);
+<i>468</i>&nbsp;        }
+<i>469</i>&nbsp;    }
+<i>470</i>&nbsp;
+<i>471</i>&nbsp;    /**
+<i>472</i>&nbsp;     * Returns a File object constructed from the given path string.
+<i>473</i>&nbsp;     *
+<i>474</i>&nbsp;     * @param path {@code String} representation of path
+<i>475</i>&nbsp;     * @return a {@code File} object created from the given {@code path}
+<i>476</i>&nbsp;     */
+<i>477</i>&nbsp;    public File createFileObject(String path) {
+<i>478</i>&nbsp;        File f = new File(path);
+<i>479</i>&nbsp;        if (isFileSystemRoot(f)) {
+<i>480</i>&nbsp;            f = createFileSystemRoot(f);
+<i>481</i>&nbsp;        }
+<i>482</i>&nbsp;        return f;
+<i>483</i>&nbsp;    }
+<i>484</i>&nbsp;
+<i>485</i>&nbsp;
+<i>486</i>&nbsp;    /**
+<i>487</i>&nbsp;     * Gets the list of shown (i.e. not hidden) files.
+<i>488</i>&nbsp;     *
+<i>489</i>&nbsp;     * @param dir the root directory of files to be returned
+<i>490</i>&nbsp;     * @param useFileHiding determine if hidden files are returned
+<i>491</i>&nbsp;     * @return an array of {@code File} objects representing files and
+<i>492</i>&nbsp;     *         directories in the given {@code dir}. It includes hidden
+<i>493</i>&nbsp;     *         files if {@code useFileHiding} is false.
+<i>494</i>&nbsp;     */
+<i>495</i>&nbsp;    public File[] getFiles(File dir, boolean useFileHiding) {
+<i>496</i>&nbsp;        List&lt;File&gt; files = new ArrayList&lt;File&gt;();
+<i>497</i>&nbsp;
+<i>498</i>&nbsp;        // add all files in dir
+<i>499</i>&nbsp;        if (!(dir instanceof ShellFolder)) {
+<i>500</i>&nbsp;            try {
+<i>501</i>&nbsp;                dir = getShellFolder(dir);
+<i>502</i>&nbsp;            } catch (FileNotFoundException e) {
+<i>503</i>&nbsp;                return new File[0];
+<i>504</i>&nbsp;            }
+<i>505</i>&nbsp;        }
+<i>506</i>&nbsp;
+<i>507</i>&nbsp;        File[] names = ((ShellFolder) dir).listFiles(!useFileHiding);
+<i>508</i>&nbsp;
+<i>509</i>&nbsp;        if (names == null) {
+<i>510</i>&nbsp;            return new File[0];
+<i>511</i>&nbsp;        }
+<i>512</i>&nbsp;
+<i>513</i>&nbsp;        for (File f : names) {
+<i>514</i>&nbsp;            if (Thread.currentThread().isInterrupted()) {
+<i>515</i>&nbsp;                break;
+<i>516</i>&nbsp;            }
+<i>517</i>&nbsp;
+<i>518</i>&nbsp;            if (!(f instanceof ShellFolder)) {
+<i>519</i>&nbsp;                if (isFileSystemRoot(f)) {
+<i>520</i>&nbsp;                    f = createFileSystemRoot(f);
+<i>521</i>&nbsp;                }
+<i>522</i>&nbsp;                try {
+<i>523</i>&nbsp;                    f = ShellFolder.getShellFolder(f);
+<i>524</i>&nbsp;                } catch (FileNotFoundException e) {
+<i>525</i>&nbsp;                    // Not a valid file (wouldn&#39;t show in native file chooser)
+<i>526</i>&nbsp;                    // Example: C:\pagefile.sys
+<i>527</i>&nbsp;                    continue;
+<i>528</i>&nbsp;                } catch (InternalError e) {
+<i>529</i>&nbsp;                    // Not a valid file (wouldn&#39;t show in native file chooser)
+<i>530</i>&nbsp;                    // Example C:\Winnt\Profiles\joe\history\History.IE5
+<i>531</i>&nbsp;                    continue;
+<i>532</i>&nbsp;                }
+<i>533</i>&nbsp;            }
+<i>534</i>&nbsp;            if (!useFileHiding || !isHiddenFile(f)) {
+<i>535</i>&nbsp;                files.add(f);
+<i>536</i>&nbsp;            }
+<i>537</i>&nbsp;        }
+<i>538</i>&nbsp;
+<i>539</i>&nbsp;        return files.toArray(new File[files.size()]);
+<i>540</i>&nbsp;    }
+<i>541</i>&nbsp;
+<i>542</i>&nbsp;
+<i>543</i>&nbsp;
+<i>544</i>&nbsp;    /**
+<i>545</i>&nbsp;     * Returns the parent directory of &lt;code&gt;dir&lt;/code&gt;.
+<i>546</i>&nbsp;     * @param dir the &lt;code&gt;File&lt;/code&gt; being queried
+<i>547</i>&nbsp;     * @return the parent directory of &lt;code&gt;dir&lt;/code&gt;, or
+<i>548</i>&nbsp;     *   &lt;code&gt;null&lt;/code&gt; if &lt;code&gt;dir&lt;/code&gt; is &lt;code&gt;null&lt;/code&gt;
+<i>549</i>&nbsp;     */
+<i>550</i>&nbsp;    public File getParentDirectory(File dir) {
+<i>551</i>&nbsp;        if (dir == null || !dir.exists()) {
+<i>552</i>&nbsp;            return null;
+<i>553</i>&nbsp;        }
+<i>554</i>&nbsp;
+<i>555</i>&nbsp;        ShellFolder sf;
+<i>556</i>&nbsp;
+<i>557</i>&nbsp;        try {
+<i>558</i>&nbsp;            sf = getShellFolder(dir);
+<i>559</i>&nbsp;        } catch (FileNotFoundException e) {
+<i>560</i>&nbsp;            return null;
+<i>561</i>&nbsp;        }
+<i>562</i>&nbsp;
+<i>563</i>&nbsp;        File psf = sf.getParentFile();
+<i>564</i>&nbsp;
+<i>565</i>&nbsp;        if (psf == null) {
+<i>566</i>&nbsp;            return null;
+<i>567</i>&nbsp;        }
+<i>568</i>&nbsp;
+<i>569</i>&nbsp;        if (isFileSystem(psf)) {
+<i>570</i>&nbsp;            File f = psf;
+<i>571</i>&nbsp;            if (!f.exists()) {
+<i>572</i>&nbsp;                // This could be a node under &quot;Network Neighborhood&quot;.
+<i>573</i>&nbsp;                File ppsf = psf.getParentFile();
+<i>574</i>&nbsp;                if (ppsf == null || !isFileSystem(ppsf)) {
+<i>575</i>&nbsp;                    // We&#39;re mostly after the exists() override for windows below.
+<i>576</i>&nbsp;                    f = createFileSystemRoot(f);
+<i>577</i>&nbsp;                }
+<i>578</i>&nbsp;            }
+<i>579</i>&nbsp;            return f;
+<i>580</i>&nbsp;        } else {
+<i>581</i>&nbsp;            return psf;
+<i>582</i>&nbsp;        }
+<i>583</i>&nbsp;    }
+<i>584</i>&nbsp;
+<i>585</i>&nbsp;    /**
+<i>586</i>&nbsp;     * Returns an array of files representing the values to show by default in
+<i>587</i>&nbsp;     * the file chooser selector.
+<i>588</i>&nbsp;     *
+<i>589</i>&nbsp;     * @return an array of {@code File} objects.
+<i>590</i>&nbsp;     * @throws SecurityException if the caller does not have necessary
+<i>591</i>&nbsp;     *                           permissions
+<i>592</i>&nbsp;     * @since 9
+<i>593</i>&nbsp;     */
+<i>594</i>&nbsp;    public File[] getChooserComboBoxFiles() {
+<i>595</i>&nbsp;        return (File[]) ShellFolder.get(&quot;fileChooserComboBoxFolders&quot;);
+<i>596</i>&nbsp;    }
+<i>597</i>&nbsp;
+<i>598</i>&nbsp;    /**
+<i>599</i>&nbsp;     * Returns whether the specified file denotes a shell interpreted link which
+<i>600</i>&nbsp;     * can be obtained by the {@link #getLinkLocation(File)}.
+<i>601</i>&nbsp;     *
+<i>602</i>&nbsp;     * @param file a file
+<i>603</i>&nbsp;     * @return whether this is a link
+<i>604</i>&nbsp;     * @throws NullPointerException if {@code file} equals {@code null}
+<i>605</i>&nbsp;     * @throws SecurityException if the caller does not have necessary
+<i>606</i>&nbsp;     *                           permissions
+<i>607</i>&nbsp;     * @see #getLinkLocation(File)
+<i>608</i>&nbsp;     * @since 9
+<i>609</i>&nbsp;     */
+<i>610</i>&nbsp;    public boolean isLink(File file) {
+<i>611</i>&nbsp;        if (file == null) {
+<i>612</i>&nbsp;            throw new NullPointerException(&quot;file is null&quot;);
+<i>613</i>&nbsp;        }
+<i>614</i>&nbsp;        try {
+<i>615</i>&nbsp;            return ShellFolder.getShellFolder(file).isLink();
+<i>616</i>&nbsp;        } catch (FileNotFoundException e) {
+<i>617</i>&nbsp;            return false;
+<i>618</i>&nbsp;        }
+<i>619</i>&nbsp;    }
+<i>620</i>&nbsp;
+<i>621</i>&nbsp;    /**
+<i>622</i>&nbsp;     * Returns the regular file referenced by the specified link file if
+<i>623</i>&nbsp;     * the specified file is a shell interpreted link.
+<i>624</i>&nbsp;     * Returns {@code null} if the specified file is not
+<i>625</i>&nbsp;     * a shell interpreted link.
+<i>626</i>&nbsp;     *
+<i>627</i>&nbsp;     * @param file a file
+<i>628</i>&nbsp;     * @return the linked file or {@code null}.
+<i>629</i>&nbsp;     * @throws FileNotFoundException if the linked file does not exist
+<i>630</i>&nbsp;     * @throws NullPointerException if {@code file} equals {@code null}
+<i>631</i>&nbsp;     * @throws SecurityException if the caller does not have necessary
+<i>632</i>&nbsp;     *                           permissions
+<i>633</i>&nbsp;     * @since 9
+<i>634</i>&nbsp;     */
+<i>635</i>&nbsp;    public File getLinkLocation(File file) throws FileNotFoundException {
+<i>636</i>&nbsp;        if (file == null) {
+<i>637</i>&nbsp;            throw new NullPointerException(&quot;file is null&quot;);
+<i>638</i>&nbsp;        }
+<i>639</i>&nbsp;        ShellFolder shellFolder;
+<i>640</i>&nbsp;        try {
+<i>641</i>&nbsp;            shellFolder = ShellFolder.getShellFolder(file);
+<i>642</i>&nbsp;        } catch (FileNotFoundException e) {
+<i>643</i>&nbsp;            return null;
+<i>644</i>&nbsp;        }
+<i>645</i>&nbsp;        return shellFolder.isLink() ? shellFolder.getLinkLocation() : null;
+<i>646</i>&nbsp;    }
+<i>647</i>&nbsp;
+<i>648</i>&nbsp;    /**
+<i>649</i>&nbsp;     * Throws {@code FileNotFoundException} if file not found or current thread was interrupted
+<i>650</i>&nbsp;     */
+<i>651</i>&nbsp;    ShellFolder getShellFolder(File f) throws FileNotFoundException {
+<i>652</i>&nbsp;        if (!(f instanceof ShellFolder) &amp;&amp; !(f instanceof FileSystemRoot) &amp;&amp; isFileSystemRoot(f)) {
+<i>653</i>&nbsp;            f = createFileSystemRoot(f);
+<i>654</i>&nbsp;        }
+<i>655</i>&nbsp;
+<i>656</i>&nbsp;        try {
+<i>657</i>&nbsp;            return ShellFolder.getShellFolder(f);
+<i>658</i>&nbsp;        } catch (InternalError e) {
+<i>659</i>&nbsp;            System.err.println(&quot;FileSystemView.getShellFolder: f=&quot;+f);
+<i>660</i>&nbsp;            e.printStackTrace();
+<i>661</i>&nbsp;            return null;
+<i>662</i>&nbsp;        }
+<i>663</i>&nbsp;    }
+<i>664</i>&nbsp;
+<i>665</i>&nbsp;    /**
+<i>666</i>&nbsp;     * Creates a new &lt;code&gt;File&lt;/code&gt; object for &lt;code&gt;f&lt;/code&gt; with correct
+<i>667</i>&nbsp;     * behavior for a file system root directory.
+<i>668</i>&nbsp;     *
+<i>669</i>&nbsp;     * @param f a &lt;code&gt;File&lt;/code&gt; object representing a file system root
+<i>670</i>&nbsp;     *          directory, for example &quot;/&quot; on Unix or &quot;C:\&quot; on Windows.
+<i>671</i>&nbsp;     * @return a new &lt;code&gt;File&lt;/code&gt; object
+<i>672</i>&nbsp;     * @since 1.4
+<i>673</i>&nbsp;     */
+<i>674</i>&nbsp;    protected File createFileSystemRoot(File f) {
+<i>675</i>&nbsp;        return new FileSystemRoot(f);
+<i>676</i>&nbsp;    }
+<i>677</i>&nbsp;
+<i>678</i>&nbsp;    @SuppressWarnings(&quot;serial&quot;) // Same-version serialization only
+<i>679</i>&nbsp;    static class FileSystemRoot extends File {
+<i>680</i>&nbsp;        public FileSystemRoot(File f) {
+<i>681</i>&nbsp;            super(f,&quot;&quot;);
+<i>682</i>&nbsp;        }
+<i>683</i>&nbsp;
+<i>684</i>&nbsp;        public FileSystemRoot(String s) {
+<i>685</i>&nbsp;            super(s);
+<i>686</i>&nbsp;        }
+<i>687</i>&nbsp;
+<i>688</i>&nbsp;        public boolean isDirectory() {
+<i>689</i>&nbsp;            return true;
+<i>690</i>&nbsp;        }
+<i>691</i>&nbsp;
+<i>692</i>&nbsp;        public String getName() {
+<i>693</i>&nbsp;            return getPath();
+<i>694</i>&nbsp;        }
+<i>695</i>&nbsp;    }
+<i>696</i>&nbsp;}
+<i>697</i>&nbsp;
+<i>698</i>&nbsp;/**
+<i>699</i>&nbsp; * FileSystemView that handles some specific unix-isms.
+<i>700</i>&nbsp; */
+<i>701</i>&nbsp;class UnixFileSystemView extends FileSystemView {
+<i>702</i>&nbsp;
+<i>703</i>&nbsp;    private static final String newFolderString =
+<i>704</i>&nbsp;            UIManager.getString(&quot;FileChooser.other.newFolder&quot;);
+<i>705</i>&nbsp;    private static final String newFolderNextString  =
+<i>706</i>&nbsp;            UIManager.getString(&quot;FileChooser.other.newFolder.subsequent&quot;);
+<i>707</i>&nbsp;
+<i>708</i>&nbsp;    /**
+<i>709</i>&nbsp;     * Creates a new folder with a default folder name.
+<i>710</i>&nbsp;     */
+<i>711</i>&nbsp;    public File createNewFolder(File containingDir) throws IOException {
+<i>712</i>&nbsp;        if(containingDir == null) {
+<i>713</i>&nbsp;            throw new IOException(&quot;Containing directory is null:&quot;);
+<i>714</i>&nbsp;        }
+<i>715</i>&nbsp;        File newFolder;
+<i>716</i>&nbsp;        // Unix - using OpenWindows&#39; default folder name. Can&#39;t find one for Motif/CDE.
+<i>717</i>&nbsp;        newFolder = createFileObject(containingDir, newFolderString);
+<i>718</i>&nbsp;        int i = 1;
+<i>719</i>&nbsp;        while (newFolder.exists() &amp;&amp; i &lt; 100) {
+<i>720</i>&nbsp;            newFolder = createFileObject(containingDir, MessageFormat.format(
+<i>721</i>&nbsp;                    newFolderNextString, i));
+<i>722</i>&nbsp;            i++;
+<i>723</i>&nbsp;        }
+<i>724</i>&nbsp;
+<i>725</i>&nbsp;        if(newFolder.exists()) {
+<i>726</i>&nbsp;            throw new IOException(&quot;Directory already exists:&quot; + newFolder.getAbsolutePath());
+<i>727</i>&nbsp;        } else {
+<i>728</i>&nbsp;            if(!newFolder.mkdirs()) {
+<i>729</i>&nbsp;                throw new IOException(newFolder.getAbsolutePath());
+<i>730</i>&nbsp;            }
+<i>731</i>&nbsp;        }
+<i>732</i>&nbsp;
+<i>733</i>&nbsp;        return newFolder;
+<i>734</i>&nbsp;    }
+<i>735</i>&nbsp;
+<i>736</i>&nbsp;    public boolean isFileSystemRoot(File dir) {
+<i>737</i>&nbsp;        return dir != null &amp;&amp; dir.getAbsolutePath().equals(&quot;/&quot;);
+<i>738</i>&nbsp;    }
+<i>739</i>&nbsp;
+<i>740</i>&nbsp;    public boolean isDrive(File dir) {
+<i>741</i>&nbsp;        return isFloppyDrive(dir);
+<i>742</i>&nbsp;    }
+<i>743</i>&nbsp;
+<i>744</i>&nbsp;    public boolean isFloppyDrive(File dir) {
+<i>745</i>&nbsp;        // Could be looking at the path for Solaris, but wouldn&#39;t be reliable.
+<i>746</i>&nbsp;        // For example:
+<i>747</i>&nbsp;        // return (dir != null &amp;&amp; dir.getAbsolutePath().toLowerCase().startsWith(&quot;/floppy&quot;));
+<i>748</i>&nbsp;        return false;
+<i>749</i>&nbsp;    }
+<i>750</i>&nbsp;
+<i>751</i>&nbsp;    public boolean isComputerNode(File dir) {
+<i>752</i>&nbsp;        if (dir != null) {
+<i>753</i>&nbsp;            String parent = dir.getParent();
+<i>754</i>&nbsp;            if (parent != null &amp;&amp; parent.equals(&quot;/net&quot;)) {
+<i>755</i>&nbsp;                return true;
+<i>756</i>&nbsp;            }
+<i>757</i>&nbsp;        }
+<i>758</i>&nbsp;        return false;
+<i>759</i>&nbsp;    }
+<i>760</i>&nbsp;}
+<i>761</i>&nbsp;
+<i>762</i>&nbsp;
+<i>763</i>&nbsp;/**
+<i>764</i>&nbsp; * FileSystemView that handles some specific windows concepts.
+<i>765</i>&nbsp; */
+<i>766</i>&nbsp;class WindowsFileSystemView extends FileSystemView {
+<i>767</i>&nbsp;
+<i>768</i>&nbsp;    private static final String newFolderString =
+<i>769</i>&nbsp;            UIManager.getString(&quot;FileChooser.win32.newFolder&quot;);
+<i>770</i>&nbsp;    private static final String newFolderNextString  =
+<i>771</i>&nbsp;            UIManager.getString(&quot;FileChooser.win32.newFolder.subsequent&quot;);
+<i>772</i>&nbsp;
+<i>773</i>&nbsp;    public Boolean isTraversable(File f) {
+<i>774</i>&nbsp;        return Boolean.valueOf(isFileSystemRoot(f) || isComputerNode(f) || f.isDirectory());
+<i>775</i>&nbsp;    }
+<i>776</i>&nbsp;
+<i>777</i>&nbsp;    public File getChild(File parent, String fileName) {
+<i>778</i>&nbsp;        if (fileName.startsWith(&quot;\\&quot;)
+<i>779</i>&nbsp;            &amp;&amp; !fileName.startsWith(&quot;\\\\&quot;)
+<i>780</i>&nbsp;            &amp;&amp; isFileSystem(parent)) {
+<i>781</i>&nbsp;
+<i>782</i>&nbsp;            //Path is relative to the root of parent&#39;s drive
+<i>783</i>&nbsp;            String path = parent.getAbsolutePath();
+<i>784</i>&nbsp;            if (path.length() &gt;= 2
+<i>785</i>&nbsp;                &amp;&amp; path.charAt(1) == &#39;:&#39;
+<i>786</i>&nbsp;                &amp;&amp; Character.isLetter(path.charAt(0))) {
+<i>787</i>&nbsp;
+<i>788</i>&nbsp;                return createFileObject(path.substring(0, 2) + fileName);
+<i>789</i>&nbsp;            }
+<i>790</i>&nbsp;        }
+<i>791</i>&nbsp;        return super.getChild(parent, fileName);
+<i>792</i>&nbsp;    }
+<i>793</i>&nbsp;
+<b class="nc"><i>794</i>&nbsp;    /**</b>
+<i>795</i>&nbsp;     * Type description for a file, directory, or folder as it would be displayed in
+<i>796</i>&nbsp;     * a system file browser. Example from Windows: the &quot;Desktop&quot; folder
+<b class="nc"><i>797</i>&nbsp;     * is described as &quot;Desktop&quot;.</b>
+<i>798</i>&nbsp;     *
+<i>799</i>&nbsp;     * The Windows implementation gets information from the ShellFolder class.
+<i>800</i>&nbsp;     */
+<i>801</i>&nbsp;    public String getSystemTypeDescription(File f) {
+<i>802</i>&nbsp;        if (f == null) {
+<b class="nc"><i>803</i>&nbsp;            return null;</b>
+<b class="nc"><i>804</i>&nbsp;        }</b>
+<i>805</i>&nbsp;
+<i>806</i>&nbsp;        try {
+<b class="nc"><i>807</i>&nbsp;            return getShellFolder(f).getFolderType();</b>
+<i>808</i>&nbsp;        } catch (FileNotFoundException e) {
+<b class="nc"><i>809</i>&nbsp;            return null;</b>
+<b class="nc"><i>810</i>&nbsp;        }</b>
+<i>811</i>&nbsp;    }
+<b class="nc"><i>812</i>&nbsp;</b>
+<i>813</i>&nbsp;    /**
+<i>814</i>&nbsp;     * @return the Desktop folder.
+<b class="nc"><i>815</i>&nbsp;     */</b>
+<i>816</i>&nbsp;    public File getHomeDirectory() {
+<i>817</i>&nbsp;        File[] roots = getRoots();
+<i>818</i>&nbsp;        return (roots.length == 0) ? null : roots[0];
+<i>819</i>&nbsp;    }
+<i>820</i>&nbsp;
+<i>821</i>&nbsp;    /**
+<i>822</i>&nbsp;     * Creates a new folder with a default folder name.
+<i>823</i>&nbsp;     */
+<i>824</i>&nbsp;    public File createNewFolder(File containingDir) throws IOException {
+<i>825</i>&nbsp;        if(containingDir == null) {
+<i>826</i>&nbsp;            throw new IOException(&quot;Containing directory is null:&quot;);
+<i>827</i>&nbsp;        }
+<i>828</i>&nbsp;        // Using NT&#39;s default folder name
+<i>829</i>&nbsp;        File newFolder = createFileObject(containingDir, newFolderString);
+<i>830</i>&nbsp;        int i = 2;
+<i>831</i>&nbsp;        while (newFolder.exists() &amp;&amp; i &lt; 100) {
+<i>832</i>&nbsp;            newFolder = createFileObject(containingDir, MessageFormat.format(
+<i>833</i>&nbsp;                newFolderNextString, i));
+<i>834</i>&nbsp;            i++;
+<i>835</i>&nbsp;        }
+<i>836</i>&nbsp;
+<i>837</i>&nbsp;        if(newFolder.exists()) {
+<i>838</i>&nbsp;            throw new IOException(&quot;Directory already exists:&quot; + newFolder.getAbsolutePath());
+<i>839</i>&nbsp;        } else {
+<i>840</i>&nbsp;            if(!newFolder.mkdirs()) {
+<i>841</i>&nbsp;                throw new IOException(newFolder.getAbsolutePath());
+<i>842</i>&nbsp;            }
+<i>843</i>&nbsp;        }
+<i>844</i>&nbsp;
+<i>845</i>&nbsp;        return newFolder;
+<i>846</i>&nbsp;    }
+<i>847</i>&nbsp;
+<i>848</i>&nbsp;    public boolean isDrive(File dir) {
+<i>849</i>&nbsp;        return isFileSystemRoot(dir);
+<i>850</i>&nbsp;    }
+<i>851</i>&nbsp;
+<i>852</i>&nbsp;    public boolean isFloppyDrive(final File dir) {
+<i>853</i>&nbsp;        String path = AccessController.doPrivileged(new PrivilegedAction&lt;String&gt;() {
+<i>854</i>&nbsp;            public String run() {
+<i>855</i>&nbsp;                return dir.getAbsolutePath();
+<i>856</i>&nbsp;            }
+<i>857</i>&nbsp;        });
+<i>858</i>&nbsp;
+<i>859</i>&nbsp;        return path != null &amp;&amp; (path.equals(&quot;A:\\&quot;) || path.equals(&quot;B:\\&quot;));
+<i>860</i>&nbsp;    }
+<i>861</i>&nbsp;
+<i>862</i>&nbsp;    /**
+<i>863</i>&nbsp;     * Returns a File object constructed from the given path string.
+<i>864</i>&nbsp;     */
+<i>865</i>&nbsp;    public File createFileObject(String path) {
+<i>866</i>&nbsp;        // Check for missing backslash after drive letter such as &quot;C:&quot; or &quot;C:filename&quot;
+<i>867</i>&nbsp;        if (path.length() &gt;= 2 &amp;&amp; path.charAt(1) == &#39;:&#39; &amp;&amp; Character.isLetter(path.charAt(0))) {
+<i>868</i>&nbsp;            if (path.length() == 2) {
+<i>869</i>&nbsp;                path += &quot;\\&quot;;
+<i>870</i>&nbsp;            } else if (path.charAt(2) != &#39;\\&#39;) {
+<i>871</i>&nbsp;                path = path.substring(0, 2) + &quot;\\&quot; + path.substring(2);
+<i>872</i>&nbsp;            }
+<i>873</i>&nbsp;        }
+<i>874</i>&nbsp;        return super.createFileObject(path);
+<i>875</i>&nbsp;    }
+<i>876</i>&nbsp;
+<i>877</i>&nbsp;    @SuppressWarnings(&quot;serial&quot;) // anonymous class
+<i>878</i>&nbsp;    protected File createFileSystemRoot(File f) {
+<i>879</i>&nbsp;        // Problem: Removable drives on Windows return false on f.exists()
+<i>880</i>&nbsp;        // Workaround: Override exists() to always return true.
+<i>881</i>&nbsp;        return new FileSystemRoot(f) {
+<i>882</i>&nbsp;            public boolean exists() {
+<i>883</i>&nbsp;                return true;
+<i>884</i>&nbsp;            }
+<i>885</i>&nbsp;        };
+<i>886</i>&nbsp;    }
+<i>887</i>&nbsp;
+<i>888</i>&nbsp;}
+<i>889</i>&nbsp;
+<i>890</i>&nbsp;/**
+<i>891</i>&nbsp; * Fallthrough FileSystemView in case we can&#39;t determine the OS.
+<i>892</i>&nbsp; */
+<i>893</i>&nbsp;class GenericFileSystemView extends FileSystemView {
+<i>894</i>&nbsp;
+<i>895</i>&nbsp;    private static final String newFolderString =
+<i>896</i>&nbsp;            UIManager.getString(&quot;FileChooser.other.newFolder&quot;);
+<i>897</i>&nbsp;
+<i>898</i>&nbsp;    /**
+<i>899</i>&nbsp;     * Creates a new folder with a default folder name.
+<i>900</i>&nbsp;     */
+<i>901</i>&nbsp;    public File createNewFolder(File containingDir) throws IOException {
+<i>902</i>&nbsp;        if(containingDir == null) {
+<i>903</i>&nbsp;            throw new IOException(&quot;Containing directory is null:&quot;);
+<i>904</i>&nbsp;        }
+<i>905</i>&nbsp;        // Using NT&#39;s default folder name
+<i>906</i>&nbsp;        File newFolder = createFileObject(containingDir, newFolderString);
+<i>907</i>&nbsp;
+<i>908</i>&nbsp;        if(newFolder.exists()) {
+<i>909</i>&nbsp;            throw new IOException(&quot;Directory already exists:&quot; + newFolder.getAbsolutePath());
+<i>910</i>&nbsp;        } else {
+<i>911</i>&nbsp;            if(!newFolder.mkdirs()) {
+<i>912</i>&nbsp;                throw new IOException(newFolder.getAbsolutePath());
+<i>913</i>&nbsp;            }
+<i>914</i>&nbsp;        }
+<i>915</i>&nbsp;        return newFolder;
+<i>916</i>&nbsp;    }
+<i>917</i>&nbsp;
+<i>918</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

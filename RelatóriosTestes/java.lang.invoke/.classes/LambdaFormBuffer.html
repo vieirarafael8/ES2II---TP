@@ -1,0 +1,482 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: LambdaFormBuffer</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.lang.invoke</a> ]
+</div>
+
+<h1>Coverage Summary for Class: LambdaFormBuffer (java.lang.invoke)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">LambdaFormBuffer</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 30)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 199)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.lang.invoke;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.ArrayList;
+<i>29</i>&nbsp;import java.util.Arrays;
+<i>30</i>&nbsp;import java.util.List;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;import static java.lang.invoke.LambdaForm.*;
+<i>33</i>&nbsp;import static java.lang.invoke.LambdaForm.BasicType.*;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;/** Working storage for an LF that is being transformed.
+<b class="nc"><i>36</i>&nbsp; *  Similarly to a StringBuffer, the editing can take place in multiple steps.</b>
+<i>37</i>&nbsp; */
+<i>38</i>&nbsp;final class LambdaFormBuffer {
+<i>39</i>&nbsp;    private int arity, length;
+<i>40</i>&nbsp;    private Name[] names;
+<i>41</i>&nbsp;    private Name[] originalNames;  // snapshot of pre-transaction names
+<i>42</i>&nbsp;    private byte flags;
+<i>43</i>&nbsp;    private int firstChange;
+<i>44</i>&nbsp;    private Name resultName;
+<i>45</i>&nbsp;    private ArrayList&lt;Name&gt; dups;
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;    private static final int F_TRANS = 0x10, F_OWNED = 0x03;
+<b class="nc"><i>48</i>&nbsp;</b>
+<b class="nc"><i>49</i>&nbsp;    LambdaFormBuffer(LambdaForm lf) {</b>
+<b class="nc"><i>50</i>&nbsp;        this.arity = lf.arity;</b>
+<b class="nc"><i>51</i>&nbsp;        setNames(lf.names);</b>
+<b class="nc"><i>52</i>&nbsp;        int result = lf.result;</b>
+<b class="nc"><i>53</i>&nbsp;        if (result == LAST_RESULT)  result = length - 1;</b>
+<b class="nc"><i>54</i>&nbsp;        if (result &gt;= 0 &amp;&amp; lf.names[result].type != V_TYPE) {</b>
+<b class="nc"><i>55</i>&nbsp;            resultName = lf.names[result];</b>
+<b class="nc"><i>56</i>&nbsp;        }</b>
+<i>57</i>&nbsp;        assert(lf.nameRefsAreLegal());
+<i>58</i>&nbsp;    }
+<i>59</i>&nbsp;
+<b class="nc"><i>60</i>&nbsp;    private LambdaForm lambdaForm() {</b>
+<b class="nc"><i>61</i>&nbsp;        assert(!inTrans());  // need endEdit call to tidy things up</b>
+<i>62</i>&nbsp;        return new LambdaForm(arity, nameArray(), resultIndex());
+<i>63</i>&nbsp;    }
+<i>64</i>&nbsp;
+<b class="nc"><i>65</i>&nbsp;    Name name(int i) {</b>
+<b class="nc"><i>66</i>&nbsp;        assert(i &lt; length);</b>
+<i>67</i>&nbsp;        return names[i];
+<i>68</i>&nbsp;    }
+<i>69</i>&nbsp;
+<b class="nc"><i>70</i>&nbsp;    Name[] nameArray() {</b>
+<i>71</i>&nbsp;        return Arrays.copyOf(names, length);
+<i>72</i>&nbsp;    }
+<i>73</i>&nbsp;
+<b class="nc"><i>74</i>&nbsp;    int resultIndex() {</b>
+<b class="nc"><i>75</i>&nbsp;        if (resultName == null)  return VOID_RESULT;</b>
+<b class="nc"><i>76</i>&nbsp;        int index = indexOf(resultName, names);</b>
+<b class="nc"><i>77</i>&nbsp;        assert(index &gt;= 0);</b>
+<i>78</i>&nbsp;        return index;
+<i>79</i>&nbsp;    }
+<i>80</i>&nbsp;
+<b class="nc"><i>81</i>&nbsp;    void setNames(Name[] names2) {</b>
+<b class="nc"><i>82</i>&nbsp;        names = originalNames = names2;  // keep a record of where everything was to start with</b>
+<b class="nc"><i>83</i>&nbsp;        length = names2.length;</b>
+<i>84</i>&nbsp;        flags = 0;
+<i>85</i>&nbsp;    }
+<i>86</i>&nbsp;
+<b class="nc"><i>87</i>&nbsp;    private boolean verifyArity() {</b>
+<b class="nc"><i>88</i>&nbsp;        for (int i = 0; i &lt; arity &amp;&amp; i &lt; firstChange; i++) {</b>
+<i>89</i>&nbsp;            assert(names[i].isParam()) : &quot;#&quot; + i + &quot;=&quot; + names[i];
+<b class="nc"><i>90</i>&nbsp;        }</b>
+<b class="nc"><i>91</i>&nbsp;        for (int i = arity; i &lt; length; i++) {</b>
+<i>92</i>&nbsp;            assert(!names[i].isParam()) : &quot;#&quot; + i + &quot;=&quot; + names[i];
+<b class="nc"><i>93</i>&nbsp;        }</b>
+<b class="nc"><i>94</i>&nbsp;        for (int i = length; i &lt; names.length; i++) {</b>
+<i>95</i>&nbsp;            assert(names[i] == null) : &quot;#&quot; + i + &quot;=&quot; + names[i];
+<i>96</i>&nbsp;        }
+<b class="nc"><i>97</i>&nbsp;        // check resultName also</b>
+<b class="nc"><i>98</i>&nbsp;        if (resultName != null) {</b>
+<b class="nc"><i>99</i>&nbsp;            int resultIndex = indexOf(resultName, names);</b>
+<b class="nc"><i>100</i>&nbsp;            assert(resultIndex &gt;= 0) : &quot;not found: &quot; + resultName.exprString() + Arrays.asList(names);</b>
+<i>101</i>&nbsp;            assert(names[resultIndex] == resultName);
+<b class="nc"><i>102</i>&nbsp;        }</b>
+<i>103</i>&nbsp;        return true;
+<i>104</i>&nbsp;    }
+<i>105</i>&nbsp;
+<b class="nc"><i>106</i>&nbsp;    private boolean verifyFirstChange() {</b>
+<b class="nc"><i>107</i>&nbsp;        assert(inTrans());</b>
+<b class="nc"><i>108</i>&nbsp;        for (int i = 0; i &lt; length; i++) {</b>
+<b class="nc"><i>109</i>&nbsp;            if (names[i] != originalNames[i]) {</b>
+<b class="nc"><i>110</i>&nbsp;                assert(firstChange == i) : Arrays.asList(firstChange, i, originalNames[i].exprString(), Arrays.asList(names));</b>
+<i>111</i>&nbsp;                return true;
+<i>112</i>&nbsp;            }
+<b class="nc"><i>113</i>&nbsp;        }</b>
+<b class="nc"><i>114</i>&nbsp;        assert(firstChange == length) : Arrays.asList(firstChange, Arrays.asList(names));</b>
+<i>115</i>&nbsp;        return true;
+<i>116</i>&nbsp;    }
+<i>117</i>&nbsp;
+<b class="nc"><i>118</i>&nbsp;    private static int indexOf(NamedFunction fn, List&lt;NamedFunction&gt; fns) {</b>
+<b class="nc"><i>119</i>&nbsp;        for (int i = 0; i &lt; fns.size(); i++) {</b>
+<i>120</i>&nbsp;            if (fns.get(i) == fn)  return i;
+<b class="nc"><i>121</i>&nbsp;        }</b>
+<i>122</i>&nbsp;        return -1;
+<i>123</i>&nbsp;    }
+<i>124</i>&nbsp;
+<b class="nc"><i>125</i>&nbsp;    private static int indexOf(Name n, Name[] ns) {</b>
+<b class="nc"><i>126</i>&nbsp;        for (int i = 0; i &lt; ns.length; i++) {</b>
+<i>127</i>&nbsp;            if (ns[i] == n)  return i;
+<b class="nc"><i>128</i>&nbsp;        }</b>
+<i>129</i>&nbsp;        return -1;
+<i>130</i>&nbsp;    }
+<i>131</i>&nbsp;
+<b class="nc"><i>132</i>&nbsp;    boolean inTrans() {</b>
+<i>133</i>&nbsp;        return (flags &amp; F_TRANS) != 0;
+<i>134</i>&nbsp;    }
+<i>135</i>&nbsp;
+<b class="nc"><i>136</i>&nbsp;    int ownedCount() {</b>
+<i>137</i>&nbsp;        return flags &amp; F_OWNED;
+<i>138</i>&nbsp;    }
+<i>139</i>&nbsp;
+<b class="nc"><i>140</i>&nbsp;    void growNames(int insertPos, int growLength) {</b>
+<b class="nc"><i>141</i>&nbsp;        int oldLength = length;</b>
+<b class="nc"><i>142</i>&nbsp;        int newLength = oldLength + growLength;</b>
+<b class="nc"><i>143</i>&nbsp;        int oc = ownedCount();</b>
+<b class="nc"><i>144</i>&nbsp;        if (oc == 0 || newLength &gt; names.length) {</b>
+<b class="nc"><i>145</i>&nbsp;            names = Arrays.copyOf(names, (names.length + growLength) * 5 / 4);</b>
+<b class="nc"><i>146</i>&nbsp;            if (oc == 0) {</b>
+<b class="nc"><i>147</i>&nbsp;                flags++;</b>
+<b class="nc"><i>148</i>&nbsp;                oc++;</b>
+<i>149</i>&nbsp;                assert(ownedCount() == oc);
+<i>150</i>&nbsp;            }
+<b class="nc"><i>151</i>&nbsp;        }</b>
+<b class="nc"><i>152</i>&nbsp;        if (originalNames != null &amp;&amp; originalNames.length &lt; names.length) {</b>
+<b class="nc"><i>153</i>&nbsp;            originalNames = Arrays.copyOf(originalNames, names.length);</b>
+<b class="nc"><i>154</i>&nbsp;            if (oc == 1) {</b>
+<b class="nc"><i>155</i>&nbsp;                flags++;</b>
+<b class="nc"><i>156</i>&nbsp;                oc++;</b>
+<i>157</i>&nbsp;                assert(ownedCount() == oc);
+<i>158</i>&nbsp;            }
+<b class="nc"><i>159</i>&nbsp;        }</b>
+<b class="nc"><i>160</i>&nbsp;        if (growLength == 0)  return;</b>
+<b class="nc"><i>161</i>&nbsp;        int insertEnd = insertPos + growLength;</b>
+<b class="nc"><i>162</i>&nbsp;        int tailLength = oldLength - insertPos;</b>
+<b class="nc"><i>163</i>&nbsp;        System.arraycopy(names, insertPos, names, insertEnd, tailLength);</b>
+<b class="nc"><i>164</i>&nbsp;        Arrays.fill(names, insertPos, insertEnd, null);</b>
+<b class="nc"><i>165</i>&nbsp;        if (originalNames != null) {</b>
+<b class="nc"><i>166</i>&nbsp;            System.arraycopy(originalNames, insertPos, originalNames, insertEnd, tailLength);</b>
+<i>167</i>&nbsp;            Arrays.fill(originalNames, insertPos, insertEnd, null);
+<b class="nc"><i>168</i>&nbsp;        }</b>
+<b class="nc"><i>169</i>&nbsp;        length = newLength;</b>
+<b class="nc"><i>170</i>&nbsp;        if (firstChange &gt;= insertPos) {</b>
+<i>171</i>&nbsp;            firstChange += growLength;
+<i>172</i>&nbsp;        }
+<i>173</i>&nbsp;    }
+<i>174</i>&nbsp;
+<b class="nc"><i>175</i>&nbsp;    int lastIndexOf(Name n) {</b>
+<b class="nc"><i>176</i>&nbsp;        int result = -1;</b>
+<b class="nc"><i>177</i>&nbsp;        for (int i = 0; i &lt; length; i++) {</b>
+<i>178</i>&nbsp;            if (names[i] == n)  result = i;
+<b class="nc"><i>179</i>&nbsp;        }</b>
+<i>180</i>&nbsp;        return result;
+<i>181</i>&nbsp;    }
+<i>182</i>&nbsp;
+<i>183</i>&nbsp;    /** We have just overwritten the name at pos1 with the name at pos2.
+<i>184</i>&nbsp;     *  This means that there are two copies of the name, which we will have to fix later.
+<i>185</i>&nbsp;     */
+<b class="nc"><i>186</i>&nbsp;    private void noteDuplicate(int pos1, int pos2) {</b>
+<b class="nc"><i>187</i>&nbsp;        Name n = names[pos1];</b>
+<b class="nc"><i>188</i>&nbsp;        assert(n == names[pos2]);</b>
+<b class="nc"><i>189</i>&nbsp;        assert(originalNames[pos1] != null);  // something was replaced at pos1</b>
+<b class="nc"><i>190</i>&nbsp;        assert(originalNames[pos2] == null || originalNames[pos2] == n);</b>
+<b class="nc"><i>191</i>&nbsp;        if (dups == null) {</b>
+<i>192</i>&nbsp;            dups = new ArrayList&lt;&gt;();
+<b class="nc"><i>193</i>&nbsp;        }</b>
+<i>194</i>&nbsp;        dups.add(n);
+<i>195</i>&nbsp;    }
+<i>196</i>&nbsp;
+<i>197</i>&nbsp;    /** Replace duplicate names by nulls, and remove all nulls. */
+<b class="nc"><i>198</i>&nbsp;    private void clearDuplicatesAndNulls() {</b>
+<i>199</i>&nbsp;        if (dups != null) {
+<b class="nc"><i>200</i>&nbsp;            // Remove duplicates.</b>
+<b class="nc"><i>201</i>&nbsp;            assert(ownedCount() &gt;= 1);</b>
+<b class="nc"><i>202</i>&nbsp;            for (Name dup : dups) {</b>
+<b class="nc"><i>203</i>&nbsp;                for (int i = firstChange; i &lt; length; i++) {</b>
+<b class="nc"><i>204</i>&nbsp;                    if (names[i] == dup &amp;&amp; originalNames[i] != dup) {</b>
+<b class="nc"><i>205</i>&nbsp;                        names[i] = null;</b>
+<i>206</i>&nbsp;                        assert(Arrays.asList(names).contains(dup));
+<i>207</i>&nbsp;                        break;  // kill only one dup
+<i>208</i>&nbsp;                    }
+<b class="nc"><i>209</i>&nbsp;                }</b>
+<b class="nc"><i>210</i>&nbsp;            }</b>
+<i>211</i>&nbsp;            dups.clear();
+<i>212</i>&nbsp;        }
+<b class="nc"><i>213</i>&nbsp;        // Now that we are done with originalNames, remove &quot;killed&quot; names.</b>
+<b class="nc"><i>214</i>&nbsp;        int oldLength = length;</b>
+<b class="nc"><i>215</i>&nbsp;        for (int i = firstChange; i &lt; length; i++) {</b>
+<b class="nc"><i>216</i>&nbsp;            if (names[i] == null) {</b>
+<b class="nc"><i>217</i>&nbsp;                System.arraycopy(names, i + 1, names, i, (--length - i));</b>
+<i>218</i>&nbsp;                --i;  // restart loop at this position
+<i>219</i>&nbsp;            }
+<b class="nc"><i>220</i>&nbsp;        }</b>
+<b class="nc"><i>221</i>&nbsp;        if (length &lt; oldLength) {</b>
+<i>222</i>&nbsp;            Arrays.fill(names, length, oldLength, null);
+<b class="nc"><i>223</i>&nbsp;        }</b>
+<i>224</i>&nbsp;        assert(!Arrays.asList(names).subList(0, length).contains(null));
+<i>225</i>&nbsp;    }
+<i>226</i>&nbsp;
+<i>227</i>&nbsp;    /** Create a private, writable copy of names.
+<i>228</i>&nbsp;     *  Preserve the original copy, for reference.
+<i>229</i>&nbsp;     */
+<b class="nc"><i>230</i>&nbsp;    void startEdit() {</b>
+<b class="nc"><i>231</i>&nbsp;        assert(verifyArity());</b>
+<b class="nc"><i>232</i>&nbsp;        int oc = ownedCount();</b>
+<b class="nc"><i>233</i>&nbsp;        assert(!inTrans());  // no nested transactions</b>
+<b class="nc"><i>234</i>&nbsp;        flags |= F_TRANS;</b>
+<b class="nc"><i>235</i>&nbsp;        Name[] oldNames = names;</b>
+<b class="nc"><i>236</i>&nbsp;        Name[] ownBuffer = (oc == 2 ? originalNames : null);</b>
+<b class="nc"><i>237</i>&nbsp;        assert(ownBuffer != oldNames);</b>
+<b class="nc"><i>238</i>&nbsp;        if (ownBuffer != null &amp;&amp; ownBuffer.length &gt;= length) {</b>
+<i>239</i>&nbsp;            names = copyNamesInto(ownBuffer);
+<i>240</i>&nbsp;        } else {
+<i>241</i>&nbsp;            // make a new buffer to hold the names
+<b class="nc"><i>242</i>&nbsp;            final int SLOP = 2;</b>
+<b class="nc"><i>243</i>&nbsp;            names = Arrays.copyOf(oldNames, Math.max(length + SLOP, oldNames.length));</b>
+<b class="nc"><i>244</i>&nbsp;            if (oc &lt; 2)  ++flags;</b>
+<i>245</i>&nbsp;            assert(ownedCount() == oc + 1);
+<b class="nc"><i>246</i>&nbsp;        }</b>
+<b class="nc"><i>247</i>&nbsp;        originalNames = oldNames;</b>
+<b class="nc"><i>248</i>&nbsp;        assert(originalNames != names);</b>
+<b class="nc"><i>249</i>&nbsp;        firstChange = length;</b>
+<i>250</i>&nbsp;        assert(inTrans());
+<i>251</i>&nbsp;    }
+<i>252</i>&nbsp;
+<b class="nc"><i>253</i>&nbsp;    void changeName(int i, Name name) {</b>
+<b class="nc"><i>254</i>&nbsp;        assert(inTrans());</b>
+<b class="nc"><i>255</i>&nbsp;        assert(i &lt; length);</b>
+<b class="nc"><i>256</i>&nbsp;        Name oldName = names[i];</b>
+<b class="nc"><i>257</i>&nbsp;        assert(oldName == originalNames[i]);  // no multiple changes</b>
+<b class="nc"><i>258</i>&nbsp;        assert(verifyFirstChange());</b>
+<b class="nc"><i>259</i>&nbsp;        if (ownedCount() == 0)</b>
+<b class="nc"><i>260</i>&nbsp;            growNames(0, 0);</b>
+<b class="nc"><i>261</i>&nbsp;        names[i] = name;</b>
+<b class="nc"><i>262</i>&nbsp;        if (firstChange &gt; i) {</b>
+<i>263</i>&nbsp;            firstChange = i;
+<b class="nc"><i>264</i>&nbsp;        }</b>
+<b class="nc"><i>265</i>&nbsp;        if (resultName != null &amp;&amp; resultName == oldName) {</b>
+<i>266</i>&nbsp;            resultName = name;
+<i>267</i>&nbsp;        }
+<i>268</i>&nbsp;    }
+<i>269</i>&nbsp;
+<i>270</i>&nbsp;    /** Change the result name.  Null means a void result. */
+<b class="nc"><i>271</i>&nbsp;    void setResult(Name name) {</b>
+<b class="nc"><i>272</i>&nbsp;        assert(name == null || lastIndexOf(name) &gt;= 0);</b>
+<i>273</i>&nbsp;        resultName = name;
+<i>274</i>&nbsp;    }
+<i>275</i>&nbsp;
+<i>276</i>&nbsp;    /** Finish a transaction. */
+<b class="nc"><i>277</i>&nbsp;    LambdaForm endEdit() {</b>
+<i>278</i>&nbsp;        assert(verifyFirstChange());
+<i>279</i>&nbsp;        // Assuming names have been changed pairwise from originalNames[i] to names[i],
+<b class="nc"><i>280</i>&nbsp;        // update arguments to ensure referential integrity.</b>
+<b class="nc"><i>281</i>&nbsp;        for (int i = Math.max(firstChange, arity); i &lt; length; i++) {</b>
+<b class="nc"><i>282</i>&nbsp;            Name name = names[i];</b>
+<b class="nc"><i>283</i>&nbsp;            if (name == null)  continue;  // space for removed duplicate</b>
+<b class="nc"><i>284</i>&nbsp;            Name newName = name.replaceNames(originalNames, names, firstChange, i);</b>
+<b class="nc"><i>285</i>&nbsp;            if (newName != name) {</b>
+<b class="nc"><i>286</i>&nbsp;                names[i] = newName;</b>
+<b class="nc"><i>287</i>&nbsp;                if (resultName == name) {</b>
+<i>288</i>&nbsp;                    resultName = newName;
+<i>289</i>&nbsp;                }
+<i>290</i>&nbsp;            }
+<b class="nc"><i>291</i>&nbsp;        }</b>
+<b class="nc"><i>292</i>&nbsp;        assert(inTrans());</b>
+<b class="nc"><i>293</i>&nbsp;        flags &amp;= ~F_TRANS;</b>
+<b class="nc"><i>294</i>&nbsp;        clearDuplicatesAndNulls();</b>
+<i>295</i>&nbsp;        originalNames = null;
+<i>296</i>&nbsp;        // If any parameters have been changed, then reorder them as needed.
+<i>297</i>&nbsp;        // This is a &quot;sheep-and-goats&quot; stable sort, pushing all non-parameters
+<b class="nc"><i>298</i>&nbsp;        // to the right of all parameters.</b>
+<b class="nc"><i>299</i>&nbsp;        if (firstChange &lt; arity) {</b>
+<b class="nc"><i>300</i>&nbsp;            Name[] exprs = new Name[arity - firstChange];</b>
+<b class="nc"><i>301</i>&nbsp;            int argp = firstChange, exprp = 0;</b>
+<b class="nc"><i>302</i>&nbsp;            for (int i = firstChange; i &lt; arity; i++) {</b>
+<b class="nc"><i>303</i>&nbsp;                Name name = names[i];</b>
+<b class="nc"><i>304</i>&nbsp;                if (name.isParam()) {</b>
+<i>305</i>&nbsp;                    names[argp++] = name;
+<b class="nc"><i>306</i>&nbsp;                } else {</b>
+<i>307</i>&nbsp;                    exprs[exprp++] = name;
+<i>308</i>&nbsp;                }
+<b class="nc"><i>309</i>&nbsp;            }</b>
+<i>310</i>&nbsp;            assert(exprp == (arity - argp));
+<b class="nc"><i>311</i>&nbsp;            // copy the exprs just after the last remaining param</b>
+<i>312</i>&nbsp;            System.arraycopy(exprs, 0, names, argp, exprp);
+<b class="nc"><i>313</i>&nbsp;            // adjust arity</b>
+<i>314</i>&nbsp;            arity -= exprp;
+<b class="nc"><i>315</i>&nbsp;        }</b>
+<b class="nc"><i>316</i>&nbsp;        assert(verifyArity());</b>
+<i>317</i>&nbsp;        return lambdaForm();
+<i>318</i>&nbsp;    }
+<i>319</i>&nbsp;
+<b class="nc"><i>320</i>&nbsp;    private Name[] copyNamesInto(Name[] buffer) {</b>
+<b class="nc"><i>321</i>&nbsp;        System.arraycopy(names, 0, buffer, 0, length);</b>
+<b class="nc"><i>322</i>&nbsp;        Arrays.fill(buffer, length, buffer.length, null);</b>
+<i>323</i>&nbsp;        return buffer;
+<i>324</i>&nbsp;    }
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;    /** Replace any Name whose function is in oldFns with a copy
+<i>327</i>&nbsp;     *  whose function is in the corresponding position in newFns.
+<i>328</i>&nbsp;     *  Only do this if the arguments are exactly equal to the given.
+<i>329</i>&nbsp;     */
+<i>330</i>&nbsp;    LambdaFormBuffer replaceFunctions(List&lt;NamedFunction&gt; oldFns, List&lt;NamedFunction&gt; newFns,
+<b class="nc"><i>331</i>&nbsp;                                      Object... forArguments) {</b>
+<b class="nc"><i>332</i>&nbsp;        assert(inTrans());</b>
+<b class="nc"><i>333</i>&nbsp;        if (oldFns.isEmpty())  return this;</b>
+<b class="nc"><i>334</i>&nbsp;        for (int i = arity; i &lt; length; i++) {</b>
+<b class="nc"><i>335</i>&nbsp;            Name n = names[i];</b>
+<b class="nc"><i>336</i>&nbsp;            int nfi = indexOf(n.function, oldFns);</b>
+<b class="nc"><i>337</i>&nbsp;            if (nfi &gt;= 0 &amp;&amp; Arrays.equals(n.arguments, forArguments)) {</b>
+<i>338</i>&nbsp;                changeName(i, new Name(newFns.get(nfi), n.arguments));
+<i>339</i>&nbsp;            }
+<b class="nc"><i>340</i>&nbsp;        }</b>
+<i>341</i>&nbsp;        return this;
+<i>342</i>&nbsp;    }
+<i>343</i>&nbsp;
+<b class="nc"><i>344</i>&nbsp;    private void replaceName(int pos, Name binding) {</b>
+<b class="nc"><i>345</i>&nbsp;        assert(inTrans());</b>
+<b class="nc"><i>346</i>&nbsp;        assert(verifyArity());</b>
+<b class="nc"><i>347</i>&nbsp;        assert(pos &lt; arity);</b>
+<b class="nc"><i>348</i>&nbsp;        Name param = names[pos];</b>
+<b class="nc"><i>349</i>&nbsp;        assert(param.isParam());</b>
+<b class="nc"><i>350</i>&nbsp;        assert(param.type == binding.type);</b>
+<i>351</i>&nbsp;        changeName(pos, binding);
+<i>352</i>&nbsp;    }
+<i>353</i>&nbsp;
+<i>354</i>&nbsp;    /** Replace a parameter by a fresh parameter. */
+<b class="nc"><i>355</i>&nbsp;    LambdaFormBuffer renameParameter(int pos, Name newParam) {</b>
+<b class="nc"><i>356</i>&nbsp;        assert(newParam.isParam());</b>
+<b class="nc"><i>357</i>&nbsp;        replaceName(pos, newParam);</b>
+<i>358</i>&nbsp;        return this;
+<i>359</i>&nbsp;    }
+<i>360</i>&nbsp;
+<i>361</i>&nbsp;    /** Replace a parameter by a fresh expression. */
+<b class="nc"><i>362</i>&nbsp;    LambdaFormBuffer replaceParameterByNewExpression(int pos, Name binding) {</b>
+<b class="nc"><i>363</i>&nbsp;        assert(!binding.isParam());</b>
+<b class="nc"><i>364</i>&nbsp;        assert(lastIndexOf(binding) &lt; 0);  // else use replaceParameterByCopy</b>
+<b class="nc"><i>365</i>&nbsp;        replaceName(pos, binding);</b>
+<i>366</i>&nbsp;        return this;
+<i>367</i>&nbsp;    }
+<i>368</i>&nbsp;
+<i>369</i>&nbsp;    /** Replace a parameter by another parameter or expression already in the form. */
+<b class="nc"><i>370</i>&nbsp;    LambdaFormBuffer replaceParameterByCopy(int pos, int valuePos) {</b>
+<b class="nc"><i>371</i>&nbsp;        assert(pos != valuePos);</b>
+<b class="nc"><i>372</i>&nbsp;        replaceName(pos, names[valuePos]);</b>
+<b class="nc"><i>373</i>&nbsp;        noteDuplicate(pos, valuePos);  // temporarily, will occur twice in the names array</b>
+<i>374</i>&nbsp;        return this;
+<i>375</i>&nbsp;    }
+<i>376</i>&nbsp;
+<b class="nc"><i>377</i>&nbsp;    private void insertName(int pos, Name expr, boolean isParameter) {</b>
+<b class="nc"><i>378</i>&nbsp;        assert(inTrans());</b>
+<b class="nc"><i>379</i>&nbsp;        assert(verifyArity());</b>
+<b class="nc"><i>380</i>&nbsp;        assert(isParameter ? pos &lt;= arity : pos &gt;= arity);</b>
+<b class="nc"><i>381</i>&nbsp;        growNames(pos, 1);</b>
+<b class="nc"><i>382</i>&nbsp;        if (isParameter)  arity += 1;</b>
+<i>383</i>&nbsp;        changeName(pos, expr);
+<i>384</i>&nbsp;    }
+<i>385</i>&nbsp;
+<i>386</i>&nbsp;    /** Insert a fresh expression. */
+<b class="nc"><i>387</i>&nbsp;    LambdaFormBuffer insertExpression(int pos, Name expr) {</b>
+<b class="nc"><i>388</i>&nbsp;        assert(!expr.isParam());</b>
+<b class="nc"><i>389</i>&nbsp;        insertName(pos, expr, false);</b>
+<i>390</i>&nbsp;        return this;
+<i>391</i>&nbsp;    }
+<i>392</i>&nbsp;
+<i>393</i>&nbsp;    /** Insert a fresh parameter. */
+<b class="nc"><i>394</i>&nbsp;    LambdaFormBuffer insertParameter(int pos, Name param) {</b>
+<b class="nc"><i>395</i>&nbsp;        assert(param.isParam());</b>
+<b class="nc"><i>396</i>&nbsp;        insertName(pos, param, true);</b>
+<i>397</i>&nbsp;        return this;
+<i>398</i>&nbsp;    }
+<i>399</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,804 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: WindowsWatchService</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.fs</a> ]
+</div>
+
+<h1>Coverage Summary for Class: WindowsWatchService (sun.nio.fs)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WindowsWatchService</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 11)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">WindowsWatchService$FileKey</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 13)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">WindowsWatchService$Poller</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 149)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">WindowsWatchService$WindowsWatchKey</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 16)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 31)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 36)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 204)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2008, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.fs;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.nio.file.NotDirectoryException;
+<i>30</i>&nbsp;import java.nio.file.Path;
+<i>31</i>&nbsp;import java.nio.file.StandardWatchEventKinds;
+<i>32</i>&nbsp;import java.nio.file.WatchEvent;
+<i>33</i>&nbsp;import java.nio.file.WatchKey;
+<i>34</i>&nbsp;import java.util.HashMap;
+<i>35</i>&nbsp;import java.util.Map;
+<i>36</i>&nbsp;import java.util.Set;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import jdk.internal.misc.Unsafe;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;import static sun.nio.fs.WindowsNativeDispatcher.*;
+<i>41</i>&nbsp;import static sun.nio.fs.WindowsConstants.*;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;/*
+<i>44</i>&nbsp; * Win32 implementation of WatchService based on ReadDirectoryChangesW.
+<i>45</i>&nbsp; */
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;class WindowsWatchService
+<b class="nc"><i>48</i>&nbsp;    extends AbstractWatchService</b>
+<i>49</i>&nbsp;{
+<i>50</i>&nbsp;    private static final int WAKEUP_COMPLETION_KEY = 0;
+<i>51</i>&nbsp;
+<i>52</i>&nbsp;    // background thread to service I/O completion port
+<i>53</i>&nbsp;    private final Poller poller;
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    /**
+<i>56</i>&nbsp;     * Creates an I/O completion port and a daemon thread to service it
+<i>57</i>&nbsp;     */
+<i>58</i>&nbsp;    WindowsWatchService(WindowsFileSystem fs) throws IOException {
+<b class="nc"><i>59</i>&nbsp;        // create I/O completion port</b>
+<i>60</i>&nbsp;        long port = 0L;
+<b class="nc"><i>61</i>&nbsp;        try {</b>
+<i>62</i>&nbsp;            port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0);
+<b class="nc"><i>63</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>64</i>&nbsp;            throw new IOException(x.getMessage());</b>
+<b class="nc"><i>65</i>&nbsp;        }</b>
+<b class="nc"><i>66</i>&nbsp;</b>
+<i>67</i>&nbsp;        this.poller = new Poller(fs, this, port);
+<b class="nc"><i>68</i>&nbsp;        this.poller.start();</b>
+<b class="nc"><i>69</i>&nbsp;    }</b>
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;    @Override
+<i>72</i>&nbsp;    WatchKey register(Path path,
+<i>73</i>&nbsp;                      WatchEvent.Kind&lt;?&gt;[] events,
+<i>74</i>&nbsp;                      WatchEvent.Modifier... modifiers)
+<i>75</i>&nbsp;         throws IOException
+<i>76</i>&nbsp;    {
+<i>77</i>&nbsp;        // delegate to poller
+<i>78</i>&nbsp;        return poller.register(path, events, modifiers);
+<b class="nc"><i>79</i>&nbsp;    }</b>
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    @Override
+<i>82</i>&nbsp;    void implClose() throws IOException {
+<i>83</i>&nbsp;        // delegate to poller
+<i>84</i>&nbsp;        poller.close();
+<b class="nc"><i>85</i>&nbsp;    }</b>
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    /**
+<i>88</i>&nbsp;     * Windows implementation of WatchKey.
+<i>89</i>&nbsp;     */
+<i>90</i>&nbsp;    private static class WindowsWatchKey extends AbstractWatchKey {
+<i>91</i>&nbsp;        // file key (used to detect existing registrations)
+<i>92</i>&nbsp;        private final FileKey fileKey;
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;        // handle to directory
+<i>95</i>&nbsp;        private volatile long handle = INVALID_HANDLE_VALUE;
+<b class="nc"><i>96</i>&nbsp;</b>
+<i>97</i>&nbsp;        // interest events
+<i>98</i>&nbsp;        private Set&lt;? extends WatchEvent.Kind&lt;?&gt;&gt; events;
+<i>99</i>&nbsp;
+<i>100</i>&nbsp;        // subtree
+<i>101</i>&nbsp;        private boolean watchSubtree;
+<i>102</i>&nbsp;
+<i>103</i>&nbsp;        // buffer for change events
+<i>104</i>&nbsp;        private NativeBuffer buffer;
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;        // pointer to bytes returned (in buffer)
+<i>107</i>&nbsp;        private long countAddress;
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;        // pointer to overlapped structure (in buffer)
+<i>110</i>&nbsp;        private long overlappedAddress;
+<i>111</i>&nbsp;
+<i>112</i>&nbsp;        // completion key (used to map I/O completion to WatchKey)
+<i>113</i>&nbsp;        private int completionKey;
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;        // flag indicates that ReadDirectoryChangesW failed
+<i>116</i>&nbsp;        // and overlapped I/O operation wasn&#39;t started
+<i>117</i>&nbsp;        private boolean errorStartingOverlapped;
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;        WindowsWatchKey(Path dir,
+<i>120</i>&nbsp;                        AbstractWatchService watcher,
+<i>121</i>&nbsp;                        FileKey fileKey)
+<i>122</i>&nbsp;        {
+<i>123</i>&nbsp;            super(dir, watcher);
+<b class="nc"><i>124</i>&nbsp;            this.fileKey = fileKey;</b>
+<b class="nc"><i>125</i>&nbsp;        }</b>
+<i>126</i>&nbsp;
+<i>127</i>&nbsp;        WindowsWatchKey init(long handle,
+<i>128</i>&nbsp;                             Set&lt;? extends WatchEvent.Kind&lt;?&gt;&gt; events,
+<i>129</i>&nbsp;                             boolean watchSubtree,
+<i>130</i>&nbsp;                             NativeBuffer buffer,
+<i>131</i>&nbsp;                             long countAddress,
+<i>132</i>&nbsp;                             long overlappedAddress,
+<i>133</i>&nbsp;                             int completionKey)
+<i>134</i>&nbsp;        {
+<i>135</i>&nbsp;            this.handle = handle;
+<b class="nc"><i>136</i>&nbsp;            this.events = events;</b>
+<b class="nc"><i>137</i>&nbsp;            this.watchSubtree = watchSubtree;</b>
+<b class="nc"><i>138</i>&nbsp;            this.buffer = buffer;</b>
+<b class="nc"><i>139</i>&nbsp;            this.countAddress = countAddress;</b>
+<b class="nc"><i>140</i>&nbsp;            this.overlappedAddress = overlappedAddress;</b>
+<b class="nc"><i>141</i>&nbsp;            this.completionKey = completionKey;</b>
+<b class="nc"><i>142</i>&nbsp;            return this;</b>
+<b class="nc"><i>143</i>&nbsp;        }</b>
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;        long handle() {
+<i>146</i>&nbsp;            return handle;
+<b class="nc"><i>147</i>&nbsp;        }</b>
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;        Set&lt;? extends WatchEvent.Kind&lt;?&gt;&gt; events() {
+<i>150</i>&nbsp;            return events;
+<b class="nc"><i>151</i>&nbsp;        }</b>
+<i>152</i>&nbsp;
+<i>153</i>&nbsp;        void setEvents(Set&lt;? extends WatchEvent.Kind&lt;?&gt;&gt; events) {
+<i>154</i>&nbsp;            this.events = events;
+<b class="nc"><i>155</i>&nbsp;        }</b>
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;        boolean watchSubtree() {
+<i>158</i>&nbsp;            return watchSubtree;
+<b class="nc"><i>159</i>&nbsp;        }</b>
+<i>160</i>&nbsp;
+<i>161</i>&nbsp;        NativeBuffer buffer() {
+<i>162</i>&nbsp;            return buffer;
+<b class="nc"><i>163</i>&nbsp;        }</b>
+<i>164</i>&nbsp;
+<i>165</i>&nbsp;        long countAddress() {
+<i>166</i>&nbsp;            return countAddress;
+<b class="nc"><i>167</i>&nbsp;        }</b>
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;        long overlappedAddress() {
+<i>170</i>&nbsp;            return overlappedAddress;
+<b class="nc"><i>171</i>&nbsp;        }</b>
+<i>172</i>&nbsp;
+<i>173</i>&nbsp;        FileKey fileKey() {
+<i>174</i>&nbsp;            return fileKey;
+<b class="nc"><i>175</i>&nbsp;        }</b>
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;        int completionKey() {
+<i>178</i>&nbsp;            return completionKey;
+<b class="nc"><i>179</i>&nbsp;        }</b>
+<i>180</i>&nbsp;
+<i>181</i>&nbsp;        void setErrorStartingOverlapped(boolean value) {
+<i>182</i>&nbsp;            errorStartingOverlapped = value;
+<b class="nc"><i>183</i>&nbsp;        }</b>
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;        boolean isErrorStartingOverlapped() {
+<i>186</i>&nbsp;            return errorStartingOverlapped;
+<b class="nc"><i>187</i>&nbsp;        }</b>
+<i>188</i>&nbsp;
+<i>189</i>&nbsp;        // Invalidate the key, assumes that resources have been released
+<i>190</i>&nbsp;        void invalidate() {
+<i>191</i>&nbsp;            ((WindowsWatchService)watcher()).poller.releaseResources(this);
+<b class="nc"><i>192</i>&nbsp;            handle = INVALID_HANDLE_VALUE;</b>
+<b class="nc"><i>193</i>&nbsp;            buffer = null;</b>
+<b class="nc"><i>194</i>&nbsp;            countAddress = 0;</b>
+<b class="nc"><i>195</i>&nbsp;            overlappedAddress = 0;</b>
+<b class="nc"><i>196</i>&nbsp;            errorStartingOverlapped = false;</b>
+<b class="nc"><i>197</i>&nbsp;        }</b>
+<i>198</i>&nbsp;
+<i>199</i>&nbsp;        @Override
+<i>200</i>&nbsp;        public boolean isValid() {
+<i>201</i>&nbsp;            return handle != INVALID_HANDLE_VALUE;
+<b class="nc"><i>202</i>&nbsp;        }</b>
+<i>203</i>&nbsp;
+<i>204</i>&nbsp;        @Override
+<i>205</i>&nbsp;        public void cancel() {
+<i>206</i>&nbsp;            if (isValid()) {
+<b class="nc"><i>207</i>&nbsp;                // delegate to poller</b>
+<i>208</i>&nbsp;                ((WindowsWatchService)watcher()).poller.cancel(this);
+<b class="nc"><i>209</i>&nbsp;            }</b>
+<i>210</i>&nbsp;        }
+<i>211</i>&nbsp;    }
+<i>212</i>&nbsp;
+<i>213</i>&nbsp;    // file key to unique identify (open) directory
+<i>214</i>&nbsp;    private static class FileKey {
+<i>215</i>&nbsp;        private final int volSerialNumber;
+<i>216</i>&nbsp;        private final int fileIndexHigh;
+<i>217</i>&nbsp;        private final int fileIndexLow;
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;        FileKey(int volSerialNumber, int fileIndexHigh, int fileIndexLow) {
+<b class="nc"><i>220</i>&nbsp;            this.volSerialNumber = volSerialNumber;</b>
+<b class="nc"><i>221</i>&nbsp;            this.fileIndexHigh = fileIndexHigh;</b>
+<b class="nc"><i>222</i>&nbsp;            this.fileIndexLow = fileIndexLow;</b>
+<b class="nc"><i>223</i>&nbsp;        }</b>
+<i>224</i>&nbsp;
+<i>225</i>&nbsp;        @Override
+<i>226</i>&nbsp;        public int hashCode() {
+<i>227</i>&nbsp;            return volSerialNumber ^ fileIndexHigh ^ fileIndexLow;
+<b class="nc"><i>228</i>&nbsp;        }</b>
+<i>229</i>&nbsp;
+<i>230</i>&nbsp;        @Override
+<i>231</i>&nbsp;        public boolean equals(Object obj) {
+<i>232</i>&nbsp;            if (obj == this)
+<b class="nc"><i>233</i>&nbsp;                return true;</b>
+<b class="nc"><i>234</i>&nbsp;            if (!(obj instanceof FileKey))</b>
+<b class="nc"><i>235</i>&nbsp;                return false;</b>
+<b class="nc"><i>236</i>&nbsp;            FileKey other = (FileKey)obj;</b>
+<b class="nc"><i>237</i>&nbsp;            if (this.volSerialNumber != other.volSerialNumber) return false;</b>
+<b class="nc"><i>238</i>&nbsp;            if (this.fileIndexHigh != other.fileIndexHigh) return false;</b>
+<b class="nc"><i>239</i>&nbsp;            return this.fileIndexLow == other.fileIndexLow;</b>
+<b class="nc"><i>240</i>&nbsp;        }</b>
+<i>241</i>&nbsp;    }
+<i>242</i>&nbsp;
+<i>243</i>&nbsp;    // all change events
+<i>244</i>&nbsp;    private static final int ALL_FILE_NOTIFY_EVENTS =
+<i>245</i>&nbsp;        FILE_NOTIFY_CHANGE_FILE_NAME |
+<i>246</i>&nbsp;        FILE_NOTIFY_CHANGE_DIR_NAME |
+<i>247</i>&nbsp;        FILE_NOTIFY_CHANGE_ATTRIBUTES  |
+<i>248</i>&nbsp;        FILE_NOTIFY_CHANGE_SIZE |
+<i>249</i>&nbsp;        FILE_NOTIFY_CHANGE_LAST_WRITE |
+<i>250</i>&nbsp;        FILE_NOTIFY_CHANGE_CREATION |
+<i>251</i>&nbsp;        FILE_NOTIFY_CHANGE_SECURITY;
+<i>252</i>&nbsp;
+<i>253</i>&nbsp;    /**
+<i>254</i>&nbsp;     * Background thread to service I/O completion port.
+<i>255</i>&nbsp;     */
+<i>256</i>&nbsp;    private static class Poller extends AbstractPoller {
+<b class="nc"><i>257</i>&nbsp;        private static final Unsafe UNSAFE = Unsafe.getUnsafe();</b>
+<b class="nc"><i>258</i>&nbsp;</b>
+<i>259</i>&nbsp;        /*
+<i>260</i>&nbsp;         * typedef struct _OVERLAPPED {
+<i>261</i>&nbsp;         *     ULONG_PTR  Internal;
+<i>262</i>&nbsp;         *     ULONG_PTR  InternalHigh;
+<i>263</i>&nbsp;         *     union {
+<i>264</i>&nbsp;         *         struct { DWORD Offset; DWORD OffsetHigh; };
+<i>265</i>&nbsp;         *         PVOID  Pointer;
+<i>266</i>&nbsp;         *     };
+<i>267</i>&nbsp;         *     HANDLE    hEvent;
+<i>268</i>&nbsp;         * } OVERLAPPED;
+<i>269</i>&nbsp;         */
+<i>270</i>&nbsp;        private static final short SIZEOF_DWORD         = 4;
+<i>271</i>&nbsp;        private static final short SIZEOF_OVERLAPPED    = 32; // 20 on 32-bit
+<i>272</i>&nbsp;        private static final short OFFSETOF_HEVENT      =
+<i>273</i>&nbsp;            (UNSAFE.addressSize() == 4) ? (short) 16 : 24;
+<b class="nc"><i>274</i>&nbsp;</b>
+<i>275</i>&nbsp;
+<i>276</i>&nbsp;        /*
+<i>277</i>&nbsp;         * typedef struct _FILE_NOTIFY_INFORMATION {
+<i>278</i>&nbsp;         *     DWORD NextEntryOffset;
+<i>279</i>&nbsp;         *     DWORD Action;
+<i>280</i>&nbsp;         *     DWORD FileNameLength;
+<i>281</i>&nbsp;         *     WCHAR FileName[1];
+<i>282</i>&nbsp;         * } FileNameLength;
+<i>283</i>&nbsp;         */
+<i>284</i>&nbsp;        private static final short OFFSETOF_NEXTENTRYOFFSET = 0;
+<i>285</i>&nbsp;        private static final short OFFSETOF_ACTION          = 4;
+<i>286</i>&nbsp;        private static final short OFFSETOF_FILENAMELENGTH  = 8;
+<i>287</i>&nbsp;        private static final short OFFSETOF_FILENAME        = 12;
+<i>288</i>&nbsp;
+<i>289</i>&nbsp;        // size of per-directory buffer for events (FIXME - make this configurable)
+<i>290</i>&nbsp;        // Need to be less than 4*16384 = 65536. DWORD align.
+<i>291</i>&nbsp;        private static final int CHANGES_BUFFER_SIZE    = 16 * 1024;
+<i>292</i>&nbsp;
+<i>293</i>&nbsp;        private final WindowsFileSystem fs;
+<i>294</i>&nbsp;        private final WindowsWatchService watcher;
+<i>295</i>&nbsp;        private final long port;
+<i>296</i>&nbsp;
+<i>297</i>&nbsp;        // maps completion key to WatchKey
+<i>298</i>&nbsp;        private final Map&lt;Integer, WindowsWatchKey&gt; ck2key;
+<i>299</i>&nbsp;
+<i>300</i>&nbsp;        // maps file key to WatchKey
+<i>301</i>&nbsp;        private final Map&lt;FileKey, WindowsWatchKey&gt; fk2key;
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;        // unique completion key for each directory
+<i>304</i>&nbsp;        // native completion key capacity is 64 bits on Win64.
+<i>305</i>&nbsp;        private int lastCompletionKey;
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;        Poller(WindowsFileSystem fs, WindowsWatchService watcher, long port) {
+<b class="nc"><i>308</i>&nbsp;            this.fs = fs;</b>
+<b class="nc"><i>309</i>&nbsp;            this.watcher = watcher;</b>
+<b class="nc"><i>310</i>&nbsp;            this.port = port;</b>
+<b class="nc"><i>311</i>&nbsp;            this.ck2key = new HashMap&lt;&gt;();</b>
+<b class="nc"><i>312</i>&nbsp;            this.fk2key = new HashMap&lt;&gt;();</b>
+<b class="nc"><i>313</i>&nbsp;            this.lastCompletionKey = 0;</b>
+<b class="nc"><i>314</i>&nbsp;        }</b>
+<i>315</i>&nbsp;
+<i>316</i>&nbsp;        @Override
+<i>317</i>&nbsp;        void wakeup() throws IOException {
+<i>318</i>&nbsp;            try {
+<i>319</i>&nbsp;                PostQueuedCompletionStatus(port, WAKEUP_COMPLETION_KEY);
+<b class="nc"><i>320</i>&nbsp;            } catch (WindowsException x) {</b>
+<b class="nc"><i>321</i>&nbsp;                throw new IOException(x.getMessage());</b>
+<b class="nc"><i>322</i>&nbsp;            }</b>
+<b class="nc"><i>323</i>&nbsp;        }</b>
+<i>324</i>&nbsp;
+<i>325</i>&nbsp;        /**
+<i>326</i>&nbsp;         * Register a directory for changes as follows:
+<i>327</i>&nbsp;         *
+<i>328</i>&nbsp;         * 1. Open directory
+<i>329</i>&nbsp;         * 2. Read its attributes (and check it really is a directory)
+<i>330</i>&nbsp;         * 3. Assign completion key and associated handle with completion port
+<i>331</i>&nbsp;         * 4. Call ReadDirectoryChangesW to start (async) read of changes
+<i>332</i>&nbsp;         * 5. Create or return existing key representing registration
+<i>333</i>&nbsp;         */
+<i>334</i>&nbsp;        @Override
+<i>335</i>&nbsp;        Object implRegister(Path obj,
+<i>336</i>&nbsp;                            Set&lt;? extends WatchEvent.Kind&lt;?&gt;&gt; events,
+<i>337</i>&nbsp;                            WatchEvent.Modifier... modifiers)
+<i>338</i>&nbsp;        {
+<i>339</i>&nbsp;            WindowsPath dir = (WindowsPath)obj;
+<b class="nc"><i>340</i>&nbsp;            boolean watchSubtree = false;</b>
+<b class="nc"><i>341</i>&nbsp;</b>
+<i>342</i>&nbsp;            // FILE_TREE modifier allowed
+<i>343</i>&nbsp;            for (WatchEvent.Modifier modifier: modifiers) {
+<b class="nc"><i>344</i>&nbsp;                if (ExtendedOptions.FILE_TREE.matches(modifier)) {</b>
+<b class="nc"><i>345</i>&nbsp;                    watchSubtree = true;</b>
+<b class="nc"><i>346</i>&nbsp;                } else {</b>
+<i>347</i>&nbsp;                    if (modifier == null)
+<b class="nc"><i>348</i>&nbsp;                        return new NullPointerException();</b>
+<b class="nc"><i>349</i>&nbsp;                    if (!ExtendedOptions.SENSITIVITY_HIGH.matches(modifier) &amp;&amp;</b>
+<b class="nc"><i>350</i>&nbsp;                            !ExtendedOptions.SENSITIVITY_MEDIUM.matches(modifier) &amp;&amp;</b>
+<b class="nc"><i>351</i>&nbsp;                            !ExtendedOptions.SENSITIVITY_LOW.matches(modifier)) {</b>
+<b class="nc"><i>352</i>&nbsp;                        return new UnsupportedOperationException(&quot;Modifier not supported&quot;);</b>
+<i>353</i>&nbsp;                    }
+<i>354</i>&nbsp;                }
+<i>355</i>&nbsp;            }
+<i>356</i>&nbsp;
+<i>357</i>&nbsp;            // open directory
+<i>358</i>&nbsp;            long handle;
+<b class="nc"><i>359</i>&nbsp;            try {</b>
+<i>360</i>&nbsp;                handle = CreateFile(dir.getPathForWin32Calls(),
+<i>361</i>&nbsp;                                    FILE_LIST_DIRECTORY,
+<i>362</i>&nbsp;                                    (FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE),
+<i>363</i>&nbsp;                                    OPEN_EXISTING,
+<b class="nc"><i>364</i>&nbsp;                                    FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED);</b>
+<b class="nc"><i>365</i>&nbsp;            } catch (WindowsException x) {</b>
+<b class="nc"><i>366</i>&nbsp;                return x.asIOException(dir);</b>
+<i>367</i>&nbsp;            }
+<b class="nc"><i>368</i>&nbsp;</b>
+<i>369</i>&nbsp;            boolean registered = false;
+<i>370</i>&nbsp;            try {
+<i>371</i>&nbsp;                // read attributes and check file is a directory
+<i>372</i>&nbsp;                WindowsFileAttributes attrs;
+<b class="nc"><i>373</i>&nbsp;                try {</b>
+<b class="nc"><i>374</i>&nbsp;                    attrs = WindowsFileAttributes.readAttributes(handle);</b>
+<b class="nc"><i>375</i>&nbsp;                } catch (WindowsException x) {</b>
+<b class="nc"><i>376</i>&nbsp;                    return x.asIOException(dir);</b>
+<b class="nc"><i>377</i>&nbsp;                }</b>
+<b class="nc"><i>378</i>&nbsp;                if (!attrs.isDirectory()) {</b>
+<i>379</i>&nbsp;                    return new NotDirectoryException(dir.getPathForExceptionMessage());
+<i>380</i>&nbsp;                }
+<i>381</i>&nbsp;
+<b class="nc"><i>382</i>&nbsp;                // check if this directory is already registered</b>
+<b class="nc"><i>383</i>&nbsp;                FileKey fk = new FileKey(attrs.volSerialNumber(),</b>
+<b class="nc"><i>384</i>&nbsp;                                         attrs.fileIndexHigh(),</b>
+<b class="nc"><i>385</i>&nbsp;                                         attrs.fileIndexLow());</b>
+<i>386</i>&nbsp;                WindowsWatchKey existing = fk2key.get(fk);
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;                // if already registered and we&#39;re not changing the subtree
+<b class="nc"><i>389</i>&nbsp;                // modifier then simply update the event and return the key.</b>
+<b class="nc"><i>390</i>&nbsp;                if (existing != null &amp;&amp; watchSubtree == existing.watchSubtree()) {</b>
+<b class="nc"><i>391</i>&nbsp;                    existing.setEvents(events);</b>
+<i>392</i>&nbsp;                    return existing;
+<i>393</i>&nbsp;                }
+<i>394</i>&nbsp;
+<i>395</i>&nbsp;                // Can overflow the int type capacity.
+<b class="nc"><i>396</i>&nbsp;                // Skip WAKEUP_COMPLETION_KEY value.</b>
+<b class="nc"><i>397</i>&nbsp;                int completionKey = ++lastCompletionKey;</b>
+<b class="nc"><i>398</i>&nbsp;                if (completionKey == WAKEUP_COMPLETION_KEY)</b>
+<i>399</i>&nbsp;                    completionKey = ++lastCompletionKey;
+<i>400</i>&nbsp;
+<i>401</i>&nbsp;                // associate handle with completion port
+<b class="nc"><i>402</i>&nbsp;                try {</b>
+<b class="nc"><i>403</i>&nbsp;                    CreateIoCompletionPort(handle, port, completionKey);</b>
+<b class="nc"><i>404</i>&nbsp;                } catch (WindowsException x) {</b>
+<b class="nc"><i>405</i>&nbsp;                    return new IOException(x.getMessage());</b>
+<i>406</i>&nbsp;                }
+<i>407</i>&nbsp;
+<i>408</i>&nbsp;                // allocate memory for events, including space for other structures
+<b class="nc"><i>409</i>&nbsp;                // needed to do overlapped I/O</b>
+<b class="nc"><i>410</i>&nbsp;                int size = CHANGES_BUFFER_SIZE + SIZEOF_DWORD + SIZEOF_OVERLAPPED;</b>
+<i>411</i>&nbsp;                NativeBuffer buffer = NativeBuffers.getNativeBuffer(size);
+<b class="nc"><i>412</i>&nbsp;</b>
+<b class="nc"><i>413</i>&nbsp;                long bufferAddress = buffer.address();</b>
+<b class="nc"><i>414</i>&nbsp;                long overlappedAddress = bufferAddress + size - SIZEOF_OVERLAPPED;</b>
+<i>415</i>&nbsp;                long countAddress = overlappedAddress - SIZEOF_DWORD;
+<i>416</i>&nbsp;
+<b class="nc"><i>417</i>&nbsp;                // zero the overlapped structure</b>
+<i>418</i>&nbsp;                UNSAFE.setMemory(overlappedAddress, SIZEOF_OVERLAPPED, (byte)0);
+<i>419</i>&nbsp;
+<i>420</i>&nbsp;                // start async read of changes to directory
+<b class="nc"><i>421</i>&nbsp;                try {</b>
+<i>422</i>&nbsp;                    createAndAttachEvent(overlappedAddress);
+<b class="nc"><i>423</i>&nbsp;</b>
+<i>424</i>&nbsp;                    ReadDirectoryChangesW(handle,
+<i>425</i>&nbsp;                                          bufferAddress,
+<i>426</i>&nbsp;                                          CHANGES_BUFFER_SIZE,
+<i>427</i>&nbsp;                                          watchSubtree,
+<i>428</i>&nbsp;                                          ALL_FILE_NOTIFY_EVENTS,
+<i>429</i>&nbsp;                                          countAddress,
+<b class="nc"><i>430</i>&nbsp;                                          overlappedAddress);</b>
+<b class="nc"><i>431</i>&nbsp;                } catch (WindowsException x) {</b>
+<b class="nc"><i>432</i>&nbsp;                    closeAttachedEvent(overlappedAddress);</b>
+<b class="nc"><i>433</i>&nbsp;                    buffer.release();</b>
+<b class="nc"><i>434</i>&nbsp;                    return new IOException(x.getMessage());</b>
+<i>435</i>&nbsp;                }
+<i>436</i>&nbsp;
+<b class="nc"><i>437</i>&nbsp;                WindowsWatchKey watchKey;</b>
+<i>438</i>&nbsp;                if (existing == null) {
+<b class="nc"><i>439</i>&nbsp;                    // not registered so create new watch key</b>
+<b class="nc"><i>440</i>&nbsp;                    watchKey = new WindowsWatchKey(dir, watcher, fk)</b>
+<i>441</i>&nbsp;                        .init(handle, events, watchSubtree, buffer, countAddress,
+<i>442</i>&nbsp;                              overlappedAddress, completionKey);
+<b class="nc"><i>443</i>&nbsp;                    // map file key to watch key</b>
+<i>444</i>&nbsp;                    fk2key.put(fk, watchKey);
+<i>445</i>&nbsp;                } else {
+<i>446</i>&nbsp;                    // directory already registered so need to:
+<i>447</i>&nbsp;                    // 1. remove mapping from old completion key to existing watch key
+<i>448</i>&nbsp;                    // 2. release existing key&#39;s resources (handle/buffer)
+<b class="nc"><i>449</i>&nbsp;                    // 3. re-initialize key with new handle/buffer</b>
+<b class="nc"><i>450</i>&nbsp;                    ck2key.remove(existing.completionKey());</b>
+<b class="nc"><i>451</i>&nbsp;                    releaseResources(existing);</b>
+<i>452</i>&nbsp;                    watchKey = existing.init(handle, events, watchSubtree, buffer,
+<i>453</i>&nbsp;                        countAddress, overlappedAddress, completionKey);
+<i>454</i>&nbsp;                }
+<b class="nc"><i>455</i>&nbsp;                // map completion map to watch key</b>
+<i>456</i>&nbsp;                ck2key.put(completionKey, watchKey);
+<b class="nc"><i>457</i>&nbsp;</b>
+<b class="nc"><i>458</i>&nbsp;                registered = true;</b>
+<i>459</i>&nbsp;                return watchKey;
+<i>460</i>&nbsp;
+<b class="nc"><i>461</i>&nbsp;            } finally {</b>
+<i>462</i>&nbsp;                if (!registered) CloseHandle(handle);
+<i>463</i>&nbsp;            }
+<i>464</i>&nbsp;        }
+<i>465</i>&nbsp;
+<i>466</i>&nbsp;        /**
+<i>467</i>&nbsp;         * Cancels the outstanding I/O operation on the directory
+<i>468</i>&nbsp;         * associated with the given key and releases the associated
+<i>469</i>&nbsp;         * resources.
+<i>470</i>&nbsp;         */
+<b class="nc"><i>471</i>&nbsp;        private void releaseResources(WindowsWatchKey key) {</b>
+<i>472</i>&nbsp;            if (!key.isErrorStartingOverlapped()) {
+<b class="nc"><i>473</i>&nbsp;                try {</b>
+<b class="nc"><i>474</i>&nbsp;                    CancelIo(key.handle());</b>
+<b class="nc"><i>475</i>&nbsp;                    GetOverlappedResult(key.handle(), key.overlappedAddress());</b>
+<i>476</i>&nbsp;                } catch (WindowsException expected) {
+<b class="nc"><i>477</i>&nbsp;                    // expected as I/O operation has been cancelled</b>
+<i>478</i>&nbsp;                }
+<b class="nc"><i>479</i>&nbsp;            }</b>
+<b class="nc"><i>480</i>&nbsp;            CloseHandle(key.handle());</b>
+<b class="nc"><i>481</i>&nbsp;            closeAttachedEvent(key.overlappedAddress());</b>
+<i>482</i>&nbsp;            key.buffer().free();
+<i>483</i>&nbsp;        }
+<i>484</i>&nbsp;
+<i>485</i>&nbsp;        /**
+<i>486</i>&nbsp;         * Creates an unnamed event and set it as the hEvent field
+<i>487</i>&nbsp;         * in the given OVERLAPPED structure
+<i>488</i>&nbsp;         */
+<b class="nc"><i>489</i>&nbsp;        private void createAndAttachEvent(long ov) throws WindowsException {</b>
+<b class="nc"><i>490</i>&nbsp;            long hEvent = CreateEvent(false, false);</b>
+<i>491</i>&nbsp;            UNSAFE.putAddress(ov + OFFSETOF_HEVENT, hEvent);
+<i>492</i>&nbsp;        }
+<i>493</i>&nbsp;
+<i>494</i>&nbsp;        /**
+<i>495</i>&nbsp;         * Closes the event attached to the given OVERLAPPED structure. A
+<i>496</i>&nbsp;         * no-op if there isn&#39;t an event attached.
+<i>497</i>&nbsp;         */
+<b class="nc"><i>498</i>&nbsp;        private void closeAttachedEvent(long ov) {</b>
+<b class="nc"><i>499</i>&nbsp;            long hEvent = UNSAFE.getAddress(ov + OFFSETOF_HEVENT);</b>
+<b class="nc"><i>500</i>&nbsp;            if (hEvent != 0 &amp;&amp; hEvent != INVALID_HANDLE_VALUE)</b>
+<i>501</i>&nbsp;               CloseHandle(hEvent);
+<i>502</i>&nbsp;        }
+<i>503</i>&nbsp;
+<i>504</i>&nbsp;        // cancel single key
+<i>505</i>&nbsp;        @Override
+<b class="nc"><i>506</i>&nbsp;        void implCancelKey(WatchKey obj) {</b>
+<b class="nc"><i>507</i>&nbsp;            WindowsWatchKey key = (WindowsWatchKey)obj;</b>
+<b class="nc"><i>508</i>&nbsp;            if (key.isValid()) {</b>
+<b class="nc"><i>509</i>&nbsp;                fk2key.remove(key.fileKey());</b>
+<b class="nc"><i>510</i>&nbsp;                ck2key.remove(key.completionKey());</b>
+<i>511</i>&nbsp;                key.invalidate();
+<i>512</i>&nbsp;            }
+<i>513</i>&nbsp;        }
+<i>514</i>&nbsp;
+<i>515</i>&nbsp;        // close watch service
+<i>516</i>&nbsp;        @Override
+<i>517</i>&nbsp;        void implCloseAll() {
+<b class="nc"><i>518</i>&nbsp;            // cancel all keys</b>
+<i>519</i>&nbsp;            ck2key.values().forEach(WindowsWatchKey::invalidate);
+<b class="nc"><i>520</i>&nbsp;</b>
+<b class="nc"><i>521</i>&nbsp;            fk2key.clear();</b>
+<i>522</i>&nbsp;            ck2key.clear();
+<i>523</i>&nbsp;
+<b class="nc"><i>524</i>&nbsp;            // close I/O completion port</b>
+<i>525</i>&nbsp;            CloseHandle(port);
+<i>526</i>&nbsp;        }
+<i>527</i>&nbsp;
+<i>528</i>&nbsp;        // Translate file change action into watch event
+<b class="nc"><i>529</i>&nbsp;        private WatchEvent.Kind&lt;?&gt; translateActionToEvent(int action) {</b>
+<i>530</i>&nbsp;            switch (action) {
+<b class="nc"><i>531</i>&nbsp;                case FILE_ACTION_MODIFIED :</b>
+<i>532</i>&nbsp;                    return StandardWatchEventKinds.ENTRY_MODIFY;
+<i>533</i>&nbsp;
+<i>534</i>&nbsp;                case FILE_ACTION_ADDED :
+<b class="nc"><i>535</i>&nbsp;                case FILE_ACTION_RENAMED_NEW_NAME :</b>
+<i>536</i>&nbsp;                    return StandardWatchEventKinds.ENTRY_CREATE;
+<i>537</i>&nbsp;
+<i>538</i>&nbsp;                case FILE_ACTION_REMOVED :
+<b class="nc"><i>539</i>&nbsp;                case FILE_ACTION_RENAMED_OLD_NAME :</b>
+<i>540</i>&nbsp;                    return StandardWatchEventKinds.ENTRY_DELETE;
+<i>541</i>&nbsp;
+<b class="nc"><i>542</i>&nbsp;                default :</b>
+<i>543</i>&nbsp;                    return null;  // action not recognized
+<i>544</i>&nbsp;            }
+<i>545</i>&nbsp;        }
+<i>546</i>&nbsp;
+<i>547</i>&nbsp;        // process events (list of FILE_NOTIFY_INFORMATION structures)
+<b class="nc"><i>548</i>&nbsp;        private void processEvents(WindowsWatchKey key, int size) {</b>
+<i>549</i>&nbsp;            long address = key.buffer().address();
+<i>550</i>&nbsp;
+<i>551</i>&nbsp;            int nextOffset;
+<b class="nc"><i>552</i>&nbsp;            do {</b>
+<i>553</i>&nbsp;                int action = UNSAFE.getInt(address + OFFSETOF_ACTION);
+<i>554</i>&nbsp;
+<b class="nc"><i>555</i>&nbsp;                // map action to event</b>
+<b class="nc"><i>556</i>&nbsp;                WatchEvent.Kind&lt;?&gt; kind = translateActionToEvent(action);</b>
+<i>557</i>&nbsp;                if (key.events().contains(kind)) {
+<b class="nc"><i>558</i>&nbsp;                    // copy the name</b>
+<b class="nc"><i>559</i>&nbsp;                    int nameLengthInBytes = UNSAFE.getInt(address + OFFSETOF_FILENAMELENGTH);</b>
+<b class="nc"><i>560</i>&nbsp;                    if ((nameLengthInBytes % 2) != 0) {</b>
+<i>561</i>&nbsp;                        throw new AssertionError(&quot;FileNameLength is not a multiple of 2&quot;);
+<b class="nc"><i>562</i>&nbsp;                    }</b>
+<b class="nc"><i>563</i>&nbsp;                    char[] nameAsArray = new char[nameLengthInBytes/2];</b>
+<i>564</i>&nbsp;                    UNSAFE.copyMemory(null, address + OFFSETOF_FILENAME, nameAsArray,
+<i>565</i>&nbsp;                        Unsafe.ARRAY_CHAR_BASE_OFFSET, nameLengthInBytes);
+<i>566</i>&nbsp;
+<b class="nc"><i>567</i>&nbsp;                    // create FileName and queue event</b>
+<b class="nc"><i>568</i>&nbsp;                    WindowsPath name = WindowsPath</b>
+<b class="nc"><i>569</i>&nbsp;                        .createFromNormalizedPath(fs, new String(nameAsArray));</b>
+<i>570</i>&nbsp;                    key.signalEvent(kind, name);
+<i>571</i>&nbsp;                }
+<i>572</i>&nbsp;
+<b class="nc"><i>573</i>&nbsp;                // next event</b>
+<b class="nc"><i>574</i>&nbsp;                nextOffset = UNSAFE.getInt(address + OFFSETOF_NEXTENTRYOFFSET);</b>
+<b class="nc"><i>575</i>&nbsp;                address += (long)nextOffset;</b>
+<i>576</i>&nbsp;            } while (nextOffset != 0);
+<i>577</i>&nbsp;        }
+<i>578</i>&nbsp;
+<i>579</i>&nbsp;        /**
+<i>580</i>&nbsp;         * Poller main loop
+<i>581</i>&nbsp;         */
+<i>582</i>&nbsp;        @Override
+<i>583</i>&nbsp;        public void run() {
+<i>584</i>&nbsp;            for (;;) {
+<i>585</i>&nbsp;                CompletionStatus info;
+<b class="nc"><i>586</i>&nbsp;                try {</b>
+<b class="nc"><i>587</i>&nbsp;                    info = GetQueuedCompletionStatus(port);</b>
+<i>588</i>&nbsp;                } catch (WindowsException x) {
+<b class="nc"><i>589</i>&nbsp;                    // this should not happen</b>
+<i>590</i>&nbsp;                    x.printStackTrace();
+<b class="nc"><i>591</i>&nbsp;                    return;</b>
+<i>592</i>&nbsp;                }
+<i>593</i>&nbsp;
+<b class="nc"><i>594</i>&nbsp;                // wakeup</b>
+<b class="nc"><i>595</i>&nbsp;                if (info.completionKey() == WAKEUP_COMPLETION_KEY) {</b>
+<b class="nc"><i>596</i>&nbsp;                    boolean shutdown = processRequests();</b>
+<i>597</i>&nbsp;                    if (shutdown) {
+<i>598</i>&nbsp;                        return;
+<i>599</i>&nbsp;                    }
+<i>600</i>&nbsp;                    continue;
+<i>601</i>&nbsp;                }
+<i>602</i>&nbsp;
+<b class="nc"><i>603</i>&nbsp;                // map completionKey to get WatchKey</b>
+<b class="nc"><i>604</i>&nbsp;                WindowsWatchKey key = ck2key.get((int)info.completionKey());</b>
+<i>605</i>&nbsp;                if (key == null) {
+<i>606</i>&nbsp;                    // We get here when a registration is changed. In that case
+<i>607</i>&nbsp;                    // the directory is closed which causes an event with the
+<b class="nc"><i>608</i>&nbsp;                    // old completion key.</b>
+<i>609</i>&nbsp;                    continue;
+<i>610</i>&nbsp;                }
+<b class="nc"><i>611</i>&nbsp;</b>
+<b class="nc"><i>612</i>&nbsp;                boolean criticalError = false;</b>
+<b class="nc"><i>613</i>&nbsp;                int errorCode = info.error();</b>
+<b class="nc"><i>614</i>&nbsp;                int messageSize = info.bytesTransferred();</b>
+<i>615</i>&nbsp;                if (errorCode == ERROR_NOTIFY_ENUM_DIR) {
+<b class="nc"><i>616</i>&nbsp;                    // buffer overflow</b>
+<b class="nc"><i>617</i>&nbsp;                    key.signalEvent(StandardWatchEventKinds.OVERFLOW, null);</b>
+<i>618</i>&nbsp;                } else if (errorCode != 0 &amp;&amp; errorCode != ERROR_MORE_DATA) {
+<b class="nc"><i>619</i>&nbsp;                    // ReadDirectoryChangesW failed</b>
+<i>620</i>&nbsp;                    criticalError = true;
+<i>621</i>&nbsp;                } else {
+<i>622</i>&nbsp;                    // ERROR_MORE_DATA is a warning about incomplete
+<i>623</i>&nbsp;                    // data transfer over TCP/UDP stack. For the case
+<i>624</i>&nbsp;                    // [messageSize] is zero in the most of cases.
+<b class="nc"><i>625</i>&nbsp;</b>
+<i>626</i>&nbsp;                    if (messageSize &gt; 0) {
+<b class="nc"><i>627</i>&nbsp;                        // process non-empty events.</b>
+<b class="nc"><i>628</i>&nbsp;                        processEvents(key, messageSize);</b>
+<i>629</i>&nbsp;                    } else if (errorCode == 0) {
+<i>630</i>&nbsp;                        // insufficient buffer size
+<b class="nc"><i>631</i>&nbsp;                        // not described, but can happen.</b>
+<i>632</i>&nbsp;                        key.signalEvent(StandardWatchEventKinds.OVERFLOW, null);
+<i>633</i>&nbsp;                    }
+<i>634</i>&nbsp;
+<i>635</i>&nbsp;                    // start read for next batch of changes
+<b class="nc"><i>636</i>&nbsp;                    try {</b>
+<b class="nc"><i>637</i>&nbsp;                        ReadDirectoryChangesW(key.handle(),</b>
+<i>638</i>&nbsp;                                              key.buffer().address(),
+<b class="nc"><i>639</i>&nbsp;                                              CHANGES_BUFFER_SIZE,</b>
+<i>640</i>&nbsp;                                              key.watchSubtree(),
+<b class="nc"><i>641</i>&nbsp;                                              ALL_FILE_NOTIFY_EVENTS,</b>
+<b class="nc"><i>642</i>&nbsp;                                              key.countAddress(),</b>
+<b class="nc"><i>643</i>&nbsp;                                              key.overlappedAddress());</b>
+<i>644</i>&nbsp;                    } catch (WindowsException x) {
+<b class="nc"><i>645</i>&nbsp;                        // no choice but to cancel key</b>
+<b class="nc"><i>646</i>&nbsp;                        criticalError = true;</b>
+<b class="nc"><i>647</i>&nbsp;                        key.setErrorStartingOverlapped(true);</b>
+<i>648</i>&nbsp;                    }
+<b class="nc"><i>649</i>&nbsp;                }</b>
+<b class="nc"><i>650</i>&nbsp;                if (criticalError) {</b>
+<b class="nc"><i>651</i>&nbsp;                    implCancelKey(key);</b>
+<i>652</i>&nbsp;                    key.signal();
+<b class="nc"><i>653</i>&nbsp;                }</b>
+<i>654</i>&nbsp;            }
+<i>655</i>&nbsp;        }
+<i>656</i>&nbsp;    }
+<i>657</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

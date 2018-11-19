@@ -1,0 +1,1250 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: WindowsPreferences</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.prefs</a> ]
+</div>
+
+<h1>Coverage Summary for Class: WindowsPreferences (java.util.prefs)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WindowsPreferences</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 35)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 430)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.util.prefs;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.StringTokenizer;
+<i>29</i>&nbsp;import java.io.ByteArrayOutputStream;
+<i>30</i>&nbsp;import java.security.AccessController;
+<i>31</i>&nbsp;import java.security.PrivilegedAction;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;import sun.util.logging.PlatformLogger;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;/**
+<i>36</i>&nbsp; * Windows registry based implementation of  {@code Preferences}.
+<i>37</i>&nbsp; * {@code Preferences}&#39; {@code systemRoot} and {@code userRoot} are stored in
+<i>38</i>&nbsp; * {@code HKEY_LOCAL_MACHINE\SOFTWARE\JavaSoft\Prefs} and
+<i>39</i>&nbsp; * {@code HKEY_CURRENT_USER\Software\JavaSoft\Prefs} correspondingly.
+<i>40</i>&nbsp; *
+<i>41</i>&nbsp; * @author  Konstantin Kladko
+<i>42</i>&nbsp; * @see Preferences
+<i>43</i>&nbsp; * @see PreferencesFactory
+<i>44</i>&nbsp; * @since 1.4
+<i>45</i>&nbsp; */
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;class WindowsPreferences extends AbstractPreferences {
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;    static {
+<i>50</i>&nbsp;        PrivilegedAction&lt;Void&gt; load = () -&gt; {
+<i>51</i>&nbsp;            System.loadLibrary(&quot;prefs&quot;);
+<i>52</i>&nbsp;            return null;
+<i>53</i>&nbsp;        };
+<i>54</i>&nbsp;        AccessController.doPrivileged(load);
+<i>55</i>&nbsp;    }
+<b class="nc"><i>56</i>&nbsp;</b>
+<b class="nc"><i>57</i>&nbsp;    /**</b>
+<i>58</i>&nbsp;     * Logger for error messages
+<i>59</i>&nbsp;     */
+<i>60</i>&nbsp;    private static PlatformLogger logger;
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    /**
+<i>63</i>&nbsp;     * Windows registry path to {@code Preferences}&#39;s root nodes.
+<i>64</i>&nbsp;     */
+<i>65</i>&nbsp;    private static final byte[] WINDOWS_ROOT_PATH =
+<i>66</i>&nbsp;        stringToByteArray(&quot;Software\\JavaSoft\\Prefs&quot;);
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    /**
+<i>69</i>&nbsp;     * Windows handles to {@code HKEY_CURRENT_USER} and
+<i>70</i>&nbsp;     * {@code HKEY_LOCAL_MACHINE} hives.
+<i>71</i>&nbsp;     */
+<i>72</i>&nbsp;    private static final int HKEY_CURRENT_USER = 0x80000001;
+<i>73</i>&nbsp;    private static final int HKEY_LOCAL_MACHINE = 0x80000002;
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    /**
+<i>76</i>&nbsp;     * Mount point for {@code Preferences}&#39;  user root.
+<i>77</i>&nbsp;     */
+<i>78</i>&nbsp;    private static final int USER_ROOT_NATIVE_HANDLE = HKEY_CURRENT_USER;
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;    /**
+<i>81</i>&nbsp;     * Mount point for {@code Preferences}&#39;  system root.
+<i>82</i>&nbsp;     */
+<i>83</i>&nbsp;    private static final int SYSTEM_ROOT_NATIVE_HANDLE = HKEY_LOCAL_MACHINE;
+<i>84</i>&nbsp;
+<b class="nc"><i>85</i>&nbsp;    /**</b>
+<i>86</i>&nbsp;     * Maximum byte-encoded path length for Windows native functions,
+<i>87</i>&nbsp;     * ending {@code null} character not included.
+<i>88</i>&nbsp;     */
+<i>89</i>&nbsp;    private static final int MAX_WINDOWS_PATH_LENGTH = 256;
+<i>90</i>&nbsp;
+<b class="nc"><i>91</i>&nbsp;    /**</b>
+<i>92</i>&nbsp;     * User root node.
+<i>93</i>&nbsp;     */
+<i>94</i>&nbsp;    private static volatile Preferences userRoot;
+<i>95</i>&nbsp;
+<i>96</i>&nbsp;    static Preferences getUserRoot() {
+<i>97</i>&nbsp;        Preferences root = userRoot;
+<i>98</i>&nbsp;        if (root == null) {
+<i>99</i>&nbsp;            synchronized (WindowsPreferences.class) {
+<i>100</i>&nbsp;                root = userRoot;
+<i>101</i>&nbsp;                if (root == null) {
+<i>102</i>&nbsp;                    root = new WindowsPreferences(USER_ROOT_NATIVE_HANDLE, WINDOWS_ROOT_PATH);
+<i>103</i>&nbsp;                    userRoot = root;
+<i>104</i>&nbsp;                }
+<i>105</i>&nbsp;            }
+<i>106</i>&nbsp;        }
+<i>107</i>&nbsp;        return root;
+<i>108</i>&nbsp;    }
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;    /**
+<i>111</i>&nbsp;     * System root node.
+<i>112</i>&nbsp;     */
+<i>113</i>&nbsp;    private static volatile Preferences systemRoot;
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;    static Preferences getSystemRoot() {
+<i>116</i>&nbsp;        Preferences root = systemRoot;
+<i>117</i>&nbsp;        if (root == null) {
+<i>118</i>&nbsp;            synchronized (WindowsPreferences.class) {
+<i>119</i>&nbsp;                root = systemRoot;
+<i>120</i>&nbsp;                if (root == null) {
+<i>121</i>&nbsp;                    root = new WindowsPreferences(SYSTEM_ROOT_NATIVE_HANDLE, WINDOWS_ROOT_PATH);
+<i>122</i>&nbsp;                    systemRoot = root;
+<i>123</i>&nbsp;                }
+<i>124</i>&nbsp;            }
+<b class="nc"><i>125</i>&nbsp;        }</b>
+<i>126</i>&nbsp;        return root;
+<i>127</i>&nbsp;    }
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    /*  Windows error codes. */
+<b class="nc"><i>130</i>&nbsp;    private static final int ERROR_SUCCESS = 0;</b>
+<i>131</i>&nbsp;    private static final int ERROR_FILE_NOT_FOUND = 2;
+<i>132</i>&nbsp;    private static final int ERROR_ACCESS_DENIED = 5;
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;    /* Constants used to interpret returns of native functions    */
+<b class="nc"><i>135</i>&nbsp;    private static final int NATIVE_HANDLE = 0;</b>
+<i>136</i>&nbsp;    private static final int ERROR_CODE = 1;
+<i>137</i>&nbsp;    private static final int SUBKEYS_NUMBER = 0;
+<i>138</i>&nbsp;    private static final int VALUES_NUMBER = 2;
+<i>139</i>&nbsp;    private static final int MAX_KEY_LENGTH = 3;
+<i>140</i>&nbsp;    private static final int MAX_VALUE_NAME_LENGTH = 4;
+<i>141</i>&nbsp;    private static final int DISPOSITION = 2;
+<i>142</i>&nbsp;    private static final int REG_CREATED_NEW_KEY = 1;
+<i>143</i>&nbsp;    private static final int REG_OPENED_EXISTING_KEY = 2;
+<i>144</i>&nbsp;    private static final int NULL_NATIVE_HANDLE = 0;
+<i>145</i>&nbsp;
+<i>146</i>&nbsp;    /* Windows security masks */
+<b class="nc"><i>147</i>&nbsp;    private static final int DELETE = 0x10000;</b>
+<b class="nc"><i>148</i>&nbsp;    private static final int KEY_QUERY_VALUE = 1;</b>
+<b class="nc"><i>149</i>&nbsp;    private static final int KEY_SET_VALUE = 2;</b>
+<b class="nc"><i>150</i>&nbsp;    private static final int KEY_CREATE_SUB_KEY = 4;</b>
+<b class="nc"><i>151</i>&nbsp;    private static final int KEY_ENUMERATE_SUB_KEYS = 8;</b>
+<b class="nc"><i>152</i>&nbsp;    private static final int KEY_READ = 0x20019;</b>
+<b class="nc"><i>153</i>&nbsp;    private static final int KEY_WRITE = 0x20006;</b>
+<i>154</i>&nbsp;    private static final int KEY_ALL_ACCESS = 0xf003f;
+<b class="nc"><i>155</i>&nbsp;</b>
+<b class="nc"><i>156</i>&nbsp;    /**</b>
+<b class="nc"><i>157</i>&nbsp;     * Initial time between registry access attempts, in ms. The time is doubled</b>
+<b class="nc"><i>158</i>&nbsp;     * after each failing attempt (except the first).</b>
+<b class="nc"><i>159</i>&nbsp;     */</b>
+<b class="nc"><i>160</i>&nbsp;    private static int INIT_SLEEP_TIME = 50;</b>
+<i>161</i>&nbsp;
+<b class="nc"><i>162</i>&nbsp;    /**</b>
+<b class="nc"><i>163</i>&nbsp;     * Maximum number of registry access attempts.</b>
+<b class="nc"><i>164</i>&nbsp;     */</b>
+<b class="nc"><i>165</i>&nbsp;    private static int MAX_ATTEMPTS = 5;</b>
+<b class="nc"><i>166</i>&nbsp;</b>
+<b class="nc"><i>167</i>&nbsp;    /**</b>
+<b class="nc"><i>168</i>&nbsp;     * BackingStore availability flag.</b>
+<b class="nc"><i>169</i>&nbsp;     */</b>
+<i>170</i>&nbsp;    private boolean isBackingStoreAvailable = true;
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;    /**
+<b class="nc"><i>173</i>&nbsp;     * Java wrapper for Windows registry API RegOpenKey()</b>
+<i>174</i>&nbsp;     */
+<i>175</i>&nbsp;    private static native long[] WindowsRegOpenKey(long hKey, byte[] subKey,
+<i>176</i>&nbsp;                                                   int securityMask);
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * Retries RegOpenKey() MAX_ATTEMPTS times before giving up.
+<i>179</i>&nbsp;     */
+<i>180</i>&nbsp;    private static long[] WindowsRegOpenKey1(long hKey, byte[] subKey,
+<i>181</i>&nbsp;                                             int securityMask) {
+<i>182</i>&nbsp;        long[] result = WindowsRegOpenKey(hKey, subKey, securityMask);
+<i>183</i>&nbsp;        if (result[ERROR_CODE] == ERROR_SUCCESS) {
+<i>184</i>&nbsp;            return result;
+<i>185</i>&nbsp;        } else if (result[ERROR_CODE] == ERROR_FILE_NOT_FOUND) {
+<i>186</i>&nbsp;            logger().warning(&quot;Trying to recreate Windows registry node &quot; +
+<i>187</i>&nbsp;            byteArrayToString(subKey) + &quot; at root 0x&quot; +
+<i>188</i>&nbsp;            Long.toHexString(hKey) + &quot;.&quot;);
+<i>189</i>&nbsp;            // Try recreation
+<b class="nc"><i>190</i>&nbsp;            long handle = WindowsRegCreateKeyEx(hKey, subKey)[NATIVE_HANDLE];</b>
+<b class="nc"><i>191</i>&nbsp;            WindowsRegCloseKey(handle);</b>
+<b class="nc"><i>192</i>&nbsp;            return WindowsRegOpenKey(hKey, subKey, securityMask);</b>
+<i>193</i>&nbsp;        } else if (result[ERROR_CODE] != ERROR_ACCESS_DENIED) {
+<b class="nc"><i>194</i>&nbsp;            long sleepTime = INIT_SLEEP_TIME;</b>
+<b class="nc"><i>195</i>&nbsp;            for (int i = 0; i &lt; MAX_ATTEMPTS; i++) {</b>
+<i>196</i>&nbsp;                try {
+<b class="nc"><i>197</i>&nbsp;                    Thread.sleep(sleepTime);</b>
+<b class="nc"><i>198</i>&nbsp;                } catch(InterruptedException e) {</b>
+<b class="nc"><i>199</i>&nbsp;                    return result;</b>
+<b class="nc"><i>200</i>&nbsp;                }</b>
+<b class="nc"><i>201</i>&nbsp;                sleepTime *= 2;</b>
+<b class="nc"><i>202</i>&nbsp;                result = WindowsRegOpenKey(hKey, subKey, securityMask);</b>
+<b class="nc"><i>203</i>&nbsp;                if (result[ERROR_CODE] == ERROR_SUCCESS) {</b>
+<b class="nc"><i>204</i>&nbsp;                    return result;</b>
+<i>205</i>&nbsp;                }
+<i>206</i>&nbsp;            }
+<i>207</i>&nbsp;        }
+<b class="nc"><i>208</i>&nbsp;        return result;</b>
+<i>209</i>&nbsp;    }
+<i>210</i>&nbsp;
+<i>211</i>&nbsp;     /**
+<i>212</i>&nbsp;     * Java wrapper for Windows registry API RegCloseKey()
+<i>213</i>&nbsp;     */
+<i>214</i>&nbsp;    private static native int WindowsRegCloseKey(long hKey);
+<i>215</i>&nbsp;
+<i>216</i>&nbsp;    /**
+<i>217</i>&nbsp;     * Java wrapper for Windows registry API RegCreateKeyEx()
+<i>218</i>&nbsp;     */
+<i>219</i>&nbsp;    private static native long[] WindowsRegCreateKeyEx(long hKey, byte[] subKey);
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;    /**
+<i>222</i>&nbsp;     * Retries RegCreateKeyEx() MAX_ATTEMPTS times before giving up.
+<i>223</i>&nbsp;     */
+<b class="nc"><i>224</i>&nbsp;    private static long[] WindowsRegCreateKeyEx1(long hKey, byte[] subKey) {</b>
+<b class="nc"><i>225</i>&nbsp;        long[] result = WindowsRegCreateKeyEx(hKey, subKey);</b>
+<b class="nc"><i>226</i>&nbsp;        if (result[ERROR_CODE] == ERROR_SUCCESS) {</b>
+<i>227</i>&nbsp;            return result;
+<b class="nc"><i>228</i>&nbsp;        } else {</b>
+<b class="nc"><i>229</i>&nbsp;            long sleepTime = INIT_SLEEP_TIME;</b>
+<i>230</i>&nbsp;            for (int i = 0; i &lt; MAX_ATTEMPTS; i++) {
+<b class="nc"><i>231</i>&nbsp;                try {</b>
+<b class="nc"><i>232</i>&nbsp;                    Thread.sleep(sleepTime);</b>
+<b class="nc"><i>233</i>&nbsp;                } catch(InterruptedException e) {</b>
+<b class="nc"><i>234</i>&nbsp;                    return result;</b>
+<b class="nc"><i>235</i>&nbsp;                }</b>
+<b class="nc"><i>236</i>&nbsp;                sleepTime *= 2;</b>
+<b class="nc"><i>237</i>&nbsp;                result = WindowsRegCreateKeyEx(hKey, subKey);</b>
+<b class="nc"><i>238</i>&nbsp;                if (result[ERROR_CODE] == ERROR_SUCCESS) {</b>
+<i>239</i>&nbsp;                    return result;
+<i>240</i>&nbsp;                }
+<i>241</i>&nbsp;            }
+<b class="nc"><i>242</i>&nbsp;        }</b>
+<i>243</i>&nbsp;        return result;
+<i>244</i>&nbsp;    }
+<i>245</i>&nbsp;    /**
+<i>246</i>&nbsp;     * Java wrapper for Windows registry API RegDeleteKey()
+<i>247</i>&nbsp;     */
+<i>248</i>&nbsp;    private static native int WindowsRegDeleteKey(long hKey, byte[] subKey);
+<i>249</i>&nbsp;
+<i>250</i>&nbsp;    /**
+<i>251</i>&nbsp;     * Java wrapper for Windows registry API RegFlushKey()
+<i>252</i>&nbsp;     */
+<i>253</i>&nbsp;    private static native int WindowsRegFlushKey(long hKey);
+<i>254</i>&nbsp;
+<i>255</i>&nbsp;    /**
+<i>256</i>&nbsp;     * Retries RegFlushKey() MAX_ATTEMPTS times before giving up.
+<i>257</i>&nbsp;     */
+<i>258</i>&nbsp;    private static int WindowsRegFlushKey1(long hKey) {
+<i>259</i>&nbsp;        int result = WindowsRegFlushKey(hKey);
+<b class="nc"><i>260</i>&nbsp;        if (result == ERROR_SUCCESS) {</b>
+<b class="nc"><i>261</i>&nbsp;            return result;</b>
+<b class="nc"><i>262</i>&nbsp;        } else {</b>
+<i>263</i>&nbsp;            long sleepTime = INIT_SLEEP_TIME;
+<b class="nc"><i>264</i>&nbsp;            for (int i = 0; i &lt; MAX_ATTEMPTS; i++) {</b>
+<b class="nc"><i>265</i>&nbsp;                try {</b>
+<i>266</i>&nbsp;                    Thread.sleep(sleepTime);
+<b class="nc"><i>267</i>&nbsp;                } catch(InterruptedException e) {</b>
+<b class="nc"><i>268</i>&nbsp;                    return result;</b>
+<b class="nc"><i>269</i>&nbsp;                }</b>
+<b class="nc"><i>270</i>&nbsp;                sleepTime *= 2;</b>
+<b class="nc"><i>271</i>&nbsp;                result = WindowsRegFlushKey(hKey);</b>
+<b class="nc"><i>272</i>&nbsp;                if (result == ERROR_SUCCESS) {</b>
+<b class="nc"><i>273</i>&nbsp;                    return result;</b>
+<b class="nc"><i>274</i>&nbsp;                }</b>
+<i>275</i>&nbsp;            }
+<i>276</i>&nbsp;        }
+<i>277</i>&nbsp;        return result;
+<b class="nc"><i>278</i>&nbsp;    }</b>
+<i>279</i>&nbsp;
+<i>280</i>&nbsp;    /**
+<i>281</i>&nbsp;     * Java wrapper for Windows registry API RegQueryValueEx()
+<i>282</i>&nbsp;     */
+<i>283</i>&nbsp;    private static native byte[] WindowsRegQueryValueEx(long hKey,
+<i>284</i>&nbsp;                                                        byte[] valueName);
+<i>285</i>&nbsp;    /**
+<i>286</i>&nbsp;     * Java wrapper for Windows registry API RegSetValueEx()
+<i>287</i>&nbsp;     */
+<i>288</i>&nbsp;    private static native int WindowsRegSetValueEx(long hKey, byte[] valueName,
+<i>289</i>&nbsp;                                                   byte[] value);
+<i>290</i>&nbsp;    /**
+<i>291</i>&nbsp;     * Retries RegSetValueEx() MAX_ATTEMPTS times before giving up.
+<i>292</i>&nbsp;     */
+<i>293</i>&nbsp;    private static int WindowsRegSetValueEx1(long hKey, byte[] valueName,
+<i>294</i>&nbsp;                                             byte[] value) {
+<b class="nc"><i>295</i>&nbsp;        int result = WindowsRegSetValueEx(hKey, valueName, value);</b>
+<b class="nc"><i>296</i>&nbsp;        if (result == ERROR_SUCCESS) {</b>
+<b class="nc"><i>297</i>&nbsp;            return result;</b>
+<i>298</i>&nbsp;        } else {
+<b class="nc"><i>299</i>&nbsp;            long sleepTime = INIT_SLEEP_TIME;</b>
+<b class="nc"><i>300</i>&nbsp;            for (int i = 0; i &lt; MAX_ATTEMPTS; i++) {</b>
+<i>301</i>&nbsp;                try {
+<b class="nc"><i>302</i>&nbsp;                    Thread.sleep(sleepTime);</b>
+<b class="nc"><i>303</i>&nbsp;                } catch(InterruptedException e) {</b>
+<b class="nc"><i>304</i>&nbsp;                    return result;</b>
+<b class="nc"><i>305</i>&nbsp;                }</b>
+<b class="nc"><i>306</i>&nbsp;                sleepTime *= 2;</b>
+<b class="nc"><i>307</i>&nbsp;                result = WindowsRegSetValueEx(hKey, valueName, value);</b>
+<b class="nc"><i>308</i>&nbsp;                if (result == ERROR_SUCCESS) {</b>
+<b class="nc"><i>309</i>&nbsp;                    return result;</b>
+<i>310</i>&nbsp;                }
+<i>311</i>&nbsp;            }
+<i>312</i>&nbsp;        }
+<b class="nc"><i>313</i>&nbsp;        return result;</b>
+<i>314</i>&nbsp;    }
+<i>315</i>&nbsp;
+<i>316</i>&nbsp;    /**
+<i>317</i>&nbsp;     * Java wrapper for Windows registry API RegDeleteValue()
+<i>318</i>&nbsp;     */
+<i>319</i>&nbsp;    private static native int WindowsRegDeleteValue(long hKey, byte[] valueName);
+<i>320</i>&nbsp;
+<i>321</i>&nbsp;    /**
+<i>322</i>&nbsp;     * Java wrapper for Windows registry API RegQueryInfoKey()
+<i>323</i>&nbsp;     */
+<i>324</i>&nbsp;    private static native long[] WindowsRegQueryInfoKey(long hKey);
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;    /**
+<b class="nc"><i>327</i>&nbsp;     * Retries RegQueryInfoKey() MAX_ATTEMPTS times before giving up.</b>
+<b class="nc"><i>328</i>&nbsp;     */</b>
+<b class="nc"><i>329</i>&nbsp;    private static long[] WindowsRegQueryInfoKey1(long hKey) {</b>
+<i>330</i>&nbsp;        long[] result = WindowsRegQueryInfoKey(hKey);
+<b class="nc"><i>331</i>&nbsp;        if (result[ERROR_CODE] == ERROR_SUCCESS) {</b>
+<b class="nc"><i>332</i>&nbsp;            return result;</b>
+<i>333</i>&nbsp;        } else {
+<b class="nc"><i>334</i>&nbsp;            long sleepTime = INIT_SLEEP_TIME;</b>
+<b class="nc"><i>335</i>&nbsp;            for (int i = 0; i &lt; MAX_ATTEMPTS; i++) {</b>
+<b class="nc"><i>336</i>&nbsp;                try {</b>
+<b class="nc"><i>337</i>&nbsp;                    Thread.sleep(sleepTime);</b>
+<b class="nc"><i>338</i>&nbsp;                } catch(InterruptedException e) {</b>
+<b class="nc"><i>339</i>&nbsp;                    return result;</b>
+<b class="nc"><i>340</i>&nbsp;                }</b>
+<b class="nc"><i>341</i>&nbsp;                sleepTime *= 2;</b>
+<i>342</i>&nbsp;                result = WindowsRegQueryInfoKey(hKey);
+<i>343</i>&nbsp;                if (result[ERROR_CODE] == ERROR_SUCCESS) {
+<i>344</i>&nbsp;                    return result;
+<b class="nc"><i>345</i>&nbsp;                }</b>
+<i>346</i>&nbsp;            }
+<i>347</i>&nbsp;        }
+<i>348</i>&nbsp;        return result;
+<i>349</i>&nbsp;    }
+<i>350</i>&nbsp;
+<i>351</i>&nbsp;    /**
+<i>352</i>&nbsp;     * Java wrapper for Windows registry API RegEnumKeyEx()
+<i>353</i>&nbsp;     */
+<i>354</i>&nbsp;    private static native byte[] WindowsRegEnumKeyEx(long hKey, int subKeyIndex,
+<i>355</i>&nbsp;                                                     int maxKeyLength);
+<i>356</i>&nbsp;
+<i>357</i>&nbsp;    /**
+<b class="nc"><i>358</i>&nbsp;     * Retries RegEnumKeyEx() MAX_ATTEMPTS times before giving up.</b>
+<i>359</i>&nbsp;     */
+<b class="nc"><i>360</i>&nbsp;    private static byte[] WindowsRegEnumKeyEx1(long hKey, int subKeyIndex,</b>
+<b class="nc"><i>361</i>&nbsp;                                               int maxKeyLength) {</b>
+<i>362</i>&nbsp;        byte[] result = WindowsRegEnumKeyEx(hKey, subKeyIndex, maxKeyLength);
+<b class="nc"><i>363</i>&nbsp;        if (result != null) {</b>
+<b class="nc"><i>364</i>&nbsp;            return result;</b>
+<i>365</i>&nbsp;        } else {
+<b class="nc"><i>366</i>&nbsp;            long sleepTime = INIT_SLEEP_TIME;</b>
+<b class="nc"><i>367</i>&nbsp;            for (int i = 0; i &lt; MAX_ATTEMPTS; i++) {</b>
+<b class="nc"><i>368</i>&nbsp;                try {</b>
+<b class="nc"><i>369</i>&nbsp;                    Thread.sleep(sleepTime);</b>
+<b class="nc"><i>370</i>&nbsp;                } catch(InterruptedException e) {</b>
+<b class="nc"><i>371</i>&nbsp;                    return result;</b>
+<i>372</i>&nbsp;                }
+<b class="nc"><i>373</i>&nbsp;                sleepTime *= 2;</b>
+<b class="nc"><i>374</i>&nbsp;                result = WindowsRegEnumKeyEx(hKey, subKeyIndex, maxKeyLength);</b>
+<i>375</i>&nbsp;                if (result != null) {
+<i>376</i>&nbsp;                    return result;
+<i>377</i>&nbsp;                }
+<b class="nc"><i>378</i>&nbsp;            }</b>
+<i>379</i>&nbsp;        }
+<i>380</i>&nbsp;        return result;
+<i>381</i>&nbsp;    }
+<i>382</i>&nbsp;
+<i>383</i>&nbsp;    /**
+<i>384</i>&nbsp;     * Java wrapper for Windows registry API RegEnumValue()
+<i>385</i>&nbsp;     */
+<i>386</i>&nbsp;    private static native byte[] WindowsRegEnumValue(long hKey, int valueIndex,
+<i>387</i>&nbsp;                                                     int maxValueNameLength);
+<b class="nc"><i>388</i>&nbsp;    /**</b>
+<b class="nc"><i>389</i>&nbsp;     * Retries RegEnumValueEx() MAX_ATTEMPTS times before giving up.</b>
+<b class="nc"><i>390</i>&nbsp;     */</b>
+<i>391</i>&nbsp;    private static byte[] WindowsRegEnumValue1(long hKey, int valueIndex,
+<b class="nc"><i>392</i>&nbsp;                                               int maxValueNameLength) {</b>
+<i>393</i>&nbsp;        byte[] result = WindowsRegEnumValue(hKey, valueIndex,
+<i>394</i>&nbsp;                                            maxValueNameLength);
+<b class="nc"><i>395</i>&nbsp;        if (result != null) {</b>
+<b class="nc"><i>396</i>&nbsp;            return result;</b>
+<b class="nc"><i>397</i>&nbsp;        } else {</b>
+<b class="nc"><i>398</i>&nbsp;            long sleepTime = INIT_SLEEP_TIME;</b>
+<b class="nc"><i>399</i>&nbsp;            for (int i = 0; i &lt; MAX_ATTEMPTS; i++) {</b>
+<b class="nc"><i>400</i>&nbsp;                try {</b>
+<i>401</i>&nbsp;                    Thread.sleep(sleepTime);
+<i>402</i>&nbsp;                } catch(InterruptedException e) {
+<b class="nc"><i>403</i>&nbsp;                    return result;</b>
+<i>404</i>&nbsp;                }
+<i>405</i>&nbsp;                sleepTime *= 2;
+<b class="nc"><i>406</i>&nbsp;                result = WindowsRegEnumValue(hKey, valueIndex,</b>
+<b class="nc"><i>407</i>&nbsp;                                             maxValueNameLength);</b>
+<b class="nc"><i>408</i>&nbsp;                if (result != null) {</b>
+<i>409</i>&nbsp;                    return result;
+<i>410</i>&nbsp;                }
+<i>411</i>&nbsp;            }
+<i>412</i>&nbsp;        }
+<i>413</i>&nbsp;        return result;
+<i>414</i>&nbsp;    }
+<i>415</i>&nbsp;
+<i>416</i>&nbsp;    /**
+<i>417</i>&nbsp;     * Constructs a {@code WindowsPreferences} node, creating underlying
+<i>418</i>&nbsp;     * Windows registry node and all its Windows parents, if they are not yet
+<i>419</i>&nbsp;     * created.
+<b class="nc"><i>420</i>&nbsp;     * Logs a warning message, if Windows Registry is unavailable.</b>
+<b class="nc"><i>421</i>&nbsp;     */</b>
+<b class="nc"><i>422</i>&nbsp;    private WindowsPreferences(WindowsPreferences parent, String name) {</b>
+<b class="nc"><i>423</i>&nbsp;        super(parent, name);</b>
+<b class="nc"><i>424</i>&nbsp;        long parentNativeHandle = parent.openKey(KEY_CREATE_SUB_KEY, KEY_READ);</b>
+<b class="nc"><i>425</i>&nbsp;        if (parentNativeHandle == NULL_NATIVE_HANDLE) {</b>
+<b class="nc"><i>426</i>&nbsp;            // if here, openKey failed and logged</b>
+<i>427</i>&nbsp;            isBackingStoreAvailable = false;
+<i>428</i>&nbsp;            return;
+<b class="nc"><i>429</i>&nbsp;        }</b>
+<i>430</i>&nbsp;        long[] result =
+<i>431</i>&nbsp;               WindowsRegCreateKeyEx1(parentNativeHandle, toWindowsName(name));
+<i>432</i>&nbsp;        if (result[ERROR_CODE] != ERROR_SUCCESS) {
+<b class="nc"><i>433</i>&nbsp;            logger().warning(&quot;Could not create windows registry node &quot; +</b>
+<b class="nc"><i>434</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +</b>
+<i>435</i>&nbsp;                    &quot; at root 0x&quot; + Long.toHexString(rootNativeHandle()) +
+<i>436</i>&nbsp;                    &quot;. Windows RegCreateKeyEx(...) returned error code &quot; +
+<i>437</i>&nbsp;                    result[ERROR_CODE] + &quot;.&quot;);
+<i>438</i>&nbsp;            isBackingStoreAvailable = false;
+<i>439</i>&nbsp;            return;
+<i>440</i>&nbsp;        }
+<i>441</i>&nbsp;        newNode = (result[DISPOSITION] == REG_CREATED_NEW_KEY);
+<i>442</i>&nbsp;        closeKey(parentNativeHandle);
+<b class="nc"><i>443</i>&nbsp;        closeKey(result[NATIVE_HANDLE]);</b>
+<b class="nc"><i>444</i>&nbsp;    }</b>
+<b class="nc"><i>445</i>&nbsp;</b>
+<b class="nc"><i>446</i>&nbsp;    /**</b>
+<b class="nc"><i>447</i>&nbsp;     * Constructs a root node creating the underlying</b>
+<b class="nc"><i>448</i>&nbsp;     * Windows registry node and all of its parents, if they have not yet been</b>
+<b class="nc"><i>449</i>&nbsp;     * created.</b>
+<b class="nc"><i>450</i>&nbsp;     * Logs a warning message, if Windows Registry is unavailable.</b>
+<b class="nc"><i>451</i>&nbsp;     * @param rootNativeHandle Native handle to one of Windows top level keys.</b>
+<b class="nc"><i>452</i>&nbsp;     * @param rootDirectory Path to root directory, as a byte-encoded string.</b>
+<b class="nc"><i>453</i>&nbsp;     */</b>
+<i>454</i>&nbsp;    private  WindowsPreferences(long rootNativeHandle, byte[] rootDirectory) {
+<i>455</i>&nbsp;        super(null, &quot;&quot;);
+<i>456</i>&nbsp;        long[] result =
+<i>457</i>&nbsp;                WindowsRegCreateKeyEx1(rootNativeHandle, rootDirectory);
+<i>458</i>&nbsp;        if (result[ERROR_CODE] != ERROR_SUCCESS) {
+<i>459</i>&nbsp;            logger().warning(&quot;Could not open/create prefs root node &quot; +
+<i>460</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +
+<i>461</i>&nbsp;                    &quot; at root 0x&quot; + Long.toHexString(rootNativeHandle()) +
+<i>462</i>&nbsp;                    &quot;. Windows RegCreateKeyEx(...) returned error code &quot; +
+<i>463</i>&nbsp;                    result[ERROR_CODE] + &quot;.&quot;);
+<i>464</i>&nbsp;            isBackingStoreAvailable = false;
+<i>465</i>&nbsp;            return;
+<b class="nc"><i>466</i>&nbsp;        }</b>
+<i>467</i>&nbsp;        // Check if a new node
+<i>468</i>&nbsp;        newNode = (result[DISPOSITION] == REG_CREATED_NEW_KEY);
+<i>469</i>&nbsp;        closeKey(result[NATIVE_HANDLE]);
+<i>470</i>&nbsp;    }
+<i>471</i>&nbsp;
+<i>472</i>&nbsp;    /**
+<i>473</i>&nbsp;     * Returns Windows absolute path of the current node as a byte array.
+<i>474</i>&nbsp;     * Java &quot;/&quot; separator is transformed into Windows &quot;\&quot;.
+<i>475</i>&nbsp;     * @see Preferences#absolutePath()
+<i>476</i>&nbsp;     */
+<i>477</i>&nbsp;    private byte[] windowsAbsolutePath() {
+<i>478</i>&nbsp;        ByteArrayOutputStream bstream = new ByteArrayOutputStream();
+<i>479</i>&nbsp;        bstream.write(WINDOWS_ROOT_PATH, 0, WINDOWS_ROOT_PATH.length-1);
+<b class="nc"><i>480</i>&nbsp;        StringTokenizer tokenizer = new StringTokenizer(absolutePath(), &quot;/&quot;);</b>
+<i>481</i>&nbsp;        while (tokenizer.hasMoreTokens()) {
+<i>482</i>&nbsp;            bstream.write((byte)&#39;\\&#39;);
+<i>483</i>&nbsp;            String nextName = tokenizer.nextToken();
+<i>484</i>&nbsp;            byte[] windowsNextName = toWindowsName(nextName);
+<i>485</i>&nbsp;            bstream.write(windowsNextName, 0, windowsNextName.length-1);
+<i>486</i>&nbsp;        }
+<i>487</i>&nbsp;        bstream.write(0);
+<i>488</i>&nbsp;        return bstream.toByteArray();
+<i>489</i>&nbsp;    }
+<i>490</i>&nbsp;
+<i>491</i>&nbsp;    /**
+<i>492</i>&nbsp;     * Opens current node&#39;s underlying Windows registry key using a
+<i>493</i>&nbsp;     * given security mask.
+<i>494</i>&nbsp;     * @param securityMask Windows security mask.
+<i>495</i>&nbsp;     * @return Windows registry key&#39;s handle.
+<i>496</i>&nbsp;     * @see #openKey(byte[], int)
+<i>497</i>&nbsp;     * @see #openKey(int, byte[], int)
+<b class="nc"><i>498</i>&nbsp;     * @see #closeKey(int)</b>
+<b class="nc"><i>499</i>&nbsp;     */</b>
+<i>500</i>&nbsp;    private long openKey(int securityMask) {
+<b class="nc"><i>501</i>&nbsp;        return openKey(securityMask, securityMask);</b>
+<b class="nc"><i>502</i>&nbsp;    }</b>
+<i>503</i>&nbsp;
+<i>504</i>&nbsp;    /**
+<b class="nc"><i>505</i>&nbsp;     * Opens current node&#39;s underlying Windows registry key using a</b>
+<b class="nc"><i>506</i>&nbsp;     * given security mask.</b>
+<b class="nc"><i>507</i>&nbsp;     * @param mask1 Preferred Windows security mask.</b>
+<i>508</i>&nbsp;     * @param mask2 Alternate Windows security mask.
+<b class="nc"><i>509</i>&nbsp;     * @return Windows registry key&#39;s handle.</b>
+<i>510</i>&nbsp;     * @see #openKey(byte[], int)
+<i>511</i>&nbsp;     * @see #openKey(int, byte[], int)
+<b class="nc"><i>512</i>&nbsp;     * @see #closeKey(int)</b>
+<b class="nc"><i>513</i>&nbsp;     */</b>
+<b class="nc"><i>514</i>&nbsp;    private long openKey(int mask1, int mask2) {</b>
+<i>515</i>&nbsp;        return openKey(windowsAbsolutePath(), mask1,  mask2);
+<b class="nc"><i>516</i>&nbsp;    }</b>
+<i>517</i>&nbsp;
+<b class="nc"><i>518</i>&nbsp;     /**</b>
+<i>519</i>&nbsp;     * Opens Windows registry key at a given absolute path using a given
+<i>520</i>&nbsp;     * security mask.
+<i>521</i>&nbsp;     * @param windowsAbsolutePath Windows absolute path of the
+<b class="nc"><i>522</i>&nbsp;     *        key as a byte-encoded string.</b>
+<i>523</i>&nbsp;     * @param mask1 Preferred Windows security mask.
+<b class="nc"><i>524</i>&nbsp;     * @param mask2 Alternate Windows security mask.</b>
+<i>525</i>&nbsp;     * @return Windows registry key&#39;s handle.
+<i>526</i>&nbsp;     * @see #openKey(int)
+<i>527</i>&nbsp;     * @see #openKey(int, byte[],int)
+<i>528</i>&nbsp;     * @see #closeKey(int)
+<i>529</i>&nbsp;     */
+<i>530</i>&nbsp;    private long openKey(byte[] windowsAbsolutePath, int mask1, int mask2) {
+<i>531</i>&nbsp;        /*  Check if key&#39;s path is short enough be opened at once
+<i>532</i>&nbsp;            otherwise use a path-splitting procedure */
+<i>533</i>&nbsp;        if (windowsAbsolutePath.length &lt;= MAX_WINDOWS_PATH_LENGTH + 1) {
+<i>534</i>&nbsp;            long[] result = WindowsRegOpenKey1(rootNativeHandle(),
+<i>535</i>&nbsp;                                               windowsAbsolutePath, mask1);
+<i>536</i>&nbsp;            if (result[ERROR_CODE] == ERROR_ACCESS_DENIED &amp;&amp; mask2 != mask1)
+<i>537</i>&nbsp;                result = WindowsRegOpenKey1(rootNativeHandle(),
+<i>538</i>&nbsp;                                            windowsAbsolutePath, mask2);
+<i>539</i>&nbsp;
+<i>540</i>&nbsp;            if (result[ERROR_CODE] != ERROR_SUCCESS) {
+<i>541</i>&nbsp;                logger().warning(&quot;Could not open windows registry node &quot; +
+<i>542</i>&nbsp;                        byteArrayToString(windowsAbsolutePath()) +
+<i>543</i>&nbsp;                        &quot; at root 0x&quot; +
+<b class="nc"><i>544</i>&nbsp;                        Long.toHexString(rootNativeHandle()) +</b>
+<b class="nc"><i>545</i>&nbsp;                        &quot;. Windows RegOpenKey(...) returned error code &quot; +</b>
+<i>546</i>&nbsp;                        result[ERROR_CODE] + &quot;.&quot;);
+<b class="nc"><i>547</i>&nbsp;                result[NATIVE_HANDLE] = NULL_NATIVE_HANDLE;</b>
+<b class="nc"><i>548</i>&nbsp;                if (result[ERROR_CODE] == ERROR_ACCESS_DENIED) {</b>
+<i>549</i>&nbsp;                    throw new SecurityException(
+<i>550</i>&nbsp;                            &quot;Could not open windows registry node &quot; +
+<b class="nc"><i>551</i>&nbsp;                            byteArrayToString(windowsAbsolutePath()) +</b>
+<b class="nc"><i>552</i>&nbsp;                            &quot; at root 0x&quot; +</b>
+<b class="nc"><i>553</i>&nbsp;                            Long.toHexString(rootNativeHandle()) +</b>
+<b class="nc"><i>554</i>&nbsp;                            &quot;: Access denied&quot;);</b>
+<i>555</i>&nbsp;                }
+<i>556</i>&nbsp;            }
+<b class="nc"><i>557</i>&nbsp;            return result[NATIVE_HANDLE];</b>
+<i>558</i>&nbsp;        } else {
+<b class="nc"><i>559</i>&nbsp;            return openKey(rootNativeHandle(), windowsAbsolutePath, mask1, mask2);</b>
+<i>560</i>&nbsp;        }
+<b class="nc"><i>561</i>&nbsp;    }</b>
+<i>562</i>&nbsp;
+<b class="nc"><i>563</i>&nbsp;     /**</b>
+<b class="nc"><i>564</i>&nbsp;     * Opens Windows registry key at a given relative path</b>
+<b class="nc"><i>565</i>&nbsp;     * with respect to a given Windows registry key.</b>
+<b class="nc"><i>566</i>&nbsp;     * @param windowsAbsolutePath Windows relative path of the</b>
+<i>567</i>&nbsp;     *        key as a byte-encoded string.
+<i>568</i>&nbsp;     * @param nativeHandle handle to the base Windows key.
+<i>569</i>&nbsp;     * @param mask1 Preferred Windows security mask.
+<b class="nc"><i>570</i>&nbsp;     * @param mask2 Alternate Windows security mask.</b>
+<b class="nc"><i>571</i>&nbsp;     * @return Windows registry key&#39;s handle.</b>
+<i>572</i>&nbsp;     * @see #openKey(int)
+<b class="nc"><i>573</i>&nbsp;     * @see #openKey(byte[],int)</b>
+<b class="nc"><i>574</i>&nbsp;     * @see #closeKey(int)</b>
+<i>575</i>&nbsp;     */
+<b class="nc"><i>576</i>&nbsp;    private long openKey(long nativeHandle, byte[] windowsRelativePath,</b>
+<i>577</i>&nbsp;                         int mask1, int mask2) {
+<b class="nc"><i>578</i>&nbsp;    /* If the path is short enough open at once. Otherwise split the path */</b>
+<i>579</i>&nbsp;        if (windowsRelativePath.length &lt;= MAX_WINDOWS_PATH_LENGTH + 1 ) {
+<b class="nc"><i>580</i>&nbsp;            long[] result = WindowsRegOpenKey1(nativeHandle,</b>
+<b class="nc"><i>581</i>&nbsp;                                               windowsRelativePath, mask1);</b>
+<i>582</i>&nbsp;            if (result[ERROR_CODE] == ERROR_ACCESS_DENIED &amp;&amp; mask2 != mask1)
+<b class="nc"><i>583</i>&nbsp;                result = WindowsRegOpenKey1(nativeHandle,</b>
+<i>584</i>&nbsp;                                            windowsRelativePath, mask2);
+<b class="nc"><i>585</i>&nbsp;</b>
+<b class="nc"><i>586</i>&nbsp;            if (result[ERROR_CODE] != ERROR_SUCCESS) {</b>
+<i>587</i>&nbsp;                logger().warning(&quot;Could not open windows registry node &quot; +
+<i>588</i>&nbsp;                        byteArrayToString(windowsAbsolutePath()) +
+<i>589</i>&nbsp;                        &quot; at root 0x&quot; + Long.toHexString(nativeHandle) +
+<i>590</i>&nbsp;                        &quot;. Windows RegOpenKey(...) returned error code &quot; +
+<i>591</i>&nbsp;                        result[ERROR_CODE] + &quot;.&quot;);
+<i>592</i>&nbsp;                result[NATIVE_HANDLE] = NULL_NATIVE_HANDLE;
+<i>593</i>&nbsp;            }
+<i>594</i>&nbsp;            return result[NATIVE_HANDLE];
+<i>595</i>&nbsp;        } else {
+<i>596</i>&nbsp;            int separatorPosition = -1;
+<i>597</i>&nbsp;            // Be greedy - open the longest possible path
+<i>598</i>&nbsp;            for (int i = MAX_WINDOWS_PATH_LENGTH; i &gt; 0; i--) {
+<b class="nc"><i>599</i>&nbsp;                if (windowsRelativePath[i] == ((byte)&#39;\\&#39;)) {</b>
+<b class="nc"><i>600</i>&nbsp;                    separatorPosition = i;</b>
+<b class="nc"><i>601</i>&nbsp;                    break;</b>
+<b class="nc"><i>602</i>&nbsp;                }</b>
+<i>603</i>&nbsp;            }
+<b class="nc"><i>604</i>&nbsp;            // Split the path and do the recursion</b>
+<i>605</i>&nbsp;            byte[] nextRelativeRoot = new byte[separatorPosition+1];
+<i>606</i>&nbsp;            System.arraycopy(windowsRelativePath, 0, nextRelativeRoot,0,
+<i>607</i>&nbsp;                                                      separatorPosition);
+<i>608</i>&nbsp;            nextRelativeRoot[separatorPosition] = 0;
+<i>609</i>&nbsp;            byte[] nextRelativePath = new byte[windowsRelativePath.length -
+<i>610</i>&nbsp;                                      separatorPosition - 1];
+<i>611</i>&nbsp;            System.arraycopy(windowsRelativePath, separatorPosition+1,
+<i>612</i>&nbsp;                             nextRelativePath, 0, nextRelativePath.length);
+<i>613</i>&nbsp;            long nextNativeHandle = openKey(nativeHandle, nextRelativeRoot,
+<i>614</i>&nbsp;                                           mask1, mask2);
+<i>615</i>&nbsp;            if (nextNativeHandle == NULL_NATIVE_HANDLE) {
+<i>616</i>&nbsp;                return NULL_NATIVE_HANDLE;
+<b class="nc"><i>617</i>&nbsp;            }</b>
+<b class="nc"><i>618</i>&nbsp;            long result = openKey(nextNativeHandle, nextRelativePath,</b>
+<b class="nc"><i>619</i>&nbsp;                                  mask1,mask2);</b>
+<i>620</i>&nbsp;            closeKey(nextNativeHandle);
+<i>621</i>&nbsp;            return result;
+<b class="nc"><i>622</i>&nbsp;        }</b>
+<b class="nc"><i>623</i>&nbsp;    }</b>
+<b class="nc"><i>624</i>&nbsp;</b>
+<b class="nc"><i>625</i>&nbsp;     /**</b>
+<b class="nc"><i>626</i>&nbsp;     * Closes Windows registry key.</b>
+<i>627</i>&nbsp;     * Logs a warning if Windows registry is unavailable.
+<b class="nc"><i>628</i>&nbsp;     * @param key&#39;s Windows registry handle.</b>
+<i>629</i>&nbsp;     * @see #openKey(int)
+<b class="nc"><i>630</i>&nbsp;     * @see #openKey(byte[],int)</b>
+<i>631</i>&nbsp;     * @see #openKey(int, byte[],int)
+<i>632</i>&nbsp;    */
+<b class="nc"><i>633</i>&nbsp;    private void closeKey(long nativeHandle) {</b>
+<i>634</i>&nbsp;        int result = WindowsRegCloseKey(nativeHandle);
+<b class="nc"><i>635</i>&nbsp;        if (result != ERROR_SUCCESS) {</b>
+<i>636</i>&nbsp;            logger().warning(&quot;Could not close windows registry node &quot; +
+<i>637</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +
+<i>638</i>&nbsp;                    &quot; at root 0x&quot; +
+<i>639</i>&nbsp;                    Long.toHexString(rootNativeHandle()) +
+<i>640</i>&nbsp;                    &quot;. Windows RegCloseKey(...) returned error code &quot; +
+<i>641</i>&nbsp;                    result + &quot;.&quot;);
+<i>642</i>&nbsp;        }
+<i>643</i>&nbsp;    }
+<i>644</i>&nbsp;
+<b class="nc"><i>645</i>&nbsp;     /**</b>
+<b class="nc"><i>646</i>&nbsp;     * Implements {@code AbstractPreferences} {@code putSpi()} method.</b>
+<b class="nc"><i>647</i>&nbsp;     * Puts name-value pair into the underlying Windows registry node.</b>
+<i>648</i>&nbsp;     * Logs a warning, if Windows registry is unavailable.
+<b class="nc"><i>649</i>&nbsp;     * @see #getSpi(String)</b>
+<b class="nc"><i>650</i>&nbsp;     */</b>
+<b class="nc"><i>651</i>&nbsp;    protected void putSpi(String javaName, String value) {</b>
+<b class="nc"><i>652</i>&nbsp;        long nativeHandle = openKey(KEY_SET_VALUE);</b>
+<b class="nc"><i>653</i>&nbsp;        if (nativeHandle == NULL_NATIVE_HANDLE) {</b>
+<i>654</i>&nbsp;            isBackingStoreAvailable = false;
+<b class="nc"><i>655</i>&nbsp;            return;</b>
+<b class="nc"><i>656</i>&nbsp;        }</b>
+<i>657</i>&nbsp;        int result = WindowsRegSetValueEx1(nativeHandle,
+<i>658</i>&nbsp;                toWindowsName(javaName), toWindowsValueString(value));
+<i>659</i>&nbsp;        if (result != ERROR_SUCCESS) {
+<i>660</i>&nbsp;            logger().warning(&quot;Could not assign value to key &quot; +
+<i>661</i>&nbsp;                    byteArrayToString(toWindowsName(javaName)) +
+<i>662</i>&nbsp;                    &quot; at Windows registry node &quot; +
+<i>663</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +
+<i>664</i>&nbsp;                    &quot; at root 0x&quot; +
+<i>665</i>&nbsp;                    Long.toHexString(rootNativeHandle()) +
+<i>666</i>&nbsp;                    &quot;. Windows RegSetValueEx(...) returned error code &quot; +
+<b class="nc"><i>667</i>&nbsp;                    result + &quot;.&quot;);</b>
+<b class="nc"><i>668</i>&nbsp;            isBackingStoreAvailable = false;</b>
+<i>669</i>&nbsp;        }
+<i>670</i>&nbsp;        closeKey(nativeHandle);
+<b class="nc"><i>671</i>&nbsp;    }</b>
+<b class="nc"><i>672</i>&nbsp;</b>
+<b class="nc"><i>673</i>&nbsp;    /**</b>
+<b class="nc"><i>674</i>&nbsp;     * Implements {@code AbstractPreferences} {@code getSpi()} method.</b>
+<b class="nc"><i>675</i>&nbsp;     * Gets a string value from the underlying Windows registry node.</b>
+<b class="nc"><i>676</i>&nbsp;     * Logs a warning, if Windows registry is unavailable.</b>
+<b class="nc"><i>677</i>&nbsp;     * @see #putSpi(String, String)</b>
+<i>678</i>&nbsp;     */
+<i>679</i>&nbsp;    protected String getSpi(String javaName) {
+<b class="nc"><i>680</i>&nbsp;        long nativeHandle = openKey(KEY_QUERY_VALUE);</b>
+<i>681</i>&nbsp;        if (nativeHandle == NULL_NATIVE_HANDLE) {
+<b class="nc"><i>682</i>&nbsp;            return null;</b>
+<i>683</i>&nbsp;        }
+<i>684</i>&nbsp;        Object resultObject = WindowsRegQueryValueEx(nativeHandle,
+<i>685</i>&nbsp;                toWindowsName(javaName));
+<i>686</i>&nbsp;        if (resultObject == null) {
+<i>687</i>&nbsp;            closeKey(nativeHandle);
+<i>688</i>&nbsp;            return null;
+<i>689</i>&nbsp;        }
+<i>690</i>&nbsp;        closeKey(nativeHandle);
+<i>691</i>&nbsp;        return toJavaValueString((byte[]) resultObject);
+<i>692</i>&nbsp;    }
+<b class="nc"><i>693</i>&nbsp;</b>
+<b class="nc"><i>694</i>&nbsp;    /**</b>
+<b class="nc"><i>695</i>&nbsp;     * Implements {@code AbstractPreferences} {@code removeSpi()} method.</b>
+<i>696</i>&nbsp;     * Deletes a string name-value pair from the underlying Windows registry
+<b class="nc"><i>697</i>&nbsp;     * node, if this value still exists.</b>
+<i>698</i>&nbsp;     * Logs a warning, if Windows registry is unavailable or key has already
+<b class="nc"><i>699</i>&nbsp;     * been deleted.</b>
+<i>700</i>&nbsp;     */
+<b class="nc"><i>701</i>&nbsp;    protected void removeSpi(String key) {</b>
+<b class="nc"><i>702</i>&nbsp;        long nativeHandle = openKey(KEY_SET_VALUE);</b>
+<b class="nc"><i>703</i>&nbsp;        if (nativeHandle == NULL_NATIVE_HANDLE) {</b>
+<b class="nc"><i>704</i>&nbsp;        return;</b>
+<i>705</i>&nbsp;        }
+<b class="nc"><i>706</i>&nbsp;        int result =</b>
+<i>707</i>&nbsp;            WindowsRegDeleteValue(nativeHandle, toWindowsName(key));
+<i>708</i>&nbsp;        if (result != ERROR_SUCCESS &amp;&amp; result != ERROR_FILE_NOT_FOUND) {
+<b class="nc"><i>709</i>&nbsp;            logger().warning(&quot;Could not delete windows registry value &quot; +</b>
+<b class="nc"><i>710</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) + &quot;\\&quot; +</b>
+<i>711</i>&nbsp;                    toWindowsName(key) + &quot; at root 0x&quot; +
+<b class="nc"><i>712</i>&nbsp;                    Long.toHexString(rootNativeHandle()) +</b>
+<b class="nc"><i>713</i>&nbsp;                    &quot;. Windows RegDeleteValue(...) returned error code &quot; +</b>
+<b class="nc"><i>714</i>&nbsp;                    result + &quot;.&quot;);</b>
+<b class="nc"><i>715</i>&nbsp;            isBackingStoreAvailable = false;</b>
+<b class="nc"><i>716</i>&nbsp;        }</b>
+<i>717</i>&nbsp;        closeKey(nativeHandle);
+<i>718</i>&nbsp;    }
+<b class="nc"><i>719</i>&nbsp;</b>
+<b class="nc"><i>720</i>&nbsp;    /**</b>
+<b class="nc"><i>721</i>&nbsp;     * Implements {@code AbstractPreferences} {@code keysSpi()} method.</b>
+<i>722</i>&nbsp;     * Gets value names from the underlying Windows registry node.
+<b class="nc"><i>723</i>&nbsp;     * Throws a BackingStoreException and logs a warning, if</b>
+<b class="nc"><i>724</i>&nbsp;     * Windows registry is unavailable.</b>
+<i>725</i>&nbsp;     */
+<b class="nc"><i>726</i>&nbsp;    protected String[] keysSpi() throws BackingStoreException{</b>
+<b class="nc"><i>727</i>&nbsp;        // Find out the number of values</b>
+<b class="nc"><i>728</i>&nbsp;        long nativeHandle = openKey(KEY_QUERY_VALUE);</b>
+<b class="nc"><i>729</i>&nbsp;        if (nativeHandle == NULL_NATIVE_HANDLE) {</b>
+<i>730</i>&nbsp;            throw new BackingStoreException(
+<b class="nc"><i>731</i>&nbsp;                    &quot;Could not open windows registry node &quot; +</b>
+<i>732</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +
+<b class="nc"><i>733</i>&nbsp;                    &quot; at root 0x&quot; +</b>
+<b class="nc"><i>734</i>&nbsp;                    Long.toHexString(rootNativeHandle()) + &quot;.&quot;);</b>
+<i>735</i>&nbsp;        }
+<i>736</i>&nbsp;        long[] result =  WindowsRegQueryInfoKey1(nativeHandle);
+<i>737</i>&nbsp;        if (result[ERROR_CODE] != ERROR_SUCCESS) {
+<i>738</i>&nbsp;            String info = &quot;Could not query windows registry node &quot; +
+<i>739</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +
+<i>740</i>&nbsp;                    &quot; at root 0x&quot; +
+<i>741</i>&nbsp;                    Long.toHexString(rootNativeHandle()) +
+<i>742</i>&nbsp;                    &quot;. Windows RegQueryInfoKeyEx(...) returned error code &quot; +
+<i>743</i>&nbsp;                    result[ERROR_CODE] + &quot;.&quot;;
+<i>744</i>&nbsp;            logger().warning(info);
+<b class="nc"><i>745</i>&nbsp;            throw new BackingStoreException(info);</b>
+<b class="nc"><i>746</i>&nbsp;        }</b>
+<b class="nc"><i>747</i>&nbsp;        int maxValueNameLength = (int)result[MAX_VALUE_NAME_LENGTH];</b>
+<i>748</i>&nbsp;        int valuesNumber = (int)result[VALUES_NUMBER];
+<b class="nc"><i>749</i>&nbsp;        if (valuesNumber == 0) {</b>
+<i>750</i>&nbsp;            closeKey(nativeHandle);
+<b class="nc"><i>751</i>&nbsp;            return new String[0];</b>
+<i>752</i>&nbsp;        }
+<i>753</i>&nbsp;        // Get the values
+<b class="nc"><i>754</i>&nbsp;        String[] valueNames = new String[valuesNumber];</b>
+<b class="nc"><i>755</i>&nbsp;        for (int i = 0; i &lt; valuesNumber; i++) {</b>
+<b class="nc"><i>756</i>&nbsp;            byte[] windowsName = WindowsRegEnumValue1(nativeHandle, i,</b>
+<b class="nc"><i>757</i>&nbsp;                                                      maxValueNameLength+1);</b>
+<b class="nc"><i>758</i>&nbsp;            if (windowsName == null) {</b>
+<i>759</i>&nbsp;                String info =
+<i>760</i>&nbsp;                    &quot;Could not enumerate value #&quot; + i + &quot;  of windows node &quot; +
+<b class="nc"><i>761</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) + &quot; at root 0x&quot; +</b>
+<b class="nc"><i>762</i>&nbsp;                    Long.toHexString(rootNativeHandle()) + &quot;.&quot;;</b>
+<i>763</i>&nbsp;                logger().warning(info);
+<b class="nc"><i>764</i>&nbsp;                throw new BackingStoreException(info);</b>
+<b class="nc"><i>765</i>&nbsp;            }</b>
+<b class="nc"><i>766</i>&nbsp;            valueNames[i] = toJavaName(windowsName);</b>
+<b class="nc"><i>767</i>&nbsp;        }</b>
+<b class="nc"><i>768</i>&nbsp;        closeKey(nativeHandle);</b>
+<i>769</i>&nbsp;        return valueNames;
+<b class="nc"><i>770</i>&nbsp;    }</b>
+<b class="nc"><i>771</i>&nbsp;</b>
+<i>772</i>&nbsp;    /**
+<b class="nc"><i>773</i>&nbsp;     * Implements {@code AbstractPreferences} {@code childrenNamesSpi()} method.</b>
+<b class="nc"><i>774</i>&nbsp;     * Calls Windows registry to retrive children of this node.</b>
+<i>775</i>&nbsp;     * Throws a BackingStoreException and logs a warning message,
+<b class="nc"><i>776</i>&nbsp;     * if Windows registry is not available.</b>
+<b class="nc"><i>777</i>&nbsp;     */</b>
+<i>778</i>&nbsp;    protected String[] childrenNamesSpi() throws BackingStoreException {
+<b class="nc"><i>779</i>&nbsp;        // Open key</b>
+<b class="nc"><i>780</i>&nbsp;        long nativeHandle = openKey(KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE);</b>
+<b class="nc"><i>781</i>&nbsp;        if (nativeHandle == NULL_NATIVE_HANDLE) {</b>
+<b class="nc"><i>782</i>&nbsp;            throw new BackingStoreException(</b>
+<i>783</i>&nbsp;                    &quot;Could not open windows registry node &quot; +
+<b class="nc"><i>784</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +</b>
+<b class="nc"><i>785</i>&nbsp;                    &quot; at root 0x&quot; +</b>
+<i>786</i>&nbsp;                    Long.toHexString(rootNativeHandle()) + &quot;.&quot;);
+<b class="nc"><i>787</i>&nbsp;        }</b>
+<b class="nc"><i>788</i>&nbsp;        // Get number of children</b>
+<i>789</i>&nbsp;        long[] result =  WindowsRegQueryInfoKey1(nativeHandle);
+<i>790</i>&nbsp;        if (result[ERROR_CODE] != ERROR_SUCCESS) {
+<i>791</i>&nbsp;            String info = &quot;Could not query windows registry node &quot; +
+<i>792</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +
+<i>793</i>&nbsp;                    &quot; at root 0x&quot; + Long.toHexString(rootNativeHandle()) +
+<i>794</i>&nbsp;                    &quot;. Windows RegQueryInfoKeyEx(...) returned error code &quot; +
+<i>795</i>&nbsp;                    result[ERROR_CODE] + &quot;.&quot;;
+<i>796</i>&nbsp;            logger().warning(info);
+<i>797</i>&nbsp;            throw new BackingStoreException(info);
+<i>798</i>&nbsp;        }
+<b class="nc"><i>799</i>&nbsp;        int maxKeyLength = (int)result[MAX_KEY_LENGTH];</b>
+<b class="nc"><i>800</i>&nbsp;        int subKeysNumber = (int)result[SUBKEYS_NUMBER];</b>
+<i>801</i>&nbsp;        if (subKeysNumber == 0) {
+<i>802</i>&nbsp;            closeKey(nativeHandle);
+<b class="nc"><i>803</i>&nbsp;            return new String[0];</b>
+<b class="nc"><i>804</i>&nbsp;        }</b>
+<i>805</i>&nbsp;        String[] subkeys = new String[subKeysNumber];
+<i>806</i>&nbsp;        String[] children = new String[subKeysNumber];
+<b class="nc"><i>807</i>&nbsp;        // Get children</b>
+<b class="nc"><i>808</i>&nbsp;        for (int i = 0; i &lt; subKeysNumber; i++) {</b>
+<b class="nc"><i>809</i>&nbsp;            byte[] windowsName = WindowsRegEnumKeyEx1(nativeHandle, i,</b>
+<i>810</i>&nbsp;                                                      maxKeyLength+1);
+<b class="nc"><i>811</i>&nbsp;            if (windowsName == null) {</b>
+<i>812</i>&nbsp;                String info =
+<b class="nc"><i>813</i>&nbsp;                    &quot;Could not enumerate key #&quot; + i + &quot;  of windows node &quot; +</b>
+<i>814</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) + &quot; at root 0x&quot; +
+<b class="nc"><i>815</i>&nbsp;                    Long.toHexString(rootNativeHandle()) + &quot;. &quot;;</b>
+<b class="nc"><i>816</i>&nbsp;                logger().warning(info);</b>
+<b class="nc"><i>817</i>&nbsp;                throw new BackingStoreException(info);</b>
+<b class="nc"><i>818</i>&nbsp;            }</b>
+<i>819</i>&nbsp;            String javaName = toJavaName(windowsName);
+<b class="nc"><i>820</i>&nbsp;            children[i] = javaName;</b>
+<i>821</i>&nbsp;        }
+<i>822</i>&nbsp;        closeKey(nativeHandle);
+<b class="nc"><i>823</i>&nbsp;        return children;</b>
+<b class="nc"><i>824</i>&nbsp;    }</b>
+<i>825</i>&nbsp;
+<b class="nc"><i>826</i>&nbsp;    /**</b>
+<i>827</i>&nbsp;     * Implements {@code Preferences} {@code flush()} method.
+<i>828</i>&nbsp;     * Flushes Windows registry changes to disk.
+<i>829</i>&nbsp;     * Throws a BackingStoreException and logs a warning message if Windows
+<i>830</i>&nbsp;     * registry is not available.
+<i>831</i>&nbsp;     */
+<i>832</i>&nbsp;    public void flush() throws BackingStoreException{
+<i>833</i>&nbsp;
+<i>834</i>&nbsp;        if (isRemoved()) {
+<i>835</i>&nbsp;            parent.flush();
+<b class="nc"><i>836</i>&nbsp;            return;</b>
+<b class="nc"><i>837</i>&nbsp;        }</b>
+<b class="nc"><i>838</i>&nbsp;        if (!isBackingStoreAvailable) {</b>
+<i>839</i>&nbsp;            throw new BackingStoreException(
+<i>840</i>&nbsp;                    &quot;flush(): Backing store not available.&quot;);
+<i>841</i>&nbsp;        }
+<i>842</i>&nbsp;        long nativeHandle = openKey(KEY_READ);
+<i>843</i>&nbsp;        if (nativeHandle == NULL_NATIVE_HANDLE) {
+<i>844</i>&nbsp;            throw new BackingStoreException(
+<i>845</i>&nbsp;                    &quot;Could not open windows registry node &quot; +
+<i>846</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +
+<i>847</i>&nbsp;                    &quot; at root 0x&quot; +
+<i>848</i>&nbsp;                    Long.toHexString(rootNativeHandle()) + &quot;.&quot;);
+<b class="nc"><i>849</i>&nbsp;        }</b>
+<i>850</i>&nbsp;        int result = WindowsRegFlushKey1(nativeHandle);
+<i>851</i>&nbsp;        if (result != ERROR_SUCCESS) {
+<i>852</i>&nbsp;            String info = &quot;Could not flush windows registry node &quot; +
+<i>853</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +
+<i>854</i>&nbsp;                    &quot; at root 0x&quot; +
+<i>855</i>&nbsp;                    Long.toHexString(rootNativeHandle()) +
+<i>856</i>&nbsp;                    &quot;. Windows RegFlushKey(...) returned error code &quot; +
+<i>857</i>&nbsp;                    result + &quot;.&quot;;
+<i>858</i>&nbsp;            logger().warning(info);
+<b class="nc"><i>859</i>&nbsp;            throw new BackingStoreException(info);</b>
+<b class="nc"><i>860</i>&nbsp;        }</b>
+<b class="nc"><i>861</i>&nbsp;        closeKey(nativeHandle);</b>
+<b class="nc"><i>862</i>&nbsp;    }</b>
+<i>863</i>&nbsp;
+<b class="nc"><i>864</i>&nbsp;</b>
+<i>865</i>&nbsp;    /**
+<b class="nc"><i>866</i>&nbsp;     * Implements {@code Preferences} {@code sync()} method.</b>
+<i>867</i>&nbsp;     * Flushes Windows registry changes to disk. Equivalent to flush().
+<b class="nc"><i>868</i>&nbsp;     * @see flush()</b>
+<b class="nc"><i>869</i>&nbsp;     */</b>
+<b class="nc"><i>870</i>&nbsp;    public void sync() throws BackingStoreException{</b>
+<b class="nc"><i>871</i>&nbsp;        if (isRemoved())</b>
+<b class="nc"><i>872</i>&nbsp;            throw new IllegalStateException(&quot;Node has been removed&quot;);</b>
+<b class="nc"><i>873</i>&nbsp;        flush();</b>
+<i>874</i>&nbsp;    }
+<i>875</i>&nbsp;
+<b class="nc"><i>876</i>&nbsp;    /**</b>
+<b class="nc"><i>877</i>&nbsp;     * Implements {@code AbstractPreferences} {@code childSpi()} method.</b>
+<i>878</i>&nbsp;     * Constructs a child node with a
+<b class="nc"><i>879</i>&nbsp;     * given name and creates its underlying Windows registry node,</b>
+<i>880</i>&nbsp;     * if it does not exist.
+<i>881</i>&nbsp;     * Logs a warning message, if Windows Registry is unavailable.
+<i>882</i>&nbsp;     */
+<i>883</i>&nbsp;    protected AbstractPreferences childSpi(String name) {
+<i>884</i>&nbsp;        return new WindowsPreferences(this, name);
+<i>885</i>&nbsp;    }
+<i>886</i>&nbsp;
+<i>887</i>&nbsp;    /**
+<i>888</i>&nbsp;     * Implements {@code AbstractPreferences} {@code removeNodeSpi()} method.
+<i>889</i>&nbsp;     * Deletes underlying Windows registry node.
+<b class="nc"><i>890</i>&nbsp;     * Throws a BackingStoreException and logs a warning, if Windows registry</b>
+<i>891</i>&nbsp;     * is not available.
+<b class="nc"><i>892</i>&nbsp;     */</b>
+<b class="nc"><i>893</i>&nbsp;    public void removeNodeSpi() throws BackingStoreException {</b>
+<b class="nc"><i>894</i>&nbsp;        long parentNativeHandle =</b>
+<i>895</i>&nbsp;                ((WindowsPreferences)parent()).openKey(DELETE);
+<b class="nc"><i>896</i>&nbsp;        if (parentNativeHandle == NULL_NATIVE_HANDLE) {</b>
+<i>897</i>&nbsp;            throw new BackingStoreException(
+<i>898</i>&nbsp;                    &quot;Could not open parent windows registry node of &quot; +
+<b class="nc"><i>899</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +</b>
+<b class="nc"><i>900</i>&nbsp;                    &quot; at root 0x&quot; +</b>
+<b class="nc"><i>901</i>&nbsp;                    Long.toHexString(rootNativeHandle()) + &quot;.&quot;);</b>
+<b class="nc"><i>902</i>&nbsp;        }</b>
+<b class="nc"><i>903</i>&nbsp;        int result =</b>
+<i>904</i>&nbsp;                WindowsRegDeleteKey(parentNativeHandle, toWindowsName(name()));
+<b class="nc"><i>905</i>&nbsp;        if (result != ERROR_SUCCESS) {</b>
+<b class="nc"><i>906</i>&nbsp;            String info = &quot;Could not delete windows registry node &quot; +</b>
+<b class="nc"><i>907</i>&nbsp;                    byteArrayToString(windowsAbsolutePath()) +</b>
+<i>908</i>&nbsp;                    &quot; at root 0x&quot; + Long.toHexString(rootNativeHandle()) +
+<b class="nc"><i>909</i>&nbsp;                    &quot;. Windows RegDeleteKeyEx(...) returned error code &quot; +</b>
+<b class="nc"><i>910</i>&nbsp;                    result + &quot;.&quot;;</b>
+<i>911</i>&nbsp;            logger().warning(info);
+<b class="nc"><i>912</i>&nbsp;            throw new BackingStoreException(info);</b>
+<b class="nc"><i>913</i>&nbsp;        }</b>
+<i>914</i>&nbsp;        closeKey(parentNativeHandle);
+<b class="nc"><i>915</i>&nbsp;    }</b>
+<i>916</i>&nbsp;
+<b class="nc"><i>917</i>&nbsp;    /**</b>
+<i>918</i>&nbsp;     * Converts value&#39;s or node&#39;s name from its byte array representation to
+<i>919</i>&nbsp;     * java string. Two encodings, simple and altBase64 are used. See
+<i>920</i>&nbsp;     * {@link #toWindowsName(String) toWindowsName()} for a detailed
+<i>921</i>&nbsp;     * description of encoding conventions.
+<i>922</i>&nbsp;     * @param windowsNameArray Null-terminated byte array.
+<i>923</i>&nbsp;     */
+<i>924</i>&nbsp;    private static String toJavaName(byte[] windowsNameArray) {
+<i>925</i>&nbsp;        String windowsName = byteArrayToString(windowsNameArray);
+<i>926</i>&nbsp;        // check if Alt64
+<i>927</i>&nbsp;        if ((windowsName.length() &gt; 1) &amp;&amp;
+<b class="nc"><i>928</i>&nbsp;                (windowsName.substring(0, 2).equals(&quot;/!&quot;))) {</b>
+<b class="nc"><i>929</i>&nbsp;            return toJavaAlt64Name(windowsName);</b>
+<b class="nc"><i>930</i>&nbsp;        }</b>
+<b class="nc"><i>931</i>&nbsp;        StringBuilder javaName = new StringBuilder();</b>
+<b class="nc"><i>932</i>&nbsp;        char ch;</b>
+<b class="nc"><i>933</i>&nbsp;        // Decode from simple encoding</b>
+<b class="nc"><i>934</i>&nbsp;        for (int i = 0; i &lt; windowsName.length(); i++) {</b>
+<i>935</i>&nbsp;            if ((ch = windowsName.charAt(i)) == &#39;/&#39;) {
+<b class="nc"><i>936</i>&nbsp;                char next = &#39; &#39;;</b>
+<i>937</i>&nbsp;                if ((windowsName.length() &gt; i + 1) &amp;&amp;
+<i>938</i>&nbsp;                        ((next = windowsName.charAt(i+1)) &gt;= &#39;A&#39;) &amp;&amp;
+<i>939</i>&nbsp;                        (next &lt;= &#39;Z&#39;)) {
+<i>940</i>&nbsp;                    ch = next;
+<i>941</i>&nbsp;                    i++;
+<i>942</i>&nbsp;                } else if ((windowsName.length() &gt; i + 1) &amp;&amp;
+<i>943</i>&nbsp;                           (next == &#39;/&#39;)) {
+<i>944</i>&nbsp;                    ch = &#39;\\&#39;;
+<i>945</i>&nbsp;                    i++;
+<i>946</i>&nbsp;                }
+<i>947</i>&nbsp;            } else if (ch == &#39;\\&#39;) {
+<i>948</i>&nbsp;                ch = &#39;/&#39;;
+<i>949</i>&nbsp;            }
+<i>950</i>&nbsp;            javaName.append(ch);
+<i>951</i>&nbsp;        }
+<i>952</i>&nbsp;        return javaName.toString();
+<i>953</i>&nbsp;    }
+<i>954</i>&nbsp;
+<i>955</i>&nbsp;    /**
+<i>956</i>&nbsp;     * Converts value&#39;s or node&#39;s name from its Windows representation to java
+<i>957</i>&nbsp;     * string, using altBase64 encoding. See
+<i>958</i>&nbsp;     * {@link #toWindowsName(String) toWindowsName()} for a detailed
+<i>959</i>&nbsp;     * description of encoding conventions.
+<b class="nc"><i>960</i>&nbsp;     */</b>
+<b class="nc"><i>961</i>&nbsp;</b>
+<b class="nc"><i>962</i>&nbsp;    private static String toJavaAlt64Name(String windowsName) {</b>
+<b class="nc"><i>963</i>&nbsp;        byte[] byteBuffer =</b>
+<i>964</i>&nbsp;                Base64.altBase64ToByteArray(windowsName.substring(2));
+<b class="nc"><i>965</i>&nbsp;        StringBuilder result = new StringBuilder();</b>
+<i>966</i>&nbsp;        for (int i = 0; i &lt; byteBuffer.length; i++) {
+<b class="nc"><i>967</i>&nbsp;            int firstbyte = (byteBuffer[i++] &amp; 0xff);</b>
+<b class="nc"><i>968</i>&nbsp;            int secondbyte =  (byteBuffer[i] &amp; 0xff);</b>
+<b class="nc"><i>969</i>&nbsp;            result.append((char)((firstbyte &lt;&lt; 8) + secondbyte));</b>
+<b class="nc"><i>970</i>&nbsp;        }</b>
+<b class="nc"><i>971</i>&nbsp;        return result.toString();</b>
+<b class="nc"><i>972</i>&nbsp;    }</b>
+<i>973</i>&nbsp;
+<b class="nc"><i>974</i>&nbsp;    /**</b>
+<i>975</i>&nbsp;     * Converts value&#39;s or node&#39;s name to its Windows representation
+<i>976</i>&nbsp;     * as a byte-encoded string.
+<b class="nc"><i>977</i>&nbsp;     * Two encodings, simple and altBase64 are used.</b>
+<i>978</i>&nbsp;     * &lt;p&gt;
+<i>979</i>&nbsp;     * &lt;i&gt;Simple&lt;/i&gt; encoding is used, if java string does not contain
+<i>980</i>&nbsp;     * any characters less, than 0x0020, or greater, than 0x007f.
+<i>981</i>&nbsp;     * Simple encoding adds &quot;/&quot; character to capital letters, i.e.
+<i>982</i>&nbsp;     * &quot;A&quot; is encoded as &quot;/A&quot;. Character &#39;\&#39; is encoded as &#39;//&#39;,
+<i>983</i>&nbsp;     * &#39;/&#39; is encoded as &#39;\&#39;.
+<i>984</i>&nbsp;     * The constructed string is converted to byte array by truncating the
+<i>985</i>&nbsp;     * highest byte and adding the terminating {@code null} character.
+<i>986</i>&nbsp;     * &lt;p&gt;
+<b class="nc"><i>987</i>&nbsp;     * &lt;i&gt;altBase64&lt;/i&gt;  encoding is used, if java string does contain at least</b>
+<i>988</i>&nbsp;     * one character less, than 0x0020, or greater, than 0x007f.
+<b class="nc"><i>989</i>&nbsp;     * This encoding is marked by setting first two bytes of the</b>
+<b class="nc"><i>990</i>&nbsp;     * Windows string to &#39;/!&#39;. The java name is then encoded using</b>
+<b class="nc"><i>991</i>&nbsp;     * byteArrayToAltBase64() method from</b>
+<b class="nc"><i>992</i>&nbsp;     * Base64 class.</b>
+<b class="nc"><i>993</i>&nbsp;     */</b>
+<i>994</i>&nbsp;    private static byte[] toWindowsName(String javaName) {
+<i>995</i>&nbsp;        StringBuilder windowsName = new StringBuilder();
+<b class="nc"><i>996</i>&nbsp;        for (int i = 0; i &lt; javaName.length(); i++) {</b>
+<b class="nc"><i>997</i>&nbsp;            char ch = javaName.charAt(i);</b>
+<i>998</i>&nbsp;            if ((ch &lt; 0x0020) || (ch &gt; 0x007f)) {
+<i>999</i>&nbsp;                // If a non-trivial character encountered, use altBase64
+<i>1000</i>&nbsp;                return toWindowsAlt64Name(javaName);
+<i>1001</i>&nbsp;            }
+<i>1002</i>&nbsp;            if (ch == &#39;\\&#39;) {
+<i>1003</i>&nbsp;                windowsName.append(&quot;//&quot;);
+<i>1004</i>&nbsp;            } else if (ch == &#39;/&#39;) {
+<i>1005</i>&nbsp;                windowsName.append(&#39;\\&#39;);
+<i>1006</i>&nbsp;            } else if ((ch &gt;= &#39;A&#39;) &amp;&amp; (ch &lt;=&#39;Z&#39;)) {
+<i>1007</i>&nbsp;                windowsName.append(&#39;/&#39;).append(ch);
+<b class="nc"><i>1008</i>&nbsp;            } else {</b>
+<b class="nc"><i>1009</i>&nbsp;                windowsName.append(ch);</b>
+<i>1010</i>&nbsp;            }
+<b class="nc"><i>1011</i>&nbsp;        }</b>
+<b class="nc"><i>1012</i>&nbsp;        return stringToByteArray(windowsName.toString());</b>
+<b class="nc"><i>1013</i>&nbsp;    }</b>
+<i>1014</i>&nbsp;
+<b class="nc"><i>1015</i>&nbsp;    /**</b>
+<b class="nc"><i>1016</i>&nbsp;     * Converts value&#39;s or node&#39;s name to its Windows representation</b>
+<b class="nc"><i>1017</i>&nbsp;     * as a byte-encoded string, using altBase64 encoding. See</b>
+<b class="nc"><i>1018</i>&nbsp;     * {@link #toWindowsName(String) toWindowsName()} for a detailed</b>
+<i>1019</i>&nbsp;     * description of encoding conventions.
+<b class="nc"><i>1020</i>&nbsp;     */</b>
+<b class="nc"><i>1021</i>&nbsp;    private static byte[] toWindowsAlt64Name(String javaName) {</b>
+<b class="nc"><i>1022</i>&nbsp;        byte[] javaNameArray = new byte[2*javaName.length()];</b>
+<i>1023</i>&nbsp;        // Convert to byte pairs
+<i>1024</i>&nbsp;        int counter = 0;
+<b class="nc"><i>1025</i>&nbsp;        for (int i = 0; i &lt; javaName.length();i++) {</b>
+<b class="nc"><i>1026</i>&nbsp;            int ch = javaName.charAt(i);</b>
+<i>1027</i>&nbsp;            javaNameArray[counter++] = (byte)(ch &gt;&gt;&gt; 8);
+<b class="nc"><i>1028</i>&nbsp;            javaNameArray[counter++] = (byte)ch;</b>
+<b class="nc"><i>1029</i>&nbsp;        }</b>
+<b class="nc"><i>1030</i>&nbsp;</b>
+<i>1031</i>&nbsp;        return stringToByteArray(&quot;/!&quot; +
+<b class="nc"><i>1032</i>&nbsp;                Base64.byteArrayToAltBase64(javaNameArray));</b>
+<b class="nc"><i>1033</i>&nbsp;    }</b>
+<i>1034</i>&nbsp;
+<b class="nc"><i>1035</i>&nbsp;    /**</b>
+<b class="nc"><i>1036</i>&nbsp;     * Converts value string from its Windows representation</b>
+<i>1037</i>&nbsp;     * to java string.  See
+<b class="nc"><i>1038</i>&nbsp;     * {@link #toWindowsValueString(String) toWindowsValueString()} for the</b>
+<i>1039</i>&nbsp;     * description of the encoding algorithm.
+<b class="nc"><i>1040</i>&nbsp;     */</b>
+<i>1041</i>&nbsp;     private static String toJavaValueString(byte[] windowsNameArray) {
+<i>1042</i>&nbsp;        String windowsName = byteArrayToString(windowsNameArray);
+<i>1043</i>&nbsp;        StringBuilder javaName = new StringBuilder();
+<i>1044</i>&nbsp;        char ch;
+<i>1045</i>&nbsp;        for (int i = 0; i &lt; windowsName.length(); i++){
+<i>1046</i>&nbsp;            if ((ch = windowsName.charAt(i)) == &#39;/&#39;) {
+<i>1047</i>&nbsp;                char next = &#39; &#39;;
+<i>1048</i>&nbsp;
+<i>1049</i>&nbsp;                if (windowsName.length() &gt; i + 1 &amp;&amp;
+<i>1050</i>&nbsp;                        (next = windowsName.charAt(i + 1)) == &#39;u&#39;) {
+<i>1051</i>&nbsp;                    if (windowsName.length() &lt; i + 6) {
+<i>1052</i>&nbsp;                        break;
+<b class="nc"><i>1053</i>&nbsp;                    } else {</b>
+<b class="nc"><i>1054</i>&nbsp;                        ch = (char)Integer.parseInt(</b>
+<b class="nc"><i>1055</i>&nbsp;                                windowsName.substring(i + 2, i + 6), 16);</b>
+<b class="nc"><i>1056</i>&nbsp;                        i += 5;</b>
+<i>1057</i>&nbsp;                    }
+<b class="nc"><i>1058</i>&nbsp;                } else</b>
+<b class="nc"><i>1059</i>&nbsp;                if ((windowsName.length() &gt; i + 1) &amp;&amp;</b>
+<b class="nc"><i>1060</i>&nbsp;                        ((windowsName.charAt(i+1)) &gt;= &#39;A&#39;) &amp;&amp;</b>
+<b class="nc"><i>1061</i>&nbsp;                        (next &lt;= &#39;Z&#39;)) {</b>
+<b class="nc"><i>1062</i>&nbsp;                    ch = next;</b>
+<b class="nc"><i>1063</i>&nbsp;                    i++;</b>
+<b class="nc"><i>1064</i>&nbsp;                } else if ((windowsName.length() &gt; i + 1) &amp;&amp;</b>
+<i>1065</i>&nbsp;                        (next == &#39;/&#39;)) {
+<b class="nc"><i>1066</i>&nbsp;                    ch = &#39;\\&#39;;</b>
+<b class="nc"><i>1067</i>&nbsp;                    i++;</b>
+<i>1068</i>&nbsp;                }
+<b class="nc"><i>1069</i>&nbsp;            } else if (ch == &#39;\\&#39;) {</b>
+<b class="nc"><i>1070</i>&nbsp;                ch = &#39;/&#39;;</b>
+<b class="nc"><i>1071</i>&nbsp;            }</b>
+<b class="nc"><i>1072</i>&nbsp;            javaName.append(ch);</b>
+<b class="nc"><i>1073</i>&nbsp;        }</b>
+<b class="nc"><i>1074</i>&nbsp;        return javaName.toString();</b>
+<i>1075</i>&nbsp;    }
+<b class="nc"><i>1076</i>&nbsp;</b>
+<i>1077</i>&nbsp;    /**
+<i>1078</i>&nbsp;     * Converts value string to it Windows representation.
+<b class="nc"><i>1079</i>&nbsp;     * as a byte-encoded string.</b>
+<i>1080</i>&nbsp;     * Encoding algorithm adds &quot;/&quot; character to capital letters, i.e.
+<i>1081</i>&nbsp;     * &quot;A&quot; is encoded as &quot;/A&quot;. Character &#39;\&#39; is encoded as &#39;//&#39;,
+<i>1082</i>&nbsp;     * &#39;/&#39; is encoded as  &#39;\&#39;.
+<i>1083</i>&nbsp;     * Then convert java string to a byte array of ASCII characters.
+<i>1084</i>&nbsp;     */
+<i>1085</i>&nbsp;    private static byte[] toWindowsValueString(String javaName) {
+<b class="nc"><i>1086</i>&nbsp;        StringBuilder windowsName = new StringBuilder();</b>
+<i>1087</i>&nbsp;        for (int i = 0; i &lt; javaName.length(); i++) {
+<i>1088</i>&nbsp;            char ch = javaName.charAt(i);
+<i>1089</i>&nbsp;            if ((ch &lt; 0x0020) || (ch &gt; 0x007f)){
+<i>1090</i>&nbsp;                // write \udddd
+<i>1091</i>&nbsp;                windowsName.append(&quot;/u&quot;);
+<i>1092</i>&nbsp;                String hex = Long.toHexString(javaName.charAt(i));
+<i>1093</i>&nbsp;                StringBuilder hex4 = new StringBuilder(hex);
+<i>1094</i>&nbsp;                hex4.reverse();
+<b class="nc"><i>1095</i>&nbsp;                int len = 4 - hex4.length();</b>
+<b class="nc"><i>1096</i>&nbsp;                for (int j = 0; j &lt; len; j++){</b>
+<b class="nc"><i>1097</i>&nbsp;                    hex4.append(&#39;0&#39;);</b>
+<i>1098</i>&nbsp;                }
+<b class="nc"><i>1099</i>&nbsp;                for (int j = 0; j &lt; 4; j++){</b>
+<b class="nc"><i>1100</i>&nbsp;                    windowsName.append(hex4.charAt(3 - j));</b>
+<i>1101</i>&nbsp;                }
+<i>1102</i>&nbsp;            } else if (ch == &#39;\\&#39;) {
+<i>1103</i>&nbsp;                windowsName.append(&quot;//&quot;);
+<i>1104</i>&nbsp;            } else if (ch == &#39;/&#39;) {
+<i>1105</i>&nbsp;                windowsName.append(&#39;\\&#39;);
+<i>1106</i>&nbsp;            } else if ((ch &gt;= &#39;A&#39;) &amp;&amp; (ch &lt;=&#39;Z&#39;)) {
+<b class="nc"><i>1107</i>&nbsp;                windowsName.append(&#39;/&#39;).append(ch);</b>
+<b class="nc"><i>1108</i>&nbsp;            } else {</b>
+<b class="nc"><i>1109</i>&nbsp;                windowsName.append(ch);</b>
+<i>1110</i>&nbsp;            }
+<b class="nc"><i>1111</i>&nbsp;        }</b>
+<i>1112</i>&nbsp;        return stringToByteArray(windowsName.toString());
+<i>1113</i>&nbsp;    }
+<i>1114</i>&nbsp;
+<i>1115</i>&nbsp;    /**
+<i>1116</i>&nbsp;     * Returns native handle for the top Windows node for this node.
+<i>1117</i>&nbsp;     */
+<i>1118</i>&nbsp;    private long rootNativeHandle() {
+<i>1119</i>&nbsp;        return (isUserNode()
+<i>1120</i>&nbsp;                ? USER_ROOT_NATIVE_HANDLE
+<i>1121</i>&nbsp;                : SYSTEM_ROOT_NATIVE_HANDLE);
+<i>1122</i>&nbsp;    }
+<i>1123</i>&nbsp;
+<i>1124</i>&nbsp;    /**
+<i>1125</i>&nbsp;     * Returns this java string as a null-terminated byte array
+<i>1126</i>&nbsp;     */
+<i>1127</i>&nbsp;    private static byte[] stringToByteArray(String str) {
+<i>1128</i>&nbsp;        byte[] result = new byte[str.length()+1];
+<b class="nc"><i>1129</i>&nbsp;        for (int i = 0; i &lt; str.length(); i++) {</b>
+<b class="nc"><i>1130</i>&nbsp;            result[i] = (byte) str.charAt(i);</b>
+<i>1131</i>&nbsp;        }
+<b class="nc"><i>1132</i>&nbsp;        result[str.length()] = 0;</b>
+<i>1133</i>&nbsp;        return result;
+<i>1134</i>&nbsp;    }
+<i>1135</i>&nbsp;
+<i>1136</i>&nbsp;    /**
+<i>1137</i>&nbsp;     * Converts a null-terminated byte array to java string
+<i>1138</i>&nbsp;     */
+<i>1139</i>&nbsp;    private static String byteArrayToString(byte[] array) {
+<i>1140</i>&nbsp;        StringBuilder result = new StringBuilder();
+<i>1141</i>&nbsp;        for (int i = 0; i &lt; array.length - 1; i++) {
+<i>1142</i>&nbsp;            result.append((char)array[i]);
+<i>1143</i>&nbsp;        }
+<i>1144</i>&nbsp;        return result.toString();
+<i>1145</i>&nbsp;    }
+<i>1146</i>&nbsp;
+<i>1147</i>&nbsp;   /**
+<i>1148</i>&nbsp;    * Empty, never used implementation  of AbstractPreferences.flushSpi().
+<i>1149</i>&nbsp;    */
+<i>1150</i>&nbsp;    protected void flushSpi() throws BackingStoreException {
+<i>1151</i>&nbsp;        // assert false;
+<i>1152</i>&nbsp;    }
+<i>1153</i>&nbsp;
+<i>1154</i>&nbsp;   /**
+<i>1155</i>&nbsp;    * Empty, never used implementation  of AbstractPreferences.flushSpi().
+<i>1156</i>&nbsp;    */
+<i>1157</i>&nbsp;    protected void syncSpi() throws BackingStoreException {
+<i>1158</i>&nbsp;        // assert false;
+<i>1159</i>&nbsp;    }
+<i>1160</i>&nbsp;
+<i>1161</i>&nbsp;    private static synchronized PlatformLogger logger() {
+<i>1162</i>&nbsp;        if (logger == null) {
+<i>1163</i>&nbsp;            logger = PlatformLogger.getLogger(&quot;java.util.prefs&quot;);
+<i>1164</i>&nbsp;        }
+<i>1165</i>&nbsp;        return logger;
+<i>1166</i>&nbsp;    }
+<i>1167</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

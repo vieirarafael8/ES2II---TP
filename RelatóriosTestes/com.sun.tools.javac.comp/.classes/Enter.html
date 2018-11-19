@@ -1,0 +1,695 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Enter</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.tools.javac.comp</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Enter (com.sun.tools.javac.comp)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Enter</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 19)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 183)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1999, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.tools.javac.comp;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.Map;
+<i>29</i>&nbsp;import java.util.Optional;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;import javax.tools.JavaFileObject;
+<i>32</i>&nbsp;import javax.tools.JavaFileManager;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import com.sun.tools.javac.code.*;
+<i>35</i>&nbsp;import com.sun.tools.javac.code.Kinds.KindName;
+<i>36</i>&nbsp;import com.sun.tools.javac.code.Kinds.KindSelector;
+<i>37</i>&nbsp;import com.sun.tools.javac.code.Scope.*;
+<i>38</i>&nbsp;import com.sun.tools.javac.code.Symbol.*;
+<i>39</i>&nbsp;import com.sun.tools.javac.code.Type.*;
+<i>40</i>&nbsp;import com.sun.tools.javac.main.Option.PkgInfo;
+<i>41</i>&nbsp;import com.sun.tools.javac.resources.CompilerProperties.Errors;
+<i>42</i>&nbsp;import com.sun.tools.javac.resources.CompilerProperties.Warnings;
+<i>43</i>&nbsp;import com.sun.tools.javac.tree.*;
+<i>44</i>&nbsp;import com.sun.tools.javac.tree.JCTree.*;
+<i>45</i>&nbsp;import com.sun.tools.javac.util.*;
+<i>46</i>&nbsp;import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
+<i>47</i>&nbsp;import com.sun.tools.javac.util.List;
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;import static com.sun.tools.javac.code.Flags.*;
+<i>50</i>&nbsp;import static com.sun.tools.javac.code.Kinds.Kind.*;
+<i>51</i>&nbsp;
+<i>52</i>&nbsp;/** This class enters symbols for all encountered definitions into
+<i>53</i>&nbsp; *  the symbol table. The pass consists of high-level two phases,
+<i>54</i>&nbsp; *  organized as follows:
+<i>55</i>&nbsp; *
+<i>56</i>&nbsp; *  &lt;p&gt;In the first phase, all class symbols are entered into their
+<i>57</i>&nbsp; *  enclosing scope, descending recursively down the tree for classes
+<i>58</i>&nbsp; *  which are members of other classes. The class symbols are given a
+<i>59</i>&nbsp; *  TypeEnter object as completer.
+<i>60</i>&nbsp; *
+<i>61</i>&nbsp; *  &lt;p&gt;In the second phase classes are completed using
+<i>62</i>&nbsp; *  TypeEnter.complete(). Completion might occur on demand, but
+<i>63</i>&nbsp; *  any classes that are not completed that way will be eventually
+<i>64</i>&nbsp; *  completed by processing the `uncompleted&#39; queue. Completion
+<i>65</i>&nbsp; *  entails determination of a class&#39;s parameters, supertype and
+<i>66</i>&nbsp; *  interfaces, as well as entering all symbols defined in the
+<i>67</i>&nbsp; *  class into its scope, with the exception of class symbols which
+<i>68</i>&nbsp; *  have been entered in phase 1.
+<i>69</i>&nbsp; *
+<i>70</i>&nbsp; *  &lt;p&gt;Whereas the first phase is organized as a sweep through all
+<i>71</i>&nbsp; *  compiled syntax trees, the second phase is on-demand. Members of a
+<i>72</i>&nbsp; *  class are entered when the contents of a class are first
+<i>73</i>&nbsp; *  accessed. This is accomplished by installing completer objects in
+<i>74</i>&nbsp; *  class symbols for compiled classes which invoke the type-enter
+<i>75</i>&nbsp; *  phase for the corresponding class tree.
+<i>76</i>&nbsp; *
+<i>77</i>&nbsp; *  &lt;p&gt;Classes migrate from one phase to the next via queues:
+<i>78</i>&nbsp; *
+<i>79</i>&nbsp; *  &lt;pre&gt;{@literal
+<i>80</i>&nbsp; *  class enter -&gt; (Enter.uncompleted)         --&gt; type enter
+<i>81</i>&nbsp; *              -&gt; (Todo)                      --&gt; attribute
+<i>82</i>&nbsp; *                                              (only for toplevel classes)
+<i>83</i>&nbsp; *  }&lt;/pre&gt;
+<i>84</i>&nbsp; *
+<i>85</i>&nbsp; *  &lt;p&gt;&lt;b&gt;This is NOT part of any supported API.
+<i>86</i>&nbsp; *  If you write code that depends on this, you do so at your own risk.
+<i>87</i>&nbsp; *  This code and its internal interfaces are subject to change or
+<i>88</i>&nbsp; *  deletion without notice.&lt;/b&gt;
+<i>89</i>&nbsp; */
+<i>90</i>&nbsp;public class Enter extends JCTree.Visitor {
+<i>91</i>&nbsp;    protected static final Context.Key&lt;Enter&gt; enterKey = new Context.Key&lt;&gt;();
+<i>92</i>&nbsp;
+<b class="nc"><i>93</i>&nbsp;    Annotate annotate;</b>
+<i>94</i>&nbsp;    Log log;
+<i>95</i>&nbsp;    Symtab syms;
+<i>96</i>&nbsp;    Check chk;
+<i>97</i>&nbsp;    TreeMaker make;
+<i>98</i>&nbsp;    TypeEnter typeEnter;
+<i>99</i>&nbsp;    Types types;
+<i>100</i>&nbsp;    Lint lint;
+<i>101</i>&nbsp;    Names names;
+<i>102</i>&nbsp;    JavaFileManager fileManager;
+<i>103</i>&nbsp;    PkgInfo pkginfoOpt;
+<i>104</i>&nbsp;    TypeEnvs typeEnvs;
+<i>105</i>&nbsp;    Modules modules;
+<i>106</i>&nbsp;    JCDiagnostic.Factory diags;
+<i>107</i>&nbsp;
+<i>108</i>&nbsp;    private final Todo todo;
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;    public static Enter instance(Context context) {
+<i>111</i>&nbsp;        Enter instance = context.get(enterKey);
+<i>112</i>&nbsp;        if (instance == null)
+<b class="nc"><i>113</i>&nbsp;            instance = new Enter(context);</b>
+<b class="nc"><i>114</i>&nbsp;        return instance;</b>
+<b class="nc"><i>115</i>&nbsp;    }</b>
+<b class="nc"><i>116</i>&nbsp;</b>
+<i>117</i>&nbsp;    protected Enter(Context context) {
+<i>118</i>&nbsp;        context.put(enterKey, this);
+<b class="nc"><i>119</i>&nbsp;</b>
+<b class="nc"><i>120</i>&nbsp;        log = Log.instance(context);</b>
+<i>121</i>&nbsp;        make = TreeMaker.instance(context);
+<b class="nc"><i>122</i>&nbsp;        syms = Symtab.instance(context);</b>
+<b class="nc"><i>123</i>&nbsp;        chk = Check.instance(context);</b>
+<b class="nc"><i>124</i>&nbsp;        typeEnter = TypeEnter.instance(context);</b>
+<b class="nc"><i>125</i>&nbsp;        types = Types.instance(context);</b>
+<b class="nc"><i>126</i>&nbsp;        annotate = Annotate.instance(context);</b>
+<b class="nc"><i>127</i>&nbsp;        lint = Lint.instance(context);</b>
+<b class="nc"><i>128</i>&nbsp;        names = Names.instance(context);</b>
+<b class="nc"><i>129</i>&nbsp;        modules = Modules.instance(context);</b>
+<b class="nc"><i>130</i>&nbsp;        diags = JCDiagnostic.Factory.instance(context);</b>
+<b class="nc"><i>131</i>&nbsp;</b>
+<i>132</i>&nbsp;        predefClassDef = make.ClassDef(
+<b class="nc"><i>133</i>&nbsp;            make.Modifiers(PUBLIC),</b>
+<b class="nc"><i>134</i>&nbsp;            syms.predefClass.name,</b>
+<i>135</i>&nbsp;            List.nil(),
+<b class="nc"><i>136</i>&nbsp;            null,</b>
+<i>137</i>&nbsp;            List.nil(),
+<b class="nc"><i>138</i>&nbsp;            List.nil());</b>
+<b class="nc"><i>139</i>&nbsp;        predefClassDef.sym = syms.predefClass;</b>
+<b class="nc"><i>140</i>&nbsp;        todo = Todo.instance(context);</b>
+<b class="nc"><i>141</i>&nbsp;        fileManager = context.get(JavaFileManager.class);</b>
+<b class="nc"><i>142</i>&nbsp;</b>
+<i>143</i>&nbsp;        Options options = Options.instance(context);
+<b class="nc"><i>144</i>&nbsp;        pkginfoOpt = PkgInfo.get(options);</b>
+<b class="nc"><i>145</i>&nbsp;        typeEnvs = TypeEnvs.instance(context);</b>
+<b class="nc"><i>146</i>&nbsp;    }</b>
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;    /** Accessor for typeEnvs
+<i>149</i>&nbsp;     */
+<i>150</i>&nbsp;    public Env&lt;AttrContext&gt; getEnv(TypeSymbol sym) {
+<i>151</i>&nbsp;        return typeEnvs.get(sym);
+<b class="nc"><i>152</i>&nbsp;    }</b>
+<i>153</i>&nbsp;
+<i>154</i>&nbsp;    public Iterable&lt;Env&lt;AttrContext&gt;&gt; getEnvs() {
+<i>155</i>&nbsp;        return typeEnvs.values();
+<b class="nc"><i>156</i>&nbsp;    }</b>
+<b class="nc"><i>157</i>&nbsp;</b>
+<b class="nc"><i>158</i>&nbsp;    public Env&lt;AttrContext&gt; getClassEnv(TypeSymbol sym) {</b>
+<b class="nc"><i>159</i>&nbsp;        Env&lt;AttrContext&gt; localEnv = getEnv(sym);</b>
+<b class="nc"><i>160</i>&nbsp;        if (localEnv == null) return null;</b>
+<b class="nc"><i>161</i>&nbsp;        Env&lt;AttrContext&gt; lintEnv = localEnv;</b>
+<i>162</i>&nbsp;        while (lintEnv.info.lint == null)
+<i>163</i>&nbsp;            lintEnv = lintEnv.next;
+<i>164</i>&nbsp;        localEnv.info.lint = lintEnv.info.lint.augment(sym);
+<i>165</i>&nbsp;        return localEnv;
+<i>166</i>&nbsp;    }
+<i>167</i>&nbsp;
+<i>168</i>&nbsp;    /** The queue of all classes that might still need to be completed;
+<i>169</i>&nbsp;     *  saved and initialized by main().
+<i>170</i>&nbsp;     */
+<i>171</i>&nbsp;    ListBuffer&lt;ClassSymbol&gt; uncompleted;
+<i>172</i>&nbsp;
+<i>173</i>&nbsp;    /** The queue of modules whose imports still need to be checked. */
+<i>174</i>&nbsp;    ListBuffer&lt;JCCompilationUnit&gt; unfinishedModules = new ListBuffer&lt;&gt;();
+<i>175</i>&nbsp;
+<i>176</i>&nbsp;    /** A dummy class to serve as enclClass for toplevel environments.
+<i>177</i>&nbsp;     */
+<i>178</i>&nbsp;    private JCClassDecl predefClassDef;
+<i>179</i>&nbsp;
+<i>180</i>&nbsp;/* ************************************************************************
+<i>181</i>&nbsp; * environment construction
+<i>182</i>&nbsp; *************************************************************************/
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;    /** Create a fresh environment for class bodies.
+<i>186</i>&nbsp;     *  This will create a fresh scope for local symbols of a class, referred
+<i>187</i>&nbsp;     *  to by the environments info.scope field.
+<i>188</i>&nbsp;     *  This scope will contain
+<i>189</i>&nbsp;     *    - symbols for this and super
+<i>190</i>&nbsp;     *    - symbols for any type parameters
+<i>191</i>&nbsp;     *  In addition, it serves as an anchor for scopes of methods and initializers
+<b class="nc"><i>192</i>&nbsp;     *  which are nested in this scope via Scope.dup().</b>
+<b class="nc"><i>193</i>&nbsp;     *  This scope should not be confused with the members scope of a class.</b>
+<b class="nc"><i>194</i>&nbsp;     *</b>
+<b class="nc"><i>195</i>&nbsp;     *  @param tree     The class definition.</b>
+<b class="nc"><i>196</i>&nbsp;     *  @param env      The environment current outside of the class definition.</b>
+<b class="nc"><i>197</i>&nbsp;     */</b>
+<i>198</i>&nbsp;    public Env&lt;AttrContext&gt; classEnv(JCClassDecl tree, Env&lt;AttrContext&gt; env) {
+<b class="nc"><i>199</i>&nbsp;        Env&lt;AttrContext&gt; localEnv =</b>
+<i>200</i>&nbsp;            env.dup(tree, env.info.dup(WriteableScope.create(tree.sym)));
+<i>201</i>&nbsp;        localEnv.enclClass = tree;
+<i>202</i>&nbsp;        localEnv.outer = env;
+<i>203</i>&nbsp;        localEnv.info.isSelfCall = false;
+<i>204</i>&nbsp;        localEnv.info.lint = null; // leave this to be filled in by Attr,
+<i>205</i>&nbsp;                                   // when annotations have been processed
+<b class="nc"><i>206</i>&nbsp;        localEnv.info.isAnonymousDiamond = TreeInfo.isDiamond(env.tree);</b>
+<b class="nc"><i>207</i>&nbsp;        return localEnv;</b>
+<b class="nc"><i>208</i>&nbsp;    }</b>
+<b class="nc"><i>209</i>&nbsp;</b>
+<b class="nc"><i>210</i>&nbsp;    /** Create a fresh environment for toplevels.</b>
+<b class="nc"><i>211</i>&nbsp;     *  @param tree     The toplevel tree.</b>
+<b class="nc"><i>212</i>&nbsp;     */</b>
+<b class="nc"><i>213</i>&nbsp;    Env&lt;AttrContext&gt; topLevelEnv(JCCompilationUnit tree) {</b>
+<i>214</i>&nbsp;        Env&lt;AttrContext&gt; localEnv = new Env&lt;&gt;(tree, new AttrContext());
+<i>215</i>&nbsp;        localEnv.toplevel = tree;
+<i>216</i>&nbsp;        localEnv.enclClass = predefClassDef;
+<b class="nc"><i>217</i>&nbsp;        tree.toplevelScope = WriteableScope.create(tree.packge);</b>
+<b class="nc"><i>218</i>&nbsp;        tree.namedImportScope = new NamedImportScope(tree.packge);</b>
+<b class="nc"><i>219</i>&nbsp;        tree.starImportScope = new StarImportScope(tree.packge);</b>
+<b class="nc"><i>220</i>&nbsp;        localEnv.info.scope = tree.toplevelScope;</b>
+<b class="nc"><i>221</i>&nbsp;        localEnv.info.lint = lint;</b>
+<b class="nc"><i>222</i>&nbsp;        return localEnv;</b>
+<i>223</i>&nbsp;    }
+<i>224</i>&nbsp;
+<i>225</i>&nbsp;    public Env&lt;AttrContext&gt; getTopLevelEnv(JCCompilationUnit tree) {
+<i>226</i>&nbsp;        Env&lt;AttrContext&gt; localEnv = new Env&lt;&gt;(tree, new AttrContext());
+<i>227</i>&nbsp;        localEnv.toplevel = tree;
+<i>228</i>&nbsp;        localEnv.enclClass = predefClassDef;
+<i>229</i>&nbsp;        localEnv.info.scope = tree.toplevelScope;
+<i>230</i>&nbsp;        localEnv.info.lint = lint;
+<b class="nc"><i>231</i>&nbsp;        return localEnv;</b>
+<i>232</i>&nbsp;    }
+<i>233</i>&nbsp;
+<i>234</i>&nbsp;    /** The scope in which a member definition in environment env is to be entered
+<i>235</i>&nbsp;     *  This is usually the environment&#39;s scope, except for class environments,
+<i>236</i>&nbsp;     *  where the local scope is for type variables, and the this and super symbol
+<i>237</i>&nbsp;     *  only, and members go into the class member scope.
+<i>238</i>&nbsp;     */
+<i>239</i>&nbsp;    WriteableScope enterScope(Env&lt;AttrContext&gt; env) {
+<i>240</i>&nbsp;        return (env.tree.hasTag(JCTree.Tag.CLASSDEF))
+<i>241</i>&nbsp;            ? ((JCClassDecl) env.tree).sym.members_field
+<i>242</i>&nbsp;            : env.info.scope;
+<i>243</i>&nbsp;    }
+<i>244</i>&nbsp;
+<i>245</i>&nbsp;    /** Create a fresh environment for modules.
+<i>246</i>&nbsp;     *
+<i>247</i>&nbsp;     *  @param tree     The module definition.
+<i>248</i>&nbsp;     *  @param env      The environment current outside of the module definition.
+<i>249</i>&nbsp;     */
+<i>250</i>&nbsp;    public Env&lt;AttrContext&gt; moduleEnv(JCModuleDecl tree, Env&lt;AttrContext&gt; env) {
+<i>251</i>&nbsp;        Assert.checkNonNull(tree.sym);
+<i>252</i>&nbsp;        Env&lt;AttrContext&gt; localEnv =
+<i>253</i>&nbsp;            env.dup(tree, env.info.dup(WriteableScope.create(tree.sym)));
+<i>254</i>&nbsp;        localEnv.enclClass = predefClassDef;
+<b class="nc"><i>255</i>&nbsp;        localEnv.outer = env;</b>
+<i>256</i>&nbsp;        localEnv.info.isSelfCall = false;
+<b class="nc"><i>257</i>&nbsp;        localEnv.info.lint = null; // leave this to be filled in by Attr,</b>
+<b class="nc"><i>258</i>&nbsp;                                   // when annotations have been processed</b>
+<b class="nc"><i>259</i>&nbsp;        return localEnv;</b>
+<b class="nc"><i>260</i>&nbsp;    }</b>
+<b class="nc"><i>261</i>&nbsp;</b>
+<i>262</i>&nbsp;
+<b class="nc"><i>263</i>&nbsp;/* ************************************************************************</b>
+<i>264</i>&nbsp; * Visitor methods for phase 1: class enter
+<i>265</i>&nbsp; *************************************************************************/
+<i>266</i>&nbsp;
+<i>267</i>&nbsp;    /** Visitor argument: the current environment.
+<i>268</i>&nbsp;     */
+<i>269</i>&nbsp;    protected Env&lt;AttrContext&gt; env;
+<b class="nc"><i>270</i>&nbsp;</b>
+<b class="nc"><i>271</i>&nbsp;    /** Visitor result: the computed type.</b>
+<b class="nc"><i>272</i>&nbsp;     */</b>
+<b class="nc"><i>273</i>&nbsp;    Type result;</b>
+<b class="nc"><i>274</i>&nbsp;</b>
+<i>275</i>&nbsp;    /** Visitor method: enter all classes in given tree, catching any
+<b class="nc"><i>276</i>&nbsp;     *  completion failure exceptions. Return the tree&#39;s type.</b>
+<i>277</i>&nbsp;     *
+<i>278</i>&nbsp;     *  @param tree    The tree to be visited.
+<i>279</i>&nbsp;     *  @param env     The environment visitor argument.
+<i>280</i>&nbsp;     */
+<b class="nc"><i>281</i>&nbsp;    Type classEnter(JCTree tree, Env&lt;AttrContext&gt; env) {</b>
+<b class="nc"><i>282</i>&nbsp;        Env&lt;AttrContext&gt; prevEnv = this.env;</b>
+<b class="nc"><i>283</i>&nbsp;        try {</b>
+<i>284</i>&nbsp;            this.env = env;
+<b class="nc"><i>285</i>&nbsp;            annotate.blockAnnotations();</b>
+<b class="nc"><i>286</i>&nbsp;            tree.accept(this);</b>
+<b class="nc"><i>287</i>&nbsp;            return result;</b>
+<i>288</i>&nbsp;        }  catch (CompletionFailure ex) {
+<i>289</i>&nbsp;            return chk.completionError(tree.pos(), ex);
+<b class="nc"><i>290</i>&nbsp;        } finally {</b>
+<b class="nc"><i>291</i>&nbsp;            annotate.unblockAnnotations();</b>
+<b class="nc"><i>292</i>&nbsp;            this.env = prevEnv;</b>
+<b class="nc"><i>293</i>&nbsp;        }</b>
+<i>294</i>&nbsp;    }
+<i>295</i>&nbsp;
+<i>296</i>&nbsp;    /** Visitor method: enter classes of a list of trees, returning a list of types.
+<i>297</i>&nbsp;     */
+<b class="nc"><i>298</i>&nbsp;    &lt;T extends JCTree&gt; List&lt;Type&gt; classEnter(List&lt;T&gt; trees, Env&lt;AttrContext&gt; env) {</b>
+<i>299</i>&nbsp;        ListBuffer&lt;Type&gt; ts = new ListBuffer&lt;&gt;();
+<b class="nc"><i>300</i>&nbsp;        for (List&lt;T&gt; l = trees; l.nonEmpty(); l = l.tail) {</b>
+<b class="nc"><i>301</i>&nbsp;            Type t = classEnter(l.head, env);</b>
+<i>302</i>&nbsp;            if (t != null)
+<i>303</i>&nbsp;                ts.append(t);
+<b class="nc"><i>304</i>&nbsp;        }</b>
+<b class="nc"><i>305</i>&nbsp;        return ts.toList();</b>
+<b class="nc"><i>306</i>&nbsp;    }</b>
+<b class="nc"><i>307</i>&nbsp;</b>
+<i>308</i>&nbsp;    @Override
+<b class="nc"><i>309</i>&nbsp;    public void visitTopLevel(JCCompilationUnit tree) {</b>
+<b class="nc"><i>310</i>&nbsp;//        Assert.checkNonNull(tree.modle, tree.sourcefile.toString());</b>
+<b class="nc"><i>311</i>&nbsp;</b>
+<i>312</i>&nbsp;        JavaFileObject prev = log.useSource(tree.sourcefile);
+<i>313</i>&nbsp;        boolean addEnv = false;
+<i>314</i>&nbsp;        boolean isPkgInfo = tree.sourcefile.isNameCompatible(&quot;package-info&quot;,
+<b class="nc"><i>315</i>&nbsp;                                                             JavaFileObject.Kind.SOURCE);</b>
+<i>316</i>&nbsp;        if (TreeInfo.isModuleInfo(tree)) {
+<b class="nc"><i>317</i>&nbsp;            JCPackageDecl pd = tree.getPackage();</b>
+<b class="nc"><i>318</i>&nbsp;            if (pd != null) {</b>
+<i>319</i>&nbsp;                log.error(pd.pos(), Errors.NoPkgInModuleInfoJava);
+<i>320</i>&nbsp;            }
+<i>321</i>&nbsp;            tree.packge = syms.rootPackage;
+<i>322</i>&nbsp;            Env&lt;AttrContext&gt; topEnv = topLevelEnv(tree);
+<b class="nc"><i>323</i>&nbsp;            classEnter(tree.defs, topEnv);</b>
+<b class="nc"><i>324</i>&nbsp;            tree.modle.usesProvidesCompleter = modules.getUsesProvidesCompleter();</b>
+<i>325</i>&nbsp;        } else {
+<b class="nc"><i>326</i>&nbsp;            JCPackageDecl pd = tree.getPackage();</b>
+<b class="nc"><i>327</i>&nbsp;            if (pd != null) {</b>
+<b class="nc"><i>328</i>&nbsp;                tree.packge = pd.packge = syms.enterPackage(tree.modle, TreeInfo.fullName(pd.pid));</b>
+<b class="nc"><i>329</i>&nbsp;                if (   pd.annotations.nonEmpty()</b>
+<b class="nc"><i>330</i>&nbsp;                    || pkginfoOpt == PkgInfo.ALWAYS</b>
+<b class="nc"><i>331</i>&nbsp;                    || tree.docComments != null) {</b>
+<b class="nc"><i>332</i>&nbsp;                    if (isPkgInfo) {</b>
+<i>333</i>&nbsp;                        addEnv = true;
+<b class="nc"><i>334</i>&nbsp;                    } else if (pd.annotations.nonEmpty()) {</b>
+<b class="nc"><i>335</i>&nbsp;                        log.error(pd.annotations.head.pos(),</b>
+<b class="nc"><i>336</i>&nbsp;                                  Errors.PkgAnnotationsSbInPackageInfoJava);</b>
+<i>337</i>&nbsp;                    }
+<b class="nc"><i>338</i>&nbsp;                }</b>
+<b class="nc"><i>339</i>&nbsp;            } else {</b>
+<i>340</i>&nbsp;                tree.packge = tree.modle.unnamedPackage;
+<i>341</i>&nbsp;            }
+<i>342</i>&nbsp;
+<i>343</i>&nbsp;            Map&lt;Name, PackageSymbol&gt; visiblePackages = tree.modle.visiblePackages;
+<b class="nc"><i>344</i>&nbsp;            Optional&lt;ModuleSymbol&gt; dependencyWithPackage =</b>
+<b class="nc"><i>345</i>&nbsp;                syms.listPackageModules(tree.packge.fullname)</b>
+<i>346</i>&nbsp;                    .stream()
+<b class="nc"><i>347</i>&nbsp;                    .filter(m -&gt; m != tree.modle)</b>
+<i>348</i>&nbsp;                    .filter(cand -&gt; visiblePackages.get(tree.packge.fullname) == syms.getPackage(cand, tree.packge.fullname))
+<b class="nc"><i>349</i>&nbsp;                    .findAny();</b>
+<b class="nc"><i>350</i>&nbsp;</b>
+<b class="nc"><i>351</i>&nbsp;            if (dependencyWithPackage.isPresent()) {</b>
+<b class="nc"><i>352</i>&nbsp;                log.error(pd, Errors.PackageInOtherModule(dependencyWithPackage.get()));</b>
+<b class="nc"><i>353</i>&nbsp;            }</b>
+<b class="nc"><i>354</i>&nbsp;</b>
+<b class="nc"><i>355</i>&nbsp;            tree.packge.complete(); // Find all classes in package.</b>
+<i>356</i>&nbsp;
+<i>357</i>&nbsp;            Env&lt;AttrContext&gt; topEnv = topLevelEnv(tree);
+<b class="nc"><i>358</i>&nbsp;            Env&lt;AttrContext&gt; packageEnv = isPkgInfo ? topEnv.dup(pd) : null;</b>
+<b class="nc"><i>359</i>&nbsp;</b>
+<b class="nc"><i>360</i>&nbsp;            // Save environment of package-info.java file.</b>
+<b class="nc"><i>361</i>&nbsp;            if (isPkgInfo) {</b>
+<i>362</i>&nbsp;                Env&lt;AttrContext&gt; env0 = typeEnvs.get(tree.packge);
+<i>363</i>&nbsp;                if (env0 != null) {
+<b class="nc"><i>364</i>&nbsp;                    JCCompilationUnit tree0 = env0.toplevel;</b>
+<i>365</i>&nbsp;                    if (!fileManager.isSameFile(tree.sourcefile, tree0.sourcefile)) {
+<b class="nc"><i>366</i>&nbsp;                        log.warning(pd != null ? pd.pid.pos() : null,</b>
+<b class="nc"><i>367</i>&nbsp;                                    Warnings.PkgInfoAlreadySeen(tree.packge));</b>
+<b class="nc"><i>368</i>&nbsp;                    }</b>
+<i>369</i>&nbsp;                }
+<i>370</i>&nbsp;                typeEnvs.put(tree.packge, packageEnv);
+<i>371</i>&nbsp;
+<b class="nc"><i>372</i>&nbsp;                for (Symbol q = tree.packge; q != null &amp;&amp; q.kind == PCK; q = q.owner)</b>
+<b class="nc"><i>373</i>&nbsp;                    q.flags_field |= EXISTS;</b>
+<b class="nc"><i>374</i>&nbsp;</b>
+<b class="nc"><i>375</i>&nbsp;                Name name = names.package_info;</b>
+<i>376</i>&nbsp;                ClassSymbol c = syms.enterClass(tree.modle, name, tree.packge);
+<i>377</i>&nbsp;                c.flatname = names.fromString(tree.packge + &quot;.&quot; + name);
+<b class="nc"><i>378</i>&nbsp;                c.sourcefile = tree.sourcefile;</b>
+<i>379</i>&nbsp;            c.completer = Completer.NULL_COMPLETER;
+<i>380</i>&nbsp;                c.members_field = WriteableScope.create(c);
+<b class="nc"><i>381</i>&nbsp;                tree.packge.package_info = c;</b>
+<b class="nc"><i>382</i>&nbsp;            }</b>
+<b class="nc"><i>383</i>&nbsp;            classEnter(tree.defs, topEnv);</b>
+<b class="nc"><i>384</i>&nbsp;            if (addEnv) {</b>
+<i>385</i>&nbsp;                todo.append(packageEnv);
+<i>386</i>&nbsp;            }
+<b class="nc"><i>387</i>&nbsp;        }</b>
+<b class="nc"><i>388</i>&nbsp;        log.useSource(prev);</b>
+<i>389</i>&nbsp;        result = null;
+<i>390</i>&nbsp;    }
+<i>391</i>&nbsp;
+<b class="nc"><i>392</i>&nbsp;    @Override</b>
+<b class="nc"><i>393</i>&nbsp;    public void visitClassDef(JCClassDecl tree) {</b>
+<i>394</i>&nbsp;        Symbol owner = env.info.scope.owner;
+<i>395</i>&nbsp;        WriteableScope enclScope = enterScope(env);
+<b class="nc"><i>396</i>&nbsp;        ClassSymbol c;</b>
+<b class="nc"><i>397</i>&nbsp;        if (owner.kind == PCK) {</b>
+<b class="nc"><i>398</i>&nbsp;            // We are seeing a toplevel class.</b>
+<b class="nc"><i>399</i>&nbsp;            PackageSymbol packge = (PackageSymbol)owner;</b>
+<i>400</i>&nbsp;            for (Symbol q = packge; q != null &amp;&amp; q.kind == PCK; q = q.owner)
+<b class="nc"><i>401</i>&nbsp;                q.flags_field |= EXISTS;</b>
+<b class="nc"><i>402</i>&nbsp;            c = syms.enterClass(env.toplevel.modle, tree.name, packge);</b>
+<i>403</i>&nbsp;            packge.members().enterIfAbsent(c);
+<i>404</i>&nbsp;            if ((tree.mods.flags &amp; PUBLIC) != 0 &amp;&amp; !classNameMatchesFileName(c, env)) {
+<i>405</i>&nbsp;                KindName topElement = KindName.CLASS;
+<i>406</i>&nbsp;                if ((tree.mods.flags &amp; ENUM) != 0) {
+<b class="nc"><i>407</i>&nbsp;                    topElement = KindName.ENUM;</b>
+<b class="nc"><i>408</i>&nbsp;                } else if ((tree.mods.flags &amp; INTERFACE) != 0) {</b>
+<i>409</i>&nbsp;                    topElement = KindName.INTERFACE;
+<b class="nc"><i>410</i>&nbsp;                }</b>
+<i>411</i>&nbsp;                log.error(tree.pos(),
+<b class="nc"><i>412</i>&nbsp;                          Errors.ClassPublicShouldBeInFile(topElement, tree.name));</b>
+<b class="nc"><i>413</i>&nbsp;            }</b>
+<i>414</i>&nbsp;        } else {
+<i>415</i>&nbsp;            if (!tree.name.isEmpty() &amp;&amp;
+<i>416</i>&nbsp;                !chk.checkUniqueClassName(tree.pos(), tree.name, enclScope)) {
+<i>417</i>&nbsp;                result = null;
+<b class="nc"><i>418</i>&nbsp;                return;</b>
+<i>419</i>&nbsp;            }
+<i>420</i>&nbsp;            if (owner.kind == TYP) {
+<i>421</i>&nbsp;                // We are seeing a member class.
+<b class="nc"><i>422</i>&nbsp;                c = syms.enterClass(env.toplevel.modle, tree.name, (TypeSymbol)owner);</b>
+<i>423</i>&nbsp;                if (c.owner != owner) {
+<i>424</i>&nbsp;                    if (c.name != tree.name) {
+<i>425</i>&nbsp;                        log.error(tree.pos(), Errors.SameBinaryName(c.name, tree.name));
+<b class="nc"><i>426</i>&nbsp;                        result = types.createErrorType(tree.name, (TypeSymbol)owner, Type.noType);</b>
+<i>427</i>&nbsp;                        tree.sym = (ClassSymbol)result.tsym;
+<b class="nc"><i>428</i>&nbsp;                        return;</b>
+<i>429</i>&nbsp;                    }
+<i>430</i>&nbsp;                    //anonymous class loaded from a classfile may be recreated from source (see below)
+<i>431</i>&nbsp;                    //if this class is a member of such an anonymous class, fix the owner:
+<i>432</i>&nbsp;                    Assert.check(owner.owner.kind != TYP, owner::toString);
+<i>433</i>&nbsp;                    Assert.check(c.owner.kind == TYP, () -&gt; c.owner.toString());
+<i>434</i>&nbsp;                    ClassSymbol cowner = (ClassSymbol) c.owner;
+<b class="nc"><i>435</i>&nbsp;                    if (cowner.members_field != null) {</b>
+<i>436</i>&nbsp;                        cowner.members_field.remove(c);
+<i>437</i>&nbsp;                    }
+<i>438</i>&nbsp;                    c.owner = owner;
+<i>439</i>&nbsp;                }
+<i>440</i>&nbsp;                if ((owner.flags_field &amp; INTERFACE) != 0) {
+<b class="nc"><i>441</i>&nbsp;                    tree.mods.flags |= PUBLIC | STATIC;</b>
+<i>442</i>&nbsp;                }
+<i>443</i>&nbsp;            } else {
+<i>444</i>&nbsp;                // We are seeing a local class.
+<i>445</i>&nbsp;                c = syms.defineClass(tree.name, owner);
+<i>446</i>&nbsp;                c.flatname = chk.localClassName(c);
+<i>447</i>&nbsp;                if (!c.name.isEmpty())
+<i>448</i>&nbsp;                    chk.checkTransparentClass(tree.pos(), c, env.info.scope);
+<i>449</i>&nbsp;            }
+<b class="nc"><i>450</i>&nbsp;        }</b>
+<i>451</i>&nbsp;        tree.sym = c;
+<i>452</i>&nbsp;
+<b class="nc"><i>453</i>&nbsp;        // Enter class into `compiled&#39; table and enclosing scope.</b>
+<b class="nc"><i>454</i>&nbsp;        if (chk.getCompiled(c) != null) {</b>
+<b class="nc"><i>455</i>&nbsp;            duplicateClass(tree.pos(), c);</b>
+<i>456</i>&nbsp;            result = types.createErrorType(tree.name, (TypeSymbol)owner, Type.noType);
+<b class="nc"><i>457</i>&nbsp;            tree.sym = (ClassSymbol)result.tsym;</b>
+<i>458</i>&nbsp;            return;
+<i>459</i>&nbsp;        }
+<i>460</i>&nbsp;        chk.putCompiled(c);
+<i>461</i>&nbsp;        enclScope.enter(c);
+<i>462</i>&nbsp;
+<i>463</i>&nbsp;        // Set up an environment for class block and store in `typeEnvs&#39;
+<b class="nc"><i>464</i>&nbsp;        // table, to be retrieved later in memberEnter and attribution.</b>
+<i>465</i>&nbsp;        Env&lt;AttrContext&gt; localEnv = classEnv(tree, env);
+<i>466</i>&nbsp;        typeEnvs.put(c, localEnv);
+<i>467</i>&nbsp;
+<i>468</i>&nbsp;        // Fill out class fields.
+<i>469</i>&nbsp;        c.completer = Completer.NULL_COMPLETER; // do not allow the initial completer linger on.
+<i>470</i>&nbsp;        c.flags_field = chk.checkFlags(tree.pos(), tree.mods.flags, c, tree);
+<b class="nc"><i>471</i>&nbsp;        c.sourcefile = env.toplevel.sourcefile;</b>
+<i>472</i>&nbsp;        c.members_field = WriteableScope.create(c);
+<i>473</i>&nbsp;        c.clearAnnotationMetadata();
+<i>474</i>&nbsp;
+<i>475</i>&nbsp;        ClassType ct = (ClassType)c.type;
+<i>476</i>&nbsp;        if (owner.kind != PCK &amp;&amp; (c.flags_field &amp; STATIC) == 0) {
+<i>477</i>&nbsp;            // We are seeing a local or inner class.
+<i>478</i>&nbsp;            // Set outer_field of this class to closest enclosing class
+<i>479</i>&nbsp;            // which contains this class in a non-static context
+<b class="nc"><i>480</i>&nbsp;            // (its &quot;enclosing instance class&quot;), provided such a class exists.</b>
+<b class="nc"><i>481</i>&nbsp;            Symbol owner1 = owner;</b>
+<b class="nc"><i>482</i>&nbsp;            while (owner1.kind.matches(KindSelector.VAL_MTH) &amp;&amp;</b>
+<i>483</i>&nbsp;                   (owner1.flags_field &amp; STATIC) == 0) {
+<i>484</i>&nbsp;                owner1 = owner1.owner;
+<i>485</i>&nbsp;            }
+<b class="nc"><i>486</i>&nbsp;            if (owner1.kind == TYP) {</b>
+<i>487</i>&nbsp;                ct.setEnclosingType(owner1.type);
+<i>488</i>&nbsp;            }
+<b class="nc"><i>489</i>&nbsp;        }</b>
+<b class="nc"><i>490</i>&nbsp;</b>
+<b class="nc"><i>491</i>&nbsp;        // Enter type parameters.</b>
+<b class="nc"><i>492</i>&nbsp;        ct.typarams_field = classEnter(tree.typarams, localEnv);</b>
+<b class="nc"><i>493</i>&nbsp;        ct.allparams_field = null;</b>
+<i>494</i>&nbsp;
+<i>495</i>&nbsp;        // install further completer for this type.
+<b class="nc"><i>496</i>&nbsp;        c.completer = typeEnter;</b>
+<b class="nc"><i>497</i>&nbsp;</b>
+<i>498</i>&nbsp;        // Add non-local class to uncompleted, to make sure it will be
+<i>499</i>&nbsp;        // completed later.
+<i>500</i>&nbsp;        if (!c.isLocal() &amp;&amp; uncompleted != null) uncompleted.append(c);
+<b class="nc"><i>501</i>&nbsp;//      System.err.println(&quot;entering &quot; + c.fullname + &quot; in &quot; + c.owner);//DEBUG</b>
+<b class="nc"><i>502</i>&nbsp;</b>
+<b class="nc"><i>503</i>&nbsp;        // Recursively enter all member classes.</b>
+<b class="nc"><i>504</i>&nbsp;        classEnter(tree.defs, localEnv);</b>
+<b class="nc"><i>505</i>&nbsp;</b>
+<b class="nc"><i>506</i>&nbsp;//        Assert.checkNonNull(c.modle, c.sourcefile.toString());</b>
+<i>507</i>&nbsp;
+<b class="nc"><i>508</i>&nbsp;        result = c.type;</b>
+<i>509</i>&nbsp;    }
+<i>510</i>&nbsp;    //where
+<b class="nc"><i>511</i>&nbsp;        /** Does class have the same name as the file it appears in?</b>
+<b class="nc"><i>512</i>&nbsp;         */</b>
+<b class="nc"><i>513</i>&nbsp;        private static boolean classNameMatchesFileName(ClassSymbol c,</b>
+<i>514</i>&nbsp;                                                        Env&lt;AttrContext&gt; env) {
+<i>515</i>&nbsp;            return env.toplevel.sourcefile.isNameCompatible(c.name.toString(),
+<i>516</i>&nbsp;                                                            JavaFileObject.Kind.SOURCE);
+<i>517</i>&nbsp;        }
+<i>518</i>&nbsp;
+<i>519</i>&nbsp;    /** Complain about a duplicate class. */
+<i>520</i>&nbsp;    protected void duplicateClass(DiagnosticPosition pos, ClassSymbol c) {
+<i>521</i>&nbsp;        log.error(pos, Errors.DuplicateClass(c.fullname));
+<i>522</i>&nbsp;    }
+<i>523</i>&nbsp;
+<i>524</i>&nbsp;    /** Class enter visitor method for type parameters.
+<i>525</i>&nbsp;     *  Enter a symbol for type parameter in local scope, after checking that it
+<i>526</i>&nbsp;     *  is unique.
+<i>527</i>&nbsp;     */
+<i>528</i>&nbsp;    @Override
+<i>529</i>&nbsp;    public void visitTypeParameter(JCTypeParameter tree) {
+<i>530</i>&nbsp;        TypeVar a = (tree.type != null)
+<i>531</i>&nbsp;            ? (TypeVar)tree.type
+<i>532</i>&nbsp;            : new TypeVar(tree.name, env.info.scope.owner, syms.botType);
+<i>533</i>&nbsp;        tree.type = a;
+<i>534</i>&nbsp;        if (chk.checkUnique(tree.pos(), a.tsym, env.info.scope)) {
+<i>535</i>&nbsp;            env.info.scope.enter(a.tsym);
+<i>536</i>&nbsp;        }
+<i>537</i>&nbsp;        result = a;
+<i>538</i>&nbsp;    }
+<i>539</i>&nbsp;
+<i>540</i>&nbsp;    @Override
+<i>541</i>&nbsp;    public void visitModuleDef(JCModuleDecl tree) {
+<i>542</i>&nbsp;        Env&lt;AttrContext&gt; moduleEnv = moduleEnv(tree, env);
+<i>543</i>&nbsp;        typeEnvs.put(tree.sym, moduleEnv);
+<i>544</i>&nbsp;        if (modules.isInModuleGraph(tree.sym)) {
+<i>545</i>&nbsp;            todo.append(moduleEnv);
+<i>546</i>&nbsp;        }
+<i>547</i>&nbsp;    }
+<i>548</i>&nbsp;
+<i>549</i>&nbsp;    /** Default class enter visitor method: do nothing.
+<i>550</i>&nbsp;     */
+<i>551</i>&nbsp;    @Override
+<i>552</i>&nbsp;    public void visitTree(JCTree tree) {
+<i>553</i>&nbsp;        result = null;
+<i>554</i>&nbsp;    }
+<i>555</i>&nbsp;
+<i>556</i>&nbsp;    /** Main method: enter all classes in a list of toplevel trees.
+<i>557</i>&nbsp;     *  @param trees      The list of trees to be processed.
+<i>558</i>&nbsp;     */
+<i>559</i>&nbsp;    public void main(List&lt;JCCompilationUnit&gt; trees) {
+<i>560</i>&nbsp;        complete(trees, null);
+<i>561</i>&nbsp;    }
+<i>562</i>&nbsp;
+<i>563</i>&nbsp;    /** Main method: enter classes from the list of toplevel trees, possibly
+<i>564</i>&nbsp;     *  skipping TypeEnter for all but &#39;c&#39; by placing them on the uncompleted
+<i>565</i>&nbsp;     *  list.
+<i>566</i>&nbsp;     *  @param trees      The list of trees to be processed.
+<i>567</i>&nbsp;     *  @param c          The class symbol to be processed or null to process all.
+<i>568</i>&nbsp;     */
+<i>569</i>&nbsp;    public void complete(List&lt;JCCompilationUnit&gt; trees, ClassSymbol c) {
+<i>570</i>&nbsp;        annotate.blockAnnotations();
+<i>571</i>&nbsp;        ListBuffer&lt;ClassSymbol&gt; prevUncompleted = uncompleted;
+<i>572</i>&nbsp;        if (typeEnter.completionEnabled) uncompleted = new ListBuffer&lt;&gt;();
+<i>573</i>&nbsp;
+<i>574</i>&nbsp;        try {
+<i>575</i>&nbsp;            // enter all classes, and construct uncompleted list
+<i>576</i>&nbsp;            classEnter(trees, null);
+<i>577</i>&nbsp;
+<i>578</i>&nbsp;            // complete all uncompleted classes in memberEnter
+<i>579</i>&nbsp;            if (typeEnter.completionEnabled) {
+<i>580</i>&nbsp;                while (uncompleted.nonEmpty()) {
+<i>581</i>&nbsp;                    ClassSymbol clazz = uncompleted.next();
+<i>582</i>&nbsp;                    if (c == null || c == clazz || prevUncompleted == null)
+<i>583</i>&nbsp;                        clazz.complete();
+<i>584</i>&nbsp;                    else
+<i>585</i>&nbsp;                        // defer
+<i>586</i>&nbsp;                        prevUncompleted.append(clazz);
+<i>587</i>&nbsp;                }
+<i>588</i>&nbsp;
+<i>589</i>&nbsp;                if (!modules.modulesInitialized()) {
+<i>590</i>&nbsp;                    for (JCCompilationUnit cut : trees) {
+<i>591</i>&nbsp;                        if (cut.getModuleDecl() != null) {
+<i>592</i>&nbsp;                            unfinishedModules.append(cut);
+<i>593</i>&nbsp;                        } else {
+<i>594</i>&nbsp;                            typeEnter.ensureImportsChecked(List.of(cut));
+<i>595</i>&nbsp;                        }
+<i>596</i>&nbsp;                    }
+<i>597</i>&nbsp;                } else {
+<i>598</i>&nbsp;                    typeEnter.ensureImportsChecked(unfinishedModules.toList());
+<i>599</i>&nbsp;                    unfinishedModules.clear();
+<i>600</i>&nbsp;                    typeEnter.ensureImportsChecked(trees);
+<i>601</i>&nbsp;                }
+<i>602</i>&nbsp;            }
+<i>603</i>&nbsp;        } finally {
+<i>604</i>&nbsp;            uncompleted = prevUncompleted;
+<i>605</i>&nbsp;            annotate.unblockAnnotations();
+<i>606</i>&nbsp;        }
+<i>607</i>&nbsp;    }
+<i>608</i>&nbsp;
+<i>609</i>&nbsp;    public void newRound() {
+<i>610</i>&nbsp;        typeEnvs.clear();
+<i>611</i>&nbsp;    }
+<i>612</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

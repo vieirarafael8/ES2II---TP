@@ -1,0 +1,864 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: CountedCompleter</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.concurrent</a> ]
+</div>
+
+<h1>Coverage Summary for Class: CountedCompleter (java.util.concurrent)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">CountedCompleter</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 22)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 66)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; */
+<i>24</i>&nbsp;
+<i>25</i>&nbsp;/*
+<i>26</i>&nbsp; *
+<i>27</i>&nbsp; *
+<i>28</i>&nbsp; *
+<i>29</i>&nbsp; *
+<i>30</i>&nbsp; *
+<i>31</i>&nbsp; * Written by Doug Lea with assistance from members of JCP JSR-166
+<i>32</i>&nbsp; * Expert Group and released to the public domain, as explained at
+<i>33</i>&nbsp; * http://creativecommons.org/publicdomain/zero/1.0/
+<i>34</i>&nbsp; */
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;package java.util.concurrent;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import java.lang.invoke.MethodHandles;
+<i>39</i>&nbsp;import java.lang.invoke.VarHandle;
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;/**
+<i>42</i>&nbsp; * A {@link ForkJoinTask} with a completion action performed when
+<i>43</i>&nbsp; * triggered and there are no remaining pending actions.
+<i>44</i>&nbsp; * CountedCompleters are in general more robust in the
+<i>45</i>&nbsp; * presence of subtask stalls and blockage than are other forms of
+<i>46</i>&nbsp; * ForkJoinTasks, but are less intuitive to program.  Uses of
+<i>47</i>&nbsp; * CountedCompleter are similar to those of other completion based
+<i>48</i>&nbsp; * components (such as {@link java.nio.channels.CompletionHandler})
+<i>49</i>&nbsp; * except that multiple &lt;em&gt;pending&lt;/em&gt; completions may be necessary
+<i>50</i>&nbsp; * to trigger the completion action {@link #onCompletion(CountedCompleter)},
+<i>51</i>&nbsp; * not just one.
+<i>52</i>&nbsp; * Unless initialized otherwise, the {@linkplain #getPendingCount pending
+<i>53</i>&nbsp; * count} starts at zero, but may be (atomically) changed using
+<i>54</i>&nbsp; * methods {@link #setPendingCount}, {@link #addToPendingCount}, and
+<i>55</i>&nbsp; * {@link #compareAndSetPendingCount}. Upon invocation of {@link
+<i>56</i>&nbsp; * #tryComplete}, if the pending action count is nonzero, it is
+<i>57</i>&nbsp; * decremented; otherwise, the completion action is performed, and if
+<i>58</i>&nbsp; * this completer itself has a completer, the process is continued
+<i>59</i>&nbsp; * with its completer.  As is the case with related synchronization
+<i>60</i>&nbsp; * components such as {@link Phaser} and {@link Semaphore}, these methods
+<i>61</i>&nbsp; * affect only internal counts; they do not establish any further
+<i>62</i>&nbsp; * internal bookkeeping. In particular, the identities of pending
+<i>63</i>&nbsp; * tasks are not maintained. As illustrated below, you can create
+<i>64</i>&nbsp; * subclasses that do record some or all pending tasks or their
+<i>65</i>&nbsp; * results when needed.  As illustrated below, utility methods
+<i>66</i>&nbsp; * supporting customization of completion traversals are also
+<i>67</i>&nbsp; * provided. However, because CountedCompleters provide only basic
+<i>68</i>&nbsp; * synchronization mechanisms, it may be useful to create further
+<i>69</i>&nbsp; * abstract subclasses that maintain linkages, fields, and additional
+<i>70</i>&nbsp; * support methods appropriate for a set of related usages.
+<i>71</i>&nbsp; *
+<i>72</i>&nbsp; * &lt;p&gt;A concrete CountedCompleter class must define method {@link
+<i>73</i>&nbsp; * #compute}, that should in most cases (as illustrated below), invoke
+<i>74</i>&nbsp; * {@code tryComplete()} once before returning. The class may also
+<i>75</i>&nbsp; * optionally override method {@link #onCompletion(CountedCompleter)}
+<i>76</i>&nbsp; * to perform an action upon normal completion, and method
+<i>77</i>&nbsp; * {@link #onExceptionalCompletion(Throwable, CountedCompleter)} to
+<i>78</i>&nbsp; * perform an action upon any exception.
+<i>79</i>&nbsp; *
+<i>80</i>&nbsp; * &lt;p&gt;CountedCompleters most often do not bear results, in which case
+<i>81</i>&nbsp; * they are normally declared as {@code CountedCompleter&lt;Void&gt;}, and
+<i>82</i>&nbsp; * will always return {@code null} as a result value.  In other cases,
+<i>83</i>&nbsp; * you should override method {@link #getRawResult} to provide a
+<i>84</i>&nbsp; * result from {@code join(), invoke()}, and related methods.  In
+<i>85</i>&nbsp; * general, this method should return the value of a field (or a
+<i>86</i>&nbsp; * function of one or more fields) of the CountedCompleter object that
+<i>87</i>&nbsp; * holds the result upon completion. Method {@link #setRawResult} by
+<i>88</i>&nbsp; * default plays no role in CountedCompleters.  It is possible, but
+<i>89</i>&nbsp; * rarely applicable, to override this method to maintain other
+<i>90</i>&nbsp; * objects or fields holding result data.
+<i>91</i>&nbsp; *
+<i>92</i>&nbsp; * &lt;p&gt;A CountedCompleter that does not itself have a completer (i.e.,
+<i>93</i>&nbsp; * one for which {@link #getCompleter} returns {@code null}) can be
+<i>94</i>&nbsp; * used as a regular ForkJoinTask with this added functionality.
+<i>95</i>&nbsp; * However, any completer that in turn has another completer serves
+<i>96</i>&nbsp; * only as an internal helper for other computations, so its own task
+<i>97</i>&nbsp; * status (as reported in methods such as {@link ForkJoinTask#isDone})
+<i>98</i>&nbsp; * is arbitrary; this status changes only upon explicit invocations of
+<i>99</i>&nbsp; * {@link #complete}, {@link ForkJoinTask#cancel},
+<i>100</i>&nbsp; * {@link ForkJoinTask#completeExceptionally(Throwable)} or upon
+<i>101</i>&nbsp; * exceptional completion of method {@code compute}. Upon any
+<i>102</i>&nbsp; * exceptional completion, the exception may be relayed to a task&#39;s
+<i>103</i>&nbsp; * completer (and its completer, and so on), if one exists and it has
+<i>104</i>&nbsp; * not otherwise already completed. Similarly, cancelling an internal
+<i>105</i>&nbsp; * CountedCompleter has only a local effect on that completer, so is
+<i>106</i>&nbsp; * not often useful.
+<i>107</i>&nbsp; *
+<i>108</i>&nbsp; * &lt;p&gt;&lt;b&gt;Sample Usages.&lt;/b&gt;
+<i>109</i>&nbsp; *
+<i>110</i>&nbsp; * &lt;p&gt;&lt;b&gt;Parallel recursive decomposition.&lt;/b&gt; CountedCompleters may
+<i>111</i>&nbsp; * be arranged in trees similar to those often used with {@link
+<i>112</i>&nbsp; * RecursiveAction}s, although the constructions involved in setting
+<i>113</i>&nbsp; * them up typically vary. Here, the completer of each task is its
+<i>114</i>&nbsp; * parent in the computation tree. Even though they entail a bit more
+<i>115</i>&nbsp; * bookkeeping, CountedCompleters may be better choices when applying
+<i>116</i>&nbsp; * a possibly time-consuming operation (that cannot be further
+<i>117</i>&nbsp; * subdivided) to each element of an array or collection; especially
+<i>118</i>&nbsp; * when the operation takes a significantly different amount of time
+<i>119</i>&nbsp; * to complete for some elements than others, either because of
+<i>120</i>&nbsp; * intrinsic variation (for example I/O) or auxiliary effects such as
+<i>121</i>&nbsp; * garbage collection.  Because CountedCompleters provide their own
+<i>122</i>&nbsp; * continuations, other tasks need not block waiting to perform them.
+<i>123</i>&nbsp; *
+<i>124</i>&nbsp; * &lt;p&gt;For example, here is an initial version of a utility method that
+<i>125</i>&nbsp; * uses divide-by-two recursive decomposition to divide work into
+<i>126</i>&nbsp; * single pieces (leaf tasks). Even when work is split into individual
+<i>127</i>&nbsp; * calls, tree-based techniques are usually preferable to directly
+<i>128</i>&nbsp; * forking leaf tasks, because they reduce inter-thread communication
+<i>129</i>&nbsp; * and improve load balancing. In the recursive case, the second of
+<i>130</i>&nbsp; * each pair of subtasks to finish triggers completion of their parent
+<i>131</i>&nbsp; * (because no result combination is performed, the default no-op
+<i>132</i>&nbsp; * implementation of method {@code onCompletion} is not overridden).
+<i>133</i>&nbsp; * The utility method sets up the root task and invokes it (here,
+<i>134</i>&nbsp; * implicitly using the {@link ForkJoinPool#commonPool()}).  It is
+<i>135</i>&nbsp; * straightforward and reliable (but not optimal) to always set the
+<i>136</i>&nbsp; * pending count to the number of child tasks and call {@code
+<i>137</i>&nbsp; * tryComplete()} immediately before returning.
+<i>138</i>&nbsp; *
+<i>139</i>&nbsp; * &lt;pre&gt; {@code
+<i>140</i>&nbsp; * public static &lt;E&gt; void forEach(E[] array, Consumer&lt;E&gt; action) {
+<i>141</i>&nbsp; *   class Task extends CountedCompleter&lt;Void&gt; {
+<i>142</i>&nbsp; *     final int lo, hi;
+<i>143</i>&nbsp; *     Task(Task parent, int lo, int hi) {
+<i>144</i>&nbsp; *       super(parent); this.lo = lo; this.hi = hi;
+<i>145</i>&nbsp; *     }
+<i>146</i>&nbsp; *
+<i>147</i>&nbsp; *     public void compute() {
+<i>148</i>&nbsp; *       if (hi - lo &gt;= 2) {
+<i>149</i>&nbsp; *         int mid = (lo + hi) &gt;&gt;&gt; 1;
+<i>150</i>&nbsp; *         // must set pending count before fork
+<i>151</i>&nbsp; *         setPendingCount(2);
+<i>152</i>&nbsp; *         new Task(this, mid, hi).fork(); // right child
+<i>153</i>&nbsp; *         new Task(this, lo, mid).fork(); // left child
+<i>154</i>&nbsp; *       }
+<i>155</i>&nbsp; *       else if (hi &gt; lo)
+<i>156</i>&nbsp; *         action.accept(array[lo]);
+<i>157</i>&nbsp; *       tryComplete();
+<i>158</i>&nbsp; *     }
+<i>159</i>&nbsp; *   }
+<i>160</i>&nbsp; *   new Task(null, 0, array.length).invoke();
+<i>161</i>&nbsp; * }}&lt;/pre&gt;
+<i>162</i>&nbsp; *
+<i>163</i>&nbsp; * This design can be improved by noticing that in the recursive case,
+<i>164</i>&nbsp; * the task has nothing to do after forking its right task, so can
+<i>165</i>&nbsp; * directly invoke its left task before returning. (This is an analog
+<i>166</i>&nbsp; * of tail recursion removal.)  Also, when the last action in a task
+<i>167</i>&nbsp; * is to fork or invoke a subtask (a &quot;tail call&quot;), the call to {@code
+<i>168</i>&nbsp; * tryComplete()} can be optimized away, at the cost of making the
+<i>169</i>&nbsp; * pending count look &quot;off by one&quot;.
+<i>170</i>&nbsp; *
+<i>171</i>&nbsp; * &lt;pre&gt; {@code
+<i>172</i>&nbsp; *     public void compute() {
+<i>173</i>&nbsp; *       if (hi - lo &gt;= 2) {
+<i>174</i>&nbsp; *         int mid = (lo + hi) &gt;&gt;&gt; 1;
+<i>175</i>&nbsp; *         setPendingCount(1); // looks off by one, but correct!
+<i>176</i>&nbsp; *         new Task(this, mid, hi).fork(); // right child
+<i>177</i>&nbsp; *         new Task(this, lo, mid).compute(); // direct invoke
+<i>178</i>&nbsp; *       } else {
+<i>179</i>&nbsp; *         if (hi &gt; lo)
+<i>180</i>&nbsp; *           action.accept(array[lo]);
+<i>181</i>&nbsp; *         tryComplete();
+<i>182</i>&nbsp; *       }
+<i>183</i>&nbsp; *     }}&lt;/pre&gt;
+<i>184</i>&nbsp; *
+<i>185</i>&nbsp; * As a further optimization, notice that the left task need not even exist.
+<i>186</i>&nbsp; * Instead of creating a new one, we can continue using the original task,
+<i>187</i>&nbsp; * and add a pending count for each fork.  Additionally, because no task
+<i>188</i>&nbsp; * in this tree implements an {@link #onCompletion(CountedCompleter)} method,
+<i>189</i>&nbsp; * {@code tryComplete} can be replaced with {@link #propagateCompletion}.
+<i>190</i>&nbsp; *
+<i>191</i>&nbsp; * &lt;pre&gt; {@code
+<i>192</i>&nbsp; *     public void compute() {
+<i>193</i>&nbsp; *       int n = hi - lo;
+<i>194</i>&nbsp; *       for (; n &gt;= 2; n /= 2) {
+<i>195</i>&nbsp; *         addToPendingCount(1);
+<i>196</i>&nbsp; *         new Task(this, lo + n/2, lo + n).fork();
+<i>197</i>&nbsp; *       }
+<i>198</i>&nbsp; *       if (n &gt; 0)
+<i>199</i>&nbsp; *         action.accept(array[lo]);
+<i>200</i>&nbsp; *       propagateCompletion();
+<i>201</i>&nbsp; *     }}&lt;/pre&gt;
+<i>202</i>&nbsp; *
+<i>203</i>&nbsp; * When pending counts can be precomputed, they can be established in
+<i>204</i>&nbsp; * the constructor:
+<i>205</i>&nbsp; *
+<i>206</i>&nbsp; * &lt;pre&gt; {@code
+<i>207</i>&nbsp; * public static &lt;E&gt; void forEach(E[] array, Consumer&lt;E&gt; action) {
+<i>208</i>&nbsp; *   class Task extends CountedCompleter&lt;Void&gt; {
+<i>209</i>&nbsp; *     final int lo, hi;
+<i>210</i>&nbsp; *     Task(Task parent, int lo, int hi) {
+<i>211</i>&nbsp; *       super(parent, 31 - Integer.numberOfLeadingZeros(hi - lo));
+<i>212</i>&nbsp; *       this.lo = lo; this.hi = hi;
+<i>213</i>&nbsp; *     }
+<i>214</i>&nbsp; *
+<i>215</i>&nbsp; *     public void compute() {
+<i>216</i>&nbsp; *       for (int n = hi - lo; n &gt;= 2; n /= 2)
+<i>217</i>&nbsp; *         new Task(this, lo + n/2, lo + n).fork();
+<i>218</i>&nbsp; *       action.accept(array[lo]);
+<i>219</i>&nbsp; *       propagateCompletion();
+<i>220</i>&nbsp; *     }
+<i>221</i>&nbsp; *   }
+<i>222</i>&nbsp; *   if (array.length &gt; 0)
+<i>223</i>&nbsp; *     new Task(null, 0, array.length).invoke();
+<i>224</i>&nbsp; * }}&lt;/pre&gt;
+<i>225</i>&nbsp; *
+<i>226</i>&nbsp; * Additional optimizations of such classes might entail specializing
+<i>227</i>&nbsp; * classes for leaf steps, subdividing by say, four, instead of two
+<i>228</i>&nbsp; * per iteration, and using an adaptive threshold instead of always
+<i>229</i>&nbsp; * subdividing down to single elements.
+<i>230</i>&nbsp; *
+<i>231</i>&nbsp; * &lt;p&gt;&lt;b&gt;Searching.&lt;/b&gt; A tree of CountedCompleters can search for a
+<i>232</i>&nbsp; * value or property in different parts of a data structure, and
+<i>233</i>&nbsp; * report a result in an {@link
+<i>234</i>&nbsp; * java.util.concurrent.atomic.AtomicReference AtomicReference} as
+<i>235</i>&nbsp; * soon as one is found. The others can poll the result to avoid
+<i>236</i>&nbsp; * unnecessary work. (You could additionally {@linkplain #cancel
+<i>237</i>&nbsp; * cancel} other tasks, but it is usually simpler and more efficient
+<i>238</i>&nbsp; * to just let them notice that the result is set and if so skip
+<i>239</i>&nbsp; * further processing.)  Illustrating again with an array using full
+<i>240</i>&nbsp; * partitioning (again, in practice, leaf tasks will almost always
+<i>241</i>&nbsp; * process more than one element):
+<i>242</i>&nbsp; *
+<i>243</i>&nbsp; * &lt;pre&gt; {@code
+<i>244</i>&nbsp; * class Searcher&lt;E&gt; extends CountedCompleter&lt;E&gt; {
+<i>245</i>&nbsp; *   final E[] array; final AtomicReference&lt;E&gt; result; final int lo, hi;
+<i>246</i>&nbsp; *   Searcher(CountedCompleter&lt;?&gt; p, E[] array, AtomicReference&lt;E&gt; result, int lo, int hi) {
+<i>247</i>&nbsp; *     super(p);
+<i>248</i>&nbsp; *     this.array = array; this.result = result; this.lo = lo; this.hi = hi;
+<i>249</i>&nbsp; *   }
+<i>250</i>&nbsp; *   public E getRawResult() { return result.get(); }
+<i>251</i>&nbsp; *   public void compute() { // similar to ForEach version 3
+<i>252</i>&nbsp; *     int l = lo, h = hi;
+<i>253</i>&nbsp; *     while (result.get() == null &amp;&amp; h &gt;= l) {
+<i>254</i>&nbsp; *       if (h - l &gt;= 2) {
+<i>255</i>&nbsp; *         int mid = (l + h) &gt;&gt;&gt; 1;
+<i>256</i>&nbsp; *         addToPendingCount(1);
+<i>257</i>&nbsp; *         new Searcher(this, array, result, mid, h).fork();
+<i>258</i>&nbsp; *         h = mid;
+<i>259</i>&nbsp; *       }
+<i>260</i>&nbsp; *       else {
+<i>261</i>&nbsp; *         E x = array[l];
+<i>262</i>&nbsp; *         if (matches(x) &amp;&amp; result.compareAndSet(null, x))
+<i>263</i>&nbsp; *           quietlyCompleteRoot(); // root task is now joinable
+<i>264</i>&nbsp; *         break;
+<i>265</i>&nbsp; *       }
+<i>266</i>&nbsp; *     }
+<i>267</i>&nbsp; *     tryComplete(); // normally complete whether or not found
+<i>268</i>&nbsp; *   }
+<i>269</i>&nbsp; *   boolean matches(E e) { ... } // return true if found
+<i>270</i>&nbsp; *
+<i>271</i>&nbsp; *   public static &lt;E&gt; E search(E[] array) {
+<i>272</i>&nbsp; *       return new Searcher&lt;E&gt;(null, array, new AtomicReference&lt;E&gt;(), 0, array.length).invoke();
+<i>273</i>&nbsp; *   }
+<i>274</i>&nbsp; * }}&lt;/pre&gt;
+<i>275</i>&nbsp; *
+<i>276</i>&nbsp; * In this example, as well as others in which tasks have no other
+<i>277</i>&nbsp; * effects except to {@code compareAndSet} a common result, the
+<i>278</i>&nbsp; * trailing unconditional invocation of {@code tryComplete} could be
+<i>279</i>&nbsp; * made conditional ({@code if (result.get() == null) tryComplete();})
+<i>280</i>&nbsp; * because no further bookkeeping is required to manage completions
+<i>281</i>&nbsp; * once the root task completes.
+<i>282</i>&nbsp; *
+<i>283</i>&nbsp; * &lt;p&gt;&lt;b&gt;Recording subtasks.&lt;/b&gt; CountedCompleter tasks that combine
+<i>284</i>&nbsp; * results of multiple subtasks usually need to access these results
+<i>285</i>&nbsp; * in method {@link #onCompletion(CountedCompleter)}. As illustrated in the following
+<i>286</i>&nbsp; * class (that performs a simplified form of map-reduce where mappings
+<i>287</i>&nbsp; * and reductions are all of type {@code E}), one way to do this in
+<i>288</i>&nbsp; * divide and conquer designs is to have each subtask record its
+<i>289</i>&nbsp; * sibling, so that it can be accessed in method {@code onCompletion}.
+<i>290</i>&nbsp; * This technique applies to reductions in which the order of
+<i>291</i>&nbsp; * combining left and right results does not matter; ordered
+<i>292</i>&nbsp; * reductions require explicit left/right designations.  Variants of
+<i>293</i>&nbsp; * other streamlinings seen in the above examples may also apply.
+<i>294</i>&nbsp; *
+<i>295</i>&nbsp; * &lt;pre&gt; {@code
+<i>296</i>&nbsp; * class MyMapper&lt;E&gt; { E apply(E v) {  ...  } }
+<i>297</i>&nbsp; * class MyReducer&lt;E&gt; { E apply(E x, E y) {  ...  } }
+<i>298</i>&nbsp; * class MapReducer&lt;E&gt; extends CountedCompleter&lt;E&gt; {
+<i>299</i>&nbsp; *   final E[] array; final MyMapper&lt;E&gt; mapper;
+<i>300</i>&nbsp; *   final MyReducer&lt;E&gt; reducer; final int lo, hi;
+<i>301</i>&nbsp; *   MapReducer&lt;E&gt; sibling;
+<i>302</i>&nbsp; *   E result;
+<i>303</i>&nbsp; *   MapReducer(CountedCompleter&lt;?&gt; p, E[] array, MyMapper&lt;E&gt; mapper,
+<i>304</i>&nbsp; *              MyReducer&lt;E&gt; reducer, int lo, int hi) {
+<i>305</i>&nbsp; *     super(p);
+<i>306</i>&nbsp; *     this.array = array; this.mapper = mapper;
+<i>307</i>&nbsp; *     this.reducer = reducer; this.lo = lo; this.hi = hi;
+<i>308</i>&nbsp; *   }
+<i>309</i>&nbsp; *   public void compute() {
+<i>310</i>&nbsp; *     if (hi - lo &gt;= 2) {
+<i>311</i>&nbsp; *       int mid = (lo + hi) &gt;&gt;&gt; 1;
+<i>312</i>&nbsp; *       MapReducer&lt;E&gt; left = new MapReducer(this, array, mapper, reducer, lo, mid);
+<i>313</i>&nbsp; *       MapReducer&lt;E&gt; right = new MapReducer(this, array, mapper, reducer, mid, hi);
+<i>314</i>&nbsp; *       left.sibling = right;
+<i>315</i>&nbsp; *       right.sibling = left;
+<i>316</i>&nbsp; *       setPendingCount(1); // only right is pending
+<i>317</i>&nbsp; *       right.fork();
+<i>318</i>&nbsp; *       left.compute();     // directly execute left
+<i>319</i>&nbsp; *     }
+<i>320</i>&nbsp; *     else {
+<i>321</i>&nbsp; *       if (hi &gt; lo)
+<i>322</i>&nbsp; *           result = mapper.apply(array[lo]);
+<i>323</i>&nbsp; *       tryComplete();
+<i>324</i>&nbsp; *     }
+<i>325</i>&nbsp; *   }
+<i>326</i>&nbsp; *   public void onCompletion(CountedCompleter&lt;?&gt; caller) {
+<i>327</i>&nbsp; *     if (caller != this) {
+<i>328</i>&nbsp; *       MapReducer&lt;E&gt; child = (MapReducer&lt;E&gt;)caller;
+<i>329</i>&nbsp; *       MapReducer&lt;E&gt; sib = child.sibling;
+<i>330</i>&nbsp; *       if (sib == null || sib.result == null)
+<i>331</i>&nbsp; *         result = child.result;
+<i>332</i>&nbsp; *       else
+<i>333</i>&nbsp; *         result = reducer.apply(child.result, sib.result);
+<i>334</i>&nbsp; *     }
+<i>335</i>&nbsp; *   }
+<i>336</i>&nbsp; *   public E getRawResult() { return result; }
+<i>337</i>&nbsp; *
+<i>338</i>&nbsp; *   public static &lt;E&gt; E mapReduce(E[] array, MyMapper&lt;E&gt; mapper, MyReducer&lt;E&gt; reducer) {
+<i>339</i>&nbsp; *     return new MapReducer&lt;E&gt;(null, array, mapper, reducer,
+<i>340</i>&nbsp; *                              0, array.length).invoke();
+<i>341</i>&nbsp; *   }
+<i>342</i>&nbsp; * }}&lt;/pre&gt;
+<i>343</i>&nbsp; *
+<i>344</i>&nbsp; * Here, method {@code onCompletion} takes a form common to many
+<i>345</i>&nbsp; * completion designs that combine results. This callback-style method
+<i>346</i>&nbsp; * is triggered once per task, in either of the two different contexts
+<i>347</i>&nbsp; * in which the pending count is, or becomes, zero: (1) by a task
+<i>348</i>&nbsp; * itself, if its pending count is zero upon invocation of {@code
+<i>349</i>&nbsp; * tryComplete}, or (2) by any of its subtasks when they complete and
+<i>350</i>&nbsp; * decrement the pending count to zero. The {@code caller} argument
+<i>351</i>&nbsp; * distinguishes cases.  Most often, when the caller is {@code this},
+<i>352</i>&nbsp; * no action is necessary. Otherwise the caller argument can be used
+<i>353</i>&nbsp; * (usually via a cast) to supply a value (and/or links to other
+<i>354</i>&nbsp; * values) to be combined.  Assuming proper use of pending counts, the
+<i>355</i>&nbsp; * actions inside {@code onCompletion} occur (once) upon completion of
+<i>356</i>&nbsp; * a task and its subtasks. No additional synchronization is required
+<i>357</i>&nbsp; * within this method to ensure thread safety of accesses to fields of
+<i>358</i>&nbsp; * this task or other completed tasks.
+<i>359</i>&nbsp; *
+<i>360</i>&nbsp; * &lt;p&gt;&lt;b&gt;Completion Traversals&lt;/b&gt;. If using {@code onCompletion} to
+<i>361</i>&nbsp; * process completions is inapplicable or inconvenient, you can use
+<i>362</i>&nbsp; * methods {@link #firstComplete} and {@link #nextComplete} to create
+<i>363</i>&nbsp; * custom traversals.  For example, to define a MapReducer that only
+<i>364</i>&nbsp; * splits out right-hand tasks in the form of the third ForEach
+<i>365</i>&nbsp; * example, the completions must cooperatively reduce along
+<i>366</i>&nbsp; * unexhausted subtask links, which can be done as follows:
+<i>367</i>&nbsp; *
+<i>368</i>&nbsp; * &lt;pre&gt; {@code
+<i>369</i>&nbsp; * class MapReducer&lt;E&gt; extends CountedCompleter&lt;E&gt; { // version 2
+<i>370</i>&nbsp; *   final E[] array; final MyMapper&lt;E&gt; mapper;
+<i>371</i>&nbsp; *   final MyReducer&lt;E&gt; reducer; final int lo, hi;
+<i>372</i>&nbsp; *   MapReducer&lt;E&gt; forks, next; // record subtask forks in list
+<i>373</i>&nbsp; *   E result;
+<i>374</i>&nbsp; *   MapReducer(CountedCompleter&lt;?&gt; p, E[] array, MyMapper&lt;E&gt; mapper,
+<i>375</i>&nbsp; *              MyReducer&lt;E&gt; reducer, int lo, int hi, MapReducer&lt;E&gt; next) {
+<i>376</i>&nbsp; *     super(p);
+<i>377</i>&nbsp; *     this.array = array; this.mapper = mapper;
+<i>378</i>&nbsp; *     this.reducer = reducer; this.lo = lo; this.hi = hi;
+<i>379</i>&nbsp; *     this.next = next;
+<i>380</i>&nbsp; *   }
+<i>381</i>&nbsp; *   public void compute() {
+<i>382</i>&nbsp; *     int l = lo, h = hi;
+<i>383</i>&nbsp; *     while (h - l &gt;= 2) {
+<i>384</i>&nbsp; *       int mid = (l + h) &gt;&gt;&gt; 1;
+<i>385</i>&nbsp; *       addToPendingCount(1);
+<i>386</i>&nbsp; *       (forks = new MapReducer(this, array, mapper, reducer, mid, h, forks)).fork();
+<i>387</i>&nbsp; *       h = mid;
+<i>388</i>&nbsp; *     }
+<i>389</i>&nbsp; *     if (h &gt; l)
+<i>390</i>&nbsp; *       result = mapper.apply(array[l]);
+<i>391</i>&nbsp; *     // process completions by reducing along and advancing subtask links
+<i>392</i>&nbsp; *     for (CountedCompleter&lt;?&gt; c = firstComplete(); c != null; c = c.nextComplete()) {
+<i>393</i>&nbsp; *       for (MapReducer t = (MapReducer)c, s = t.forks; s != null; s = t.forks = s.next)
+<i>394</i>&nbsp; *         t.result = reducer.apply(t.result, s.result);
+<i>395</i>&nbsp; *     }
+<i>396</i>&nbsp; *   }
+<i>397</i>&nbsp; *   public E getRawResult() { return result; }
+<i>398</i>&nbsp; *
+<i>399</i>&nbsp; *   public static &lt;E&gt; E mapReduce(E[] array, MyMapper&lt;E&gt; mapper, MyReducer&lt;E&gt; reducer) {
+<i>400</i>&nbsp; *     return new MapReducer&lt;E&gt;(null, array, mapper, reducer,
+<i>401</i>&nbsp; *                              0, array.length, null).invoke();
+<i>402</i>&nbsp; *   }
+<i>403</i>&nbsp; * }}&lt;/pre&gt;
+<i>404</i>&nbsp; *
+<i>405</i>&nbsp; * &lt;p&gt;&lt;b&gt;Triggers.&lt;/b&gt; Some CountedCompleters are themselves never
+<i>406</i>&nbsp; * forked, but instead serve as bits of plumbing in other designs;
+<i>407</i>&nbsp; * including those in which the completion of one or more async tasks
+<i>408</i>&nbsp; * triggers another async task. For example:
+<i>409</i>&nbsp; *
+<i>410</i>&nbsp; * &lt;pre&gt; {@code
+<i>411</i>&nbsp; * class HeaderBuilder extends CountedCompleter&lt;...&gt; { ... }
+<i>412</i>&nbsp; * class BodyBuilder extends CountedCompleter&lt;...&gt; { ... }
+<i>413</i>&nbsp; * class PacketSender extends CountedCompleter&lt;...&gt; {
+<i>414</i>&nbsp; *   PacketSender(...) { super(null, 1); ... } // trigger on second completion
+<i>415</i>&nbsp; *   public void compute() { } // never called
+<i>416</i>&nbsp; *   public void onCompletion(CountedCompleter&lt;?&gt; caller) { sendPacket(); }
+<i>417</i>&nbsp; * }
+<i>418</i>&nbsp; * // sample use:
+<i>419</i>&nbsp; * PacketSender p = new PacketSender();
+<i>420</i>&nbsp; * new HeaderBuilder(p, ...).fork();
+<i>421</i>&nbsp; * new BodyBuilder(p, ...).fork();}&lt;/pre&gt;
+<i>422</i>&nbsp; *
+<i>423</i>&nbsp; * @since 1.8
+<i>424</i>&nbsp; * @author Doug Lea
+<i>425</i>&nbsp; */
+<i>426</i>&nbsp;public abstract class CountedCompleter&lt;T&gt; extends ForkJoinTask&lt;T&gt; {
+<b class="nc"><i>427</i>&nbsp;    private static final long serialVersionUID = 5232453752276485070L;</b>
+<b class="nc"><i>428</i>&nbsp;</b>
+<b class="nc"><i>429</i>&nbsp;    /** This task&#39;s completer, or null if none */</b>
+<i>430</i>&nbsp;    final CountedCompleter&lt;?&gt; completer;
+<i>431</i>&nbsp;    /** The number of pending tasks until completion */
+<i>432</i>&nbsp;    volatile int pending;
+<i>433</i>&nbsp;
+<i>434</i>&nbsp;    /**
+<i>435</i>&nbsp;     * Creates a new CountedCompleter with the given completer
+<i>436</i>&nbsp;     * and initial pending count.
+<i>437</i>&nbsp;     *
+<b class="nc"><i>438</i>&nbsp;     * @param completer this task&#39;s completer, or {@code null} if none</b>
+<b class="nc"><i>439</i>&nbsp;     * @param initialPendingCount the initial pending count</b>
+<i>440</i>&nbsp;     */
+<i>441</i>&nbsp;    protected CountedCompleter(CountedCompleter&lt;?&gt; completer,
+<i>442</i>&nbsp;                               int initialPendingCount) {
+<i>443</i>&nbsp;        this.completer = completer;
+<i>444</i>&nbsp;        this.pending = initialPendingCount;
+<i>445</i>&nbsp;    }
+<b class="nc"><i>446</i>&nbsp;</b>
+<b class="nc"><i>447</i>&nbsp;    /**</b>
+<i>448</i>&nbsp;     * Creates a new CountedCompleter with the given completer
+<i>449</i>&nbsp;     * and an initial pending count of zero.
+<i>450</i>&nbsp;     *
+<i>451</i>&nbsp;     * @param completer this task&#39;s completer, or {@code null} if none
+<i>452</i>&nbsp;     */
+<i>453</i>&nbsp;    protected CountedCompleter(CountedCompleter&lt;?&gt; completer) {
+<i>454</i>&nbsp;        this.completer = completer;
+<i>455</i>&nbsp;    }
+<i>456</i>&nbsp;
+<i>457</i>&nbsp;    /**
+<i>458</i>&nbsp;     * Creates a new CountedCompleter with no completer
+<i>459</i>&nbsp;     * and an initial pending count of zero.
+<i>460</i>&nbsp;     */
+<i>461</i>&nbsp;    protected CountedCompleter() {
+<i>462</i>&nbsp;        this.completer = null;
+<i>463</i>&nbsp;    }
+<i>464</i>&nbsp;
+<i>465</i>&nbsp;    /**
+<i>466</i>&nbsp;     * The main computation performed by this task.
+<i>467</i>&nbsp;     */
+<i>468</i>&nbsp;    public abstract void compute();
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;    /**
+<i>471</i>&nbsp;     * Performs an action when method {@link #tryComplete} is invoked
+<i>472</i>&nbsp;     * and the pending count is zero, or when the unconditional
+<i>473</i>&nbsp;     * method {@link #complete} is invoked.  By default, this method
+<i>474</i>&nbsp;     * does nothing. You can distinguish cases by checking the
+<i>475</i>&nbsp;     * identity of the given caller argument. If not equal to {@code
+<i>476</i>&nbsp;     * this}, then it is typically a subtask that may contain results
+<i>477</i>&nbsp;     * (and/or links to other results) to combine.
+<i>478</i>&nbsp;     *
+<i>479</i>&nbsp;     * @param caller the task invoking this method (which may
+<i>480</i>&nbsp;     * be this task itself)
+<i>481</i>&nbsp;     */
+<i>482</i>&nbsp;    public void onCompletion(CountedCompleter&lt;?&gt; caller) {
+<i>483</i>&nbsp;    }
+<i>484</i>&nbsp;
+<i>485</i>&nbsp;    /**
+<i>486</i>&nbsp;     * Performs an action when method {@link
+<i>487</i>&nbsp;     * #completeExceptionally(Throwable)} is invoked or method {@link
+<i>488</i>&nbsp;     * #compute} throws an exception, and this task has not already
+<b class="nc"><i>489</i>&nbsp;     * otherwise completed normally. On entry to this method, this task</b>
+<i>490</i>&nbsp;     * {@link ForkJoinTask#isCompletedAbnormally}.  The return value
+<i>491</i>&nbsp;     * of this method controls further propagation: If {@code true}
+<i>492</i>&nbsp;     * and this task has a completer that has not completed, then that
+<i>493</i>&nbsp;     * completer is also completed exceptionally, with the same
+<i>494</i>&nbsp;     * exception as this completer.  The default implementation of
+<i>495</i>&nbsp;     * this method does nothing except return {@code true}.
+<i>496</i>&nbsp;     *
+<i>497</i>&nbsp;     * @param ex the exception
+<i>498</i>&nbsp;     * @param caller the task invoking this method (which may
+<b class="nc"><i>499</i>&nbsp;     * be this task itself)</b>
+<i>500</i>&nbsp;     * @return {@code true} if this exception should be propagated to this
+<i>501</i>&nbsp;     * task&#39;s completer, if one exists
+<i>502</i>&nbsp;     */
+<i>503</i>&nbsp;    public boolean onExceptionalCompletion(Throwable ex, CountedCompleter&lt;?&gt; caller) {
+<i>504</i>&nbsp;        return true;
+<i>505</i>&nbsp;    }
+<i>506</i>&nbsp;
+<i>507</i>&nbsp;    /**
+<b class="nc"><i>508</i>&nbsp;     * Returns the completer established in this task&#39;s constructor,</b>
+<i>509</i>&nbsp;     * or {@code null} if none.
+<i>510</i>&nbsp;     *
+<i>511</i>&nbsp;     * @return the completer
+<i>512</i>&nbsp;     */
+<i>513</i>&nbsp;    public final CountedCompleter&lt;?&gt; getCompleter() {
+<i>514</i>&nbsp;        return completer;
+<i>515</i>&nbsp;    }
+<i>516</i>&nbsp;
+<b class="nc"><i>517</i>&nbsp;    /**</b>
+<i>518</i>&nbsp;     * Returns the current pending count.
+<i>519</i>&nbsp;     *
+<i>520</i>&nbsp;     * @return the current pending count
+<i>521</i>&nbsp;     */
+<i>522</i>&nbsp;    public final int getPendingCount() {
+<i>523</i>&nbsp;        return pending;
+<i>524</i>&nbsp;    }
+<i>525</i>&nbsp;
+<b class="nc"><i>526</i>&nbsp;    /**</b>
+<i>527</i>&nbsp;     * Sets the pending count to the given value.
+<i>528</i>&nbsp;     *
+<i>529</i>&nbsp;     * @param count the count
+<i>530</i>&nbsp;     */
+<i>531</i>&nbsp;    public final void setPendingCount(int count) {
+<i>532</i>&nbsp;        pending = count;
+<i>533</i>&nbsp;    }
+<i>534</i>&nbsp;
+<i>535</i>&nbsp;    /**
+<i>536</i>&nbsp;     * Adds (atomically) the given value to the pending count.
+<i>537</i>&nbsp;     *
+<b class="nc"><i>538</i>&nbsp;     * @param delta the value to add</b>
+<i>539</i>&nbsp;     */
+<i>540</i>&nbsp;    public final void addToPendingCount(int delta) {
+<i>541</i>&nbsp;        PENDING.getAndAdd(this, delta);
+<i>542</i>&nbsp;    }
+<i>543</i>&nbsp;
+<i>544</i>&nbsp;    /**
+<i>545</i>&nbsp;     * Sets (atomically) the pending count to the given count only if
+<i>546</i>&nbsp;     * it currently holds the given expected value.
+<i>547</i>&nbsp;     *
+<i>548</i>&nbsp;     * @param expected the expected value
+<b class="nc"><i>549</i>&nbsp;     * @param count the new value</b>
+<b class="nc"><i>550</i>&nbsp;     * @return {@code true} if successful</b>
+<b class="nc"><i>551</i>&nbsp;     */</b>
+<i>552</i>&nbsp;    public final boolean compareAndSetPendingCount(int expected, int count) {
+<i>553</i>&nbsp;        return PENDING.compareAndSet(this, expected, count);
+<i>554</i>&nbsp;    }
+<i>555</i>&nbsp;
+<i>556</i>&nbsp;    /**
+<i>557</i>&nbsp;     * If the pending count is nonzero, (atomically) decrements it.
+<i>558</i>&nbsp;     *
+<i>559</i>&nbsp;     * @return the initial (undecremented) pending count holding on entry
+<i>560</i>&nbsp;     * to this method
+<b class="nc"><i>561</i>&nbsp;     */</b>
+<b class="nc"><i>562</i>&nbsp;    public final int decrementPendingCountUnlessZero() {</b>
+<b class="nc"><i>563</i>&nbsp;        int c;</b>
+<b class="nc"><i>564</i>&nbsp;        do {} while ((c = pending) != 0 &amp;&amp;</b>
+<i>565</i>&nbsp;                     !PENDING.weakCompareAndSet(this, c, c - 1));
+<i>566</i>&nbsp;        return c;
+<i>567</i>&nbsp;    }
+<i>568</i>&nbsp;
+<i>569</i>&nbsp;    /**
+<i>570</i>&nbsp;     * Returns the root of the current computation; i.e., this
+<i>571</i>&nbsp;     * task if it has no completer, else its completer&#39;s root.
+<i>572</i>&nbsp;     *
+<i>573</i>&nbsp;     * @return the root of the current computation
+<b class="nc"><i>574</i>&nbsp;     */</b>
+<i>575</i>&nbsp;    public final CountedCompleter&lt;?&gt; getRoot() {
+<b class="nc"><i>576</i>&nbsp;        CountedCompleter&lt;?&gt; a = this, p;</b>
+<b class="nc"><i>577</i>&nbsp;        while ((p = a.completer) != null)</b>
+<b class="nc"><i>578</i>&nbsp;            a = p;</b>
+<b class="nc"><i>579</i>&nbsp;        return a;</b>
+<i>580</i>&nbsp;    }
+<i>581</i>&nbsp;
+<i>582</i>&nbsp;    /**
+<b class="nc"><i>583</i>&nbsp;     * If the pending count is nonzero, decrements the count;</b>
+<i>584</i>&nbsp;     * otherwise invokes {@link #onCompletion(CountedCompleter)}
+<i>585</i>&nbsp;     * and then similarly tries to complete this task&#39;s completer,
+<i>586</i>&nbsp;     * if one exists, else marks this task as complete.
+<i>587</i>&nbsp;     */
+<i>588</i>&nbsp;    public final void tryComplete() {
+<i>589</i>&nbsp;        CountedCompleter&lt;?&gt; a = this, s = a;
+<i>590</i>&nbsp;        for (int c;;) {
+<i>591</i>&nbsp;            if ((c = a.pending) == 0) {
+<i>592</i>&nbsp;                a.onCompletion(s);
+<i>593</i>&nbsp;                if ((a = (s = a).completer) == null) {
+<i>594</i>&nbsp;                    s.quietlyComplete();
+<i>595</i>&nbsp;                    return;
+<i>596</i>&nbsp;                }
+<i>597</i>&nbsp;            }
+<b class="nc"><i>598</i>&nbsp;            else if (PENDING.weakCompareAndSet(a, c, c - 1))</b>
+<i>599</i>&nbsp;                return;
+<b class="nc"><i>600</i>&nbsp;        }</b>
+<b class="nc"><i>601</i>&nbsp;    }</b>
+<b class="nc"><i>602</i>&nbsp;</b>
+<i>603</i>&nbsp;    /**
+<i>604</i>&nbsp;     * Equivalent to {@link #tryComplete} but does not invoke {@link
+<i>605</i>&nbsp;     * #onCompletion(CountedCompleter)} along the completion path:
+<b class="nc"><i>606</i>&nbsp;     * If the pending count is nonzero, decrements the count;</b>
+<i>607</i>&nbsp;     * otherwise, similarly tries to complete this task&#39;s completer, if
+<i>608</i>&nbsp;     * one exists, else marks this task as complete. This method may be
+<i>609</i>&nbsp;     * useful in cases where {@code onCompletion} should not, or need
+<i>610</i>&nbsp;     * not, be invoked for each completer in a computation.
+<i>611</i>&nbsp;     */
+<i>612</i>&nbsp;    public final void propagateCompletion() {
+<i>613</i>&nbsp;        CountedCompleter&lt;?&gt; a = this, s;
+<i>614</i>&nbsp;        for (int c;;) {
+<i>615</i>&nbsp;            if ((c = a.pending) == 0) {
+<i>616</i>&nbsp;                if ((a = (s = a).completer) == null) {
+<i>617</i>&nbsp;                    s.quietlyComplete();
+<i>618</i>&nbsp;                    return;
+<i>619</i>&nbsp;                }
+<i>620</i>&nbsp;            }
+<i>621</i>&nbsp;            else if (PENDING.weakCompareAndSet(a, c, c - 1))
+<i>622</i>&nbsp;                return;
+<i>623</i>&nbsp;        }
+<i>624</i>&nbsp;    }
+<i>625</i>&nbsp;
+<i>626</i>&nbsp;    /**
+<i>627</i>&nbsp;     * Regardless of pending count, invokes
+<i>628</i>&nbsp;     * {@link #onCompletion(CountedCompleter)}, marks this task as
+<i>629</i>&nbsp;     * complete and further triggers {@link #tryComplete} on this
+<i>630</i>&nbsp;     * task&#39;s completer, if one exists.  The given rawResult is
+<i>631</i>&nbsp;     * used as an argument to {@link #setRawResult} before invoking
+<b class="nc"><i>632</i>&nbsp;     * {@link #onCompletion(CountedCompleter)} or marking this task</b>
+<b class="nc"><i>633</i>&nbsp;     * as complete; its value is meaningful only for classes</b>
+<b class="nc"><i>634</i>&nbsp;     * overriding {@code setRawResult}.  This method does not modify</b>
+<b class="nc"><i>635</i>&nbsp;     * the pending count.</b>
+<b class="nc"><i>636</i>&nbsp;     *</b>
+<i>637</i>&nbsp;     * &lt;p&gt;This method may be useful when forcing completion as soon as
+<i>638</i>&nbsp;     * any one (versus all) of several subtask results are obtained.
+<i>639</i>&nbsp;     * However, in the common (and recommended) case in which {@code
+<i>640</i>&nbsp;     * setRawResult} is not overridden, this effect can be obtained
+<i>641</i>&nbsp;     * more simply using {@link #quietlyCompleteRoot()}.
+<i>642</i>&nbsp;     *
+<i>643</i>&nbsp;     * @param rawResult the raw result
+<i>644</i>&nbsp;     */
+<i>645</i>&nbsp;    public void complete(T rawResult) {
+<i>646</i>&nbsp;        CountedCompleter&lt;?&gt; p;
+<i>647</i>&nbsp;        setRawResult(rawResult);
+<i>648</i>&nbsp;        onCompletion(this);
+<b class="nc"><i>649</i>&nbsp;        quietlyComplete();</b>
+<b class="nc"><i>650</i>&nbsp;        if ((p = completer) != null)</b>
+<b class="nc"><i>651</i>&nbsp;            p.tryComplete();</b>
+<b class="nc"><i>652</i>&nbsp;    }</b>
+<i>653</i>&nbsp;
+<i>654</i>&nbsp;    /**
+<i>655</i>&nbsp;     * If this task&#39;s pending count is zero, returns this task;
+<i>656</i>&nbsp;     * otherwise decrements its pending count and returns {@code null}.
+<i>657</i>&nbsp;     * This method is designed to be used with {@link #nextComplete} in
+<i>658</i>&nbsp;     * completion traversal loops.
+<i>659</i>&nbsp;     *
+<i>660</i>&nbsp;     * @return this task, if pending count was zero, else {@code null}
+<i>661</i>&nbsp;     */
+<i>662</i>&nbsp;    public final CountedCompleter&lt;?&gt; firstComplete() {
+<i>663</i>&nbsp;        for (int c;;) {
+<i>664</i>&nbsp;            if ((c = pending) == 0)
+<i>665</i>&nbsp;                return this;
+<i>666</i>&nbsp;            else if (PENDING.weakCompareAndSet(this, c, c - 1))
+<i>667</i>&nbsp;                return null;
+<i>668</i>&nbsp;        }
+<i>669</i>&nbsp;    }
+<i>670</i>&nbsp;
+<i>671</i>&nbsp;    /**
+<i>672</i>&nbsp;     * If this task does not have a completer, invokes {@link
+<i>673</i>&nbsp;     * ForkJoinTask#quietlyComplete} and returns {@code null}.  Or, if
+<i>674</i>&nbsp;     * the completer&#39;s pending count is non-zero, decrements that
+<b class="nc"><i>675</i>&nbsp;     * pending count and returns {@code null}.  Otherwise, returns the</b>
+<b class="nc"><i>676</i>&nbsp;     * completer.  This method can be used as part of a completion</b>
+<i>677</i>&nbsp;     * traversal loop for homogeneous task hierarchies:
+<b class="nc"><i>678</i>&nbsp;     *</b>
+<b class="nc"><i>679</i>&nbsp;     * &lt;pre&gt; {@code</b>
+<i>680</i>&nbsp;     * for (CountedCompleter&lt;?&gt; c = firstComplete();
+<i>681</i>&nbsp;     *      c != null;
+<i>682</i>&nbsp;     *      c = c.nextComplete()) {
+<i>683</i>&nbsp;     *   // ... process c ...
+<i>684</i>&nbsp;     * }}&lt;/pre&gt;
+<i>685</i>&nbsp;     *
+<i>686</i>&nbsp;     * @return the completer, or {@code null} if none
+<b class="nc"><i>687</i>&nbsp;     */</b>
+<b class="nc"><i>688</i>&nbsp;    public final CountedCompleter&lt;?&gt; nextComplete() {</b>
+<b class="nc"><i>689</i>&nbsp;        CountedCompleter&lt;?&gt; p;</b>
+<i>690</i>&nbsp;        if ((p = completer) != null)
+<i>691</i>&nbsp;            return p.firstComplete();
+<b class="nc"><i>692</i>&nbsp;        else {</b>
+<i>693</i>&nbsp;            quietlyComplete();
+<i>694</i>&nbsp;            return null;
+<i>695</i>&nbsp;        }
+<i>696</i>&nbsp;    }
+<i>697</i>&nbsp;
+<i>698</i>&nbsp;    /**
+<i>699</i>&nbsp;     * Equivalent to {@code getRoot().quietlyComplete()}.
+<i>700</i>&nbsp;     */
+<i>701</i>&nbsp;    public final void quietlyCompleteRoot() {
+<i>702</i>&nbsp;        for (CountedCompleter&lt;?&gt; a = this, p;;) {
+<i>703</i>&nbsp;            if ((p = a.completer) == null) {
+<i>704</i>&nbsp;                a.quietlyComplete();
+<i>705</i>&nbsp;                return;
+<i>706</i>&nbsp;            }
+<b class="nc"><i>707</i>&nbsp;            a = p;</b>
+<b class="nc"><i>708</i>&nbsp;        }</b>
+<b class="nc"><i>709</i>&nbsp;    }</b>
+<b class="nc"><i>710</i>&nbsp;</b>
+<i>711</i>&nbsp;    /**
+<b class="nc"><i>712</i>&nbsp;     * If this task has not completed, attempts to process at most the</b>
+<i>713</i>&nbsp;     * given number of other unprocessed tasks for which this task is
+<i>714</i>&nbsp;     * on the completion path, if any are known to exist.
+<i>715</i>&nbsp;     *
+<i>716</i>&nbsp;     * @param maxTasks the maximum number of tasks to process.  If
+<i>717</i>&nbsp;     *                 less than or equal to zero, then no tasks are
+<i>718</i>&nbsp;     *                 processed.
+<i>719</i>&nbsp;     */
+<b class="nc"><i>720</i>&nbsp;    public final void helpComplete(int maxTasks) {</b>
+<b class="nc"><i>721</i>&nbsp;        Thread t; ForkJoinWorkerThread wt;</b>
+<i>722</i>&nbsp;        if (maxTasks &gt; 0 &amp;&amp; status &gt;= 0) {
+<b class="nc"><i>723</i>&nbsp;            if ((t = Thread.currentThread()) instanceof ForkJoinWorkerThread)</b>
+<b class="nc"><i>724</i>&nbsp;                (wt = (ForkJoinWorkerThread)t).pool.</b>
+<i>725</i>&nbsp;                    helpComplete(wt.workQueue, this, maxTasks);
+<i>726</i>&nbsp;            else
+<i>727</i>&nbsp;                ForkJoinPool.common.externalHelpComplete(this, maxTasks);
+<i>728</i>&nbsp;        }
+<i>729</i>&nbsp;    }
+<i>730</i>&nbsp;
+<b class="nc"><i>731</i>&nbsp;    /**</b>
+<b class="nc"><i>732</i>&nbsp;     * Supports ForkJoinTask exception propagation.</b>
+<i>733</i>&nbsp;     */
+<i>734</i>&nbsp;    void internalPropagateException(Throwable ex) {
+<i>735</i>&nbsp;        CountedCompleter&lt;?&gt; a = this, s = a;
+<i>736</i>&nbsp;        while (a.onExceptionalCompletion(ex, s) &amp;&amp;
+<i>737</i>&nbsp;               (a = (s = a).completer) != null &amp;&amp; a.status &gt;= 0 &amp;&amp;
+<i>738</i>&nbsp;               isExceptionalStatus(a.recordExceptionalCompletion(ex)))
+<i>739</i>&nbsp;            ;
+<i>740</i>&nbsp;    }
+<i>741</i>&nbsp;
+<i>742</i>&nbsp;    /**
+<i>743</i>&nbsp;     * Implements execution conventions for CountedCompleters.
+<b class="nc"><i>744</i>&nbsp;     */</b>
+<i>745</i>&nbsp;    protected final boolean exec() {
+<i>746</i>&nbsp;        compute();
+<i>747</i>&nbsp;        return false;
+<i>748</i>&nbsp;    }
+<i>749</i>&nbsp;
+<i>750</i>&nbsp;    /**
+<i>751</i>&nbsp;     * Returns the result of the computation.  By default,
+<i>752</i>&nbsp;     * returns {@code null}, which is appropriate for {@code Void}
+<i>753</i>&nbsp;     * actions, but in other cases should be overridden, almost
+<i>754</i>&nbsp;     * always to return a field or function of a field that
+<i>755</i>&nbsp;     * holds the result upon completion.
+<i>756</i>&nbsp;     *
+<i>757</i>&nbsp;     * @return the result of the computation
+<i>758</i>&nbsp;     */
+<i>759</i>&nbsp;    public T getRawResult() { return null; }
+<b class="nc"><i>760</i>&nbsp;</b>
+<b class="nc"><i>761</i>&nbsp;    /**</b>
+<b class="nc"><i>762</i>&nbsp;     * A method that result-bearing CountedCompleters may optionally</b>
+<b class="nc"><i>763</i>&nbsp;     * use to help maintain result data.  By default, does nothing.</b>
+<b class="nc"><i>764</i>&nbsp;     * Overrides are not recommended. However, if this method is</b>
+<b class="nc"><i>765</i>&nbsp;     * overridden to update existing objects or fields, then it must</b>
+<i>766</i>&nbsp;     * in general be defined to be thread-safe.
+<i>767</i>&nbsp;     */
+<i>768</i>&nbsp;    protected void setRawResult(T t) { }
+<i>769</i>&nbsp;
+<i>770</i>&nbsp;    // VarHandle mechanics
+<i>771</i>&nbsp;    private static final VarHandle PENDING;
+<i>772</i>&nbsp;    static {
+<i>773</i>&nbsp;        try {
+<i>774</i>&nbsp;            MethodHandles.Lookup l = MethodHandles.lookup();
+<i>775</i>&nbsp;            PENDING = l.findVarHandle(CountedCompleter.class, &quot;pending&quot;, int.class);
+<i>776</i>&nbsp;
+<i>777</i>&nbsp;        } catch (ReflectiveOperationException e) {
+<i>778</i>&nbsp;            throw new ExceptionInInitializerError(e);
+<i>779</i>&nbsp;        }
+<i>780</i>&nbsp;    }
+<i>781</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

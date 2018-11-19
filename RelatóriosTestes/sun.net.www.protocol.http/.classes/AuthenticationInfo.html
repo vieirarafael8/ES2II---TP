@@ -1,0 +1,585 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AuthenticationInfo</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.net.www.protocol.http</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AuthenticationInfo (sun.net.www.protocol.http)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AuthenticationInfo</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 29)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 116)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1995, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.net.www.protocol.http;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.io.ObjectInputStream;
+<i>30</i>&nbsp;import java.net.PasswordAuthentication;
+<i>31</i>&nbsp;import java.net.URL;
+<i>32</i>&nbsp;import java.util.HashMap;
+<i>33</i>&nbsp;import java.util.Objects;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;import sun.net.www.HeaderParser;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * AuthenticationInfo: Encapsulate the information needed to
+<i>40</i>&nbsp; * authenticate a user to a server.
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * @author Jon Payne
+<i>43</i>&nbsp; * @author Herb Jellinek
+<i>44</i>&nbsp; * @author Bill Foote
+<i>45</i>&nbsp; */
+<i>46</i>&nbsp;// REMIND:  It would be nice if this class understood about partial matching.
+<i>47</i>&nbsp;//      If you&#39;re authorized for foo.com, chances are high you&#39;re also
+<i>48</i>&nbsp;//      authorized for baz.foo.com.
+<i>49</i>&nbsp;// NB:  When this gets implemented, be careful about the uncaching
+<i>50</i>&nbsp;//      policy in HttpURLConnection.  A failure on baz.foo.com shouldn&#39;t
+<i>51</i>&nbsp;//      uncache foo.com!
+<b class="nc"><i>52</i>&nbsp;</b>
+<i>53</i>&nbsp;public abstract class AuthenticationInfo extends AuthCacheValue implements Cloneable {
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    static final long serialVersionUID = -2588378268010453259L;
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;    // Constants saying what kind of authroization this is.  This determines
+<i>58</i>&nbsp;    // the namespace in the hash table lookup.
+<i>59</i>&nbsp;    public static final char SERVER_AUTHENTICATION = &#39;s&#39;;
+<i>60</i>&nbsp;    public static final char PROXY_AUTHENTICATION = &#39;p&#39;;
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    /**
+<i>63</i>&nbsp;     * If true, then simultaneous authentication requests to the same realm/proxy
+<i>64</i>&nbsp;     * are serialized, in order to avoid a user having to type the same username/passwords
+<i>65</i>&nbsp;     * repeatedly, via the Authenticator. Default is false, which means that this
+<i>66</i>&nbsp;     * behavior is switched off.
+<i>67</i>&nbsp;     */
+<i>68</i>&nbsp;    static final boolean serializeAuth;
+<i>69</i>&nbsp;    static {
+<b class="nc"><i>70</i>&nbsp;        serializeAuth = java.security.AccessController.doPrivileged(</b>
+<i>71</i>&nbsp;            new sun.security.action.GetBooleanAction(
+<b class="nc"><i>72</i>&nbsp;                &quot;http.auth.serializeRequests&quot;)).booleanValue();</b>
+<i>73</i>&nbsp;    }
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    /* AuthCacheValue: */
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    protected transient PasswordAuthentication pw;
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    public PasswordAuthentication credentials() {
+<b class="nc"><i>80</i>&nbsp;        return pw;</b>
+<i>81</i>&nbsp;    }
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;    public AuthCacheValue.Type getAuthType() {
+<b class="nc"><i>84</i>&nbsp;        return type == SERVER_AUTHENTICATION ?</b>
+<i>85</i>&nbsp;            AuthCacheValue.Type.Server:
+<i>86</i>&nbsp;            AuthCacheValue.Type.Proxy;
+<i>87</i>&nbsp;    }
+<i>88</i>&nbsp;
+<i>89</i>&nbsp;    AuthScheme getAuthScheme() {
+<b class="nc"><i>90</i>&nbsp;        return authScheme;</b>
+<i>91</i>&nbsp;    }
+<i>92</i>&nbsp;
+<i>93</i>&nbsp;    public String getHost() {
+<b class="nc"><i>94</i>&nbsp;        return host;</b>
+<i>95</i>&nbsp;    }
+<i>96</i>&nbsp;    public int getPort() {
+<b class="nc"><i>97</i>&nbsp;        return port;</b>
+<i>98</i>&nbsp;    }
+<i>99</i>&nbsp;    public String getRealm() {
+<b class="nc"><i>100</i>&nbsp;        return realm;</b>
+<i>101</i>&nbsp;    }
+<i>102</i>&nbsp;    public String getPath() {
+<b class="nc"><i>103</i>&nbsp;        return path;</b>
+<i>104</i>&nbsp;    }
+<i>105</i>&nbsp;    public String getProtocolScheme() {
+<b class="nc"><i>106</i>&nbsp;        return protocol;</b>
+<i>107</i>&nbsp;    }
+<i>108</i>&nbsp;    /**
+<i>109</i>&nbsp;     * Whether we should cache this instance in the AuthCache.
+<i>110</i>&nbsp;     * This method returns {@code true} by default.
+<i>111</i>&nbsp;     * Subclasses may override this method to add
+<i>112</i>&nbsp;     * additional restrictions.
+<i>113</i>&nbsp;     * @return {@code true} by default.
+<i>114</i>&nbsp;     */
+<i>115</i>&nbsp;    protected boolean useAuthCache() {
+<b class="nc"><i>116</i>&nbsp;        return true;</b>
+<i>117</i>&nbsp;    }
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;    /**
+<i>120</i>&nbsp;     * requests is used to ensure that interaction with the
+<i>121</i>&nbsp;     * Authenticator for a particular realm is single threaded.
+<i>122</i>&nbsp;     * ie. if multiple threads need to get credentials from the user
+<b class="nc"><i>123</i>&nbsp;     * at the same time, then all but the first will block until</b>
+<i>124</i>&nbsp;     * the first completes its authentication.
+<b class="nc"><i>125</i>&nbsp;     */</b>
+<i>126</i>&nbsp;    private static HashMap&lt;String,Thread&gt; requests = new HashMap&lt;&gt;();
+<b class="nc"><i>127</i>&nbsp;</b>
+<i>128</i>&nbsp;    /* check if a request for this destination is in progress
+<b class="nc"><i>129</i>&nbsp;     * return false immediately if not. Otherwise block until</b>
+<b class="nc"><i>130</i>&nbsp;     * request is finished and return true</b>
+<b class="nc"><i>131</i>&nbsp;     */</b>
+<b class="nc"><i>132</i>&nbsp;    private static boolean requestIsInProgress (String key) {</b>
+<i>133</i>&nbsp;        if (!serializeAuth) {
+<b class="nc"><i>134</i>&nbsp;            /* behavior is disabled. Revert to concurrent requests */</b>
+<b class="nc"><i>135</i>&nbsp;            return false;</b>
+<i>136</i>&nbsp;        }
+<b class="nc"><i>137</i>&nbsp;        synchronized (requests) {</b>
+<i>138</i>&nbsp;            Thread t, c;
+<b class="nc"><i>139</i>&nbsp;            c = Thread.currentThread();</b>
+<b class="nc"><i>140</i>&nbsp;            if ((t = requests.get(key)) == null) {</b>
+<i>141</i>&nbsp;                requests.put (key, c);
+<b class="nc"><i>142</i>&nbsp;                return false;</b>
+<i>143</i>&nbsp;            }
+<b class="nc"><i>144</i>&nbsp;            if (t == c) {</b>
+<i>145</i>&nbsp;                return false;
+<i>146</i>&nbsp;            }
+<i>147</i>&nbsp;            while (requests.containsKey(key)) {
+<i>148</i>&nbsp;                try {
+<i>149</i>&nbsp;                    requests.wait ();
+<i>150</i>&nbsp;                } catch (InterruptedException e) {}
+<b class="nc"><i>151</i>&nbsp;            }</b>
+<b class="nc"><i>152</i>&nbsp;        }</b>
+<b class="nc"><i>153</i>&nbsp;        /* entry may be in cache now. */</b>
+<b class="nc"><i>154</i>&nbsp;        return true;</b>
+<b class="nc"><i>155</i>&nbsp;    }</b>
+<i>156</i>&nbsp;
+<b class="nc"><i>157</i>&nbsp;    /* signal completion of an authentication (whether it succeeded or not)</b>
+<b class="nc"><i>158</i>&nbsp;     * so that other threads can continue.</b>
+<i>159</i>&nbsp;     */
+<i>160</i>&nbsp;    private static void requestCompleted (String key) {
+<i>161</i>&nbsp;        synchronized (requests) {
+<i>162</i>&nbsp;            Thread thread = requests.get(key);
+<i>163</i>&nbsp;            if (thread != null &amp;&amp; thread == Thread.currentThread()) {
+<i>164</i>&nbsp;                boolean waspresent = requests.remove(key) != null;
+<i>165</i>&nbsp;                assert waspresent;
+<i>166</i>&nbsp;            }
+<i>167</i>&nbsp;            requests.notifyAll();
+<i>168</i>&nbsp;        }
+<i>169</i>&nbsp;    }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;    //public String toString () {
+<i>172</i>&nbsp;        //return (&quot;{&quot;+type+&quot;:&quot;+authScheme+&quot;:&quot;+protocol+&quot;:&quot;+host+&quot;:&quot;+port+&quot;:&quot;+realm+&quot;:&quot;+path+&quot;}&quot;);
+<i>173</i>&nbsp;    //}
+<i>174</i>&nbsp;
+<i>175</i>&nbsp;    // REMIND:  This cache just grows forever.  We should put in a bounded
+<i>176</i>&nbsp;    //          cache, or maybe something using WeakRef&#39;s.
+<i>177</i>&nbsp;
+<i>178</i>&nbsp;    /** The type (server/proxy) of authentication this is.  Used for key lookup */
+<i>179</i>&nbsp;    char type;
+<i>180</i>&nbsp;
+<i>181</i>&nbsp;    /** The authentication scheme (basic/digest). Also used for key lookup */
+<i>182</i>&nbsp;    AuthScheme authScheme;
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;    /** The protocol/scheme (i.e. http or https ). Need to keep the caches
+<i>185</i>&nbsp;     *  logically separate for the two protocols. This field is only used
+<i>186</i>&nbsp;     *  when constructed with a URL (the normal case for server authentication)
+<i>187</i>&nbsp;     *  For proxy authentication the protocol is not relevant.
+<i>188</i>&nbsp;     */
+<i>189</i>&nbsp;    String protocol;
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;    /** The host we&#39;re authenticating against. */
+<i>192</i>&nbsp;    String host;
+<i>193</i>&nbsp;
+<b class="nc"><i>194</i>&nbsp;    /** The port on the host we&#39;re authenticating against. */</b>
+<b class="nc"><i>195</i>&nbsp;    int port;</b>
+<b class="nc"><i>196</i>&nbsp;</b>
+<b class="nc"><i>197</i>&nbsp;    /** The realm we&#39;re authenticating against. */</b>
+<b class="nc"><i>198</i>&nbsp;    String realm;</b>
+<b class="nc"><i>199</i>&nbsp;</b>
+<b class="nc"><i>200</i>&nbsp;    /** The shortest path from the URL we authenticated against. */</b>
+<b class="nc"><i>201</i>&nbsp;    String path;</b>
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;    /**
+<i>204</i>&nbsp;     * A key identifying the authenticator from which the credentials
+<i>205</i>&nbsp;     * were obtained.
+<b class="nc"><i>206</i>&nbsp;     * {@link AuthenticatorKeys#DEFAULT} identifies the {@linkplain</b>
+<b class="nc"><i>207</i>&nbsp;     * java.net.Authenticator#setDefault(java.net.Authenticator) default}</b>
+<i>208</i>&nbsp;     * authenticator.
+<b class="nc"><i>209</i>&nbsp;     */</b>
+<i>210</i>&nbsp;     String authenticatorKey;
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;    /** Use this constructor only for proxy entries */
+<i>213</i>&nbsp;    public AuthenticationInfo(char type, AuthScheme authScheme, String host,
+<i>214</i>&nbsp;                              int port, String realm, String authenticatorKey) {
+<i>215</i>&nbsp;        this.type = type;
+<i>216</i>&nbsp;        this.authScheme = authScheme;
+<b class="nc"><i>217</i>&nbsp;        this.protocol = &quot;&quot;;</b>
+<b class="nc"><i>218</i>&nbsp;        this.host = host.toLowerCase();</b>
+<b class="nc"><i>219</i>&nbsp;        this.port = port;</b>
+<b class="nc"><i>220</i>&nbsp;        this.realm = realm;</b>
+<b class="nc"><i>221</i>&nbsp;        this.path = null;</b>
+<b class="nc"><i>222</i>&nbsp;        this.authenticatorKey = Objects.requireNonNull(authenticatorKey);</b>
+<b class="nc"><i>223</i>&nbsp;    }</b>
+<b class="nc"><i>224</i>&nbsp;</b>
+<i>225</i>&nbsp;    public Object clone() {
+<b class="nc"><i>226</i>&nbsp;        try {</b>
+<i>227</i>&nbsp;            return super.clone ();
+<b class="nc"><i>228</i>&nbsp;        } catch (CloneNotSupportedException e) {</b>
+<b class="nc"><i>229</i>&nbsp;            // Cannot happen because Cloneable implemented by AuthenticationInfo</b>
+<b class="nc"><i>230</i>&nbsp;            return null;</b>
+<i>231</i>&nbsp;        }
+<b class="nc"><i>232</i>&nbsp;    }</b>
+<i>233</i>&nbsp;
+<i>234</i>&nbsp;    /*
+<i>235</i>&nbsp;     * Constructor used to limit the authorization to the path within
+<i>236</i>&nbsp;     * the URL. Use this constructor for origin server entries.
+<i>237</i>&nbsp;     */
+<i>238</i>&nbsp;    public AuthenticationInfo(char type, AuthScheme authScheme, URL url, String realm,
+<i>239</i>&nbsp;                              String authenticatorKey) {
+<i>240</i>&nbsp;        this.type = type;
+<i>241</i>&nbsp;        this.authScheme = authScheme;
+<i>242</i>&nbsp;        this.protocol = url.getProtocol().toLowerCase();
+<b class="nc"><i>243</i>&nbsp;        this.host = url.getHost().toLowerCase();</b>
+<b class="nc"><i>244</i>&nbsp;        this.port = url.getPort();</b>
+<b class="nc"><i>245</i>&nbsp;        if (this.port == -1) {</b>
+<b class="nc"><i>246</i>&nbsp;            this.port = url.getDefaultPort();</b>
+<b class="nc"><i>247</i>&nbsp;        }</b>
+<i>248</i>&nbsp;        this.realm = realm;
+<b class="nc"><i>249</i>&nbsp;</b>
+<i>250</i>&nbsp;        String urlPath = url.getPath();
+<b class="nc"><i>251</i>&nbsp;        if (urlPath.length() == 0)</b>
+<i>252</i>&nbsp;            this.path = urlPath;
+<i>253</i>&nbsp;        else {
+<i>254</i>&nbsp;            this.path = reducePath (urlPath);
+<i>255</i>&nbsp;        }
+<i>256</i>&nbsp;        this.authenticatorKey = Objects.requireNonNull(authenticatorKey);
+<i>257</i>&nbsp;    }
+<i>258</i>&nbsp;
+<i>259</i>&nbsp;    /**
+<b class="nc"><i>260</i>&nbsp;     * The {@linkplain java.net.Authenticator#getKey(java.net.Authenticator) key}</b>
+<b class="nc"><i>261</i>&nbsp;     * of the authenticator that was used to obtain the credentials.</b>
+<b class="nc"><i>262</i>&nbsp;     * @return The authenticator&#39;s key.</b>
+<i>263</i>&nbsp;     */
+<b class="nc"><i>264</i>&nbsp;    public final String getAuthenticatorKey() {</b>
+<b class="nc"><i>265</i>&nbsp;        return authenticatorKey;</b>
+<b class="nc"><i>266</i>&nbsp;    }</b>
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;    /*
+<i>269</i>&nbsp;     * reduce the path to the root of where we think the
+<i>270</i>&nbsp;     * authorization begins. This could get shorter as
+<i>271</i>&nbsp;     * the url is traversed up following a successful challenge.
+<i>272</i>&nbsp;     */
+<i>273</i>&nbsp;    static String reducePath (String urlPath) {
+<i>274</i>&nbsp;        int sepIndex = urlPath.lastIndexOf(&#39;/&#39;);
+<i>275</i>&nbsp;        int targetSuffixIndex = urlPath.lastIndexOf(&#39;.&#39;);
+<b class="nc"><i>276</i>&nbsp;        if (sepIndex != -1)</b>
+<b class="nc"><i>277</i>&nbsp;            if (sepIndex &lt; targetSuffixIndex)</b>
+<b class="nc"><i>278</i>&nbsp;                return urlPath.substring(0, sepIndex+1);</b>
+<i>279</i>&nbsp;            else
+<b class="nc"><i>280</i>&nbsp;                return urlPath;</b>
+<b class="nc"><i>281</i>&nbsp;        else</b>
+<b class="nc"><i>282</i>&nbsp;            return urlPath;</b>
+<i>283</i>&nbsp;    }
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;    /**
+<b class="nc"><i>286</i>&nbsp;     * Returns info for the URL, for an HTTP server auth.  Used when we</b>
+<b class="nc"><i>287</i>&nbsp;     * don&#39;t yet know the realm</b>
+<i>288</i>&nbsp;     * (i.e. when we&#39;re preemptively setting the auth).
+<b class="nc"><i>289</i>&nbsp;     */</b>
+<i>290</i>&nbsp;    static AuthenticationInfo getServerAuth(URL url, String authenticatorKey) {
+<b class="nc"><i>291</i>&nbsp;        int port = url.getPort();</b>
+<i>292</i>&nbsp;        if (port == -1) {
+<i>293</i>&nbsp;            port = url.getDefaultPort();
+<i>294</i>&nbsp;        }
+<i>295</i>&nbsp;        String key = SERVER_AUTHENTICATION + &quot;:&quot; + url.getProtocol().toLowerCase()
+<i>296</i>&nbsp;                + &quot;:&quot; + url.getHost().toLowerCase() + &quot;:&quot; + port
+<i>297</i>&nbsp;                + &quot;;auth=&quot; + authenticatorKey;
+<i>298</i>&nbsp;        return getAuth(key, url);
+<i>299</i>&nbsp;    }
+<b class="nc"><i>300</i>&nbsp;</b>
+<b class="nc"><i>301</i>&nbsp;    /**</b>
+<i>302</i>&nbsp;     * Returns info for the URL, for an HTTP server auth.  Used when we
+<b class="nc"><i>303</i>&nbsp;     * do know the realm (i.e. when we&#39;re responding to a challenge).</b>
+<i>304</i>&nbsp;     * In this case we do not use the path because the protection space
+<i>305</i>&nbsp;     * is identified by the host:port:realm only
+<i>306</i>&nbsp;     */
+<i>307</i>&nbsp;    static String getServerAuthKey(URL url, String realm, AuthScheme scheme,
+<i>308</i>&nbsp;                                   String authenticatorKey) {
+<i>309</i>&nbsp;        int port = url.getPort();
+<i>310</i>&nbsp;        if (port == -1) {
+<i>311</i>&nbsp;            port = url.getDefaultPort();
+<i>312</i>&nbsp;        }
+<b class="nc"><i>313</i>&nbsp;        String key = SERVER_AUTHENTICATION + &quot;:&quot; + scheme + &quot;:&quot;</b>
+<b class="nc"><i>314</i>&nbsp;                     + url.getProtocol().toLowerCase()</b>
+<b class="nc"><i>315</i>&nbsp;                     + &quot;:&quot; + url.getHost().toLowerCase()</b>
+<i>316</i>&nbsp;                     + &quot;:&quot; + port + &quot;:&quot; + realm
+<i>317</i>&nbsp;                     + &quot;;auth=&quot; + authenticatorKey;
+<i>318</i>&nbsp;        return key;
+<i>319</i>&nbsp;    }
+<i>320</i>&nbsp;
+<i>321</i>&nbsp;    static AuthenticationInfo getServerAuth(String key) {
+<i>322</i>&nbsp;        AuthenticationInfo cached = getAuth(key, null);
+<i>323</i>&nbsp;        if ((cached == null) &amp;&amp; requestIsInProgress (key)) {
+<b class="nc"><i>324</i>&nbsp;            /* check the cache again, it might contain an entry */</b>
+<i>325</i>&nbsp;            cached = getAuth(key, null);
+<b class="nc"><i>326</i>&nbsp;        }</b>
+<i>327</i>&nbsp;        return cached;
+<i>328</i>&nbsp;    }
+<i>329</i>&nbsp;
+<b class="nc"><i>330</i>&nbsp;</b>
+<b class="nc"><i>331</i>&nbsp;    /**</b>
+<i>332</i>&nbsp;     * Return the AuthenticationInfo object from the cache if it&#39;s path is
+<b class="nc"><i>333</i>&nbsp;     * a substring of the supplied URLs path.</b>
+<i>334</i>&nbsp;     */
+<b class="nc"><i>335</i>&nbsp;    static AuthenticationInfo getAuth(String key, URL url) {</b>
+<i>336</i>&nbsp;        if (url == null) {
+<i>337</i>&nbsp;            return (AuthenticationInfo)cache.get (key, null);
+<i>338</i>&nbsp;        } else {
+<i>339</i>&nbsp;            return (AuthenticationInfo)cache.get (key, url.getPath());
+<i>340</i>&nbsp;        }
+<i>341</i>&nbsp;    }
+<i>342</i>&nbsp;
+<b class="nc"><i>343</i>&nbsp;    /**</b>
+<b class="nc"><i>344</i>&nbsp;     * Returns a firewall authentication, for the given host/port.  Used</b>
+<b class="nc"><i>345</i>&nbsp;     * for preemptive header-setting. Note, the protocol field is always</b>
+<b class="nc"><i>346</i>&nbsp;     * blank for proxies.</b>
+<i>347</i>&nbsp;     */
+<b class="nc"><i>348</i>&nbsp;    static AuthenticationInfo getProxyAuth(String host, int port,</b>
+<i>349</i>&nbsp;                                           String authenticatorKey) {
+<i>350</i>&nbsp;        String key = PROXY_AUTHENTICATION + &quot;::&quot; + host.toLowerCase() + &quot;:&quot; + port
+<i>351</i>&nbsp;                     + &quot;;auth=&quot; + authenticatorKey;
+<b class="nc"><i>352</i>&nbsp;        AuthenticationInfo result = (AuthenticationInfo) cache.get(key, null);</b>
+<i>353</i>&nbsp;        return result;
+<i>354</i>&nbsp;    }
+<b class="nc"><i>355</i>&nbsp;</b>
+<b class="nc"><i>356</i>&nbsp;    /**</b>
+<b class="nc"><i>357</i>&nbsp;     * Returns a firewall authentication, for the given host/port and realm.</b>
+<i>358</i>&nbsp;     * Used in response to a challenge. Note, the protocol field is always
+<i>359</i>&nbsp;     * blank for proxies.
+<i>360</i>&nbsp;     */
+<i>361</i>&nbsp;    static String getProxyAuthKey(String host, int port, String realm,
+<i>362</i>&nbsp;                                  AuthScheme scheme, String authenticatorKey) {
+<i>363</i>&nbsp;        String key = PROXY_AUTHENTICATION + &quot;:&quot; + scheme
+<b class="nc"><i>364</i>&nbsp;                        + &quot;::&quot; + host.toLowerCase()</b>
+<b class="nc"><i>365</i>&nbsp;                        + &quot;:&quot; + port + &quot;:&quot; + realm</b>
+<b class="nc"><i>366</i>&nbsp;                        + &quot;;auth=&quot; + authenticatorKey;</b>
+<i>367</i>&nbsp;        return key;
+<i>368</i>&nbsp;    }
+<i>369</i>&nbsp;
+<i>370</i>&nbsp;    static AuthenticationInfo getProxyAuth(String key) {
+<i>371</i>&nbsp;        AuthenticationInfo cached = (AuthenticationInfo) cache.get(key, null);
+<i>372</i>&nbsp;        if ((cached == null) &amp;&amp; requestIsInProgress (key)) {
+<i>373</i>&nbsp;            /* check the cache again, it might contain an entry */
+<i>374</i>&nbsp;            cached = (AuthenticationInfo) cache.get(key, null);
+<i>375</i>&nbsp;        }
+<i>376</i>&nbsp;        return cached;
+<i>377</i>&nbsp;    }
+<i>378</i>&nbsp;
+<i>379</i>&nbsp;
+<b class="nc"><i>380</i>&nbsp;    /**</b>
+<b class="nc"><i>381</i>&nbsp;     * Add this authentication to the cache</b>
+<i>382</i>&nbsp;     */
+<b class="nc"><i>383</i>&nbsp;    void addToCache() {</b>
+<i>384</i>&nbsp;        String key = cacheKey(true);
+<i>385</i>&nbsp;        if (useAuthCache()) {
+<i>386</i>&nbsp;            cache.put(key, this);
+<i>387</i>&nbsp;            if (supportsPreemptiveAuthorization()) {
+<i>388</i>&nbsp;                cache.put(cacheKey(false), this);
+<i>389</i>&nbsp;            }
+<i>390</i>&nbsp;        }
+<i>391</i>&nbsp;        endAuthRequest(key);
+<i>392</i>&nbsp;    }
+<i>393</i>&nbsp;
+<i>394</i>&nbsp;    static void endAuthRequest (String key) {
+<i>395</i>&nbsp;        if (!serializeAuth) {
+<i>396</i>&nbsp;            return;
+<i>397</i>&nbsp;        }
+<i>398</i>&nbsp;        synchronized (requests) {
+<i>399</i>&nbsp;            requestCompleted(key);
+<i>400</i>&nbsp;        }
+<i>401</i>&nbsp;    }
+<i>402</i>&nbsp;
+<i>403</i>&nbsp;    /**
+<i>404</i>&nbsp;     * Remove this authentication from the cache
+<i>405</i>&nbsp;     */
+<i>406</i>&nbsp;    void removeFromCache() {
+<i>407</i>&nbsp;        cache.remove(cacheKey(true), this);
+<i>408</i>&nbsp;        if (supportsPreemptiveAuthorization()) {
+<i>409</i>&nbsp;            cache.remove(cacheKey(false), this);
+<i>410</i>&nbsp;        }
+<i>411</i>&nbsp;    }
+<i>412</i>&nbsp;
+<i>413</i>&nbsp;    /**
+<i>414</i>&nbsp;     * @return true if this authentication supports preemptive authorization
+<i>415</i>&nbsp;     */
+<i>416</i>&nbsp;    public abstract boolean supportsPreemptiveAuthorization();
+<i>417</i>&nbsp;
+<i>418</i>&nbsp;    /**
+<i>419</i>&nbsp;     * @return the name of the HTTP header this authentication wants set.
+<i>420</i>&nbsp;     *          This is used for preemptive authorization.
+<i>421</i>&nbsp;     */
+<i>422</i>&nbsp;    public String getHeaderName() {
+<i>423</i>&nbsp;        if (type == SERVER_AUTHENTICATION) {
+<i>424</i>&nbsp;            return &quot;Authorization&quot;;
+<i>425</i>&nbsp;        } else {
+<i>426</i>&nbsp;            return &quot;Proxy-authorization&quot;;
+<b class="nc"><i>427</i>&nbsp;        }</b>
+<b class="nc"><i>428</i>&nbsp;    }</b>
+<i>429</i>&nbsp;
+<i>430</i>&nbsp;    /**
+<b class="nc"><i>431</i>&nbsp;     * Calculates and returns the authentication header value based</b>
+<i>432</i>&nbsp;     * on the stored authentication parameters. If the calculation does not depend
+<i>433</i>&nbsp;     * on the URL or the request method then these parameters are ignored.
+<i>434</i>&nbsp;     * @param url The URL
+<i>435</i>&nbsp;     * @param method The request method
+<i>436</i>&nbsp;     * @return the value of the HTTP header this authentication wants set.
+<i>437</i>&nbsp;     *          Used for preemptive authorization.
+<i>438</i>&nbsp;     */
+<i>439</i>&nbsp;    public abstract String getHeaderValue(URL url, String method);
+<b class="nc"><i>440</i>&nbsp;</b>
+<b class="nc"><i>441</i>&nbsp;    /**</b>
+<b class="nc"><i>442</i>&nbsp;     * Set header(s) on the given connection.  Subclasses must override</b>
+<i>443</i>&nbsp;     * This will only be called for
+<i>444</i>&nbsp;     * definitive (i.e. non-preemptive) authorization.
+<i>445</i>&nbsp;     * @param conn The connection to apply the header(s) to
+<i>446</i>&nbsp;     * @param p A source of header values for this connection, if needed.
+<i>447</i>&nbsp;     * @param raw The raw header field (if needed)
+<b class="nc"><i>448</i>&nbsp;     * @return true if all goes well, false if no headers were set.</b>
+<b class="nc"><i>449</i>&nbsp;     */</b>
+<b class="nc"><i>450</i>&nbsp;    public abstract boolean setHeaders(HttpURLConnection conn, HeaderParser p, String raw);</b>
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;    /**
+<i>453</i>&nbsp;     * Check if the header indicates that the current auth. parameters are stale.
+<i>454</i>&nbsp;     * If so, then replace the relevant field with the new value
+<i>455</i>&nbsp;     * and return true. Otherwise return false.
+<i>456</i>&nbsp;     * returning true means the request can be retried with the same userid/password
+<i>457</i>&nbsp;     * returning false means we have to go back to the user to ask for a new
+<i>458</i>&nbsp;     * username password.
+<i>459</i>&nbsp;     */
+<i>460</i>&nbsp;    public abstract boolean isAuthorizationStale (String header);
+<i>461</i>&nbsp;
+<i>462</i>&nbsp;    /**
+<i>463</i>&nbsp;     * Give a key for hash table lookups.
+<i>464</i>&nbsp;     * @param includeRealm if you want the realm considered.  Preemptively
+<i>465</i>&nbsp;     *          setting an authorization is done before the realm is known.
+<i>466</i>&nbsp;     */
+<i>467</i>&nbsp;    String cacheKey(boolean includeRealm) {
+<i>468</i>&nbsp;        // This must be kept in sync with the getXXXAuth() methods in this
+<i>469</i>&nbsp;        // class.
+<i>470</i>&nbsp;        String authenticatorKey = getAuthenticatorKey();
+<i>471</i>&nbsp;        if (includeRealm) {
+<i>472</i>&nbsp;            return type + &quot;:&quot; + authScheme + &quot;:&quot; + protocol + &quot;:&quot;
+<i>473</i>&nbsp;                        + host + &quot;:&quot; + port + &quot;:&quot; + realm
+<i>474</i>&nbsp;                     + &quot;;auth=&quot; + authenticatorKey;
+<i>475</i>&nbsp;        } else {
+<i>476</i>&nbsp;            return type + &quot;:&quot; + protocol + &quot;:&quot; + host + &quot;:&quot; + port
+<i>477</i>&nbsp;                     + &quot;;auth=&quot; + authenticatorKey;
+<i>478</i>&nbsp;        }
+<i>479</i>&nbsp;    }
+<i>480</i>&nbsp;
+<i>481</i>&nbsp;    String s1, s2;  /* used for serialization of pw */
+<i>482</i>&nbsp;
+<i>483</i>&nbsp;    private synchronized void readObject(ObjectInputStream s)
+<i>484</i>&nbsp;        throws IOException, ClassNotFoundException
+<i>485</i>&nbsp;    {
+<i>486</i>&nbsp;        s.defaultReadObject ();
+<i>487</i>&nbsp;        pw = new PasswordAuthentication (s1, s2.toCharArray());
+<i>488</i>&nbsp;        s1 = null; s2= null;
+<i>489</i>&nbsp;        if (authenticatorKey == null) {
+<i>490</i>&nbsp;            authenticatorKey = AuthenticatorKeys.DEFAULT;
+<i>491</i>&nbsp;        }
+<i>492</i>&nbsp;    }
+<i>493</i>&nbsp;
+<i>494</i>&nbsp;    private synchronized void writeObject(java.io.ObjectOutputStream s)
+<i>495</i>&nbsp;        throws IOException
+<i>496</i>&nbsp;    {
+<i>497</i>&nbsp;        Objects.requireNonNull(authenticatorKey);
+<i>498</i>&nbsp;        s1 = pw.getUserName();
+<i>499</i>&nbsp;        s2 = new String (pw.getPassword());
+<i>500</i>&nbsp;        s.defaultWriteObject ();
+<i>501</i>&nbsp;    }
+<i>502</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

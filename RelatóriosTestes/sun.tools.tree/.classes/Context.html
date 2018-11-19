@@ -1,0 +1,944 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Context</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.tree</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Context (sun.tools.tree)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Context</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 39)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 286)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1994, 2003, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.tree;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import sun.tools.java.*;
+<i>29</i>&nbsp;import sun.tools.asm.Assembler;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;/**
+<i>32</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>33</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>34</i>&nbsp; * they are subject to change or removal without notice.
+<i>35</i>&nbsp; */
+<i>36</i>&nbsp;public
+<i>37</i>&nbsp;class Context implements Constants {
+<i>38</i>&nbsp;    Context prev;
+<i>39</i>&nbsp;    Node node;
+<i>40</i>&nbsp;    int varNumber;
+<i>41</i>&nbsp;    LocalMember locals;
+<i>42</i>&nbsp;    LocalMember classes;
+<i>43</i>&nbsp;    MemberDefinition field;
+<i>44</i>&nbsp;    int scopeNumber;
+<i>45</i>&nbsp;    int frameNumber;
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;    /**
+<i>48</i>&nbsp;     * Create the initial context for a method
+<i>49</i>&nbsp;     * The incoming context is inherited from
+<i>50</i>&nbsp;     */
+<b class="nc"><i>51</i>&nbsp;    public Context(Context ctx, MemberDefinition field) {</b>
+<b class="nc"><i>52</i>&nbsp;        this.field = field;</b>
+<b class="nc"><i>53</i>&nbsp;        if (ctx == null) {</b>
+<b class="nc"><i>54</i>&nbsp;            this.frameNumber = 1;</b>
+<b class="nc"><i>55</i>&nbsp;            this.scopeNumber = 2;</b>
+<b class="nc"><i>56</i>&nbsp;            this.varNumber = 0;</b>
+<i>57</i>&nbsp;        } else {
+<b class="nc"><i>58</i>&nbsp;            this.prev = ctx;</b>
+<b class="nc"><i>59</i>&nbsp;            this.locals = ctx.locals;</b>
+<b class="nc"><i>60</i>&nbsp;            this.classes = ctx.classes;</b>
+<b class="nc"><i>61</i>&nbsp;            if (field != null &amp;&amp;</b>
+<b class="nc"><i>62</i>&nbsp;                  (field.isVariable() || field.isInitializer())) {</b>
+<i>63</i>&nbsp;                // Variables and initializers are inlined into a constructor.
+<i>64</i>&nbsp;                // Model this by inheriting the frame number of the parent,
+<i>65</i>&nbsp;                // which will contain a &quot;this&quot; parameter.
+<b class="nc"><i>66</i>&nbsp;                this.frameNumber = ctx.frameNumber;</b>
+<b class="nc"><i>67</i>&nbsp;                this.scopeNumber = ctx.scopeNumber + 1;</b>
+<i>68</i>&nbsp;            } else {
+<b class="nc"><i>69</i>&nbsp;                this.frameNumber = ctx.scopeNumber + 1;</b>
+<b class="nc"><i>70</i>&nbsp;                this.scopeNumber = this.frameNumber + 1;</b>
+<i>71</i>&nbsp;            }
+<b class="nc"><i>72</i>&nbsp;            this.varNumber = ctx.varNumber;</b>
+<i>73</i>&nbsp;        }
+<i>74</i>&nbsp;    }
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    /**
+<i>77</i>&nbsp;     * Create a new context, for initializing a class.
+<i>78</i>&nbsp;     */
+<i>79</i>&nbsp;    public Context(Context ctx, ClassDefinition c) {
+<b class="nc"><i>80</i>&nbsp;        this(ctx, (MemberDefinition)null);</b>
+<i>81</i>&nbsp;    }
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;    /**
+<i>84</i>&nbsp;     * Create a new nested context, for a block statement
+<i>85</i>&nbsp;     */
+<b class="nc"><i>86</i>&nbsp;    Context(Context ctx, Node node) {</b>
+<b class="nc"><i>87</i>&nbsp;        if (ctx == null) {</b>
+<b class="nc"><i>88</i>&nbsp;            this.frameNumber = 1;</b>
+<b class="nc"><i>89</i>&nbsp;            this.scopeNumber = 2;</b>
+<b class="nc"><i>90</i>&nbsp;            this.varNumber = 0;</b>
+<i>91</i>&nbsp;        } else {
+<b class="nc"><i>92</i>&nbsp;            this.prev = ctx;</b>
+<b class="nc"><i>93</i>&nbsp;            this.locals = ctx.locals;</b>
+<i>94</i>&nbsp;            // Inherit local classes from surrounding block,
+<i>95</i>&nbsp;            // just as for local variables.  Fixes 4074421.
+<b class="nc"><i>96</i>&nbsp;            this.classes = ctx.classes;</b>
+<b class="nc"><i>97</i>&nbsp;            this.varNumber = ctx.varNumber;</b>
+<b class="nc"><i>98</i>&nbsp;            this.field = ctx.field;</b>
+<b class="nc"><i>99</i>&nbsp;            this.frameNumber = ctx.frameNumber;</b>
+<b class="nc"><i>100</i>&nbsp;            this.scopeNumber = ctx.scopeNumber + 1;</b>
+<b class="nc"><i>101</i>&nbsp;            this.node = node;</b>
+<i>102</i>&nbsp;        }
+<i>103</i>&nbsp;    }
+<i>104</i>&nbsp;
+<i>105</i>&nbsp;    public Context(Context ctx) {
+<b class="nc"><i>106</i>&nbsp;        this(ctx, (Node)null);</b>
+<i>107</i>&nbsp;    }
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    /**
+<i>110</i>&nbsp;     * Declare local
+<i>111</i>&nbsp;     */
+<i>112</i>&nbsp;    public int declare(Environment env, LocalMember local) {
+<i>113</i>&nbsp;        //System.out.println(   &quot;DECLARE= &quot; + local.getName() + &quot;=&quot; + varNumber + &quot;, read=&quot; + local.readcount + &quot;, write=&quot; + local.writecount + &quot;, hash=&quot; + local.hashCode());
+<b class="nc"><i>114</i>&nbsp;        local.scopeNumber = scopeNumber;</b>
+<b class="nc"><i>115</i>&nbsp;        if (this.field == null &amp;&amp; idThis.equals(local.getName())) {</b>
+<b class="nc"><i>116</i>&nbsp;            local.scopeNumber += 1; // Anticipate variable or initializer.</b>
+<i>117</i>&nbsp;        }
+<b class="nc"><i>118</i>&nbsp;        if (local.isInnerClass()) {</b>
+<b class="nc"><i>119</i>&nbsp;            local.prev = classes;</b>
+<b class="nc"><i>120</i>&nbsp;            classes = local;</b>
+<b class="nc"><i>121</i>&nbsp;            return 0;</b>
+<i>122</i>&nbsp;        }
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;        // Originally the statement:
+<i>125</i>&nbsp;        //
+<i>126</i>&nbsp;        //     local.subModifiers(M_INLINEABLE);
+<i>127</i>&nbsp;        //
+<i>128</i>&nbsp;        // was here with the comment:
+<i>129</i>&nbsp;        //
+<i>130</i>&nbsp;        //     // prevent inlining across call sites
+<i>131</i>&nbsp;        //
+<i>132</i>&nbsp;        // This statement prevented constant local variables from
+<i>133</i>&nbsp;        // inlining. It didn&#39;t seem to do anything useful.
+<i>134</i>&nbsp;        //
+<i>135</i>&nbsp;        // The statement has been removed and an assertion has been
+<i>136</i>&nbsp;        // added which mandates that the only members which are marked
+<i>137</i>&nbsp;        // with M_INLINEABLE are the ones for which isConstant() is true.
+<i>138</i>&nbsp;        // (Fix for 4106244.)
+<i>139</i>&nbsp;        //
+<i>140</i>&nbsp;        // Addition to the above comment: they might also be
+<i>141</i>&nbsp;        // final variables initialized with &#39;this&#39;, &#39;super&#39;, or other
+<i>142</i>&nbsp;        // final identifiers.  See VarDeclarationStatement.inline().
+<i>143</i>&nbsp;        // So I&#39;ve removed the assertion.  The original subModifiers
+<i>144</i>&nbsp;        // call appears to have been there to fix nested class translation
+<i>145</i>&nbsp;        // breakage, which has been fixed in VarDeclarationStatement
+<i>146</i>&nbsp;        // now instead.  (Fix for 4073244.)
+<i>147</i>&nbsp;
+<b class="nc"><i>148</i>&nbsp;        local.prev = locals;</b>
+<b class="nc"><i>149</i>&nbsp;        locals = local;</b>
+<b class="nc"><i>150</i>&nbsp;        local.number = varNumber;</b>
+<b class="nc"><i>151</i>&nbsp;        varNumber += local.getType().stackSize();</b>
+<b class="nc"><i>152</i>&nbsp;        return local.number;</b>
+<i>153</i>&nbsp;    }
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    /**
+<i>156</i>&nbsp;     * Get a local variable by name
+<i>157</i>&nbsp;     */
+<i>158</i>&nbsp;    public
+<i>159</i>&nbsp;    LocalMember getLocalField(Identifier name) {
+<b class="nc"><i>160</i>&nbsp;        for (LocalMember f = locals ; f != null ; f = f.prev) {</b>
+<b class="nc"><i>161</i>&nbsp;            if (name.equals(f.getName())) {</b>
+<b class="nc"><i>162</i>&nbsp;                return f;</b>
+<i>163</i>&nbsp;            }
+<i>164</i>&nbsp;        }
+<b class="nc"><i>165</i>&nbsp;        return null;</b>
+<i>166</i>&nbsp;    }
+<i>167</i>&nbsp;
+<i>168</i>&nbsp;    /**
+<i>169</i>&nbsp;     * Get the scope number for a reference to a member of this class
+<i>170</i>&nbsp;     * (Larger scope numbers are more deeply nested.)
+<i>171</i>&nbsp;     * @see LocalMember#scopeNumber
+<i>172</i>&nbsp;     */
+<i>173</i>&nbsp;    public
+<i>174</i>&nbsp;    int getScopeNumber(ClassDefinition c) {
+<b class="nc"><i>175</i>&nbsp;        for (Context ctx = this; ctx != null; ctx = ctx.prev) {</b>
+<b class="nc"><i>176</i>&nbsp;            if (ctx.field == null)  continue;</b>
+<b class="nc"><i>177</i>&nbsp;            if (ctx.field.getClassDefinition() == c) {</b>
+<b class="nc"><i>178</i>&nbsp;                return ctx.frameNumber;</b>
+<i>179</i>&nbsp;            }
+<i>180</i>&nbsp;        }
+<b class="nc"><i>181</i>&nbsp;        return -1;</b>
+<i>182</i>&nbsp;    }
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;    private
+<i>185</i>&nbsp;    MemberDefinition getFieldCommon(Environment env, Identifier name,
+<i>186</i>&nbsp;                                   boolean apparentOnly) throws AmbiguousMember, ClassNotFound {
+<i>187</i>&nbsp;        // Note:  This is structured as a pair of parallel lookups.
+<i>188</i>&nbsp;        // If we were to redesign Context, we might prefer to walk
+<i>189</i>&nbsp;        // along a single chain of scopes.
+<i>190</i>&nbsp;
+<b class="nc"><i>191</i>&nbsp;        LocalMember lf = getLocalField(name);</b>
+<b class="nc"><i>192</i>&nbsp;        int ls = (lf == null) ? -2 : lf.scopeNumber;</b>
+<i>193</i>&nbsp;
+<b class="nc"><i>194</i>&nbsp;        ClassDefinition thisClass = field.getClassDefinition();</b>
+<i>195</i>&nbsp;
+<i>196</i>&nbsp;        // Also look for a class member in a shallower scope.
+<b class="nc"><i>197</i>&nbsp;        for (ClassDefinition c = thisClass;</b>
+<b class="nc"><i>198</i>&nbsp;             c != null;</b>
+<b class="nc"><i>199</i>&nbsp;             c = c.getOuterClass()) {</b>
+<b class="nc"><i>200</i>&nbsp;            MemberDefinition f = c.getVariable(env, name, thisClass);</b>
+<b class="nc"><i>201</i>&nbsp;            if (f != null &amp;&amp; getScopeNumber(c) &gt; ls) {</b>
+<b class="nc"><i>202</i>&nbsp;                if (apparentOnly &amp;&amp; f.getClassDefinition() != c) {</b>
+<b class="nc"><i>203</i>&nbsp;                    continue;</b>
+<i>204</i>&nbsp;                }
+<b class="nc"><i>205</i>&nbsp;                return f;</b>
+<i>206</i>&nbsp;            }
+<i>207</i>&nbsp;        }
+<i>208</i>&nbsp;
+<b class="nc"><i>209</i>&nbsp;        return lf;</b>
+<i>210</i>&nbsp;    }
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;    /**
+<i>213</i>&nbsp;     * Assign a number to a class field.
+<i>214</i>&nbsp;     * (This is used to track definite assignment of some blank finals.)
+<i>215</i>&nbsp;     */
+<i>216</i>&nbsp;    public int declareFieldNumber(MemberDefinition field) {
+<b class="nc"><i>217</i>&nbsp;        return declare(null, new LocalMember(field));</b>
+<i>218</i>&nbsp;    }
+<i>219</i>&nbsp;
+<i>220</i>&nbsp;    /**
+<i>221</i>&nbsp;     * Retrieve a number previously assigned by declareMember().
+<i>222</i>&nbsp;     * Return -1 if there was no such assignment in this context.
+<i>223</i>&nbsp;     */
+<i>224</i>&nbsp;    public int getFieldNumber(MemberDefinition field) {
+<b class="nc"><i>225</i>&nbsp;        for (LocalMember f = locals ; f != null ; f = f.prev) {</b>
+<b class="nc"><i>226</i>&nbsp;            if (f.getMember() == field) {</b>
+<b class="nc"><i>227</i>&nbsp;                return f.number;</b>
+<i>228</i>&nbsp;            }
+<i>229</i>&nbsp;        }
+<b class="nc"><i>230</i>&nbsp;        return -1;</b>
+<i>231</i>&nbsp;    }
+<i>232</i>&nbsp;
+<i>233</i>&nbsp;    /**
+<i>234</i>&nbsp;     * Return the local field or member field corresponding to a number.
+<i>235</i>&nbsp;     * Return null if there is no such field.
+<i>236</i>&nbsp;     */
+<i>237</i>&nbsp;    public MemberDefinition getElement(int number) {
+<b class="nc"><i>238</i>&nbsp;        for (LocalMember f = locals ; f != null ; f = f.prev) {</b>
+<b class="nc"><i>239</i>&nbsp;            if (f.number == number) {</b>
+<b class="nc"><i>240</i>&nbsp;                MemberDefinition field = f.getMember();</b>
+<b class="nc"><i>241</i>&nbsp;                return (field != null) ? field : f;</b>
+<i>242</i>&nbsp;            }
+<i>243</i>&nbsp;        }
+<b class="nc"><i>244</i>&nbsp;        return null;</b>
+<i>245</i>&nbsp;    }
+<i>246</i>&nbsp;
+<i>247</i>&nbsp;    /**
+<i>248</i>&nbsp;     * Get a local class by name
+<i>249</i>&nbsp;     */
+<i>250</i>&nbsp;    public
+<i>251</i>&nbsp;    LocalMember getLocalClass(Identifier name) {
+<b class="nc"><i>252</i>&nbsp;        for (LocalMember f = classes ; f != null ; f = f.prev) {</b>
+<b class="nc"><i>253</i>&nbsp;            if (name.equals(f.getName())) {</b>
+<b class="nc"><i>254</i>&nbsp;                return f;</b>
+<i>255</i>&nbsp;            }
+<i>256</i>&nbsp;        }
+<b class="nc"><i>257</i>&nbsp;        return null;</b>
+<i>258</i>&nbsp;    }
+<i>259</i>&nbsp;
+<i>260</i>&nbsp;    private
+<i>261</i>&nbsp;    MemberDefinition getClassCommon(Environment env, Identifier name,
+<i>262</i>&nbsp;                                   boolean apparentOnly) throws ClassNotFound {
+<b class="nc"><i>263</i>&nbsp;        LocalMember lf = getLocalClass(name);</b>
+<b class="nc"><i>264</i>&nbsp;        int ls = (lf == null) ? -2 : lf.scopeNumber;</b>
+<i>265</i>&nbsp;
+<i>266</i>&nbsp;        // Also look for a class member in a shallower scope.
+<b class="nc"><i>267</i>&nbsp;        for (ClassDefinition c = field.getClassDefinition();</b>
+<b class="nc"><i>268</i>&nbsp;             c != null;</b>
+<b class="nc"><i>269</i>&nbsp;             c = c.getOuterClass()) {</b>
+<i>270</i>&nbsp;            // QUERY: We may need to get the inner class from a
+<i>271</i>&nbsp;            // superclass of &#39;c&#39;.  This call is prepared to
+<i>272</i>&nbsp;            // resolve the superclass if necessary.  Can we arrange
+<i>273</i>&nbsp;            // to assure that it is always previously resolved?
+<i>274</i>&nbsp;            // This is one of a small number of problematic calls that
+<i>275</i>&nbsp;            // requires &#39;getSuperClass&#39; to resolve superclasses on demand.
+<i>276</i>&nbsp;            // See &#39;ClassDefinition.getInnerClass(env, nm)&#39;.
+<b class="nc"><i>277</i>&nbsp;            MemberDefinition f = c.getInnerClass(env, name);</b>
+<b class="nc"><i>278</i>&nbsp;            if (f != null &amp;&amp; getScopeNumber(c) &gt; ls) {</b>
+<b class="nc"><i>279</i>&nbsp;                if (apparentOnly &amp;&amp; f.getClassDefinition() != c) {</b>
+<b class="nc"><i>280</i>&nbsp;                    continue;</b>
+<i>281</i>&nbsp;                }
+<b class="nc"><i>282</i>&nbsp;                return f;</b>
+<i>283</i>&nbsp;            }
+<i>284</i>&nbsp;        }
+<i>285</i>&nbsp;
+<b class="nc"><i>286</i>&nbsp;        return lf;</b>
+<i>287</i>&nbsp;    }
+<i>288</i>&nbsp;
+<i>289</i>&nbsp;    /**
+<i>290</i>&nbsp;     * Get either a local variable, or a field in a current class
+<i>291</i>&nbsp;     */
+<i>292</i>&nbsp;    public final
+<i>293</i>&nbsp;    MemberDefinition getField(Environment env, Identifier name) throws AmbiguousMember, ClassNotFound {
+<b class="nc"><i>294</i>&nbsp;        return getFieldCommon(env, name, false);</b>
+<i>295</i>&nbsp;    }
+<i>296</i>&nbsp;
+<i>297</i>&nbsp;    /**
+<i>298</i>&nbsp;     * Like getField, except that it skips over inherited fields.
+<i>299</i>&nbsp;     * Used for error checking.
+<i>300</i>&nbsp;     */
+<i>301</i>&nbsp;    public final
+<i>302</i>&nbsp;    MemberDefinition getApparentField(Environment env, Identifier name) throws AmbiguousMember, ClassNotFound {
+<b class="nc"><i>303</i>&nbsp;        return getFieldCommon(env, name, true);</b>
+<i>304</i>&nbsp;    }
+<i>305</i>&nbsp;
+<i>306</i>&nbsp;    /**
+<i>307</i>&nbsp;     * Check if the given field is active in this context.
+<i>308</i>&nbsp;     */
+<i>309</i>&nbsp;    public boolean isInScope(LocalMember field) {
+<b class="nc"><i>310</i>&nbsp;        for (LocalMember f = locals ; f != null ; f = f.prev) {</b>
+<b class="nc"><i>311</i>&nbsp;            if (field == f) {</b>
+<b class="nc"><i>312</i>&nbsp;                return true;</b>
+<i>313</i>&nbsp;            }
+<i>314</i>&nbsp;        }
+<b class="nc"><i>315</i>&nbsp;        return false;</b>
+<i>316</i>&nbsp;    }
+<i>317</i>&nbsp;
+<i>318</i>&nbsp;    /**
+<i>319</i>&nbsp;     * Notice a reference (usually an uplevel one).
+<i>320</i>&nbsp;     * Update the references list of every enclosing class
+<i>321</i>&nbsp;     * which is enclosed by the scope of the target.
+<i>322</i>&nbsp;     * Update decisions about which uplevels to make into fields.
+<i>323</i>&nbsp;     * Return the uplevel reference descriptor, or null if it&#39;s local.
+<i>324</i>&nbsp;     * &lt;p&gt;
+<i>325</i>&nbsp;     * The target must be in scope in this context.
+<i>326</i>&nbsp;     * So, call this method only from the check phase.
+<i>327</i>&nbsp;     * (In other phases, the context may be less complete.)
+<i>328</i>&nbsp;     * &lt;p&gt;
+<i>329</i>&nbsp;     * This can and should be called both before and after classes are frozen.
+<i>330</i>&nbsp;     * It should be a no-op, and will raise a compiler error if not.
+<i>331</i>&nbsp;     */
+<i>332</i>&nbsp;    public UplevelReference noteReference(Environment env, LocalMember target) {
+<b class="nc"><i>333</i>&nbsp;        int targetScopeNumber = !isInScope(target) ? -1 : target.scopeNumber;</b>
+<i>334</i>&nbsp;
+<i>335</i>&nbsp;        // Walk outward visiting each scope.
+<i>336</i>&nbsp;        // Note each distinct frame (i.e., enclosing method).
+<i>337</i>&nbsp;        // For each frame in which the variable is uplevel,
+<i>338</i>&nbsp;        // record the event in the references list of the enclosing class.
+<b class="nc"><i>339</i>&nbsp;        UplevelReference res = null;</b>
+<b class="nc"><i>340</i>&nbsp;        int currentFrameNumber = -1;</b>
+<b class="nc"><i>341</i>&nbsp;        for (Context refctx = this; refctx != null; refctx = refctx.prev) {</b>
+<b class="nc"><i>342</i>&nbsp;            if (currentFrameNumber == refctx.frameNumber) {</b>
+<b class="nc"><i>343</i>&nbsp;                continue;       // we&#39;re processing frames, not contexts</b>
+<i>344</i>&nbsp;            }
+<b class="nc"><i>345</i>&nbsp;            currentFrameNumber = refctx.frameNumber;</b>
+<b class="nc"><i>346</i>&nbsp;            if (targetScopeNumber &gt;= currentFrameNumber) {</b>
+<b class="nc"><i>347</i>&nbsp;                break;          // the target is native to this frame</b>
+<i>348</i>&nbsp;            }
+<i>349</i>&nbsp;
+<i>350</i>&nbsp;            // process a frame which is using this variable as an uplevel
+<b class="nc"><i>351</i>&nbsp;            ClassDefinition refc = refctx.field.getClassDefinition();</b>
+<b class="nc"><i>352</i>&nbsp;            UplevelReference r = refc.getReference(target);</b>
+<b class="nc"><i>353</i>&nbsp;            r.noteReference(env, refctx);</b>
+<i>354</i>&nbsp;
+<i>355</i>&nbsp;            // remember the reference pertaining to the innermost frame
+<b class="nc"><i>356</i>&nbsp;            if (res == null) {</b>
+<b class="nc"><i>357</i>&nbsp;                res = r;</b>
+<i>358</i>&nbsp;            }
+<i>359</i>&nbsp;        }
+<b class="nc"><i>360</i>&nbsp;        return res;</b>
+<i>361</i>&nbsp;    }
+<i>362</i>&nbsp;
+<i>363</i>&nbsp;    /**
+<i>364</i>&nbsp;     * Implement a reference (usually an uplevel one).
+<i>365</i>&nbsp;     * Call noteReference() first, to make sure the reference
+<i>366</i>&nbsp;     * lists are up to date.
+<i>367</i>&nbsp;     * &lt;p&gt;
+<i>368</i>&nbsp;     * The resulting expression tree does not need checking;
+<i>369</i>&nbsp;     * it can be code-generated right away.
+<i>370</i>&nbsp;     * If the reference is not uplevel, the result is an IDENT or THIS.
+<i>371</i>&nbsp;     */
+<i>372</i>&nbsp;    public Expression makeReference(Environment env, LocalMember target) {
+<b class="nc"><i>373</i>&nbsp;        UplevelReference r = noteReference(env, target);</b>
+<i>374</i>&nbsp;
+<i>375</i>&nbsp;        // Now create a referencing expression.
+<b class="nc"><i>376</i>&nbsp;        if (r != null) {</b>
+<b class="nc"><i>377</i>&nbsp;            return r.makeLocalReference(env, this);</b>
+<b class="nc"><i>378</i>&nbsp;        } else if (idThis.equals(target.getName())) {</b>
+<b class="nc"><i>379</i>&nbsp;            return new ThisExpression(0, target);</b>
+<i>380</i>&nbsp;        } else {
+<b class="nc"><i>381</i>&nbsp;            return new IdentifierExpression(0, target);</b>
+<i>382</i>&nbsp;        }
+<i>383</i>&nbsp;    }
+<i>384</i>&nbsp;
+<i>385</i>&nbsp;    /**
+<i>386</i>&nbsp;     * Return a local expression which can serve as the base reference
+<i>387</i>&nbsp;     * for the given field.  If the field is a constructor, return an
+<i>388</i>&nbsp;     * expression for the implicit enclosing instance argument.
+<i>389</i>&nbsp;     * &lt;p&gt;
+<i>390</i>&nbsp;     * Return null if there is no need for such an argument,
+<i>391</i>&nbsp;     * or if there was an error.
+<i>392</i>&nbsp;     */
+<i>393</i>&nbsp;    public Expression findOuterLink(Environment env, long where,
+<i>394</i>&nbsp;                                    MemberDefinition f) {
+<i>395</i>&nbsp;        // reqc is the base pointer type required to use f
+<b class="nc"><i>396</i>&nbsp;        ClassDefinition fc = f.getClassDefinition();</b>
+<b class="nc"><i>397</i>&nbsp;        ClassDefinition reqc = f.isStatic() ? null</b>
+<b class="nc"><i>398</i>&nbsp;                             : !f.isConstructor() ? fc</b>
+<b class="nc"><i>399</i>&nbsp;                             : fc.isTopLevel() ? null</b>
+<b class="nc"><i>400</i>&nbsp;                             : fc.getOuterClass();</b>
+<b class="nc"><i>401</i>&nbsp;        if (reqc == null) {</b>
+<b class="nc"><i>402</i>&nbsp;            return null;</b>
+<i>403</i>&nbsp;        }
+<b class="nc"><i>404</i>&nbsp;        return findOuterLink(env, where, reqc, f, false);</b>
+<i>405</i>&nbsp;    }
+<i>406</i>&nbsp;
+<i>407</i>&nbsp;    private static boolean match(Environment env,
+<i>408</i>&nbsp;                                 ClassDefinition thisc, ClassDefinition reqc) {
+<i>409</i>&nbsp;        try {
+<b class="nc"><i>410</i>&nbsp;            return thisc == reqc</b>
+<b class="nc"><i>411</i>&nbsp;                || reqc.implementedBy(env, thisc.getClassDeclaration());</b>
+<b class="nc"><i>412</i>&nbsp;        } catch (ClassNotFound ee) {</b>
+<b class="nc"><i>413</i>&nbsp;            return false;</b>
+<i>414</i>&nbsp;        }
+<i>415</i>&nbsp;    }
+<i>416</i>&nbsp;
+<i>417</i>&nbsp;    public Expression findOuterLink(Environment env, long where,
+<i>418</i>&nbsp;                                    ClassDefinition reqc,
+<i>419</i>&nbsp;                                    MemberDefinition f,
+<i>420</i>&nbsp;                                    boolean needExactMatch) {
+<b class="nc"><i>421</i>&nbsp;        if (field.isStatic()) {</b>
+<b class="nc"><i>422</i>&nbsp;            if (f == null) {</b>
+<i>423</i>&nbsp;                // say something like: undefined variable A.this
+<b class="nc"><i>424</i>&nbsp;                Identifier nm = reqc.getName().getFlatName().getName();</b>
+<b class="nc"><i>425</i>&nbsp;                env.error(where, &quot;undef.var&quot;, Identifier.lookup(nm,idThis));</b>
+<b class="nc"><i>426</i>&nbsp;            } else if (f.isConstructor()) {</b>
+<b class="nc"><i>427</i>&nbsp;                env.error(where, &quot;no.outer.arg&quot;, reqc, f.getClassDeclaration());</b>
+<b class="nc"><i>428</i>&nbsp;            } else if (f.isMethod()) {</b>
+<b class="nc"><i>429</i>&nbsp;                env.error(where, &quot;no.static.meth.access&quot;,</b>
+<b class="nc"><i>430</i>&nbsp;                          f, f.getClassDeclaration());</b>
+<i>431</i>&nbsp;            } else {
+<b class="nc"><i>432</i>&nbsp;                env.error(where, &quot;no.static.field.access&quot;, f.getName(),</b>
+<b class="nc"><i>433</i>&nbsp;                          f.getClassDeclaration());</b>
+<i>434</i>&nbsp;            }
+<i>435</i>&nbsp;            // This is an attempt at error recovery.
+<i>436</i>&nbsp;            // Unfortunately, the constructor may throw
+<i>437</i>&nbsp;            // a null pointer exception after failing to resolve
+<i>438</i>&nbsp;            // &#39;idThis&#39;.  Since an error message has already been
+<i>439</i>&nbsp;            // issued previously, this exception is caught and
+<i>440</i>&nbsp;            // silently ignored.  Ideally, we should avoid throwing
+<i>441</i>&nbsp;            // the exception.
+<b class="nc"><i>442</i>&nbsp;            Expression e = new ThisExpression(where, this);</b>
+<b class="nc"><i>443</i>&nbsp;            e.type = reqc.getType();</b>
+<b class="nc"><i>444</i>&nbsp;            return e;</b>
+<i>445</i>&nbsp;        }
+<i>446</i>&nbsp;
+<i>447</i>&nbsp;        // use lp to scan for current instances (locals named &quot;this&quot;)
+<b class="nc"><i>448</i>&nbsp;        LocalMember lp = locals;</b>
+<i>449</i>&nbsp;
+<i>450</i>&nbsp;        // thise is a link expression being built up
+<b class="nc"><i>451</i>&nbsp;        Expression thise = null;</b>
+<i>452</i>&nbsp;
+<i>453</i>&nbsp;        // root is the local variable (idThis) at the far left of thise
+<b class="nc"><i>454</i>&nbsp;        LocalMember root = null;</b>
+<i>455</i>&nbsp;
+<i>456</i>&nbsp;        // thisc is the class of the link expression thise
+<b class="nc"><i>457</i>&nbsp;        ClassDefinition thisc = null;</b>
+<i>458</i>&nbsp;
+<i>459</i>&nbsp;        // conCls is the class of the &quot;this&quot;, in a constructor
+<b class="nc"><i>460</i>&nbsp;        ClassDefinition conCls = null;</b>
+<b class="nc"><i>461</i>&nbsp;        if (field.isConstructor()) {</b>
+<b class="nc"><i>462</i>&nbsp;            conCls = field.getClassDefinition();</b>
+<i>463</i>&nbsp;        }
+<i>464</i>&nbsp;
+<b class="nc"><i>465</i>&nbsp;        if (!field.isMethod()) {</b>
+<b class="nc"><i>466</i>&nbsp;            thisc = field.getClassDefinition();</b>
+<b class="nc"><i>467</i>&nbsp;            thise = new ThisExpression(where, this);</b>
+<i>468</i>&nbsp;        }
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;        while (true) {
+<b class="nc"><i>471</i>&nbsp;            if (thise == null) {</b>
+<i>472</i>&nbsp;                // start fresh from lp
+<b class="nc"><i>473</i>&nbsp;                while (lp != null &amp;&amp; !idThis.equals(lp.getName())) {</b>
+<b class="nc"><i>474</i>&nbsp;                    lp = lp.prev;</b>
+<i>475</i>&nbsp;                }
+<b class="nc"><i>476</i>&nbsp;                if (lp == null) {</b>
+<b class="nc"><i>477</i>&nbsp;                    break;</b>
+<i>478</i>&nbsp;                }
+<b class="nc"><i>479</i>&nbsp;                thise = new ThisExpression(where, lp);</b>
+<b class="nc"><i>480</i>&nbsp;                thisc = lp.getClassDefinition();</b>
+<b class="nc"><i>481</i>&nbsp;                root = lp;</b>
+<b class="nc"><i>482</i>&nbsp;                lp = lp.prev;</b>
+<i>483</i>&nbsp;            }
+<i>484</i>&nbsp;
+<i>485</i>&nbsp;            // Require exact class identity when called with
+<i>486</i>&nbsp;            // &#39;needExactMatch&#39; true.  This is done when checking
+<i>487</i>&nbsp;            // the &#39;&lt;class&gt;.this&#39; syntax.  Fixes 4102393 and 4133457.
+<b class="nc"><i>488</i>&nbsp;            if (thisc == reqc ||</b>
+<b class="nc"><i>489</i>&nbsp;                (!needExactMatch &amp;&amp; match(env, thisc, reqc))) {</b>
+<b class="nc"><i>490</i>&nbsp;                break;</b>
+<i>491</i>&nbsp;            }
+<i>492</i>&nbsp;
+<i>493</i>&nbsp;            // move out one step, if the current instance has an outer link
+<i>494</i>&nbsp;
+<b class="nc"><i>495</i>&nbsp;            MemberDefinition outerMember = thisc.findOuterMember();</b>
+<b class="nc"><i>496</i>&nbsp;            if (outerMember == null) {</b>
+<b class="nc"><i>497</i>&nbsp;                thise = null;</b>
+<b class="nc"><i>498</i>&nbsp;                continue;       // try to find more help in lp</b>
+<i>499</i>&nbsp;            }
+<b class="nc"><i>500</i>&nbsp;            ClassDefinition prevc = thisc;</b>
+<b class="nc"><i>501</i>&nbsp;            thisc = prevc.getOuterClass();</b>
+<i>502</i>&nbsp;
+<b class="nc"><i>503</i>&nbsp;            if (prevc == conCls) {</b>
+<i>504</i>&nbsp;                // Must pick up &quot;this$C&quot; from the constructor argument,
+<i>505</i>&nbsp;                // not from &quot;this.this$C&quot;, since the latter may not be
+<i>506</i>&nbsp;                // initialized properly.  (This way is cheaper too.)
+<b class="nc"><i>507</i>&nbsp;                Identifier nm = outerMember.getName();</b>
+<b class="nc"><i>508</i>&nbsp;                IdentifierExpression arg = new IdentifierExpression(where, nm);</b>
+<b class="nc"><i>509</i>&nbsp;                arg.bind(env, this);</b>
+<b class="nc"><i>510</i>&nbsp;                thise = arg;</b>
+<b class="nc"><i>511</i>&nbsp;            } else {</b>
+<b class="nc"><i>512</i>&nbsp;                thise = new FieldExpression(where, thise, outerMember);</b>
+<i>513</i>&nbsp;            }
+<b class="nc"><i>514</i>&nbsp;        }</b>
+<b class="nc"><i>515</i>&nbsp;        if (thise != null) {</b>
+<i>516</i>&nbsp;            // mark crossed scopes
+<i>517</i>&nbsp;            // ?????
+<i>518</i>&nbsp;            //ensureAvailable(root);
+<b class="nc"><i>519</i>&nbsp;            return thise;</b>
+<i>520</i>&nbsp;        }
+<i>521</i>&nbsp;
+<b class="nc"><i>522</i>&nbsp;        if (f == null) {</b>
+<i>523</i>&nbsp;            // say something like: undefined variable A.this
+<b class="nc"><i>524</i>&nbsp;            Identifier nm = reqc.getName().getFlatName().getName();</b>
+<b class="nc"><i>525</i>&nbsp;            env.error(where, &quot;undef.var&quot;, Identifier.lookup(nm,idThis));</b>
+<b class="nc"><i>526</i>&nbsp;        } else if (f.isConstructor()) {</b>
+<b class="nc"><i>527</i>&nbsp;            env.error(where, &quot;no.outer.arg&quot;, reqc, f.getClassDefinition());</b>
+<i>528</i>&nbsp;        } else {
+<b class="nc"><i>529</i>&nbsp;            env.error(where, &quot;no.static.field.access&quot;, f, field);</b>
+<i>530</i>&nbsp;        }
+<i>531</i>&nbsp;
+<i>532</i>&nbsp;        // avoid floodgating:
+<b class="nc"><i>533</i>&nbsp;        Expression e = new ThisExpression(where, this);</b>
+<b class="nc"><i>534</i>&nbsp;        e.type = reqc.getType();</b>
+<b class="nc"><i>535</i>&nbsp;        return e;</b>
+<i>536</i>&nbsp;    }
+<i>537</i>&nbsp;
+<i>538</i>&nbsp;    /**
+<i>539</i>&nbsp;     * Is there a &quot;this&quot; of type reqc in scope?
+<i>540</i>&nbsp;     */
+<i>541</i>&nbsp;    public static boolean outerLinkExists(Environment env,
+<i>542</i>&nbsp;                                          ClassDefinition reqc,
+<i>543</i>&nbsp;                                          ClassDefinition thisc) {
+<b class="nc"><i>544</i>&nbsp;        while (!match(env, thisc, reqc)) {</b>
+<b class="nc"><i>545</i>&nbsp;            if (thisc.isTopLevel()) {</b>
+<b class="nc"><i>546</i>&nbsp;                return false;</b>
+<i>547</i>&nbsp;            }
+<b class="nc"><i>548</i>&nbsp;            thisc = thisc.getOuterClass();</b>
+<i>549</i>&nbsp;        }
+<b class="nc"><i>550</i>&nbsp;        return true;</b>
+<i>551</i>&nbsp;    }
+<i>552</i>&nbsp;
+<i>553</i>&nbsp;    /**
+<i>554</i>&nbsp;     * From which enclosing class do members of this type come?
+<i>555</i>&nbsp;     */
+<i>556</i>&nbsp;    public ClassDefinition findScope(Environment env, ClassDefinition reqc) {
+<b class="nc"><i>557</i>&nbsp;        ClassDefinition thisc = field.getClassDefinition();</b>
+<b class="nc"><i>558</i>&nbsp;        while (thisc != null &amp;&amp; !match(env, thisc, reqc)) {</b>
+<b class="nc"><i>559</i>&nbsp;            thisc = thisc.getOuterClass();</b>
+<i>560</i>&nbsp;        }
+<b class="nc"><i>561</i>&nbsp;        return thisc;</b>
+<i>562</i>&nbsp;    }
+<i>563</i>&nbsp;
+<i>564</i>&nbsp;    /**
+<i>565</i>&nbsp;     * Resolve a type name from within a local scope.
+<i>566</i>&nbsp;     * @see Environment#resolveName
+<i>567</i>&nbsp;     */
+<i>568</i>&nbsp;    Identifier resolveName(Environment env, Identifier name) {
+<i>569</i>&nbsp;        // This logic is pretty much exactly parallel to that of
+<i>570</i>&nbsp;        // Environment.resolveName().
+<b class="nc"><i>571</i>&nbsp;        if (name.isQualified()) {</b>
+<i>572</i>&nbsp;            // Try to resolve the first identifier component,
+<i>573</i>&nbsp;            // because inner class names take precedence over
+<i>574</i>&nbsp;            // package prefixes.  (Cf. Environment.resolveName.)
+<b class="nc"><i>575</i>&nbsp;            Identifier rhead = resolveName(env, name.getHead());</b>
+<i>576</i>&nbsp;
+<b class="nc"><i>577</i>&nbsp;            if (rhead.hasAmbigPrefix()) {</b>
+<i>578</i>&nbsp;                // The first identifier component refers to an
+<i>579</i>&nbsp;                // ambiguous class.  Limp on.  We throw away the
+<i>580</i>&nbsp;                // rest of the classname as it is irrelevant.
+<i>581</i>&nbsp;                // (part of solution for 4059855).
+<b class="nc"><i>582</i>&nbsp;                return rhead;</b>
+<i>583</i>&nbsp;            }
+<i>584</i>&nbsp;
+<b class="nc"><i>585</i>&nbsp;            if (!env.classExists(rhead)) {</b>
+<b class="nc"><i>586</i>&nbsp;                return env.resolvePackageQualifiedName(name);</b>
+<i>587</i>&nbsp;            }
+<i>588</i>&nbsp;            try {
+<b class="nc"><i>589</i>&nbsp;                return env.getClassDefinition(rhead).</b>
+<b class="nc"><i>590</i>&nbsp;                    resolveInnerClass(env, name.getTail());</b>
+<b class="nc"><i>591</i>&nbsp;            } catch (ClassNotFound ee) {</b>
+<i>592</i>&nbsp;                // return partially-resolved name someone else can fail on
+<b class="nc"><i>593</i>&nbsp;                return Identifier.lookupInner(rhead, name.getTail());</b>
+<i>594</i>&nbsp;            }
+<i>595</i>&nbsp;        }
+<i>596</i>&nbsp;
+<i>597</i>&nbsp;        // Look for an unqualified name in enclosing scopes.
+<i>598</i>&nbsp;        try {
+<b class="nc"><i>599</i>&nbsp;            MemberDefinition f = getClassCommon(env, name, false);</b>
+<b class="nc"><i>600</i>&nbsp;            if (f != null) {</b>
+<b class="nc"><i>601</i>&nbsp;                return f.getInnerClass().getName();</b>
+<i>602</i>&nbsp;            }
+<b class="nc"><i>603</i>&nbsp;        } catch (ClassNotFound ee) {</b>
+<i>604</i>&nbsp;            // a missing superclass, or something catastrophic
+<b class="nc"><i>605</i>&nbsp;        }</b>
+<i>606</i>&nbsp;
+<i>607</i>&nbsp;        // look in imports, etc.
+<b class="nc"><i>608</i>&nbsp;        return env.resolveName(name);</b>
+<i>609</i>&nbsp;    }
+<i>610</i>&nbsp;
+<i>611</i>&nbsp;    /**
+<i>612</i>&nbsp;     * Return the name of a lexically apparent type,
+<i>613</i>&nbsp;     * skipping inherited members, and ignoring
+<i>614</i>&nbsp;     * the current pacakge and imports.
+<i>615</i>&nbsp;     * This is used for error checking.
+<i>616</i>&nbsp;     */
+<i>617</i>&nbsp;    public
+<i>618</i>&nbsp;    Identifier getApparentClassName(Environment env, Identifier name) {
+<b class="nc"><i>619</i>&nbsp;        if (name.isQualified()) {</b>
+<i>620</i>&nbsp;            // Try to resolve the first identifier component,
+<i>621</i>&nbsp;            // because inner class names take precedence over
+<i>622</i>&nbsp;            // package prefixes.  (Cf. Environment.resolveName.)
+<b class="nc"><i>623</i>&nbsp;            Identifier rhead = getApparentClassName(env, name.getHead());</b>
+<b class="nc"><i>624</i>&nbsp;            return (rhead == null) ? idNull</b>
+<b class="nc"><i>625</i>&nbsp;                : Identifier.lookup(rhead,</b>
+<b class="nc"><i>626</i>&nbsp;                                    name.getTail());</b>
+<i>627</i>&nbsp;        }
+<i>628</i>&nbsp;
+<i>629</i>&nbsp;        // Look for an unqualified name in enclosing scopes.
+<i>630</i>&nbsp;        try {
+<b class="nc"><i>631</i>&nbsp;            MemberDefinition f = getClassCommon(env, name, true);</b>
+<b class="nc"><i>632</i>&nbsp;            if (f != null) {</b>
+<b class="nc"><i>633</i>&nbsp;                return f.getInnerClass().getName();</b>
+<i>634</i>&nbsp;            }
+<b class="nc"><i>635</i>&nbsp;        } catch (ClassNotFound ee) {</b>
+<i>636</i>&nbsp;            // a missing superclass, or something catastrophic
+<b class="nc"><i>637</i>&nbsp;        }</b>
+<i>638</i>&nbsp;
+<i>639</i>&nbsp;        // the enclosing class name is the only apparent package member:
+<b class="nc"><i>640</i>&nbsp;        Identifier topnm = field.getClassDefinition().getTopClass().getName();</b>
+<b class="nc"><i>641</i>&nbsp;        if (topnm.getName().equals(name)) {</b>
+<b class="nc"><i>642</i>&nbsp;            return topnm;</b>
+<i>643</i>&nbsp;        }
+<b class="nc"><i>644</i>&nbsp;        return idNull;</b>
+<i>645</i>&nbsp;    }
+<i>646</i>&nbsp;
+<i>647</i>&nbsp;    /**
+<i>648</i>&nbsp;     * Raise an error if a blank final was definitely unassigned
+<i>649</i>&nbsp;     * on entry to a loop, but has possibly been assigned on the
+<i>650</i>&nbsp;     * back-branch.  If this is the case, the loop may be assigning
+<i>651</i>&nbsp;     * it multiple times.
+<i>652</i>&nbsp;     */
+<i>653</i>&nbsp;    public void checkBackBranch(Environment env, Statement loop,
+<i>654</i>&nbsp;                                Vset vsEntry, Vset vsBack) {
+<b class="nc"><i>655</i>&nbsp;        for (LocalMember f = locals ; f != null ; f = f.prev) {</b>
+<b class="nc"><i>656</i>&nbsp;            if (f.isBlankFinal()</b>
+<b class="nc"><i>657</i>&nbsp;                &amp;&amp; vsEntry.testVarUnassigned(f.number)</b>
+<b class="nc"><i>658</i>&nbsp;                &amp;&amp; !vsBack.testVarUnassigned(f.number)) {</b>
+<b class="nc"><i>659</i>&nbsp;                env.error(loop.where, &quot;assign.to.blank.final.in.loop&quot;,</b>
+<b class="nc"><i>660</i>&nbsp;                          f.getName());</b>
+<i>661</i>&nbsp;            }
+<i>662</i>&nbsp;        }
+<i>663</i>&nbsp;    }
+<i>664</i>&nbsp;
+<i>665</i>&nbsp;    /**
+<i>666</i>&nbsp;     * Check if a field can reach another field (only considers
+<i>667</i>&nbsp;     * forward references, not the access modifiers).
+<i>668</i>&nbsp;     */
+<i>669</i>&nbsp;    public boolean canReach(Environment env, MemberDefinition f) {
+<b class="nc"><i>670</i>&nbsp;        return field.canReach(env, f);</b>
+<i>671</i>&nbsp;    }
+<i>672</i>&nbsp;
+<i>673</i>&nbsp;    /**
+<i>674</i>&nbsp;     * Get the context that corresponds to a label, return null if
+<i>675</i>&nbsp;     * not found.
+<i>676</i>&nbsp;     */
+<i>677</i>&nbsp;    public
+<i>678</i>&nbsp;    Context getLabelContext(Identifier lbl) {
+<b class="nc"><i>679</i>&nbsp;        for (Context ctx = this ; ctx != null ; ctx = ctx.prev) {</b>
+<b class="nc"><i>680</i>&nbsp;            if ((ctx.node != null) &amp;&amp; (ctx.node instanceof Statement)) {</b>
+<b class="nc"><i>681</i>&nbsp;                if (((Statement)(ctx.node)).hasLabel(lbl))</b>
+<b class="nc"><i>682</i>&nbsp;                    return ctx;</b>
+<i>683</i>&nbsp;            }
+<i>684</i>&nbsp;        }
+<b class="nc"><i>685</i>&nbsp;        return null;</b>
+<i>686</i>&nbsp;    }
+<i>687</i>&nbsp;
+<i>688</i>&nbsp;    /**
+<i>689</i>&nbsp;     * Get the destination context of a break
+<i>690</i>&nbsp;     */
+<i>691</i>&nbsp;    public
+<i>692</i>&nbsp;    Context getBreakContext(Identifier lbl) {
+<b class="nc"><i>693</i>&nbsp;        if (lbl != null) {</b>
+<b class="nc"><i>694</i>&nbsp;            return getLabelContext(lbl);</b>
+<i>695</i>&nbsp;        }
+<b class="nc"><i>696</i>&nbsp;        for (Context ctx = this ; ctx != null ; ctx = ctx.prev) {</b>
+<b class="nc"><i>697</i>&nbsp;            if (ctx.node != null) {</b>
+<b class="nc"><i>698</i>&nbsp;                switch (ctx.node.op) {</b>
+<i>699</i>&nbsp;                  case SWITCH:
+<i>700</i>&nbsp;                  case FOR:
+<i>701</i>&nbsp;                  case DO:
+<i>702</i>&nbsp;                  case WHILE:
+<b class="nc"><i>703</i>&nbsp;                    return ctx;</b>
+<i>704</i>&nbsp;                }
+<i>705</i>&nbsp;            }
+<i>706</i>&nbsp;        }
+<b class="nc"><i>707</i>&nbsp;        return null;</b>
+<i>708</i>&nbsp;    }
+<i>709</i>&nbsp;
+<i>710</i>&nbsp;    /**
+<i>711</i>&nbsp;     * Get the destination context of a continue
+<i>712</i>&nbsp;     */
+<i>713</i>&nbsp;    public
+<i>714</i>&nbsp;    Context getContinueContext(Identifier lbl) {
+<b class="nc"><i>715</i>&nbsp;        if (lbl != null) {</b>
+<b class="nc"><i>716</i>&nbsp;            return getLabelContext(lbl);</b>
+<i>717</i>&nbsp;        }
+<b class="nc"><i>718</i>&nbsp;        for (Context ctx = this ; ctx != null ; ctx = ctx.prev) {</b>
+<b class="nc"><i>719</i>&nbsp;            if (ctx.node != null) {</b>
+<b class="nc"><i>720</i>&nbsp;                switch (ctx.node.op) {</b>
+<i>721</i>&nbsp;                  case FOR:
+<i>722</i>&nbsp;                  case DO:
+<i>723</i>&nbsp;                  case WHILE:
+<b class="nc"><i>724</i>&nbsp;                    return ctx;</b>
+<i>725</i>&nbsp;                }
+<i>726</i>&nbsp;            }
+<i>727</i>&nbsp;        }
+<b class="nc"><i>728</i>&nbsp;        return null;</b>
+<i>729</i>&nbsp;    }
+<i>730</i>&nbsp;
+<i>731</i>&nbsp;    /**
+<i>732</i>&nbsp;     * Get the destination context of a return (the method body)
+<i>733</i>&nbsp;     */
+<i>734</i>&nbsp;    public
+<i>735</i>&nbsp;    CheckContext getReturnContext() {
+<b class="nc"><i>736</i>&nbsp;        for (Context ctx = this ; ctx != null ; ctx = ctx.prev) {</b>
+<i>737</i>&nbsp;            // The METHOD node is set up by Statement.checkMethod().
+<b class="nc"><i>738</i>&nbsp;            if (ctx.node != null &amp;&amp; ctx.node.op == METHOD) {</b>
+<b class="nc"><i>739</i>&nbsp;                return (CheckContext)ctx;</b>
+<i>740</i>&nbsp;            }
+<i>741</i>&nbsp;        }
+<b class="nc"><i>742</i>&nbsp;        return null;</b>
+<i>743</i>&nbsp;    }
+<i>744</i>&nbsp;
+<i>745</i>&nbsp;    /**
+<i>746</i>&nbsp;     * Get the context of the innermost surrounding try-block.
+<i>747</i>&nbsp;     * Consider only try-blocks contained within the same method.
+<i>748</i>&nbsp;     * (There could be others when searching from within a method
+<i>749</i>&nbsp;     * of a local class, but they are irrelevant to our purpose.)
+<i>750</i>&nbsp;     * This is used for recording DA/DU information preceding
+<i>751</i>&nbsp;     * all abnormal transfers of control: break, continue, return,
+<i>752</i>&nbsp;     * and throw.
+<i>753</i>&nbsp;     */
+<i>754</i>&nbsp;    public
+<i>755</i>&nbsp;    CheckContext getTryExitContext() {
+<b class="nc"><i>756</i>&nbsp;        for (Context ctx = this;</b>
+<b class="nc"><i>757</i>&nbsp;             ctx != null &amp;&amp; ctx.node != null &amp;&amp; ctx.node.op != METHOD;</b>
+<b class="nc"><i>758</i>&nbsp;             ctx = ctx.prev) {</b>
+<b class="nc"><i>759</i>&nbsp;            if (ctx.node.op == TRY) {</b>
+<b class="nc"><i>760</i>&nbsp;                return (CheckContext)ctx;</b>
+<i>761</i>&nbsp;            }
+<i>762</i>&nbsp;        }
+<b class="nc"><i>763</i>&nbsp;        return null;</b>
+<i>764</i>&nbsp;    }
+<i>765</i>&nbsp;
+<i>766</i>&nbsp;    /**
+<i>767</i>&nbsp;     * Get the nearest inlined context
+<i>768</i>&nbsp;     */
+<i>769</i>&nbsp;    Context getInlineContext() {
+<b class="nc"><i>770</i>&nbsp;        for (Context ctx = this ; ctx != null ; ctx = ctx.prev) {</b>
+<b class="nc"><i>771</i>&nbsp;            if (ctx.node != null) {</b>
+<b class="nc"><i>772</i>&nbsp;                switch (ctx.node.op) {</b>
+<i>773</i>&nbsp;                  case INLINEMETHOD:
+<i>774</i>&nbsp;                  case INLINENEWINSTANCE:
+<b class="nc"><i>775</i>&nbsp;                    return ctx;</b>
+<i>776</i>&nbsp;                }
+<i>777</i>&nbsp;            }
+<i>778</i>&nbsp;        }
+<b class="nc"><i>779</i>&nbsp;        return null;</b>
+<i>780</i>&nbsp;    }
+<i>781</i>&nbsp;
+<i>782</i>&nbsp;    /**
+<i>783</i>&nbsp;     * Get the context of a field that is being inlined
+<i>784</i>&nbsp;     */
+<i>785</i>&nbsp;    Context getInlineMemberContext(MemberDefinition field) {
+<b class="nc"><i>786</i>&nbsp;        for (Context ctx = this ; ctx != null ; ctx = ctx.prev) {</b>
+<b class="nc"><i>787</i>&nbsp;            if (ctx.node != null) {</b>
+<b class="nc"><i>788</i>&nbsp;                switch (ctx.node.op) {</b>
+<i>789</i>&nbsp;                  case INLINEMETHOD:
+<b class="nc"><i>790</i>&nbsp;                    if (((InlineMethodExpression)ctx.node).field.equals(field)) {</b>
+<b class="nc"><i>791</i>&nbsp;                        return ctx;</b>
+<i>792</i>&nbsp;                    }
+<i>793</i>&nbsp;                    break;
+<i>794</i>&nbsp;                  case INLINENEWINSTANCE:
+<b class="nc"><i>795</i>&nbsp;                    if (((InlineNewInstanceExpression)ctx.node).field.equals(field)) {</b>
+<b class="nc"><i>796</i>&nbsp;                        return ctx;</b>
+<i>797</i>&nbsp;                    }
+<i>798</i>&nbsp;                }
+<i>799</i>&nbsp;            }
+<i>800</i>&nbsp;        }
+<b class="nc"><i>801</i>&nbsp;        return null;</b>
+<i>802</i>&nbsp;    }
+<i>803</i>&nbsp;
+<i>804</i>&nbsp;    /**
+<i>805</i>&nbsp;     * Remove variables from the vset set  that are no longer part of
+<i>806</i>&nbsp;     * this context.
+<i>807</i>&nbsp;     */
+<i>808</i>&nbsp;    public final Vset removeAdditionalVars(Vset vset) {
+<b class="nc"><i>809</i>&nbsp;        return vset.removeAdditionalVars(varNumber);</b>
+<i>810</i>&nbsp;    }
+<i>811</i>&nbsp;
+<i>812</i>&nbsp;    public final int getVarNumber() {
+<b class="nc"><i>813</i>&nbsp;        return varNumber;</b>
+<i>814</i>&nbsp;    }
+<i>815</i>&nbsp;
+<i>816</i>&nbsp;    /**
+<i>817</i>&nbsp;     * Return the number of the innermost current instance reference.
+<i>818</i>&nbsp;     */
+<i>819</i>&nbsp;    public int getThisNumber() {
+<b class="nc"><i>820</i>&nbsp;        LocalMember thisf = getLocalField(idThis);</b>
+<b class="nc"><i>821</i>&nbsp;        if (thisf != null</b>
+<b class="nc"><i>822</i>&nbsp;            &amp;&amp; thisf.getClassDefinition() == field.getClassDefinition()) {</b>
+<b class="nc"><i>823</i>&nbsp;            return thisf.number;</b>
+<i>824</i>&nbsp;        }
+<i>825</i>&nbsp;        // this is a variable; there is no &quot;this&quot; (should not happen)
+<b class="nc"><i>826</i>&nbsp;        return varNumber;</b>
+<i>827</i>&nbsp;    }
+<i>828</i>&nbsp;
+<i>829</i>&nbsp;    /**
+<i>830</i>&nbsp;     * Return the field containing the present context.
+<i>831</i>&nbsp;     */
+<i>832</i>&nbsp;    public final MemberDefinition getField() {
+<b class="nc"><i>833</i>&nbsp;        return field;</b>
+<i>834</i>&nbsp;    }
+<i>835</i>&nbsp;
+<i>836</i>&nbsp;    /**
+<i>837</i>&nbsp;     * Extend an environment with the given context.
+<i>838</i>&nbsp;     * The resulting environment behaves the same as
+<i>839</i>&nbsp;     * the given one, except that resolveName() takes
+<i>840</i>&nbsp;     * into account local class names in this context.
+<i>841</i>&nbsp;     */
+<i>842</i>&nbsp;    public static Environment newEnvironment(Environment env, Context ctx) {
+<b class="nc"><i>843</i>&nbsp;        return new ContextEnvironment(env, ctx);</b>
+<i>844</i>&nbsp;    }
+<i>845</i>&nbsp;}
+<i>846</i>&nbsp;
+<i>847</i>&nbsp;final
+<i>848</i>&nbsp;class ContextEnvironment extends Environment {
+<i>849</i>&nbsp;    Context ctx;
+<i>850</i>&nbsp;    Environment innerEnv;
+<i>851</i>&nbsp;
+<i>852</i>&nbsp;    ContextEnvironment(Environment env, Context ctx) {
+<i>853</i>&nbsp;        super(env, env.getSource());
+<i>854</i>&nbsp;        this.ctx = ctx;
+<i>855</i>&nbsp;        this.innerEnv = env;
+<i>856</i>&nbsp;    }
+<i>857</i>&nbsp;
+<i>858</i>&nbsp;    public Identifier resolveName(Identifier name) {
+<i>859</i>&nbsp;        return ctx.resolveName(innerEnv, name);
+<i>860</i>&nbsp;    }
+<i>861</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

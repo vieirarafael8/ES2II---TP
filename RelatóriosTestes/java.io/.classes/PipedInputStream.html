@@ -1,0 +1,532 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: PipedInputStream</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.io</a> ]
+</div>
+
+<h1>Coverage Summary for Class: PipedInputStream (java.io)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">PipedInputStream</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 16)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 129)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1995, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.io;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;/**
+<i>29</i>&nbsp; * A piped input stream should be connected
+<i>30</i>&nbsp; * to a piped output stream; the piped  input
+<i>31</i>&nbsp; * stream then provides whatever data bytes
+<i>32</i>&nbsp; * are written to the piped output  stream.
+<i>33</i>&nbsp; * Typically, data is read from a &lt;code&gt;PipedInputStream&lt;/code&gt;
+<i>34</i>&nbsp; * object by one thread  and data is written
+<i>35</i>&nbsp; * to the corresponding &lt;code&gt;PipedOutputStream&lt;/code&gt;
+<i>36</i>&nbsp; * by some  other thread. Attempting to use
+<i>37</i>&nbsp; * both objects from a single thread is not
+<i>38</i>&nbsp; * recommended, as it may deadlock the thread.
+<i>39</i>&nbsp; * The piped input stream contains a buffer,
+<i>40</i>&nbsp; * decoupling read operations from write operations,
+<i>41</i>&nbsp; * within limits.
+<i>42</i>&nbsp; * A pipe is said to be &lt;a id=&quot;BROKEN&quot;&gt; &lt;i&gt;broken&lt;/i&gt; &lt;/a&gt; if a
+<i>43</i>&nbsp; * thread that was providing data bytes to the connected
+<i>44</i>&nbsp; * piped output stream is no longer alive.
+<i>45</i>&nbsp; *
+<i>46</i>&nbsp; * @author  James Gosling
+<i>47</i>&nbsp; * @see     java.io.PipedOutputStream
+<i>48</i>&nbsp; * @since   1.0
+<i>49</i>&nbsp; */
+<b class="nc"><i>50</i>&nbsp;public class PipedInputStream extends InputStream {</b>
+<b class="nc"><i>51</i>&nbsp;    boolean closedByWriter;</b>
+<b class="nc"><i>52</i>&nbsp;    volatile boolean closedByReader;</b>
+<b class="nc"><i>53</i>&nbsp;    boolean connected;</b>
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;        /* REMIND: identification of the read and write sides needs to be
+<i>56</i>&nbsp;           more sophisticated.  Either using thread groups (but what about
+<i>57</i>&nbsp;           pipes within a thread?) or using finalization (but it may be a
+<i>58</i>&nbsp;           long time until the next GC). */
+<i>59</i>&nbsp;    Thread readSide;
+<i>60</i>&nbsp;    Thread writeSide;
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    private static final int DEFAULT_PIPE_SIZE = 1024;
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    /**
+<i>65</i>&nbsp;     * The default size of the pipe&#39;s circular input buffer.
+<i>66</i>&nbsp;     * @since   1.1
+<i>67</i>&nbsp;     */
+<i>68</i>&nbsp;    // This used to be a constant before the pipe size was allowed
+<i>69</i>&nbsp;    // to change. This field will continue to be maintained
+<i>70</i>&nbsp;    // for backward compatibility.
+<i>71</i>&nbsp;    protected static final int PIPE_SIZE = DEFAULT_PIPE_SIZE;
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;    /**
+<i>74</i>&nbsp;     * The circular buffer into which incoming data is placed.
+<i>75</i>&nbsp;     * @since   1.1
+<i>76</i>&nbsp;     */
+<i>77</i>&nbsp;    protected byte buffer[];
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    /**
+<i>80</i>&nbsp;     * The index of the position in the circular buffer at which the
+<i>81</i>&nbsp;     * next byte of data will be stored when received from the connected
+<i>82</i>&nbsp;     * piped output stream. &lt;code&gt;in&amp;lt;0&lt;/code&gt; implies the buffer is empty,
+<i>83</i>&nbsp;     * &lt;code&gt;in==out&lt;/code&gt; implies the buffer is full
+<i>84</i>&nbsp;     * @since   1.1
+<i>85</i>&nbsp;     */
+<b class="nc"><i>86</i>&nbsp;    protected int in = -1;</b>
+<i>87</i>&nbsp;
+<i>88</i>&nbsp;    /**
+<i>89</i>&nbsp;     * The index of the position in the circular buffer at which the next
+<i>90</i>&nbsp;     * byte of data will be read by this piped input stream.
+<i>91</i>&nbsp;     * @since   1.1
+<i>92</i>&nbsp;     */
+<b class="nc"><i>93</i>&nbsp;    protected int out = 0;</b>
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;    /**
+<i>96</i>&nbsp;     * Creates a &lt;code&gt;PipedInputStream&lt;/code&gt; so
+<i>97</i>&nbsp;     * that it is connected to the piped output
+<i>98</i>&nbsp;     * stream &lt;code&gt;src&lt;/code&gt;. Data bytes written
+<i>99</i>&nbsp;     * to &lt;code&gt;src&lt;/code&gt; will then be  available
+<i>100</i>&nbsp;     * as input from this stream.
+<i>101</i>&nbsp;     *
+<i>102</i>&nbsp;     * @param      src   the stream to connect to.
+<i>103</i>&nbsp;     * @exception  IOException  if an I/O error occurs.
+<i>104</i>&nbsp;     */
+<i>105</i>&nbsp;    public PipedInputStream(PipedOutputStream src) throws IOException {
+<b class="nc"><i>106</i>&nbsp;        this(src, DEFAULT_PIPE_SIZE);</b>
+<i>107</i>&nbsp;    }
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    /**
+<i>110</i>&nbsp;     * Creates a &lt;code&gt;PipedInputStream&lt;/code&gt; so that it is
+<i>111</i>&nbsp;     * connected to the piped output stream
+<i>112</i>&nbsp;     * &lt;code&gt;src&lt;/code&gt; and uses the specified pipe size for
+<i>113</i>&nbsp;     * the pipe&#39;s buffer.
+<i>114</i>&nbsp;     * Data bytes written to &lt;code&gt;src&lt;/code&gt; will then
+<i>115</i>&nbsp;     * be available as input from this stream.
+<i>116</i>&nbsp;     *
+<i>117</i>&nbsp;     * @param      src   the stream to connect to.
+<i>118</i>&nbsp;     * @param      pipeSize the size of the pipe&#39;s buffer.
+<i>119</i>&nbsp;     * @exception  IOException  if an I/O error occurs.
+<i>120</i>&nbsp;     * @exception  IllegalArgumentException if {@code pipeSize &lt;= 0}.
+<i>121</i>&nbsp;     * @since      1.6
+<i>122</i>&nbsp;     */
+<i>123</i>&nbsp;    public PipedInputStream(PipedOutputStream src, int pipeSize)
+<b class="nc"><i>124</i>&nbsp;            throws IOException {</b>
+<b class="nc"><i>125</i>&nbsp;         initPipe(pipeSize);</b>
+<b class="nc"><i>126</i>&nbsp;         connect(src);</b>
+<i>127</i>&nbsp;    }
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    /**
+<i>130</i>&nbsp;     * Creates a &lt;code&gt;PipedInputStream&lt;/code&gt; so
+<i>131</i>&nbsp;     * that it is not yet {@linkplain #connect(java.io.PipedOutputStream)
+<i>132</i>&nbsp;     * connected}.
+<i>133</i>&nbsp;     * It must be {@linkplain java.io.PipedOutputStream#connect(
+<i>134</i>&nbsp;     * java.io.PipedInputStream) connected} to a
+<i>135</i>&nbsp;     * &lt;code&gt;PipedOutputStream&lt;/code&gt; before being used.
+<i>136</i>&nbsp;     */
+<b class="nc"><i>137</i>&nbsp;    public PipedInputStream() {</b>
+<b class="nc"><i>138</i>&nbsp;        initPipe(DEFAULT_PIPE_SIZE);</b>
+<i>139</i>&nbsp;    }
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;    /**
+<i>142</i>&nbsp;     * Creates a &lt;code&gt;PipedInputStream&lt;/code&gt; so that it is not yet
+<i>143</i>&nbsp;     * {@linkplain #connect(java.io.PipedOutputStream) connected} and
+<i>144</i>&nbsp;     * uses the specified pipe size for the pipe&#39;s buffer.
+<i>145</i>&nbsp;     * It must be {@linkplain java.io.PipedOutputStream#connect(
+<i>146</i>&nbsp;     * java.io.PipedInputStream)
+<i>147</i>&nbsp;     * connected} to a &lt;code&gt;PipedOutputStream&lt;/code&gt; before being used.
+<i>148</i>&nbsp;     *
+<i>149</i>&nbsp;     * @param      pipeSize the size of the pipe&#39;s buffer.
+<i>150</i>&nbsp;     * @exception  IllegalArgumentException if {@code pipeSize &lt;= 0}.
+<i>151</i>&nbsp;     * @since      1.6
+<i>152</i>&nbsp;     */
+<b class="nc"><i>153</i>&nbsp;    public PipedInputStream(int pipeSize) {</b>
+<b class="nc"><i>154</i>&nbsp;        initPipe(pipeSize);</b>
+<i>155</i>&nbsp;    }
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;    private void initPipe(int pipeSize) {
+<b class="nc"><i>158</i>&nbsp;         if (pipeSize &lt;= 0) {</b>
+<b class="nc"><i>159</i>&nbsp;            throw new IllegalArgumentException(&quot;Pipe Size &lt;= 0&quot;);</b>
+<i>160</i>&nbsp;         }
+<b class="nc"><i>161</i>&nbsp;         buffer = new byte[pipeSize];</b>
+<i>162</i>&nbsp;    }
+<i>163</i>&nbsp;
+<i>164</i>&nbsp;    /**
+<i>165</i>&nbsp;     * Causes this piped input stream to be connected
+<i>166</i>&nbsp;     * to the piped  output stream &lt;code&gt;src&lt;/code&gt;.
+<i>167</i>&nbsp;     * If this object is already connected to some
+<i>168</i>&nbsp;     * other piped output  stream, an &lt;code&gt;IOException&lt;/code&gt;
+<i>169</i>&nbsp;     * is thrown.
+<i>170</i>&nbsp;     * &lt;p&gt;
+<i>171</i>&nbsp;     * If &lt;code&gt;src&lt;/code&gt; is an
+<i>172</i>&nbsp;     * unconnected piped output stream and &lt;code&gt;snk&lt;/code&gt;
+<i>173</i>&nbsp;     * is an unconnected piped input stream, they
+<i>174</i>&nbsp;     * may be connected by either the call:
+<i>175</i>&nbsp;     *
+<i>176</i>&nbsp;     * &lt;pre&gt;&lt;code&gt;snk.connect(src)&lt;/code&gt; &lt;/pre&gt;
+<i>177</i>&nbsp;     * &lt;p&gt;
+<i>178</i>&nbsp;     * or the call:
+<i>179</i>&nbsp;     *
+<i>180</i>&nbsp;     * &lt;pre&gt;&lt;code&gt;src.connect(snk)&lt;/code&gt; &lt;/pre&gt;
+<i>181</i>&nbsp;     * &lt;p&gt;
+<i>182</i>&nbsp;     * The two calls have the same effect.
+<i>183</i>&nbsp;     *
+<i>184</i>&nbsp;     * @param      src   The piped output stream to connect to.
+<i>185</i>&nbsp;     * @exception  IOException  if an I/O error occurs.
+<i>186</i>&nbsp;     */
+<i>187</i>&nbsp;    public void connect(PipedOutputStream src) throws IOException {
+<b class="nc"><i>188</i>&nbsp;        src.connect(this);</b>
+<i>189</i>&nbsp;    }
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;    /**
+<i>192</i>&nbsp;     * Receives a byte of data.  This method will block if no input is
+<i>193</i>&nbsp;     * available.
+<i>194</i>&nbsp;     * @param b the byte being received
+<i>195</i>&nbsp;     * @exception IOException If the pipe is &lt;a href=&quot;#BROKEN&quot;&gt; &lt;code&gt;broken&lt;/code&gt;&lt;/a&gt;,
+<i>196</i>&nbsp;     *          {@link #connect(java.io.PipedOutputStream) unconnected},
+<i>197</i>&nbsp;     *          closed, or if an I/O error occurs.
+<i>198</i>&nbsp;     * @since     1.1
+<i>199</i>&nbsp;     */
+<i>200</i>&nbsp;    protected synchronized void receive(int b) throws IOException {
+<b class="nc"><i>201</i>&nbsp;        checkStateForReceive();</b>
+<b class="nc"><i>202</i>&nbsp;        writeSide = Thread.currentThread();</b>
+<b class="nc"><i>203</i>&nbsp;        if (in == out)</b>
+<b class="nc"><i>204</i>&nbsp;            awaitSpace();</b>
+<b class="nc"><i>205</i>&nbsp;        if (in &lt; 0) {</b>
+<b class="nc"><i>206</i>&nbsp;            in = 0;</b>
+<b class="nc"><i>207</i>&nbsp;            out = 0;</b>
+<i>208</i>&nbsp;        }
+<b class="nc"><i>209</i>&nbsp;        buffer[in++] = (byte)(b &amp; 0xFF);</b>
+<b class="nc"><i>210</i>&nbsp;        if (in &gt;= buffer.length) {</b>
+<b class="nc"><i>211</i>&nbsp;            in = 0;</b>
+<i>212</i>&nbsp;        }
+<i>213</i>&nbsp;    }
+<i>214</i>&nbsp;
+<i>215</i>&nbsp;    /**
+<i>216</i>&nbsp;     * Receives data into an array of bytes.  This method will
+<i>217</i>&nbsp;     * block until some input is available.
+<i>218</i>&nbsp;     * @param b the buffer into which the data is received
+<i>219</i>&nbsp;     * @param off the start offset of the data
+<i>220</i>&nbsp;     * @param len the maximum number of bytes received
+<i>221</i>&nbsp;     * @exception IOException If the pipe is &lt;a href=&quot;#BROKEN&quot;&gt; broken&lt;/a&gt;,
+<i>222</i>&nbsp;     *           {@link #connect(java.io.PipedOutputStream) unconnected},
+<i>223</i>&nbsp;     *           closed,or if an I/O error occurs.
+<i>224</i>&nbsp;     */
+<i>225</i>&nbsp;    synchronized void receive(byte b[], int off, int len)  throws IOException {
+<b class="nc"><i>226</i>&nbsp;        checkStateForReceive();</b>
+<b class="nc"><i>227</i>&nbsp;        writeSide = Thread.currentThread();</b>
+<b class="nc"><i>228</i>&nbsp;        int bytesToTransfer = len;</b>
+<b class="nc"><i>229</i>&nbsp;        while (bytesToTransfer &gt; 0) {</b>
+<b class="nc"><i>230</i>&nbsp;            if (in == out)</b>
+<b class="nc"><i>231</i>&nbsp;                awaitSpace();</b>
+<b class="nc"><i>232</i>&nbsp;            int nextTransferAmount = 0;</b>
+<b class="nc"><i>233</i>&nbsp;            if (out &lt; in) {</b>
+<b class="nc"><i>234</i>&nbsp;                nextTransferAmount = buffer.length - in;</b>
+<b class="nc"><i>235</i>&nbsp;            } else if (in &lt; out) {</b>
+<b class="nc"><i>236</i>&nbsp;                if (in == -1) {</b>
+<b class="nc"><i>237</i>&nbsp;                    in = out = 0;</b>
+<b class="nc"><i>238</i>&nbsp;                    nextTransferAmount = buffer.length - in;</b>
+<i>239</i>&nbsp;                } else {
+<b class="nc"><i>240</i>&nbsp;                    nextTransferAmount = out - in;</b>
+<i>241</i>&nbsp;                }
+<i>242</i>&nbsp;            }
+<b class="nc"><i>243</i>&nbsp;            if (nextTransferAmount &gt; bytesToTransfer)</b>
+<b class="nc"><i>244</i>&nbsp;                nextTransferAmount = bytesToTransfer;</b>
+<b class="nc"><i>245</i>&nbsp;            assert(nextTransferAmount &gt; 0);</b>
+<b class="nc"><i>246</i>&nbsp;            System.arraycopy(b, off, buffer, in, nextTransferAmount);</b>
+<b class="nc"><i>247</i>&nbsp;            bytesToTransfer -= nextTransferAmount;</b>
+<b class="nc"><i>248</i>&nbsp;            off += nextTransferAmount;</b>
+<b class="nc"><i>249</i>&nbsp;            in += nextTransferAmount;</b>
+<b class="nc"><i>250</i>&nbsp;            if (in &gt;= buffer.length) {</b>
+<b class="nc"><i>251</i>&nbsp;                in = 0;</b>
+<i>252</i>&nbsp;            }
+<b class="nc"><i>253</i>&nbsp;        }</b>
+<i>254</i>&nbsp;    }
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;    private void checkStateForReceive() throws IOException {
+<b class="nc"><i>257</i>&nbsp;        if (!connected) {</b>
+<b class="nc"><i>258</i>&nbsp;            throw new IOException(&quot;Pipe not connected&quot;);</b>
+<b class="nc"><i>259</i>&nbsp;        } else if (closedByWriter || closedByReader) {</b>
+<b class="nc"><i>260</i>&nbsp;            throw new IOException(&quot;Pipe closed&quot;);</b>
+<b class="nc"><i>261</i>&nbsp;        } else if (readSide != null &amp;&amp; !readSide.isAlive()) {</b>
+<b class="nc"><i>262</i>&nbsp;            throw new IOException(&quot;Read end dead&quot;);</b>
+<i>263</i>&nbsp;        }
+<i>264</i>&nbsp;    }
+<i>265</i>&nbsp;
+<i>266</i>&nbsp;    private void awaitSpace() throws IOException {
+<b class="nc"><i>267</i>&nbsp;        while (in == out) {</b>
+<b class="nc"><i>268</i>&nbsp;            checkStateForReceive();</b>
+<i>269</i>&nbsp;
+<i>270</i>&nbsp;            /* full: kick any waiting readers */
+<b class="nc"><i>271</i>&nbsp;            notifyAll();</b>
+<i>272</i>&nbsp;            try {
+<b class="nc"><i>273</i>&nbsp;                wait(1000);</b>
+<b class="nc"><i>274</i>&nbsp;            } catch (InterruptedException ex) {</b>
+<b class="nc"><i>275</i>&nbsp;                throw new java.io.InterruptedIOException();</b>
+<b class="nc"><i>276</i>&nbsp;            }</b>
+<i>277</i>&nbsp;        }
+<i>278</i>&nbsp;    }
+<i>279</i>&nbsp;
+<i>280</i>&nbsp;    /**
+<i>281</i>&nbsp;     * Notifies all waiting threads that the last byte of data has been
+<i>282</i>&nbsp;     * received.
+<i>283</i>&nbsp;     */
+<i>284</i>&nbsp;    synchronized void receivedLast() {
+<b class="nc"><i>285</i>&nbsp;        closedByWriter = true;</b>
+<b class="nc"><i>286</i>&nbsp;        notifyAll();</b>
+<i>287</i>&nbsp;    }
+<i>288</i>&nbsp;
+<i>289</i>&nbsp;    /**
+<i>290</i>&nbsp;     * Reads the next byte of data from this piped input stream. The
+<i>291</i>&nbsp;     * value byte is returned as an &lt;code&gt;int&lt;/code&gt; in the range
+<i>292</i>&nbsp;     * &lt;code&gt;0&lt;/code&gt; to &lt;code&gt;255&lt;/code&gt;.
+<i>293</i>&nbsp;     * This method blocks until input data is available, the end of the
+<i>294</i>&nbsp;     * stream is detected, or an exception is thrown.
+<i>295</i>&nbsp;     *
+<i>296</i>&nbsp;     * @return     the next byte of data, or &lt;code&gt;-1&lt;/code&gt; if the end of the
+<i>297</i>&nbsp;     *             stream is reached.
+<i>298</i>&nbsp;     * @exception  IOException  if the pipe is
+<i>299</i>&nbsp;     *           {@link #connect(java.io.PipedOutputStream) unconnected},
+<i>300</i>&nbsp;     *           &lt;a href=&quot;#BROKEN&quot;&gt; &lt;code&gt;broken&lt;/code&gt;&lt;/a&gt;, closed,
+<i>301</i>&nbsp;     *           or if an I/O error occurs.
+<i>302</i>&nbsp;     */
+<i>303</i>&nbsp;    public synchronized int read()  throws IOException {
+<b class="nc"><i>304</i>&nbsp;        if (!connected) {</b>
+<b class="nc"><i>305</i>&nbsp;            throw new IOException(&quot;Pipe not connected&quot;);</b>
+<b class="nc"><i>306</i>&nbsp;        } else if (closedByReader) {</b>
+<b class="nc"><i>307</i>&nbsp;            throw new IOException(&quot;Pipe closed&quot;);</b>
+<b class="nc"><i>308</i>&nbsp;        } else if (writeSide != null &amp;&amp; !writeSide.isAlive()</b>
+<i>309</i>&nbsp;                   &amp;&amp; !closedByWriter &amp;&amp; (in &lt; 0)) {
+<b class="nc"><i>310</i>&nbsp;            throw new IOException(&quot;Write end dead&quot;);</b>
+<i>311</i>&nbsp;        }
+<i>312</i>&nbsp;
+<b class="nc"><i>313</i>&nbsp;        readSide = Thread.currentThread();</b>
+<b class="nc"><i>314</i>&nbsp;        int trials = 2;</b>
+<b class="nc"><i>315</i>&nbsp;        while (in &lt; 0) {</b>
+<b class="nc"><i>316</i>&nbsp;            if (closedByWriter) {</b>
+<i>317</i>&nbsp;                /* closed by writer, return EOF */
+<b class="nc"><i>318</i>&nbsp;                return -1;</b>
+<i>319</i>&nbsp;            }
+<b class="nc"><i>320</i>&nbsp;            if ((writeSide != null) &amp;&amp; (!writeSide.isAlive()) &amp;&amp; (--trials &lt; 0)) {</b>
+<b class="nc"><i>321</i>&nbsp;                throw new IOException(&quot;Pipe broken&quot;);</b>
+<i>322</i>&nbsp;            }
+<i>323</i>&nbsp;            /* might be a writer waiting */
+<b class="nc"><i>324</i>&nbsp;            notifyAll();</b>
+<i>325</i>&nbsp;            try {
+<b class="nc"><i>326</i>&nbsp;                wait(1000);</b>
+<b class="nc"><i>327</i>&nbsp;            } catch (InterruptedException ex) {</b>
+<b class="nc"><i>328</i>&nbsp;                throw new java.io.InterruptedIOException();</b>
+<b class="nc"><i>329</i>&nbsp;            }</b>
+<i>330</i>&nbsp;        }
+<b class="nc"><i>331</i>&nbsp;        int ret = buffer[out++] &amp; 0xFF;</b>
+<b class="nc"><i>332</i>&nbsp;        if (out &gt;= buffer.length) {</b>
+<b class="nc"><i>333</i>&nbsp;            out = 0;</b>
+<i>334</i>&nbsp;        }
+<b class="nc"><i>335</i>&nbsp;        if (in == out) {</b>
+<i>336</i>&nbsp;            /* now empty */
+<b class="nc"><i>337</i>&nbsp;            in = -1;</b>
+<i>338</i>&nbsp;        }
+<i>339</i>&nbsp;
+<b class="nc"><i>340</i>&nbsp;        return ret;</b>
+<i>341</i>&nbsp;    }
+<i>342</i>&nbsp;
+<i>343</i>&nbsp;    /**
+<i>344</i>&nbsp;     * Reads up to &lt;code&gt;len&lt;/code&gt; bytes of data from this piped input
+<i>345</i>&nbsp;     * stream into an array of bytes. Less than &lt;code&gt;len&lt;/code&gt; bytes
+<i>346</i>&nbsp;     * will be read if the end of the data stream is reached or if
+<i>347</i>&nbsp;     * &lt;code&gt;len&lt;/code&gt; exceeds the pipe&#39;s buffer size.
+<i>348</i>&nbsp;     * If &lt;code&gt;len &lt;/code&gt; is zero, then no bytes are read and 0 is returned;
+<i>349</i>&nbsp;     * otherwise, the method blocks until at least 1 byte of input is
+<i>350</i>&nbsp;     * available, end of the stream has been detected, or an exception is
+<i>351</i>&nbsp;     * thrown.
+<i>352</i>&nbsp;     *
+<i>353</i>&nbsp;     * @param      b     the buffer into which the data is read.
+<i>354</i>&nbsp;     * @param      off   the start offset in the destination array &lt;code&gt;b&lt;/code&gt;
+<i>355</i>&nbsp;     * @param      len   the maximum number of bytes read.
+<i>356</i>&nbsp;     * @return     the total number of bytes read into the buffer, or
+<i>357</i>&nbsp;     *             &lt;code&gt;-1&lt;/code&gt; if there is no more data because the end of
+<i>358</i>&nbsp;     *             the stream has been reached.
+<i>359</i>&nbsp;     * @exception  NullPointerException If &lt;code&gt;b&lt;/code&gt; is &lt;code&gt;null&lt;/code&gt;.
+<i>360</i>&nbsp;     * @exception  IndexOutOfBoundsException If &lt;code&gt;off&lt;/code&gt; is negative,
+<i>361</i>&nbsp;     * &lt;code&gt;len&lt;/code&gt; is negative, or &lt;code&gt;len&lt;/code&gt; is greater than
+<i>362</i>&nbsp;     * &lt;code&gt;b.length - off&lt;/code&gt;
+<i>363</i>&nbsp;     * @exception  IOException if the pipe is &lt;a href=&quot;#BROKEN&quot;&gt; &lt;code&gt;broken&lt;/code&gt;&lt;/a&gt;,
+<i>364</i>&nbsp;     *           {@link #connect(java.io.PipedOutputStream) unconnected},
+<i>365</i>&nbsp;     *           closed, or if an I/O error occurs.
+<i>366</i>&nbsp;     */
+<i>367</i>&nbsp;    public synchronized int read(byte b[], int off, int len)  throws IOException {
+<b class="nc"><i>368</i>&nbsp;        if (b == null) {</b>
+<b class="nc"><i>369</i>&nbsp;            throw new NullPointerException();</b>
+<b class="nc"><i>370</i>&nbsp;        } else if (off &lt; 0 || len &lt; 0 || len &gt; b.length - off) {</b>
+<b class="nc"><i>371</i>&nbsp;            throw new IndexOutOfBoundsException();</b>
+<b class="nc"><i>372</i>&nbsp;        } else if (len == 0) {</b>
+<b class="nc"><i>373</i>&nbsp;            return 0;</b>
+<i>374</i>&nbsp;        }
+<i>375</i>&nbsp;
+<i>376</i>&nbsp;        /* possibly wait on the first character */
+<b class="nc"><i>377</i>&nbsp;        int c = read();</b>
+<b class="nc"><i>378</i>&nbsp;        if (c &lt; 0) {</b>
+<b class="nc"><i>379</i>&nbsp;            return -1;</b>
+<i>380</i>&nbsp;        }
+<b class="nc"><i>381</i>&nbsp;        b[off] = (byte) c;</b>
+<b class="nc"><i>382</i>&nbsp;        int rlen = 1;</b>
+<b class="nc"><i>383</i>&nbsp;        while ((in &gt;= 0) &amp;&amp; (len &gt; 1)) {</b>
+<i>384</i>&nbsp;
+<i>385</i>&nbsp;            int available;
+<i>386</i>&nbsp;
+<b class="nc"><i>387</i>&nbsp;            if (in &gt; out) {</b>
+<b class="nc"><i>388</i>&nbsp;                available = Math.min((buffer.length - out), (in - out));</b>
+<i>389</i>&nbsp;            } else {
+<b class="nc"><i>390</i>&nbsp;                available = buffer.length - out;</b>
+<i>391</i>&nbsp;            }
+<i>392</i>&nbsp;
+<i>393</i>&nbsp;            // A byte is read beforehand outside the loop
+<b class="nc"><i>394</i>&nbsp;            if (available &gt; (len - 1)) {</b>
+<b class="nc"><i>395</i>&nbsp;                available = len - 1;</b>
+<i>396</i>&nbsp;            }
+<b class="nc"><i>397</i>&nbsp;            System.arraycopy(buffer, out, b, off + rlen, available);</b>
+<b class="nc"><i>398</i>&nbsp;            out += available;</b>
+<b class="nc"><i>399</i>&nbsp;            rlen += available;</b>
+<b class="nc"><i>400</i>&nbsp;            len -= available;</b>
+<i>401</i>&nbsp;
+<b class="nc"><i>402</i>&nbsp;            if (out &gt;= buffer.length) {</b>
+<b class="nc"><i>403</i>&nbsp;                out = 0;</b>
+<i>404</i>&nbsp;            }
+<b class="nc"><i>405</i>&nbsp;            if (in == out) {</b>
+<i>406</i>&nbsp;                /* now empty */
+<b class="nc"><i>407</i>&nbsp;                in = -1;</b>
+<i>408</i>&nbsp;            }
+<b class="nc"><i>409</i>&nbsp;        }</b>
+<b class="nc"><i>410</i>&nbsp;        return rlen;</b>
+<i>411</i>&nbsp;    }
+<i>412</i>&nbsp;
+<i>413</i>&nbsp;    /**
+<i>414</i>&nbsp;     * Returns the number of bytes that can be read from this input
+<i>415</i>&nbsp;     * stream without blocking.
+<i>416</i>&nbsp;     *
+<i>417</i>&nbsp;     * @return the number of bytes that can be read from this input stream
+<i>418</i>&nbsp;     *         without blocking, or {@code 0} if this input stream has been
+<i>419</i>&nbsp;     *         closed by invoking its {@link #close()} method, or if the pipe
+<i>420</i>&nbsp;     *         is {@link #connect(java.io.PipedOutputStream) unconnected}, or
+<i>421</i>&nbsp;     *          &lt;a href=&quot;#BROKEN&quot;&gt; &lt;code&gt;broken&lt;/code&gt;&lt;/a&gt;.
+<i>422</i>&nbsp;     *
+<i>423</i>&nbsp;     * @exception  IOException  if an I/O error occurs.
+<i>424</i>&nbsp;     * @since   1.0.2
+<i>425</i>&nbsp;     */
+<i>426</i>&nbsp;    public synchronized int available() throws IOException {
+<b class="nc"><i>427</i>&nbsp;        if(in &lt; 0)</b>
+<b class="nc"><i>428</i>&nbsp;            return 0;</b>
+<b class="nc"><i>429</i>&nbsp;        else if(in == out)</b>
+<b class="nc"><i>430</i>&nbsp;            return buffer.length;</b>
+<b class="nc"><i>431</i>&nbsp;        else if (in &gt; out)</b>
+<b class="nc"><i>432</i>&nbsp;            return in - out;</b>
+<i>433</i>&nbsp;        else
+<b class="nc"><i>434</i>&nbsp;            return in + buffer.length - out;</b>
+<i>435</i>&nbsp;    }
+<i>436</i>&nbsp;
+<i>437</i>&nbsp;    /**
+<i>438</i>&nbsp;     * Closes this piped input stream and releases any system resources
+<i>439</i>&nbsp;     * associated with the stream.
+<i>440</i>&nbsp;     *
+<i>441</i>&nbsp;     * @exception  IOException  if an I/O error occurs.
+<i>442</i>&nbsp;     */
+<i>443</i>&nbsp;    public void close()  throws IOException {
+<b class="nc"><i>444</i>&nbsp;        closedByReader = true;</b>
+<b class="nc"><i>445</i>&nbsp;        synchronized (this) {</b>
+<b class="nc"><i>446</i>&nbsp;            in = -1;</b>
+<b class="nc"><i>447</i>&nbsp;        }</b>
+<i>448</i>&nbsp;    }
+<i>449</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:16</div>
+</div>
+</body>
+</html>

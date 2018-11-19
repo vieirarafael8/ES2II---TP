@@ -1,0 +1,1441 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AVA</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.x509</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AVA (sun.security.x509)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AVA</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 33)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 419)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.x509;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.ByteArrayOutputStream;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import java.io.OutputStream;
+<i>31</i>&nbsp;import java.io.Reader;
+<i>32</i>&nbsp;import java.security.AccessController;
+<i>33</i>&nbsp;import java.text.Normalizer;
+<i>34</i>&nbsp;import java.util.*;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import sun.security.action.GetBooleanAction;
+<i>37</i>&nbsp;import sun.security.util.*;
+<i>38</i>&nbsp;import sun.security.pkcs.PKCS9Attribute;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;/**
+<i>42</i>&nbsp; * X.500 Attribute-Value-Assertion (AVA):  an attribute, as identified by
+<i>43</i>&nbsp; * some attribute ID, has some particular value.  Values are as a rule ASN.1
+<i>44</i>&nbsp; * printable strings.  A conventional set of type IDs is recognized when
+<i>45</i>&nbsp; * parsing (and generating) RFC 1779, 2253 or 4514 syntax strings.
+<i>46</i>&nbsp; *
+<i>47</i>&nbsp; * &lt;P&gt;AVAs are components of X.500 relative names.  Think of them as being
+<i>48</i>&nbsp; * individual fields of a database record.  The attribute ID is how you
+<i>49</i>&nbsp; * identify the field, and the value is part of a particular record.
+<i>50</i>&nbsp; * &lt;p&gt;
+<i>51</i>&nbsp; * Note that instances of this class are immutable.
+<i>52</i>&nbsp; *
+<i>53</i>&nbsp; * @see X500Name
+<i>54</i>&nbsp; * @see RDN
+<i>55</i>&nbsp; *
+<i>56</i>&nbsp; *
+<i>57</i>&nbsp; * @author David Brownell
+<i>58</i>&nbsp; * @author Amit Kapoor
+<i>59</i>&nbsp; * @author Hemma Prafullchandra
+<i>60</i>&nbsp; */
+<i>61</i>&nbsp;public class AVA implements DerEncoder {
+<i>62</i>&nbsp;
+<b class="nc"><i>63</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;x509&quot;, &quot;\t[AVA]&quot;);</b>
+<i>64</i>&nbsp;    // See CR 6391482: if enabled this flag preserves the old but incorrect
+<i>65</i>&nbsp;    // PrintableString encoding for DomainComponent. It may need to be set to
+<i>66</i>&nbsp;    // avoid breaking preexisting certificates generated with sun.security APIs.
+<i>67</i>&nbsp;    private static final boolean PRESERVE_OLD_DC_ENCODING =
+<b class="nc"><i>68</i>&nbsp;        AccessController.doPrivileged(new GetBooleanAction</b>
+<i>69</i>&nbsp;            (&quot;com.sun.security.preserveOldDCEncoding&quot;));
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;    /**
+<i>72</i>&nbsp;     * DEFAULT format allows both RFC1779 and RFC2253 syntax and
+<i>73</i>&nbsp;     * additional keywords.
+<i>74</i>&nbsp;     */
+<i>75</i>&nbsp;    static final int DEFAULT = 1;
+<i>76</i>&nbsp;    /**
+<i>77</i>&nbsp;     * RFC1779 specifies format according to RFC1779.
+<i>78</i>&nbsp;     */
+<i>79</i>&nbsp;    static final int RFC1779 = 2;
+<i>80</i>&nbsp;    /**
+<i>81</i>&nbsp;     * RFC2253 specifies format according to RFC2253.
+<i>82</i>&nbsp;     */
+<i>83</i>&nbsp;    static final int RFC2253 = 3;
+<i>84</i>&nbsp;
+<i>85</i>&nbsp;    // currently not private, accessed directly from RDN
+<i>86</i>&nbsp;    final ObjectIdentifier oid;
+<i>87</i>&nbsp;    final DerValue value;
+<i>88</i>&nbsp;
+<i>89</i>&nbsp;    /*
+<i>90</i>&nbsp;     * If the value has any of these characters in it, it must be quoted.
+<i>91</i>&nbsp;     * Backslash and quote characters must also be individually escaped.
+<i>92</i>&nbsp;     * Leading and trailing spaces, also multiple internal spaces, also
+<i>93</i>&nbsp;     * call for quoting the whole string.
+<i>94</i>&nbsp;     */
+<i>95</i>&nbsp;    private static final String specialChars1779 = &quot;,=\n+&lt;&gt;#;\\\&quot;&quot;;
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    /*
+<i>98</i>&nbsp;     * In RFC2253, if the value has any of these characters in it, it
+<i>99</i>&nbsp;     * must be quoted by a preceding \.
+<i>100</i>&nbsp;     */
+<i>101</i>&nbsp;    private static final String specialChars2253 = &quot;,=+&lt;&gt;#;\\\&quot;&quot;;
+<i>102</i>&nbsp;
+<i>103</i>&nbsp;    /*
+<i>104</i>&nbsp;     * includes special chars from RFC1779 and RFC2253, as well as &#39; &#39; from
+<i>105</i>&nbsp;     * RFC 4514.
+<i>106</i>&nbsp;     */
+<i>107</i>&nbsp;    private static final String specialCharsDefault = &quot;,=\n+&lt;&gt;#;\\\&quot; &quot;;
+<i>108</i>&nbsp;    private static final String escapedDefault = &quot;,+&lt;&gt;;\&quot;&quot;;
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;    /*
+<i>111</i>&nbsp;     * Values that aren&#39;t printable strings are emitted as BER-encoded
+<i>112</i>&nbsp;     * hex data.
+<i>113</i>&nbsp;     */
+<i>114</i>&nbsp;    private static final String hexDigits = &quot;0123456789ABCDEF&quot;;
+<i>115</i>&nbsp;
+<b class="nc"><i>116</i>&nbsp;    public AVA(ObjectIdentifier type, DerValue val) {</b>
+<b class="nc"><i>117</i>&nbsp;        if ((type == null) || (val == null)) {</b>
+<b class="nc"><i>118</i>&nbsp;            throw new NullPointerException();</b>
+<i>119</i>&nbsp;        }
+<b class="nc"><i>120</i>&nbsp;        oid = type;</b>
+<b class="nc"><i>121</i>&nbsp;        value = val;</b>
+<i>122</i>&nbsp;    }
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;    /**
+<i>125</i>&nbsp;     * Parse an RFC 1779, 2253 or 4514 style AVA string:  CN=fee fie foe fum
+<i>126</i>&nbsp;     * or perhaps with quotes.  Not all defined AVA tags are supported;
+<i>127</i>&nbsp;     * of current note are X.400 related ones (PRMD, ADMD, etc).
+<i>128</i>&nbsp;     *
+<i>129</i>&nbsp;     * This terminates at unescaped AVA separators (&quot;+&quot;) or RDN
+<i>130</i>&nbsp;     * separators (&quot;,&quot;, &quot;;&quot;), and removes cosmetic whitespace at the end of
+<i>131</i>&nbsp;     * values.
+<i>132</i>&nbsp;     */
+<i>133</i>&nbsp;    AVA(Reader in) throws IOException {
+<b class="nc"><i>134</i>&nbsp;        this(in, DEFAULT);</b>
+<i>135</i>&nbsp;    }
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;    /**
+<i>138</i>&nbsp;     * Parse an RFC 1779, 2253 or 4514 style AVA string:  CN=fee fie foe fum
+<i>139</i>&nbsp;     * or perhaps with quotes. Additional keywords can be specified in the
+<i>140</i>&nbsp;     * keyword/OID map.
+<i>141</i>&nbsp;     *
+<i>142</i>&nbsp;     * This terminates at unescaped AVA separators (&quot;+&quot;) or RDN
+<i>143</i>&nbsp;     * separators (&quot;,&quot;, &quot;;&quot;), and removes cosmetic whitespace at the end of
+<i>144</i>&nbsp;     * values.
+<i>145</i>&nbsp;     */
+<i>146</i>&nbsp;    AVA(Reader in, Map&lt;String, String&gt; keywordMap) throws IOException {
+<b class="nc"><i>147</i>&nbsp;        this(in, DEFAULT, keywordMap);</b>
+<i>148</i>&nbsp;    }
+<i>149</i>&nbsp;
+<i>150</i>&nbsp;    /**
+<i>151</i>&nbsp;     * Parse an AVA string formatted according to format.
+<i>152</i>&nbsp;     */
+<i>153</i>&nbsp;    AVA(Reader in, int format) throws IOException {
+<b class="nc"><i>154</i>&nbsp;        this(in, format, Collections.&lt;String, String&gt;emptyMap());</b>
+<i>155</i>&nbsp;    }
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;    /**
+<i>158</i>&nbsp;     * Parse an AVA string formatted according to format.
+<i>159</i>&nbsp;     *
+<i>160</i>&nbsp;     * @param in Reader containing AVA String
+<i>161</i>&nbsp;     * @param format parsing format
+<i>162</i>&nbsp;     * @param keywordMap a Map where a keyword String maps to a corresponding
+<i>163</i>&nbsp;     *   OID String. Each AVA keyword will be mapped to the corresponding OID.
+<i>164</i>&nbsp;     *   If an entry does not exist, it will fallback to the builtin
+<i>165</i>&nbsp;     *   keyword/OID mapping.
+<i>166</i>&nbsp;     * @throws IOException if the AVA String is not valid in the specified
+<i>167</i>&nbsp;     *   format or an OID String from the keywordMap is improperly formatted
+<i>168</i>&nbsp;     */
+<i>169</i>&nbsp;    AVA(Reader in, int format, Map&lt;String, String&gt; keywordMap)
+<b class="nc"><i>170</i>&nbsp;        throws IOException {</b>
+<i>171</i>&nbsp;        // assume format is one of DEFAULT or RFC2253
+<i>172</i>&nbsp;
+<b class="nc"><i>173</i>&nbsp;        StringBuilder   temp = new StringBuilder();</b>
+<i>174</i>&nbsp;        int             c;
+<i>175</i>&nbsp;
+<i>176</i>&nbsp;        /*
+<i>177</i>&nbsp;         * First get the keyword indicating the attribute&#39;s type,
+<i>178</i>&nbsp;         * and map it to the appropriate OID.
+<i>179</i>&nbsp;         */
+<i>180</i>&nbsp;        while (true) {
+<b class="nc"><i>181</i>&nbsp;            c = readChar(in, &quot;Incorrect AVA format&quot;);</b>
+<b class="nc"><i>182</i>&nbsp;            if (c == &#39;=&#39;) {</b>
+<b class="nc"><i>183</i>&nbsp;                break;</b>
+<i>184</i>&nbsp;            }
+<b class="nc"><i>185</i>&nbsp;            temp.append((char)c);</b>
+<i>186</i>&nbsp;        }
+<i>187</i>&nbsp;
+<b class="nc"><i>188</i>&nbsp;        oid = AVAKeyword.getOID(temp.toString(), format, keywordMap);</b>
+<i>189</i>&nbsp;
+<i>190</i>&nbsp;        /*
+<i>191</i>&nbsp;         * Now parse the value.  &quot;#hex&quot;, a quoted string, or a string
+<i>192</i>&nbsp;         * terminated by &quot;+&quot;, &quot;,&quot;, &quot;;&quot;.  Whitespace before or after
+<i>193</i>&nbsp;         * the value is stripped away unless format is RFC2253.
+<i>194</i>&nbsp;         */
+<b class="nc"><i>195</i>&nbsp;        temp.setLength(0);</b>
+<b class="nc"><i>196</i>&nbsp;        if (format == RFC2253) {</b>
+<i>197</i>&nbsp;            // read next character
+<b class="nc"><i>198</i>&nbsp;            c = in.read();</b>
+<b class="nc"><i>199</i>&nbsp;            if (c == &#39; &#39;) {</b>
+<b class="nc"><i>200</i>&nbsp;                throw new IOException(&quot;Incorrect AVA RFC2253 format - &quot; +</b>
+<i>201</i>&nbsp;                                      &quot;leading space must be escaped&quot;);
+<i>202</i>&nbsp;            }
+<i>203</i>&nbsp;        } else {
+<i>204</i>&nbsp;            // read next character skipping whitespace
+<i>205</i>&nbsp;            do {
+<b class="nc"><i>206</i>&nbsp;                c = in.read();</b>
+<b class="nc"><i>207</i>&nbsp;            } while ((c == &#39; &#39;) || (c == &#39;\n&#39;));</b>
+<i>208</i>&nbsp;        }
+<b class="nc"><i>209</i>&nbsp;        if (c == -1) {</b>
+<i>210</i>&nbsp;            // empty value
+<b class="nc"><i>211</i>&nbsp;            value = new DerValue(&quot;&quot;);</b>
+<i>212</i>&nbsp;            return;
+<i>213</i>&nbsp;        }
+<i>214</i>&nbsp;
+<b class="nc"><i>215</i>&nbsp;        if (c == &#39;#&#39;) {</b>
+<b class="nc"><i>216</i>&nbsp;            value = parseHexString(in, format);</b>
+<b class="nc"><i>217</i>&nbsp;        } else if ((c == &#39;&quot;&#39;) &amp;&amp; (format != RFC2253)) {</b>
+<b class="nc"><i>218</i>&nbsp;            value = parseQuotedString(in, temp);</b>
+<i>219</i>&nbsp;        } else {
+<b class="nc"><i>220</i>&nbsp;            value = parseString(in, c, format, temp);</b>
+<i>221</i>&nbsp;        }
+<i>222</i>&nbsp;    }
+<i>223</i>&nbsp;
+<i>224</i>&nbsp;    /**
+<i>225</i>&nbsp;     * Get the ObjectIdentifier of this AVA.
+<i>226</i>&nbsp;     */
+<i>227</i>&nbsp;    public ObjectIdentifier getObjectIdentifier() {
+<b class="nc"><i>228</i>&nbsp;        return oid;</b>
+<i>229</i>&nbsp;    }
+<i>230</i>&nbsp;
+<i>231</i>&nbsp;    /**
+<i>232</i>&nbsp;     * Get the value of this AVA as a DerValue.
+<i>233</i>&nbsp;     */
+<i>234</i>&nbsp;    public DerValue getDerValue() {
+<b class="nc"><i>235</i>&nbsp;        return value;</b>
+<i>236</i>&nbsp;    }
+<i>237</i>&nbsp;
+<i>238</i>&nbsp;    /**
+<i>239</i>&nbsp;     * Get the value of this AVA as a String.
+<i>240</i>&nbsp;     *
+<i>241</i>&nbsp;     * @exception RuntimeException if we could not obtain the string form
+<i>242</i>&nbsp;     *    (should not occur)
+<i>243</i>&nbsp;     */
+<i>244</i>&nbsp;    public String getValueString() {
+<i>245</i>&nbsp;        try {
+<b class="nc"><i>246</i>&nbsp;            String s = value.getAsString();</b>
+<b class="nc"><i>247</i>&nbsp;            if (s == null) {</b>
+<b class="nc"><i>248</i>&nbsp;                throw new RuntimeException(&quot;AVA string is null&quot;);</b>
+<i>249</i>&nbsp;            }
+<b class="nc"><i>250</i>&nbsp;            return s;</b>
+<b class="nc"><i>251</i>&nbsp;        } catch (IOException e) {</b>
+<i>252</i>&nbsp;            // should not occur
+<b class="nc"><i>253</i>&nbsp;            throw new RuntimeException(&quot;AVA error: &quot; + e, e);</b>
+<i>254</i>&nbsp;        }
+<i>255</i>&nbsp;    }
+<i>256</i>&nbsp;
+<i>257</i>&nbsp;    private static DerValue parseHexString
+<i>258</i>&nbsp;        (Reader in, int format) throws IOException {
+<i>259</i>&nbsp;
+<i>260</i>&nbsp;        int c;
+<b class="nc"><i>261</i>&nbsp;        ByteArrayOutputStream baos = new ByteArrayOutputStream();</b>
+<b class="nc"><i>262</i>&nbsp;        byte b = 0;</b>
+<b class="nc"><i>263</i>&nbsp;        int cNdx = 0;</b>
+<i>264</i>&nbsp;        while (true) {
+<b class="nc"><i>265</i>&nbsp;            c = in.read();</b>
+<i>266</i>&nbsp;
+<b class="nc"><i>267</i>&nbsp;            if (isTerminator(c, format)) {</b>
+<b class="nc"><i>268</i>&nbsp;                break;</b>
+<i>269</i>&nbsp;            }
+<i>270</i>&nbsp;
+<b class="nc"><i>271</i>&nbsp;            int cVal = hexDigits.indexOf(Character.toUpperCase((char)c));</b>
+<i>272</i>&nbsp;
+<b class="nc"><i>273</i>&nbsp;            if (cVal == -1) {</b>
+<b class="nc"><i>274</i>&nbsp;                throw new IOException(&quot;AVA parse, invalid hex &quot; +</b>
+<i>275</i>&nbsp;                                              &quot;digit: &quot;+ (char)c);
+<i>276</i>&nbsp;            }
+<i>277</i>&nbsp;
+<b class="nc"><i>278</i>&nbsp;            if ((cNdx % 2) == 1) {</b>
+<b class="nc"><i>279</i>&nbsp;                b = (byte)((b * 16) + (byte)(cVal));</b>
+<b class="nc"><i>280</i>&nbsp;                baos.write(b);</b>
+<i>281</i>&nbsp;            } else {
+<b class="nc"><i>282</i>&nbsp;                b = (byte)(cVal);</b>
+<i>283</i>&nbsp;            }
+<b class="nc"><i>284</i>&nbsp;            cNdx++;</b>
+<b class="nc"><i>285</i>&nbsp;        }</b>
+<i>286</i>&nbsp;
+<i>287</i>&nbsp;        // throw exception if no hex digits
+<b class="nc"><i>288</i>&nbsp;        if (cNdx == 0) {</b>
+<b class="nc"><i>289</i>&nbsp;            throw new IOException(&quot;AVA parse, zero hex digits&quot;);</b>
+<i>290</i>&nbsp;        }
+<i>291</i>&nbsp;
+<i>292</i>&nbsp;        // throw exception if odd number of hex digits
+<b class="nc"><i>293</i>&nbsp;        if (cNdx % 2 == 1) {</b>
+<b class="nc"><i>294</i>&nbsp;            throw new IOException(&quot;AVA parse, odd number of hex digits&quot;);</b>
+<i>295</i>&nbsp;        }
+<i>296</i>&nbsp;
+<b class="nc"><i>297</i>&nbsp;        return new DerValue(baos.toByteArray());</b>
+<i>298</i>&nbsp;    }
+<i>299</i>&nbsp;
+<i>300</i>&nbsp;    private DerValue parseQuotedString
+<i>301</i>&nbsp;        (Reader in, StringBuilder temp) throws IOException {
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;        // RFC1779 specifies that an entire RDN may be enclosed in double
+<i>304</i>&nbsp;        // quotes. In this case the syntax is any sequence of
+<i>305</i>&nbsp;        // backslash-specialChar, backslash-backslash,
+<i>306</i>&nbsp;        // backslash-doublequote, or character other than backslash or
+<i>307</i>&nbsp;        // doublequote.
+<b class="nc"><i>308</i>&nbsp;        int c = readChar(in, &quot;Quoted string did not end in quote&quot;);</b>
+<i>309</i>&nbsp;
+<b class="nc"><i>310</i>&nbsp;        List&lt;Byte&gt; embeddedHex = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>311</i>&nbsp;        boolean isPrintableString = true;</b>
+<b class="nc"><i>312</i>&nbsp;        while (c != &#39;&quot;&#39;) {</b>
+<b class="nc"><i>313</i>&nbsp;            if (c == &#39;\\&#39;) {</b>
+<b class="nc"><i>314</i>&nbsp;                c = readChar(in, &quot;Quoted string did not end in quote&quot;);</b>
+<i>315</i>&nbsp;
+<i>316</i>&nbsp;                // check for embedded hex pairs
+<b class="nc"><i>317</i>&nbsp;                Byte hexByte = null;</b>
+<b class="nc"><i>318</i>&nbsp;                if ((hexByte = getEmbeddedHexPair(c, in)) != null) {</b>
+<i>319</i>&nbsp;
+<i>320</i>&nbsp;                    // always encode AVAs with embedded hex as UTF8
+<b class="nc"><i>321</i>&nbsp;                    isPrintableString = false;</b>
+<i>322</i>&nbsp;
+<i>323</i>&nbsp;                    // append consecutive embedded hex
+<i>324</i>&nbsp;                    // as single string later
+<b class="nc"><i>325</i>&nbsp;                    embeddedHex.add(hexByte);</b>
+<b class="nc"><i>326</i>&nbsp;                    c = in.read();</b>
+<b class="nc"><i>327</i>&nbsp;                    continue;</b>
+<i>328</i>&nbsp;                }
+<i>329</i>&nbsp;
+<b class="nc"><i>330</i>&nbsp;                if (specialChars1779.indexOf((char)c) &lt; 0) {</b>
+<b class="nc"><i>331</i>&nbsp;                    throw new IOException</b>
+<i>332</i>&nbsp;                        (&quot;Invalid escaped character in AVA: &quot; +
+<i>333</i>&nbsp;                        (char)c);
+<i>334</i>&nbsp;                }
+<i>335</i>&nbsp;            }
+<i>336</i>&nbsp;
+<i>337</i>&nbsp;            // add embedded hex bytes before next char
+<b class="nc"><i>338</i>&nbsp;            if (embeddedHex.size() &gt; 0) {</b>
+<b class="nc"><i>339</i>&nbsp;                String hexString = getEmbeddedHexString(embeddedHex);</b>
+<b class="nc"><i>340</i>&nbsp;                temp.append(hexString);</b>
+<b class="nc"><i>341</i>&nbsp;                embeddedHex.clear();</b>
+<i>342</i>&nbsp;            }
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;            // check for non-PrintableString chars
+<b class="nc"><i>345</i>&nbsp;            isPrintableString &amp;= DerValue.isPrintableStringChar((char)c);</b>
+<b class="nc"><i>346</i>&nbsp;            temp.append((char)c);</b>
+<b class="nc"><i>347</i>&nbsp;            c = readChar(in, &quot;Quoted string did not end in quote&quot;);</b>
+<i>348</i>&nbsp;        }
+<i>349</i>&nbsp;
+<i>350</i>&nbsp;        // add trailing embedded hex bytes
+<b class="nc"><i>351</i>&nbsp;        if (embeddedHex.size() &gt; 0) {</b>
+<b class="nc"><i>352</i>&nbsp;            String hexString = getEmbeddedHexString(embeddedHex);</b>
+<b class="nc"><i>353</i>&nbsp;            temp.append(hexString);</b>
+<b class="nc"><i>354</i>&nbsp;            embeddedHex.clear();</b>
+<i>355</i>&nbsp;        }
+<i>356</i>&nbsp;
+<i>357</i>&nbsp;        do {
+<b class="nc"><i>358</i>&nbsp;            c = in.read();</b>
+<b class="nc"><i>359</i>&nbsp;        } while ((c == &#39;\n&#39;) || (c == &#39; &#39;));</b>
+<b class="nc"><i>360</i>&nbsp;        if (c != -1) {</b>
+<b class="nc"><i>361</i>&nbsp;            throw new IOException(&quot;AVA had characters other than &quot;</b>
+<i>362</i>&nbsp;                    + &quot;whitespace after terminating quote&quot;);
+<i>363</i>&nbsp;        }
+<i>364</i>&nbsp;
+<i>365</i>&nbsp;        // encode as PrintableString unless value contains
+<i>366</i>&nbsp;        // non-PrintableString chars
+<b class="nc"><i>367</i>&nbsp;        if (this.oid.equals(PKCS9Attribute.EMAIL_ADDRESS_OID) ||</b>
+<b class="nc"><i>368</i>&nbsp;            (this.oid.equals(X500Name.DOMAIN_COMPONENT_OID) &amp;&amp;</b>
+<i>369</i>&nbsp;                PRESERVE_OLD_DC_ENCODING == false)) {
+<i>370</i>&nbsp;            // EmailAddress and DomainComponent must be IA5String
+<b class="nc"><i>371</i>&nbsp;            return new DerValue(DerValue.tag_IA5String,</b>
+<b class="nc"><i>372</i>&nbsp;                                        temp.toString().trim());</b>
+<b class="nc"><i>373</i>&nbsp;        } else if (isPrintableString) {</b>
+<b class="nc"><i>374</i>&nbsp;            return new DerValue(temp.toString().trim());</b>
+<i>375</i>&nbsp;        } else {
+<b class="nc"><i>376</i>&nbsp;            return new DerValue(DerValue.tag_UTF8String,</b>
+<b class="nc"><i>377</i>&nbsp;                                        temp.toString().trim());</b>
+<i>378</i>&nbsp;        }
+<i>379</i>&nbsp;    }
+<i>380</i>&nbsp;
+<i>381</i>&nbsp;    private DerValue parseString
+<i>382</i>&nbsp;        (Reader in, int c, int format, StringBuilder temp) throws IOException {
+<i>383</i>&nbsp;
+<b class="nc"><i>384</i>&nbsp;        List&lt;Byte&gt; embeddedHex = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>385</i>&nbsp;        boolean isPrintableString = true;</b>
+<b class="nc"><i>386</i>&nbsp;        boolean escape = false;</b>
+<b class="nc"><i>387</i>&nbsp;        boolean leadingChar = true;</b>
+<b class="nc"><i>388</i>&nbsp;        int spaceCount = 0;</b>
+<i>389</i>&nbsp;        do {
+<b class="nc"><i>390</i>&nbsp;            escape = false;</b>
+<b class="nc"><i>391</i>&nbsp;            if (c == &#39;\\&#39;) {</b>
+<b class="nc"><i>392</i>&nbsp;                escape = true;</b>
+<b class="nc"><i>393</i>&nbsp;                c = readChar(in, &quot;Invalid trailing backslash&quot;);</b>
+<i>394</i>&nbsp;
+<i>395</i>&nbsp;                // check for embedded hex pairs
+<b class="nc"><i>396</i>&nbsp;                Byte hexByte = null;</b>
+<b class="nc"><i>397</i>&nbsp;                if ((hexByte = getEmbeddedHexPair(c, in)) != null) {</b>
+<i>398</i>&nbsp;
+<i>399</i>&nbsp;                    // always encode AVAs with embedded hex as UTF8
+<b class="nc"><i>400</i>&nbsp;                    isPrintableString = false;</b>
+<i>401</i>&nbsp;
+<i>402</i>&nbsp;                    // append consecutive embedded hex
+<i>403</i>&nbsp;                    // as single string later
+<b class="nc"><i>404</i>&nbsp;                    embeddedHex.add(hexByte);</b>
+<b class="nc"><i>405</i>&nbsp;                    c = in.read();</b>
+<b class="nc"><i>406</i>&nbsp;                    leadingChar = false;</b>
+<b class="nc"><i>407</i>&nbsp;                    continue;</b>
+<i>408</i>&nbsp;                }
+<i>409</i>&nbsp;
+<i>410</i>&nbsp;                // check if character was improperly escaped
+<b class="nc"><i>411</i>&nbsp;                if (format == DEFAULT &amp;&amp;</b>
+<b class="nc"><i>412</i>&nbsp;                       specialCharsDefault.indexOf((char)c) == -1) {</b>
+<b class="nc"><i>413</i>&nbsp;                    throw new IOException</b>
+<i>414</i>&nbsp;                        (&quot;Invalid escaped character in AVA: &#39;&quot; +
+<i>415</i>&nbsp;                        (char)c + &quot;&#39;&quot;);
+<b class="nc"><i>416</i>&nbsp;                } else if (format == RFC2253) {</b>
+<b class="nc"><i>417</i>&nbsp;                    if (c == &#39; &#39;) {</b>
+<i>418</i>&nbsp;                        // only leading/trailing space can be escaped
+<b class="nc"><i>419</i>&nbsp;                        if (!leadingChar &amp;&amp; !trailingSpace(in)) {</b>
+<b class="nc"><i>420</i>&nbsp;                            throw new IOException</b>
+<i>421</i>&nbsp;                                    (&quot;Invalid escaped space character &quot; +
+<i>422</i>&nbsp;                                    &quot;in AVA.  Only a leading or trailing &quot; +
+<i>423</i>&nbsp;                                    &quot;space character can be escaped.&quot;);
+<i>424</i>&nbsp;                        }
+<b class="nc"><i>425</i>&nbsp;                    } else if (c == &#39;#&#39;) {</b>
+<i>426</i>&nbsp;                        // only leading &#39;#&#39; can be escaped
+<b class="nc"><i>427</i>&nbsp;                        if (!leadingChar) {</b>
+<b class="nc"><i>428</i>&nbsp;                            throw new IOException</b>
+<i>429</i>&nbsp;                                (&quot;Invalid escaped &#39;#&#39; character in AVA.  &quot; +
+<i>430</i>&nbsp;                                &quot;Only a leading &#39;#&#39; can be escaped.&quot;);
+<i>431</i>&nbsp;                        }
+<b class="nc"><i>432</i>&nbsp;                    } else if (specialChars2253.indexOf((char)c) == -1) {</b>
+<b class="nc"><i>433</i>&nbsp;                        throw new IOException</b>
+<i>434</i>&nbsp;                                (&quot;Invalid escaped character in AVA: &#39;&quot; +
+<i>435</i>&nbsp;                                (char)c + &quot;&#39;&quot;);
+<i>436</i>&nbsp;                    }
+<i>437</i>&nbsp;                }
+<b class="nc"><i>438</i>&nbsp;            } else {</b>
+<i>439</i>&nbsp;                // check if character should have been escaped
+<b class="nc"><i>440</i>&nbsp;                if (format == RFC2253) {</b>
+<b class="nc"><i>441</i>&nbsp;                    if (specialChars2253.indexOf((char)c) != -1) {</b>
+<b class="nc"><i>442</i>&nbsp;                        throw new IOException</b>
+<i>443</i>&nbsp;                                (&quot;Character &#39;&quot; + (char)c +
+<i>444</i>&nbsp;                                 &quot;&#39; in AVA appears without escape&quot;);
+<i>445</i>&nbsp;                    }
+<b class="nc"><i>446</i>&nbsp;                } else if (escapedDefault.indexOf((char)c) != -1) {</b>
+<b class="nc"><i>447</i>&nbsp;                    throw new IOException</b>
+<i>448</i>&nbsp;                            (&quot;Character &#39;&quot; + (char)c +
+<i>449</i>&nbsp;                            &quot;&#39; in AVA appears without escape&quot;);
+<i>450</i>&nbsp;                }
+<i>451</i>&nbsp;            }
+<i>452</i>&nbsp;
+<i>453</i>&nbsp;            // add embedded hex bytes before next char
+<b class="nc"><i>454</i>&nbsp;            if (embeddedHex.size() &gt; 0) {</b>
+<i>455</i>&nbsp;                // add space(s) before embedded hex bytes
+<b class="nc"><i>456</i>&nbsp;                for (int i = 0; i &lt; spaceCount; i++) {</b>
+<b class="nc"><i>457</i>&nbsp;                    temp.append(&#39; &#39;);</b>
+<i>458</i>&nbsp;                }
+<b class="nc"><i>459</i>&nbsp;                spaceCount = 0;</b>
+<i>460</i>&nbsp;
+<b class="nc"><i>461</i>&nbsp;                String hexString = getEmbeddedHexString(embeddedHex);</b>
+<b class="nc"><i>462</i>&nbsp;                temp.append(hexString);</b>
+<b class="nc"><i>463</i>&nbsp;                embeddedHex.clear();</b>
+<i>464</i>&nbsp;            }
+<i>465</i>&nbsp;
+<i>466</i>&nbsp;            // check for non-PrintableString chars
+<b class="nc"><i>467</i>&nbsp;            isPrintableString &amp;= DerValue.isPrintableStringChar((char)c);</b>
+<b class="nc"><i>468</i>&nbsp;            if (c == &#39; &#39; &amp;&amp; escape == false) {</b>
+<i>469</i>&nbsp;                // do not add non-escaped spaces yet
+<i>470</i>&nbsp;                // (non-escaped trailing spaces are ignored)
+<b class="nc"><i>471</i>&nbsp;                spaceCount++;</b>
+<i>472</i>&nbsp;            } else {
+<i>473</i>&nbsp;                // add space(s)
+<b class="nc"><i>474</i>&nbsp;                for (int i = 0; i &lt; spaceCount; i++) {</b>
+<b class="nc"><i>475</i>&nbsp;                    temp.append(&#39; &#39;);</b>
+<i>476</i>&nbsp;                }
+<b class="nc"><i>477</i>&nbsp;                spaceCount = 0;</b>
+<b class="nc"><i>478</i>&nbsp;                temp.append((char)c);</b>
+<i>479</i>&nbsp;            }
+<b class="nc"><i>480</i>&nbsp;            c = in.read();</b>
+<b class="nc"><i>481</i>&nbsp;            leadingChar = false;</b>
+<b class="nc"><i>482</i>&nbsp;        } while (isTerminator(c, format) == false);</b>
+<i>483</i>&nbsp;
+<b class="nc"><i>484</i>&nbsp;        if (format == RFC2253 &amp;&amp; spaceCount &gt; 0) {</b>
+<b class="nc"><i>485</i>&nbsp;            throw new IOException(&quot;Incorrect AVA RFC2253 format - &quot; +</b>
+<i>486</i>&nbsp;                                        &quot;trailing space must be escaped&quot;);
+<i>487</i>&nbsp;        }
+<i>488</i>&nbsp;
+<i>489</i>&nbsp;        // add trailing embedded hex bytes
+<b class="nc"><i>490</i>&nbsp;        if (embeddedHex.size() &gt; 0) {</b>
+<b class="nc"><i>491</i>&nbsp;            String hexString = getEmbeddedHexString(embeddedHex);</b>
+<b class="nc"><i>492</i>&nbsp;            temp.append(hexString);</b>
+<b class="nc"><i>493</i>&nbsp;            embeddedHex.clear();</b>
+<i>494</i>&nbsp;        }
+<i>495</i>&nbsp;
+<i>496</i>&nbsp;        // encode as PrintableString unless value contains
+<i>497</i>&nbsp;        // non-PrintableString chars
+<b class="nc"><i>498</i>&nbsp;        if (this.oid.equals(PKCS9Attribute.EMAIL_ADDRESS_OID) ||</b>
+<b class="nc"><i>499</i>&nbsp;            (this.oid.equals(X500Name.DOMAIN_COMPONENT_OID) &amp;&amp;</b>
+<i>500</i>&nbsp;                PRESERVE_OLD_DC_ENCODING == false)) {
+<i>501</i>&nbsp;            // EmailAddress and DomainComponent must be IA5String
+<b class="nc"><i>502</i>&nbsp;            return new DerValue(DerValue.tag_IA5String, temp.toString());</b>
+<b class="nc"><i>503</i>&nbsp;        } else if (isPrintableString) {</b>
+<b class="nc"><i>504</i>&nbsp;            return new DerValue(temp.toString());</b>
+<i>505</i>&nbsp;        } else {
+<b class="nc"><i>506</i>&nbsp;            return new DerValue(DerValue.tag_UTF8String, temp.toString());</b>
+<i>507</i>&nbsp;        }
+<i>508</i>&nbsp;    }
+<i>509</i>&nbsp;
+<i>510</i>&nbsp;    private static Byte getEmbeddedHexPair(int c1, Reader in)
+<i>511</i>&nbsp;        throws IOException {
+<i>512</i>&nbsp;
+<b class="nc"><i>513</i>&nbsp;        if (hexDigits.indexOf(Character.toUpperCase((char)c1)) &gt;= 0) {</b>
+<b class="nc"><i>514</i>&nbsp;            int c2 = readChar(in, &quot;unexpected EOF - &quot; +</b>
+<i>515</i>&nbsp;                        &quot;escaped hex value must include two valid digits&quot;);
+<i>516</i>&nbsp;
+<b class="nc"><i>517</i>&nbsp;            if (hexDigits.indexOf(Character.toUpperCase((char)c2)) &gt;= 0) {</b>
+<b class="nc"><i>518</i>&nbsp;                int hi = Character.digit((char)c1, 16);</b>
+<b class="nc"><i>519</i>&nbsp;                int lo = Character.digit((char)c2, 16);</b>
+<b class="nc"><i>520</i>&nbsp;                return (byte)((hi&lt;&lt;4) + lo);</b>
+<i>521</i>&nbsp;            } else {
+<b class="nc"><i>522</i>&nbsp;                throw new IOException</b>
+<i>523</i>&nbsp;                        (&quot;escaped hex value must include two valid digits&quot;);
+<i>524</i>&nbsp;            }
+<i>525</i>&nbsp;        }
+<b class="nc"><i>526</i>&nbsp;        return null;</b>
+<i>527</i>&nbsp;    }
+<i>528</i>&nbsp;
+<i>529</i>&nbsp;    private static String getEmbeddedHexString(List&lt;Byte&gt; hexList)
+<i>530</i>&nbsp;                                                throws IOException {
+<b class="nc"><i>531</i>&nbsp;        int n = hexList.size();</b>
+<b class="nc"><i>532</i>&nbsp;        byte[] hexBytes = new byte[n];</b>
+<b class="nc"><i>533</i>&nbsp;        for (int i = 0; i &lt; n; i++) {</b>
+<b class="nc"><i>534</i>&nbsp;                hexBytes[i] = hexList.get(i).byteValue();</b>
+<i>535</i>&nbsp;        }
+<b class="nc"><i>536</i>&nbsp;        return new String(hexBytes, &quot;UTF8&quot;);</b>
+<i>537</i>&nbsp;    }
+<i>538</i>&nbsp;
+<i>539</i>&nbsp;    private static boolean isTerminator(int ch, int format) {
+<b class="nc"><i>540</i>&nbsp;        switch (ch) {</b>
+<i>541</i>&nbsp;        case -1:
+<i>542</i>&nbsp;        case &#39;+&#39;:
+<i>543</i>&nbsp;        case &#39;,&#39;:
+<b class="nc"><i>544</i>&nbsp;            return true;</b>
+<i>545</i>&nbsp;        case &#39;;&#39;:
+<b class="nc"><i>546</i>&nbsp;            return format != RFC2253;</b>
+<i>547</i>&nbsp;        default:
+<b class="nc"><i>548</i>&nbsp;            return false;</b>
+<i>549</i>&nbsp;        }
+<i>550</i>&nbsp;    }
+<i>551</i>&nbsp;
+<i>552</i>&nbsp;    private static int readChar(Reader in, String errMsg) throws IOException {
+<b class="nc"><i>553</i>&nbsp;        int c = in.read();</b>
+<b class="nc"><i>554</i>&nbsp;        if (c == -1) {</b>
+<b class="nc"><i>555</i>&nbsp;            throw new IOException(errMsg);</b>
+<i>556</i>&nbsp;        }
+<b class="nc"><i>557</i>&nbsp;        return c;</b>
+<i>558</i>&nbsp;    }
+<i>559</i>&nbsp;
+<i>560</i>&nbsp;    private static boolean trailingSpace(Reader in) throws IOException {
+<i>561</i>&nbsp;
+<b class="nc"><i>562</i>&nbsp;        boolean trailing = false;</b>
+<i>563</i>&nbsp;
+<b class="nc"><i>564</i>&nbsp;        if (!in.markSupported()) {</b>
+<i>565</i>&nbsp;            // oh well
+<b class="nc"><i>566</i>&nbsp;            return true;</b>
+<i>567</i>&nbsp;        } else {
+<i>568</i>&nbsp;            // make readAheadLimit huge -
+<i>569</i>&nbsp;            // in practice, AVA was passed a StringReader from X500Name,
+<i>570</i>&nbsp;            // and StringReader ignores readAheadLimit anyways
+<b class="nc"><i>571</i>&nbsp;            in.mark(9999);</b>
+<i>572</i>&nbsp;            while (true) {
+<b class="nc"><i>573</i>&nbsp;                int nextChar = in.read();</b>
+<b class="nc"><i>574</i>&nbsp;                if (nextChar == -1) {</b>
+<b class="nc"><i>575</i>&nbsp;                    trailing = true;</b>
+<b class="nc"><i>576</i>&nbsp;                    break;</b>
+<b class="nc"><i>577</i>&nbsp;                } else if (nextChar == &#39; &#39;) {</b>
+<b class="nc"><i>578</i>&nbsp;                    continue;</b>
+<b class="nc"><i>579</i>&nbsp;                } else if (nextChar == &#39;\\&#39;) {</b>
+<b class="nc"><i>580</i>&nbsp;                    int followingChar = in.read();</b>
+<b class="nc"><i>581</i>&nbsp;                    if (followingChar != &#39; &#39;) {</b>
+<b class="nc"><i>582</i>&nbsp;                        trailing = false;</b>
+<b class="nc"><i>583</i>&nbsp;                        break;</b>
+<i>584</i>&nbsp;                    }
+<b class="nc"><i>585</i>&nbsp;                } else {</b>
+<b class="nc"><i>586</i>&nbsp;                    trailing = false;</b>
+<b class="nc"><i>587</i>&nbsp;                    break;</b>
+<i>588</i>&nbsp;                }
+<b class="nc"><i>589</i>&nbsp;            }</b>
+<i>590</i>&nbsp;
+<b class="nc"><i>591</i>&nbsp;            in.reset();</b>
+<b class="nc"><i>592</i>&nbsp;            return trailing;</b>
+<i>593</i>&nbsp;        }
+<i>594</i>&nbsp;    }
+<i>595</i>&nbsp;
+<b class="nc"><i>596</i>&nbsp;    AVA(DerValue derval) throws IOException {</b>
+<i>597</i>&nbsp;        // Individual attribute value assertions are SEQUENCE of two values.
+<i>598</i>&nbsp;        // That&#39;d be a &quot;struct&quot; outside of ASN.1.
+<b class="nc"><i>599</i>&nbsp;        if (derval.tag != DerValue.tag_Sequence) {</b>
+<b class="nc"><i>600</i>&nbsp;            throw new IOException(&quot;AVA not a sequence&quot;);</b>
+<i>601</i>&nbsp;        }
+<b class="nc"><i>602</i>&nbsp;        oid = X500Name.intern(derval.data.getOID());</b>
+<b class="nc"><i>603</i>&nbsp;        value = derval.data.getDerValue();</b>
+<i>604</i>&nbsp;
+<b class="nc"><i>605</i>&nbsp;        if (derval.data.available() != 0) {</b>
+<b class="nc"><i>606</i>&nbsp;            throw new IOException(&quot;AVA, extra bytes = &quot;</b>
+<b class="nc"><i>607</i>&nbsp;                + derval.data.available());</b>
+<i>608</i>&nbsp;        }
+<i>609</i>&nbsp;    }
+<i>610</i>&nbsp;
+<i>611</i>&nbsp;    AVA(DerInputStream in) throws IOException {
+<b class="nc"><i>612</i>&nbsp;        this(in.getDerValue());</b>
+<i>613</i>&nbsp;    }
+<i>614</i>&nbsp;
+<i>615</i>&nbsp;    public boolean equals(Object obj) {
+<b class="nc"><i>616</i>&nbsp;        if (this == obj) {</b>
+<b class="nc"><i>617</i>&nbsp;            return true;</b>
+<i>618</i>&nbsp;        }
+<b class="nc"><i>619</i>&nbsp;        if (obj instanceof AVA == false) {</b>
+<b class="nc"><i>620</i>&nbsp;            return false;</b>
+<i>621</i>&nbsp;        }
+<b class="nc"><i>622</i>&nbsp;        AVA other = (AVA)obj;</b>
+<b class="nc"><i>623</i>&nbsp;        return this.toRFC2253CanonicalString().equals</b>
+<b class="nc"><i>624</i>&nbsp;                                (other.toRFC2253CanonicalString());</b>
+<i>625</i>&nbsp;    }
+<i>626</i>&nbsp;
+<i>627</i>&nbsp;    /**
+<i>628</i>&nbsp;     * Returns a hashcode for this AVA.
+<i>629</i>&nbsp;     *
+<i>630</i>&nbsp;     * @return a hashcode for this AVA.
+<i>631</i>&nbsp;     */
+<i>632</i>&nbsp;    public int hashCode() {
+<b class="nc"><i>633</i>&nbsp;        return toRFC2253CanonicalString().hashCode();</b>
+<i>634</i>&nbsp;    }
+<i>635</i>&nbsp;
+<i>636</i>&nbsp;    /*
+<i>637</i>&nbsp;     * AVAs are encoded as a SEQUENCE of two elements.
+<i>638</i>&nbsp;     */
+<i>639</i>&nbsp;    public void encode(DerOutputStream out) throws IOException {
+<b class="nc"><i>640</i>&nbsp;        derEncode(out);</b>
+<i>641</i>&nbsp;    }
+<i>642</i>&nbsp;
+<i>643</i>&nbsp;    /**
+<i>644</i>&nbsp;     * DER encode this object onto an output stream.
+<i>645</i>&nbsp;     * Implements the &lt;code&gt;DerEncoder&lt;/code&gt; interface.
+<i>646</i>&nbsp;     *
+<i>647</i>&nbsp;     * @param out
+<i>648</i>&nbsp;     * the output stream on which to write the DER encoding.
+<i>649</i>&nbsp;     *
+<i>650</i>&nbsp;     * @exception IOException on encoding error.
+<i>651</i>&nbsp;     */
+<i>652</i>&nbsp;    public void derEncode(OutputStream out) throws IOException {
+<b class="nc"><i>653</i>&nbsp;        DerOutputStream         tmp = new DerOutputStream();</b>
+<b class="nc"><i>654</i>&nbsp;        DerOutputStream         tmp2 = new DerOutputStream();</b>
+<i>655</i>&nbsp;
+<b class="nc"><i>656</i>&nbsp;        tmp.putOID(oid);</b>
+<b class="nc"><i>657</i>&nbsp;        value.encode(tmp);</b>
+<b class="nc"><i>658</i>&nbsp;        tmp2.write(DerValue.tag_Sequence, tmp);</b>
+<b class="nc"><i>659</i>&nbsp;        out.write(tmp2.toByteArray());</b>
+<i>660</i>&nbsp;    }
+<i>661</i>&nbsp;
+<i>662</i>&nbsp;    private String toKeyword(int format, Map&lt;String, String&gt; oidMap) {
+<b class="nc"><i>663</i>&nbsp;        return AVAKeyword.getKeyword(oid, format, oidMap);</b>
+<i>664</i>&nbsp;    }
+<i>665</i>&nbsp;
+<i>666</i>&nbsp;    /**
+<i>667</i>&nbsp;     * Returns a printable form of this attribute, using RFC 1779
+<i>668</i>&nbsp;     * syntax for individual attribute/value assertions.
+<i>669</i>&nbsp;     */
+<i>670</i>&nbsp;    public String toString() {
+<b class="nc"><i>671</i>&nbsp;        return toKeywordValueString</b>
+<b class="nc"><i>672</i>&nbsp;            (toKeyword(DEFAULT, Collections.&lt;String, String&gt;emptyMap()));</b>
+<i>673</i>&nbsp;    }
+<i>674</i>&nbsp;
+<i>675</i>&nbsp;    /**
+<i>676</i>&nbsp;     * Returns a printable form of this attribute, using RFC 1779
+<i>677</i>&nbsp;     * syntax for individual attribute/value assertions. It only
+<i>678</i>&nbsp;     * emits standardised keywords.
+<i>679</i>&nbsp;     */
+<i>680</i>&nbsp;    public String toRFC1779String() {
+<b class="nc"><i>681</i>&nbsp;        return toRFC1779String(Collections.&lt;String, String&gt;emptyMap());</b>
+<i>682</i>&nbsp;    }
+<i>683</i>&nbsp;
+<i>684</i>&nbsp;    /**
+<i>685</i>&nbsp;     * Returns a printable form of this attribute, using RFC 1779
+<i>686</i>&nbsp;     * syntax for individual attribute/value assertions. It
+<i>687</i>&nbsp;     * emits standardised keywords, as well as keywords contained in the
+<i>688</i>&nbsp;     * OID/keyword map.
+<i>689</i>&nbsp;     */
+<i>690</i>&nbsp;    public String toRFC1779String(Map&lt;String, String&gt; oidMap) {
+<b class="nc"><i>691</i>&nbsp;        return toKeywordValueString(toKeyword(RFC1779, oidMap));</b>
+<i>692</i>&nbsp;    }
+<i>693</i>&nbsp;
+<i>694</i>&nbsp;    /**
+<i>695</i>&nbsp;     * Returns a printable form of this attribute, using RFC 2253
+<i>696</i>&nbsp;     * syntax for individual attribute/value assertions. It only
+<i>697</i>&nbsp;     * emits standardised keywords.
+<i>698</i>&nbsp;     */
+<i>699</i>&nbsp;    public String toRFC2253String() {
+<b class="nc"><i>700</i>&nbsp;        return toRFC2253String(Collections.&lt;String, String&gt;emptyMap());</b>
+<i>701</i>&nbsp;    }
+<i>702</i>&nbsp;
+<i>703</i>&nbsp;    /**
+<i>704</i>&nbsp;     * Returns a printable form of this attribute, using RFC 2253
+<i>705</i>&nbsp;     * syntax for individual attribute/value assertions. It
+<i>706</i>&nbsp;     * emits standardised keywords, as well as keywords contained in the
+<i>707</i>&nbsp;     * OID/keyword map.
+<i>708</i>&nbsp;     */
+<i>709</i>&nbsp;    public String toRFC2253String(Map&lt;String, String&gt; oidMap) {
+<i>710</i>&nbsp;        /*
+<i>711</i>&nbsp;         * Section 2.3: The AttributeTypeAndValue is encoded as the string
+<i>712</i>&nbsp;         * representation of the AttributeType, followed by an equals character
+<i>713</i>&nbsp;         * (&#39;=&#39; ASCII 61), followed by the string representation of the
+<i>714</i>&nbsp;         * AttributeValue. The encoding of the AttributeValue is given in
+<i>715</i>&nbsp;         * section 2.4.
+<i>716</i>&nbsp;         */
+<b class="nc"><i>717</i>&nbsp;        StringBuilder typeAndValue = new StringBuilder(100);</b>
+<b class="nc"><i>718</i>&nbsp;        typeAndValue.append(toKeyword(RFC2253, oidMap));</b>
+<b class="nc"><i>719</i>&nbsp;        typeAndValue.append(&#39;=&#39;);</b>
+<i>720</i>&nbsp;
+<i>721</i>&nbsp;        /*
+<i>722</i>&nbsp;         * Section 2.4: Converting an AttributeValue from ASN.1 to a String.
+<i>723</i>&nbsp;         * If the AttributeValue is of a type which does not have a string
+<i>724</i>&nbsp;         * representation defined for it, then it is simply encoded as an
+<i>725</i>&nbsp;         * octothorpe character (&#39;#&#39; ASCII 35) followed by the hexadecimal
+<i>726</i>&nbsp;         * representation of each of the bytes of the BER encoding of the X.500
+<i>727</i>&nbsp;         * AttributeValue.  This form SHOULD be used if the AttributeType is of
+<i>728</i>&nbsp;         * the dotted-decimal form.
+<i>729</i>&nbsp;         */
+<b class="nc"><i>730</i>&nbsp;        if ((typeAndValue.charAt(0) &gt;= &#39;0&#39; &amp;&amp; typeAndValue.charAt(0) &lt;= &#39;9&#39;) ||</b>
+<b class="nc"><i>731</i>&nbsp;            !isDerString(value, false))</b>
+<i>732</i>&nbsp;        {
+<b class="nc"><i>733</i>&nbsp;            byte[] data = null;</b>
+<i>734</i>&nbsp;            try {
+<b class="nc"><i>735</i>&nbsp;                data = value.toByteArray();</b>
+<b class="nc"><i>736</i>&nbsp;            } catch (IOException ie) {</b>
+<b class="nc"><i>737</i>&nbsp;                throw new IllegalArgumentException(&quot;DER Value conversion&quot;);</b>
+<b class="nc"><i>738</i>&nbsp;            }</b>
+<b class="nc"><i>739</i>&nbsp;            typeAndValue.append(&#39;#&#39;);</b>
+<b class="nc"><i>740</i>&nbsp;            for (int j = 0; j &lt; data.length; j++) {</b>
+<b class="nc"><i>741</i>&nbsp;                byte b = data[j];</b>
+<b class="nc"><i>742</i>&nbsp;                typeAndValue.append(Character.forDigit(0xF &amp; (b &gt;&gt;&gt; 4), 16));</b>
+<b class="nc"><i>743</i>&nbsp;                typeAndValue.append(Character.forDigit(0xF &amp; b, 16));</b>
+<i>744</i>&nbsp;            }
+<b class="nc"><i>745</i>&nbsp;        } else {</b>
+<i>746</i>&nbsp;            /*
+<i>747</i>&nbsp;             * 2.4 (cont): Otherwise, if the AttributeValue is of a type which
+<i>748</i>&nbsp;             * has a string representation, the value is converted first to a
+<i>749</i>&nbsp;             * UTF-8 string according to its syntax specification.
+<i>750</i>&nbsp;             *
+<i>751</i>&nbsp;             * NOTE: this implementation only emits DirectoryStrings of the
+<i>752</i>&nbsp;             * types returned by isDerString().
+<i>753</i>&nbsp;             */
+<b class="nc"><i>754</i>&nbsp;            String valStr = null;</b>
+<i>755</i>&nbsp;            try {
+<b class="nc"><i>756</i>&nbsp;                valStr = new String(value.getDataBytes(), &quot;UTF8&quot;);</b>
+<b class="nc"><i>757</i>&nbsp;            } catch (IOException ie) {</b>
+<b class="nc"><i>758</i>&nbsp;                throw new IllegalArgumentException(&quot;DER Value conversion&quot;);</b>
+<b class="nc"><i>759</i>&nbsp;            }</b>
+<i>760</i>&nbsp;
+<i>761</i>&nbsp;            /*
+<i>762</i>&nbsp;             * 2.4 (cont): If the UTF-8 string does not have any of the
+<i>763</i>&nbsp;             * following characters which need escaping, then that string can be
+<i>764</i>&nbsp;             * used as the string representation of the value.
+<i>765</i>&nbsp;             *
+<i>766</i>&nbsp;             *   o   a space or &quot;#&quot; character occurring at the beginning of the
+<i>767</i>&nbsp;             *       string
+<i>768</i>&nbsp;             *   o   a space character occurring at the end of the string
+<i>769</i>&nbsp;             *   o   one of the characters &quot;,&quot;, &quot;+&quot;, &quot;&quot;&quot;, &quot;\&quot;, &quot;&lt;&quot;, &quot;&gt;&quot; or &quot;;&quot;
+<i>770</i>&nbsp;             *
+<i>771</i>&nbsp;             * Implementations MAY escape other characters.
+<i>772</i>&nbsp;             *
+<i>773</i>&nbsp;             * NOTE: this implementation also recognizes &quot;=&quot; and &quot;#&quot; as
+<i>774</i>&nbsp;             * characters which need escaping, and null which is escaped as
+<i>775</i>&nbsp;             * &#39;\00&#39; (see RFC 4514).
+<i>776</i>&nbsp;             *
+<i>777</i>&nbsp;             * If a character to be escaped is one of the list shown above, then
+<i>778</i>&nbsp;             * it is prefixed by a backslash (&#39;\&#39; ASCII 92).
+<i>779</i>&nbsp;             *
+<i>780</i>&nbsp;             * Otherwise the character to be escaped is replaced by a backslash
+<i>781</i>&nbsp;             * and two hex digits, which form a single byte in the code of the
+<i>782</i>&nbsp;             * character.
+<i>783</i>&nbsp;             */
+<i>784</i>&nbsp;            final String escapees = &quot;,=+&lt;&gt;#;\&quot;\\&quot;;
+<b class="nc"><i>785</i>&nbsp;            StringBuilder sbuffer = new StringBuilder();</b>
+<i>786</i>&nbsp;
+<b class="nc"><i>787</i>&nbsp;            for (int i = 0; i &lt; valStr.length(); i++) {</b>
+<b class="nc"><i>788</i>&nbsp;                char c = valStr.charAt(i);</b>
+<b class="nc"><i>789</i>&nbsp;                if (DerValue.isPrintableStringChar(c) ||</b>
+<b class="nc"><i>790</i>&nbsp;                    escapees.indexOf(c) &gt;= 0) {</b>
+<i>791</i>&nbsp;
+<i>792</i>&nbsp;                    // escape escapees
+<b class="nc"><i>793</i>&nbsp;                    if (escapees.indexOf(c) &gt;= 0) {</b>
+<b class="nc"><i>794</i>&nbsp;                        sbuffer.append(&#39;\\&#39;);</b>
+<i>795</i>&nbsp;                    }
+<i>796</i>&nbsp;
+<i>797</i>&nbsp;                    // append printable/escaped char
+<b class="nc"><i>798</i>&nbsp;                    sbuffer.append(c);</b>
+<i>799</i>&nbsp;
+<b class="nc"><i>800</i>&nbsp;                } else if (c == &#39;\u0000&#39;) {</b>
+<i>801</i>&nbsp;                    // escape null character
+<b class="nc"><i>802</i>&nbsp;                    sbuffer.append(&quot;\\00&quot;);</b>
+<i>803</i>&nbsp;
+<b class="nc"><i>804</i>&nbsp;                } else if (debug != null &amp;&amp; Debug.isOn(&quot;ava&quot;)) {</b>
+<i>805</i>&nbsp;
+<i>806</i>&nbsp;                    // embed non-printable/non-escaped char
+<i>807</i>&nbsp;                    // as escaped hex pairs for debugging
+<b class="nc"><i>808</i>&nbsp;                    byte[] valueBytes = null;</b>
+<i>809</i>&nbsp;                    try {
+<b class="nc"><i>810</i>&nbsp;                        valueBytes = Character.toString(c).getBytes(&quot;UTF8&quot;);</b>
+<b class="nc"><i>811</i>&nbsp;                    } catch (IOException ie) {</b>
+<b class="nc"><i>812</i>&nbsp;                        throw new IllegalArgumentException</b>
+<i>813</i>&nbsp;                                        (&quot;DER Value conversion&quot;);
+<b class="nc"><i>814</i>&nbsp;                    }</b>
+<b class="nc"><i>815</i>&nbsp;                    for (int j = 0; j &lt; valueBytes.length; j++) {</b>
+<b class="nc"><i>816</i>&nbsp;                        sbuffer.append(&#39;\\&#39;);</b>
+<b class="nc"><i>817</i>&nbsp;                        char hexChar = Character.forDigit</b>
+<b class="nc"><i>818</i>&nbsp;                                (0xF &amp; (valueBytes[j] &gt;&gt;&gt; 4), 16);</b>
+<b class="nc"><i>819</i>&nbsp;                        sbuffer.append(Character.toUpperCase(hexChar));</b>
+<b class="nc"><i>820</i>&nbsp;                        hexChar = Character.forDigit</b>
+<b class="nc"><i>821</i>&nbsp;                                (0xF &amp; (valueBytes[j]), 16);</b>
+<b class="nc"><i>822</i>&nbsp;                        sbuffer.append(Character.toUpperCase(hexChar));</b>
+<i>823</i>&nbsp;                    }
+<b class="nc"><i>824</i>&nbsp;                } else {</b>
+<i>825</i>&nbsp;
+<i>826</i>&nbsp;                    // append non-printable/non-escaped char
+<b class="nc"><i>827</i>&nbsp;                    sbuffer.append(c);</b>
+<i>828</i>&nbsp;                }
+<i>829</i>&nbsp;            }
+<i>830</i>&nbsp;
+<b class="nc"><i>831</i>&nbsp;            char[] chars = sbuffer.toString().toCharArray();</b>
+<b class="nc"><i>832</i>&nbsp;            sbuffer = new StringBuilder();</b>
+<i>833</i>&nbsp;
+<i>834</i>&nbsp;            // Find leading and trailing whitespace.
+<i>835</i>&nbsp;            int lead;   // index of first char that is not leading whitespace
+<b class="nc"><i>836</i>&nbsp;            for (lead = 0; lead &lt; chars.length; lead++) {</b>
+<b class="nc"><i>837</i>&nbsp;                if (chars[lead] != &#39; &#39; &amp;&amp; chars[lead] != &#39;\r&#39;) {</b>
+<b class="nc"><i>838</i>&nbsp;                    break;</b>
+<i>839</i>&nbsp;                }
+<i>840</i>&nbsp;            }
+<i>841</i>&nbsp;            int trail;  // index of last char that is not trailing whitespace
+<b class="nc"><i>842</i>&nbsp;            for (trail = chars.length - 1; trail &gt;= 0; trail--) {</b>
+<b class="nc"><i>843</i>&nbsp;                if (chars[trail] != &#39; &#39; &amp;&amp; chars[trail] != &#39;\r&#39;) {</b>
+<b class="nc"><i>844</i>&nbsp;                    break;</b>
+<i>845</i>&nbsp;                }
+<i>846</i>&nbsp;            }
+<i>847</i>&nbsp;
+<i>848</i>&nbsp;            // escape leading and trailing whitespace
+<b class="nc"><i>849</i>&nbsp;            for (int i = 0; i &lt; chars.length; i++) {</b>
+<b class="nc"><i>850</i>&nbsp;                char c = chars[i];</b>
+<b class="nc"><i>851</i>&nbsp;                if (i &lt; lead || i &gt; trail) {</b>
+<b class="nc"><i>852</i>&nbsp;                    sbuffer.append(&#39;\\&#39;);</b>
+<i>853</i>&nbsp;                }
+<b class="nc"><i>854</i>&nbsp;                sbuffer.append(c);</b>
+<i>855</i>&nbsp;            }
+<b class="nc"><i>856</i>&nbsp;            typeAndValue.append(sbuffer);</b>
+<i>857</i>&nbsp;        }
+<b class="nc"><i>858</i>&nbsp;        return typeAndValue.toString();</b>
+<i>859</i>&nbsp;    }
+<i>860</i>&nbsp;
+<i>861</i>&nbsp;    public String toRFC2253CanonicalString() {
+<i>862</i>&nbsp;        /*
+<i>863</i>&nbsp;         * Section 2.3: The AttributeTypeAndValue is encoded as the string
+<i>864</i>&nbsp;         * representation of the AttributeType, followed by an equals character
+<i>865</i>&nbsp;         * (&#39;=&#39; ASCII 61), followed by the string representation of the
+<i>866</i>&nbsp;         * AttributeValue. The encoding of the AttributeValue is given in
+<i>867</i>&nbsp;         * section 2.4.
+<i>868</i>&nbsp;         */
+<b class="nc"><i>869</i>&nbsp;        StringBuilder typeAndValue = new StringBuilder(40);</b>
+<b class="nc"><i>870</i>&nbsp;        typeAndValue.append</b>
+<b class="nc"><i>871</i>&nbsp;            (toKeyword(RFC2253, Collections.&lt;String, String&gt;emptyMap()));</b>
+<b class="nc"><i>872</i>&nbsp;        typeAndValue.append(&#39;=&#39;);</b>
+<i>873</i>&nbsp;
+<i>874</i>&nbsp;        /*
+<i>875</i>&nbsp;         * Section 2.4: Converting an AttributeValue from ASN.1 to a String.
+<i>876</i>&nbsp;         * If the AttributeValue is of a type which does not have a string
+<i>877</i>&nbsp;         * representation defined for it, then it is simply encoded as an
+<i>878</i>&nbsp;         * octothorpe character (&#39;#&#39; ASCII 35) followed by the hexadecimal
+<i>879</i>&nbsp;         * representation of each of the bytes of the BER encoding of the X.500
+<i>880</i>&nbsp;         * AttributeValue.  This form SHOULD be used if the AttributeType is of
+<i>881</i>&nbsp;         * the dotted-decimal form.
+<i>882</i>&nbsp;         */
+<b class="nc"><i>883</i>&nbsp;        if ((typeAndValue.charAt(0) &gt;= &#39;0&#39; &amp;&amp; typeAndValue.charAt(0) &lt;= &#39;9&#39;) ||</b>
+<b class="nc"><i>884</i>&nbsp;            !isDerString(value, true))</b>
+<i>885</i>&nbsp;        {
+<b class="nc"><i>886</i>&nbsp;            byte[] data = null;</b>
+<i>887</i>&nbsp;            try {
+<b class="nc"><i>888</i>&nbsp;                data = value.toByteArray();</b>
+<b class="nc"><i>889</i>&nbsp;            } catch (IOException ie) {</b>
+<b class="nc"><i>890</i>&nbsp;                throw new IllegalArgumentException(&quot;DER Value conversion&quot;);</b>
+<b class="nc"><i>891</i>&nbsp;            }</b>
+<b class="nc"><i>892</i>&nbsp;            typeAndValue.append(&#39;#&#39;);</b>
+<b class="nc"><i>893</i>&nbsp;            for (int j = 0; j &lt; data.length; j++) {</b>
+<b class="nc"><i>894</i>&nbsp;                byte b = data[j];</b>
+<b class="nc"><i>895</i>&nbsp;                typeAndValue.append(Character.forDigit(0xF &amp; (b &gt;&gt;&gt; 4), 16));</b>
+<b class="nc"><i>896</i>&nbsp;                typeAndValue.append(Character.forDigit(0xF &amp; b, 16));</b>
+<i>897</i>&nbsp;            }
+<b class="nc"><i>898</i>&nbsp;        } else {</b>
+<i>899</i>&nbsp;            /*
+<i>900</i>&nbsp;             * 2.4 (cont): Otherwise, if the AttributeValue is of a type which
+<i>901</i>&nbsp;             * has a string representation, the value is converted first to a
+<i>902</i>&nbsp;             * UTF-8 string according to its syntax specification.
+<i>903</i>&nbsp;             *
+<i>904</i>&nbsp;             * NOTE: this implementation only emits DirectoryStrings of the
+<i>905</i>&nbsp;             * types returned by isDerString().
+<i>906</i>&nbsp;             */
+<b class="nc"><i>907</i>&nbsp;            String valStr = null;</b>
+<i>908</i>&nbsp;            try {
+<b class="nc"><i>909</i>&nbsp;                valStr = new String(value.getDataBytes(), &quot;UTF8&quot;);</b>
+<b class="nc"><i>910</i>&nbsp;            } catch (IOException ie) {</b>
+<b class="nc"><i>911</i>&nbsp;                throw new IllegalArgumentException(&quot;DER Value conversion&quot;);</b>
+<b class="nc"><i>912</i>&nbsp;            }</b>
+<i>913</i>&nbsp;
+<i>914</i>&nbsp;            /*
+<i>915</i>&nbsp;             * 2.4 (cont): If the UTF-8 string does not have any of the
+<i>916</i>&nbsp;             * following characters which need escaping, then that string can be
+<i>917</i>&nbsp;             * used as the string representation of the value.
+<i>918</i>&nbsp;             *
+<i>919</i>&nbsp;             *   o   a space or &quot;#&quot; character occurring at the beginning of the
+<i>920</i>&nbsp;             *       string
+<i>921</i>&nbsp;             *   o   a space character occurring at the end of the string
+<i>922</i>&nbsp;             *
+<i>923</i>&nbsp;             *   o   one of the characters &quot;,&quot;, &quot;+&quot;, &quot;&quot;&quot;, &quot;\&quot;, &quot;&lt;&quot;, &quot;&gt;&quot; or &quot;;&quot;
+<i>924</i>&nbsp;             *
+<i>925</i>&nbsp;             * If a character to be escaped is one of the list shown above, then
+<i>926</i>&nbsp;             * it is prefixed by a backslash (&#39;\&#39; ASCII 92).
+<i>927</i>&nbsp;             *
+<i>928</i>&nbsp;             * Otherwise the character to be escaped is replaced by a backslash
+<i>929</i>&nbsp;             * and two hex digits, which form a single byte in the code of the
+<i>930</i>&nbsp;             * character.
+<i>931</i>&nbsp;             */
+<i>932</i>&nbsp;            final String escapees = &quot;,+&lt;&gt;;\&quot;\\&quot;;
+<b class="nc"><i>933</i>&nbsp;            StringBuilder sbuffer = new StringBuilder();</b>
+<b class="nc"><i>934</i>&nbsp;            boolean previousWhite = false;</b>
+<i>935</i>&nbsp;
+<b class="nc"><i>936</i>&nbsp;            for (int i = 0; i &lt; valStr.length(); i++) {</b>
+<b class="nc"><i>937</i>&nbsp;                char c = valStr.charAt(i);</b>
+<i>938</i>&nbsp;
+<b class="nc"><i>939</i>&nbsp;                if (DerValue.isPrintableStringChar(c) ||</b>
+<b class="nc"><i>940</i>&nbsp;                    escapees.indexOf(c) &gt;= 0 ||</b>
+<i>941</i>&nbsp;                    (i == 0 &amp;&amp; c == &#39;#&#39;)) {
+<i>942</i>&nbsp;
+<i>943</i>&nbsp;                    // escape leading &#39;#&#39; and escapees
+<b class="nc"><i>944</i>&nbsp;                    if ((i == 0 &amp;&amp; c == &#39;#&#39;) || escapees.indexOf(c) &gt;= 0) {</b>
+<b class="nc"><i>945</i>&nbsp;                        sbuffer.append(&#39;\\&#39;);</b>
+<i>946</i>&nbsp;                    }
+<i>947</i>&nbsp;
+<i>948</i>&nbsp;                    // convert multiple whitespace to single whitespace
+<b class="nc"><i>949</i>&nbsp;                    if (!Character.isWhitespace(c)) {</b>
+<b class="nc"><i>950</i>&nbsp;                        previousWhite = false;</b>
+<b class="nc"><i>951</i>&nbsp;                        sbuffer.append(c);</b>
+<i>952</i>&nbsp;                    } else {
+<b class="nc"><i>953</i>&nbsp;                        if (previousWhite == false) {</b>
+<i>954</i>&nbsp;                            // add single whitespace
+<b class="nc"><i>955</i>&nbsp;                            previousWhite = true;</b>
+<b class="nc"><i>956</i>&nbsp;                            sbuffer.append(c);</b>
+<i>957</i>&nbsp;                        } else {
+<i>958</i>&nbsp;                            // ignore subsequent consecutive whitespace
+<i>959</i>&nbsp;                            continue;
+<i>960</i>&nbsp;                        }
+<i>961</i>&nbsp;                    }
+<i>962</i>&nbsp;
+<b class="nc"><i>963</i>&nbsp;                } else if (debug != null &amp;&amp; Debug.isOn(&quot;ava&quot;)) {</b>
+<i>964</i>&nbsp;
+<i>965</i>&nbsp;                    // embed non-printable/non-escaped char
+<i>966</i>&nbsp;                    // as escaped hex pairs for debugging
+<i>967</i>&nbsp;
+<b class="nc"><i>968</i>&nbsp;                    previousWhite = false;</b>
+<i>969</i>&nbsp;
+<b class="nc"><i>970</i>&nbsp;                    byte[] valueBytes = null;</b>
+<i>971</i>&nbsp;                    try {
+<b class="nc"><i>972</i>&nbsp;                        valueBytes = Character.toString(c).getBytes(&quot;UTF8&quot;);</b>
+<b class="nc"><i>973</i>&nbsp;                    } catch (IOException ie) {</b>
+<b class="nc"><i>974</i>&nbsp;                        throw new IllegalArgumentException</b>
+<i>975</i>&nbsp;                                        (&quot;DER Value conversion&quot;);
+<b class="nc"><i>976</i>&nbsp;                    }</b>
+<b class="nc"><i>977</i>&nbsp;                    for (int j = 0; j &lt; valueBytes.length; j++) {</b>
+<b class="nc"><i>978</i>&nbsp;                        sbuffer.append(&#39;\\&#39;);</b>
+<b class="nc"><i>979</i>&nbsp;                        sbuffer.append(Character.forDigit</b>
+<b class="nc"><i>980</i>&nbsp;                                        (0xF &amp; (valueBytes[j] &gt;&gt;&gt; 4), 16));</b>
+<b class="nc"><i>981</i>&nbsp;                        sbuffer.append(Character.forDigit</b>
+<b class="nc"><i>982</i>&nbsp;                                        (0xF &amp; (valueBytes[j]), 16));</b>
+<i>983</i>&nbsp;                    }
+<b class="nc"><i>984</i>&nbsp;                } else {</b>
+<i>985</i>&nbsp;
+<i>986</i>&nbsp;                    // append non-printable/non-escaped char
+<i>987</i>&nbsp;
+<b class="nc"><i>988</i>&nbsp;                    previousWhite = false;</b>
+<b class="nc"><i>989</i>&nbsp;                    sbuffer.append(c);</b>
+<i>990</i>&nbsp;                }
+<i>991</i>&nbsp;            }
+<i>992</i>&nbsp;
+<i>993</i>&nbsp;            // remove leading and trailing whitespace from value
+<b class="nc"><i>994</i>&nbsp;            typeAndValue.append(sbuffer.toString().trim());</b>
+<i>995</i>&nbsp;        }
+<i>996</i>&nbsp;
+<b class="nc"><i>997</i>&nbsp;        String canon = typeAndValue.toString();</b>
+<b class="nc"><i>998</i>&nbsp;        canon = canon.toUpperCase(Locale.US).toLowerCase(Locale.US);</b>
+<b class="nc"><i>999</i>&nbsp;        return Normalizer.normalize(canon, Normalizer.Form.NFKD);</b>
+<i>1000</i>&nbsp;    }
+<i>1001</i>&nbsp;
+<i>1002</i>&nbsp;    /*
+<i>1003</i>&nbsp;     * Return true if DerValue can be represented as a String.
+<i>1004</i>&nbsp;     */
+<i>1005</i>&nbsp;    private static boolean isDerString(DerValue value, boolean canonical) {
+<b class="nc"><i>1006</i>&nbsp;        if (canonical) {</b>
+<b class="nc"><i>1007</i>&nbsp;            switch (value.tag) {</b>
+<i>1008</i>&nbsp;                case DerValue.tag_PrintableString:
+<i>1009</i>&nbsp;                case DerValue.tag_UTF8String:
+<b class="nc"><i>1010</i>&nbsp;                    return true;</b>
+<i>1011</i>&nbsp;                default:
+<b class="nc"><i>1012</i>&nbsp;                    return false;</b>
+<i>1013</i>&nbsp;            }
+<i>1014</i>&nbsp;        } else {
+<b class="nc"><i>1015</i>&nbsp;            switch (value.tag) {</b>
+<i>1016</i>&nbsp;                case DerValue.tag_PrintableString:
+<i>1017</i>&nbsp;                case DerValue.tag_T61String:
+<i>1018</i>&nbsp;                case DerValue.tag_IA5String:
+<i>1019</i>&nbsp;                case DerValue.tag_GeneralString:
+<i>1020</i>&nbsp;                case DerValue.tag_BMPString:
+<i>1021</i>&nbsp;                case DerValue.tag_UTF8String:
+<b class="nc"><i>1022</i>&nbsp;                    return true;</b>
+<i>1023</i>&nbsp;                default:
+<b class="nc"><i>1024</i>&nbsp;                    return false;</b>
+<i>1025</i>&nbsp;            }
+<i>1026</i>&nbsp;        }
+<i>1027</i>&nbsp;    }
+<i>1028</i>&nbsp;
+<i>1029</i>&nbsp;    boolean hasRFC2253Keyword() {
+<b class="nc"><i>1030</i>&nbsp;        return AVAKeyword.hasKeyword(oid, RFC2253);</b>
+<i>1031</i>&nbsp;    }
+<i>1032</i>&nbsp;
+<i>1033</i>&nbsp;    private String toKeywordValueString(String keyword) {
+<i>1034</i>&nbsp;        /*
+<i>1035</i>&nbsp;         * Construct the value with as little copying and garbage
+<i>1036</i>&nbsp;         * production as practical.  First the keyword (mandatory),
+<i>1037</i>&nbsp;         * then the equals sign, finally the value.
+<i>1038</i>&nbsp;         */
+<b class="nc"><i>1039</i>&nbsp;        StringBuilder   retval = new StringBuilder(40);</b>
+<i>1040</i>&nbsp;
+<b class="nc"><i>1041</i>&nbsp;        retval.append(keyword);</b>
+<b class="nc"><i>1042</i>&nbsp;        retval.append(&#39;=&#39;);</b>
+<i>1043</i>&nbsp;
+<i>1044</i>&nbsp;        try {
+<b class="nc"><i>1045</i>&nbsp;            String valStr = value.getAsString();</b>
+<i>1046</i>&nbsp;
+<b class="nc"><i>1047</i>&nbsp;            if (valStr == null) {</b>
+<i>1048</i>&nbsp;
+<i>1049</i>&nbsp;                // rfc1779 specifies that attribute values associated
+<i>1050</i>&nbsp;                // with non-standard keyword attributes may be represented
+<i>1051</i>&nbsp;                // using the hex format below.  This will be used only
+<i>1052</i>&nbsp;                // when the value is not a string type
+<i>1053</i>&nbsp;
+<b class="nc"><i>1054</i>&nbsp;                byte[] data = value.toByteArray();</b>
+<i>1055</i>&nbsp;
+<b class="nc"><i>1056</i>&nbsp;                retval.append(&#39;#&#39;);</b>
+<b class="nc"><i>1057</i>&nbsp;                for (int i = 0; i &lt; data.length; i++) {</b>
+<b class="nc"><i>1058</i>&nbsp;                    retval.append(hexDigits.charAt((data [i] &gt;&gt; 4) &amp; 0x0f));</b>
+<b class="nc"><i>1059</i>&nbsp;                    retval.append(hexDigits.charAt(data [i] &amp; 0x0f));</b>
+<i>1060</i>&nbsp;                }
+<i>1061</i>&nbsp;
+<b class="nc"><i>1062</i>&nbsp;            } else {</b>
+<i>1063</i>&nbsp;
+<b class="nc"><i>1064</i>&nbsp;                boolean quoteNeeded = false;</b>
+<b class="nc"><i>1065</i>&nbsp;                StringBuilder sbuffer = new StringBuilder();</b>
+<b class="nc"><i>1066</i>&nbsp;                boolean previousWhite = false;</b>
+<i>1067</i>&nbsp;                final String escapees = &quot;,+=\n&lt;&gt;#;\\\&quot;&quot;;
+<i>1068</i>&nbsp;
+<i>1069</i>&nbsp;                /*
+<i>1070</i>&nbsp;                 * Special characters (e.g. AVA list separators) cause strings
+<i>1071</i>&nbsp;                 * to need quoting, or at least escaping.  So do leading or
+<i>1072</i>&nbsp;                 * trailing spaces, and multiple internal spaces.
+<i>1073</i>&nbsp;                 */
+<b class="nc"><i>1074</i>&nbsp;                int length = valStr.length();</b>
+<b class="nc"><i>1075</i>&nbsp;                boolean alreadyQuoted =</b>
+<b class="nc"><i>1076</i>&nbsp;                    (length &gt; 1 &amp;&amp; valStr.charAt(0) == &#39;\&quot;&#39;</b>
+<b class="nc"><i>1077</i>&nbsp;                     &amp;&amp; valStr.charAt(length - 1) == &#39;\&quot;&#39;);</b>
+<i>1078</i>&nbsp;
+<b class="nc"><i>1079</i>&nbsp;                for (int i = 0; i &lt; length; i++) {</b>
+<b class="nc"><i>1080</i>&nbsp;                    char c = valStr.charAt(i);</b>
+<b class="nc"><i>1081</i>&nbsp;                    if (alreadyQuoted &amp;&amp; (i == 0 || i == length - 1)) {</b>
+<b class="nc"><i>1082</i>&nbsp;                        sbuffer.append(c);</b>
+<b class="nc"><i>1083</i>&nbsp;                        continue;</b>
+<i>1084</i>&nbsp;                    }
+<b class="nc"><i>1085</i>&nbsp;                    if (DerValue.isPrintableStringChar(c) ||</b>
+<b class="nc"><i>1086</i>&nbsp;                        escapees.indexOf(c) &gt;= 0) {</b>
+<i>1087</i>&nbsp;
+<i>1088</i>&nbsp;                        // quote if leading whitespace or special chars
+<b class="nc"><i>1089</i>&nbsp;                        if (!quoteNeeded &amp;&amp;</b>
+<i>1090</i>&nbsp;                            ((i == 0 &amp;&amp; (c == &#39; &#39; || c == &#39;\n&#39;)) ||
+<b class="nc"><i>1091</i>&nbsp;                                escapees.indexOf(c) &gt;= 0)) {</b>
+<b class="nc"><i>1092</i>&nbsp;                            quoteNeeded = true;</b>
+<i>1093</i>&nbsp;                        }
+<i>1094</i>&nbsp;
+<i>1095</i>&nbsp;                        // quote if multiple internal whitespace
+<b class="nc"><i>1096</i>&nbsp;                        if (!(c == &#39; &#39; || c == &#39;\n&#39;)) {</b>
+<i>1097</i>&nbsp;                            // escape &#39;&quot;&#39; and &#39;\&#39;
+<b class="nc"><i>1098</i>&nbsp;                            if (c == &#39;&quot;&#39; || c == &#39;\\&#39;) {</b>
+<b class="nc"><i>1099</i>&nbsp;                                sbuffer.append(&#39;\\&#39;);</b>
+<i>1100</i>&nbsp;                            }
+<b class="nc"><i>1101</i>&nbsp;                            previousWhite = false;</b>
+<i>1102</i>&nbsp;                        } else {
+<b class="nc"><i>1103</i>&nbsp;                            if (!quoteNeeded &amp;&amp; previousWhite) {</b>
+<b class="nc"><i>1104</i>&nbsp;                                quoteNeeded = true;</b>
+<i>1105</i>&nbsp;                            }
+<b class="nc"><i>1106</i>&nbsp;                            previousWhite = true;</b>
+<i>1107</i>&nbsp;                        }
+<i>1108</i>&nbsp;
+<b class="nc"><i>1109</i>&nbsp;                        sbuffer.append(c);</b>
+<i>1110</i>&nbsp;
+<b class="nc"><i>1111</i>&nbsp;                    } else if (debug != null &amp;&amp; Debug.isOn(&quot;ava&quot;)) {</b>
+<i>1112</i>&nbsp;
+<i>1113</i>&nbsp;                        // embed non-printable/non-escaped char
+<i>1114</i>&nbsp;                        // as escaped hex pairs for debugging
+<i>1115</i>&nbsp;
+<b class="nc"><i>1116</i>&nbsp;                        previousWhite = false;</b>
+<i>1117</i>&nbsp;
+<i>1118</i>&nbsp;                        // embed escaped hex pairs
+<b class="nc"><i>1119</i>&nbsp;                        byte[] valueBytes =</b>
+<b class="nc"><i>1120</i>&nbsp;                                Character.toString(c).getBytes(&quot;UTF8&quot;);</b>
+<b class="nc"><i>1121</i>&nbsp;                        for (int j = 0; j &lt; valueBytes.length; j++) {</b>
+<b class="nc"><i>1122</i>&nbsp;                            sbuffer.append(&#39;\\&#39;);</b>
+<b class="nc"><i>1123</i>&nbsp;                            char hexChar = Character.forDigit</b>
+<b class="nc"><i>1124</i>&nbsp;                                        (0xF &amp; (valueBytes[j] &gt;&gt;&gt; 4), 16);</b>
+<b class="nc"><i>1125</i>&nbsp;                            sbuffer.append(Character.toUpperCase(hexChar));</b>
+<b class="nc"><i>1126</i>&nbsp;                            hexChar = Character.forDigit</b>
+<b class="nc"><i>1127</i>&nbsp;                                        (0xF &amp; (valueBytes[j]), 16);</b>
+<b class="nc"><i>1128</i>&nbsp;                            sbuffer.append(Character.toUpperCase(hexChar));</b>
+<i>1129</i>&nbsp;                        }
+<b class="nc"><i>1130</i>&nbsp;                    } else {</b>
+<i>1131</i>&nbsp;
+<i>1132</i>&nbsp;                        // append non-printable/non-escaped char
+<i>1133</i>&nbsp;
+<b class="nc"><i>1134</i>&nbsp;                        previousWhite = false;</b>
+<b class="nc"><i>1135</i>&nbsp;                        sbuffer.append(c);</b>
+<i>1136</i>&nbsp;                    }
+<i>1137</i>&nbsp;                }
+<i>1138</i>&nbsp;
+<i>1139</i>&nbsp;                // quote if trailing whitespace
+<b class="nc"><i>1140</i>&nbsp;                if (sbuffer.length() &gt; 0) {</b>
+<b class="nc"><i>1141</i>&nbsp;                    char trailChar = sbuffer.charAt(sbuffer.length() - 1);</b>
+<b class="nc"><i>1142</i>&nbsp;                    if (trailChar == &#39; &#39; || trailChar == &#39;\n&#39;) {</b>
+<b class="nc"><i>1143</i>&nbsp;                        quoteNeeded = true;</b>
+<i>1144</i>&nbsp;                    }
+<i>1145</i>&nbsp;                }
+<i>1146</i>&nbsp;
+<i>1147</i>&nbsp;                // Emit the string ... quote it if needed
+<i>1148</i>&nbsp;                // if string is already quoted, don&#39;t re-quote
+<b class="nc"><i>1149</i>&nbsp;                if (!alreadyQuoted &amp;&amp; quoteNeeded) {</b>
+<b class="nc"><i>1150</i>&nbsp;                    retval.append(&#39;\&quot;&#39;)</b>
+<i>1151</i>&nbsp;                        .append(sbuffer)
+<b class="nc"><i>1152</i>&nbsp;                        .append(&#39;\&quot;&#39;);</b>
+<i>1153</i>&nbsp;                } else {
+<i>1154</i>&nbsp;                    retval.append(sbuffer);
+<b class="nc"><i>1155</i>&nbsp;                }</b>
+<b class="nc"><i>1156</i>&nbsp;            }</b>
+<b class="nc"><i>1157</i>&nbsp;        } catch (IOException e) {</b>
+<i>1158</i>&nbsp;            throw new IllegalArgumentException(&quot;DER Value conversion&quot;);
+<b class="nc"><i>1159</i>&nbsp;        }</b>
+<i>1160</i>&nbsp;
+<i>1161</i>&nbsp;        return retval.toString();
+<i>1162</i>&nbsp;    }
+<i>1163</i>&nbsp;
+<i>1164</i>&nbsp;}
+<i>1165</i>&nbsp;
+<i>1166</i>&nbsp;/**
+<i>1167</i>&nbsp; * Helper class that allows conversion from String to ObjectIdentifier and
+<i>1168</i>&nbsp; * vice versa according to RFC1779, RFC2253, and an augmented version of
+<i>1169</i>&nbsp; * those standards.
+<i>1170</i>&nbsp; */
+<i>1171</i>&nbsp;class AVAKeyword {
+<i>1172</i>&nbsp;
+<i>1173</i>&nbsp;    private static final Map&lt;ObjectIdentifier,AVAKeyword&gt; oidMap;
+<i>1174</i>&nbsp;    private static final Map&lt;String,AVAKeyword&gt; keywordMap;
+<i>1175</i>&nbsp;
+<i>1176</i>&nbsp;    private String keyword;
+<i>1177</i>&nbsp;    private ObjectIdentifier oid;
+<i>1178</i>&nbsp;    private boolean rfc1779Compliant, rfc2253Compliant;
+<i>1179</i>&nbsp;
+<i>1180</i>&nbsp;    private AVAKeyword(String keyword, ObjectIdentifier oid,
+<i>1181</i>&nbsp;               boolean rfc1779Compliant, boolean rfc2253Compliant) {
+<i>1182</i>&nbsp;        this.keyword = keyword;
+<i>1183</i>&nbsp;        this.oid = oid;
+<i>1184</i>&nbsp;        this.rfc1779Compliant = rfc1779Compliant;
+<i>1185</i>&nbsp;        this.rfc2253Compliant = rfc2253Compliant;
+<i>1186</i>&nbsp;
+<i>1187</i>&nbsp;        // register it
+<i>1188</i>&nbsp;        oidMap.put(oid, this);
+<i>1189</i>&nbsp;        keywordMap.put(keyword, this);
+<i>1190</i>&nbsp;    }
+<i>1191</i>&nbsp;
+<i>1192</i>&nbsp;    private boolean isCompliant(int standard) {
+<i>1193</i>&nbsp;        switch (standard) {
+<i>1194</i>&nbsp;        case AVA.RFC1779:
+<i>1195</i>&nbsp;            return rfc1779Compliant;
+<i>1196</i>&nbsp;        case AVA.RFC2253:
+<i>1197</i>&nbsp;            return rfc2253Compliant;
+<i>1198</i>&nbsp;        case AVA.DEFAULT:
+<i>1199</i>&nbsp;            return true;
+<i>1200</i>&nbsp;        default:
+<i>1201</i>&nbsp;            // should not occur, internal error
+<i>1202</i>&nbsp;            throw new IllegalArgumentException(&quot;Invalid standard &quot; + standard);
+<i>1203</i>&nbsp;        }
+<i>1204</i>&nbsp;    }
+<i>1205</i>&nbsp;
+<i>1206</i>&nbsp;    /**
+<i>1207</i>&nbsp;     * Get an object identifier representing the specified keyword (or
+<i>1208</i>&nbsp;     * string encoded object identifier) in the given standard.
+<i>1209</i>&nbsp;     *
+<i>1210</i>&nbsp;     * @param keywordMap a Map where a keyword String maps to a corresponding
+<i>1211</i>&nbsp;     *   OID String. Each AVA keyword will be mapped to the corresponding OID.
+<i>1212</i>&nbsp;     *   If an entry does not exist, it will fallback to the builtin
+<i>1213</i>&nbsp;     *   keyword/OID mapping.
+<i>1214</i>&nbsp;     * @throws IOException If the keyword is not valid in the specified standard
+<i>1215</i>&nbsp;     *   or the OID String to which a keyword maps to is improperly formatted.
+<i>1216</i>&nbsp;     */
+<i>1217</i>&nbsp;    static ObjectIdentifier getOID
+<i>1218</i>&nbsp;        (String keyword, int standard, Map&lt;String, String&gt; extraKeywordMap)
+<i>1219</i>&nbsp;            throws IOException {
+<i>1220</i>&nbsp;
+<i>1221</i>&nbsp;        keyword = keyword.toUpperCase(Locale.ENGLISH);
+<i>1222</i>&nbsp;        if (standard == AVA.RFC2253) {
+<i>1223</i>&nbsp;            if (keyword.startsWith(&quot; &quot;) || keyword.endsWith(&quot; &quot;)) {
+<i>1224</i>&nbsp;                throw new IOException(&quot;Invalid leading or trailing space &quot; +
+<i>1225</i>&nbsp;                        &quot;in keyword \&quot;&quot; + keyword + &quot;\&quot;&quot;);
+<i>1226</i>&nbsp;            }
+<i>1227</i>&nbsp;        } else {
+<i>1228</i>&nbsp;            keyword = keyword.trim();
+<i>1229</i>&nbsp;        }
+<i>1230</i>&nbsp;
+<i>1231</i>&nbsp;        // check user-specified keyword map first, then fallback to built-in
+<i>1232</i>&nbsp;        // map
+<i>1233</i>&nbsp;        String oidString = extraKeywordMap.get(keyword);
+<i>1234</i>&nbsp;        if (oidString == null) {
+<i>1235</i>&nbsp;            AVAKeyword ak = keywordMap.get(keyword);
+<i>1236</i>&nbsp;            if ((ak != null) &amp;&amp; ak.isCompliant(standard)) {
+<i>1237</i>&nbsp;                return ak.oid;
+<i>1238</i>&nbsp;            }
+<i>1239</i>&nbsp;        } else {
+<i>1240</i>&nbsp;            return new ObjectIdentifier(oidString);
+<i>1241</i>&nbsp;        }
+<i>1242</i>&nbsp;
+<i>1243</i>&nbsp;        // no keyword found, check if OID string
+<i>1244</i>&nbsp;        if (standard == AVA.DEFAULT &amp;&amp; keyword.startsWith(&quot;OID.&quot;)) {
+<i>1245</i>&nbsp;            keyword = keyword.substring(4);
+<i>1246</i>&nbsp;        }
+<i>1247</i>&nbsp;
+<i>1248</i>&nbsp;        boolean number = false;
+<i>1249</i>&nbsp;        if (keyword.length() != 0) {
+<i>1250</i>&nbsp;            char ch = keyword.charAt(0);
+<i>1251</i>&nbsp;            if ((ch &gt;= &#39;0&#39;) &amp;&amp; (ch &lt;= &#39;9&#39;)) {
+<i>1252</i>&nbsp;                number = true;
+<i>1253</i>&nbsp;            }
+<i>1254</i>&nbsp;        }
+<i>1255</i>&nbsp;        if (number == false) {
+<i>1256</i>&nbsp;            throw new IOException(&quot;Invalid keyword \&quot;&quot; + keyword + &quot;\&quot;&quot;);
+<i>1257</i>&nbsp;        }
+<i>1258</i>&nbsp;        return new ObjectIdentifier(keyword);
+<i>1259</i>&nbsp;    }
+<i>1260</i>&nbsp;
+<i>1261</i>&nbsp;    /**
+<i>1262</i>&nbsp;     * Get a keyword for the given ObjectIdentifier according to standard.
+<i>1263</i>&nbsp;     * If no keyword is available, the ObjectIdentifier is encoded as a
+<i>1264</i>&nbsp;     * String.
+<i>1265</i>&nbsp;     */
+<i>1266</i>&nbsp;    static String getKeyword(ObjectIdentifier oid, int standard) {
+<i>1267</i>&nbsp;        return getKeyword
+<i>1268</i>&nbsp;            (oid, standard, Collections.&lt;String, String&gt;emptyMap());
+<i>1269</i>&nbsp;    }
+<i>1270</i>&nbsp;
+<i>1271</i>&nbsp;    /**
+<i>1272</i>&nbsp;     * Get a keyword for the given ObjectIdentifier according to standard.
+<i>1273</i>&nbsp;     * Checks the extraOidMap for a keyword first, then falls back to the
+<i>1274</i>&nbsp;     * builtin/default set. If no keyword is available, the ObjectIdentifier
+<i>1275</i>&nbsp;     * is encoded as a String.
+<i>1276</i>&nbsp;     */
+<i>1277</i>&nbsp;    static String getKeyword
+<i>1278</i>&nbsp;        (ObjectIdentifier oid, int standard, Map&lt;String, String&gt; extraOidMap) {
+<i>1279</i>&nbsp;
+<i>1280</i>&nbsp;        // check extraOidMap first, then fallback to built-in map
+<i>1281</i>&nbsp;        String oidString = oid.toString();
+<i>1282</i>&nbsp;        String keywordString = extraOidMap.get(oidString);
+<i>1283</i>&nbsp;        if (keywordString == null) {
+<i>1284</i>&nbsp;            AVAKeyword ak = oidMap.get(oid);
+<i>1285</i>&nbsp;            if ((ak != null) &amp;&amp; ak.isCompliant(standard)) {
+<i>1286</i>&nbsp;                return ak.keyword;
+<i>1287</i>&nbsp;            }
+<i>1288</i>&nbsp;        } else {
+<i>1289</i>&nbsp;            if (keywordString.length() == 0) {
+<i>1290</i>&nbsp;                throw new IllegalArgumentException(&quot;keyword cannot be empty&quot;);
+<i>1291</i>&nbsp;            }
+<i>1292</i>&nbsp;            keywordString = keywordString.trim();
+<i>1293</i>&nbsp;            char c = keywordString.charAt(0);
+<i>1294</i>&nbsp;            if (c &lt; 65 || c &gt; 122 || (c &gt; 90 &amp;&amp; c &lt; 97)) {
+<i>1295</i>&nbsp;                throw new IllegalArgumentException
+<i>1296</i>&nbsp;                    (&quot;keyword does not start with letter&quot;);
+<i>1297</i>&nbsp;            }
+<i>1298</i>&nbsp;            for (int i=1; i&lt;keywordString.length(); i++) {
+<i>1299</i>&nbsp;                c = keywordString.charAt(i);
+<i>1300</i>&nbsp;                if ((c &lt; 65 || c &gt; 122 || (c &gt; 90 &amp;&amp; c &lt; 97)) &amp;&amp;
+<i>1301</i>&nbsp;                    (c &lt; 48 || c &gt; 57) &amp;&amp; c != &#39;_&#39;) {
+<i>1302</i>&nbsp;                    throw new IllegalArgumentException
+<i>1303</i>&nbsp;                    (&quot;keyword character is not a letter, digit, or underscore&quot;);
+<i>1304</i>&nbsp;                }
+<i>1305</i>&nbsp;            }
+<i>1306</i>&nbsp;            return keywordString;
+<i>1307</i>&nbsp;        }
+<i>1308</i>&nbsp;        // no compliant keyword, use OID
+<i>1309</i>&nbsp;        if (standard == AVA.RFC2253) {
+<i>1310</i>&nbsp;            return oidString;
+<i>1311</i>&nbsp;        } else {
+<i>1312</i>&nbsp;            return &quot;OID.&quot; + oidString;
+<i>1313</i>&nbsp;        }
+<i>1314</i>&nbsp;    }
+<i>1315</i>&nbsp;
+<i>1316</i>&nbsp;    /**
+<i>1317</i>&nbsp;     * Test if oid has an associated keyword in standard.
+<i>1318</i>&nbsp;     */
+<i>1319</i>&nbsp;    static boolean hasKeyword(ObjectIdentifier oid, int standard) {
+<i>1320</i>&nbsp;        AVAKeyword ak = oidMap.get(oid);
+<i>1321</i>&nbsp;        if (ak == null) {
+<i>1322</i>&nbsp;            return false;
+<i>1323</i>&nbsp;        }
+<i>1324</i>&nbsp;        return ak.isCompliant(standard);
+<i>1325</i>&nbsp;    }
+<i>1326</i>&nbsp;
+<i>1327</i>&nbsp;    static {
+<i>1328</i>&nbsp;        oidMap = new HashMap&lt;ObjectIdentifier,AVAKeyword&gt;();
+<i>1329</i>&nbsp;        keywordMap = new HashMap&lt;String,AVAKeyword&gt;();
+<i>1330</i>&nbsp;
+<i>1331</i>&nbsp;        // NOTE if multiple keywords are available for one OID, order
+<i>1332</i>&nbsp;        // is significant!! Preferred *LAST*.
+<i>1333</i>&nbsp;        new AVAKeyword(&quot;CN&quot;,           X500Name.commonName_oid,   true,  true);
+<i>1334</i>&nbsp;        new AVAKeyword(&quot;C&quot;,            X500Name.countryName_oid,  true,  true);
+<i>1335</i>&nbsp;        new AVAKeyword(&quot;L&quot;,            X500Name.localityName_oid, true,  true);
+<i>1336</i>&nbsp;        new AVAKeyword(&quot;S&quot;,            X500Name.stateName_oid,    false, false);
+<i>1337</i>&nbsp;        new AVAKeyword(&quot;ST&quot;,           X500Name.stateName_oid,    true,  true);
+<i>1338</i>&nbsp;        new AVAKeyword(&quot;O&quot;,            X500Name.orgName_oid,      true,  true);
+<i>1339</i>&nbsp;        new AVAKeyword(&quot;OU&quot;,           X500Name.orgUnitName_oid,  true,  true);
+<i>1340</i>&nbsp;        new AVAKeyword(&quot;T&quot;,            X500Name.title_oid,        false, false);
+<i>1341</i>&nbsp;        new AVAKeyword(&quot;IP&quot;,           X500Name.ipAddress_oid,    false, false);
+<i>1342</i>&nbsp;        new AVAKeyword(&quot;STREET&quot;,       X500Name.streetAddress_oid,true,  true);
+<i>1343</i>&nbsp;        new AVAKeyword(&quot;DC&quot;,           X500Name.DOMAIN_COMPONENT_OID,
+<i>1344</i>&nbsp;                                                                  false, true);
+<i>1345</i>&nbsp;        new AVAKeyword(&quot;DNQUALIFIER&quot;,  X500Name.DNQUALIFIER_OID,  false, false);
+<i>1346</i>&nbsp;        new AVAKeyword(&quot;DNQ&quot;,          X500Name.DNQUALIFIER_OID,  false, false);
+<i>1347</i>&nbsp;        new AVAKeyword(&quot;SURNAME&quot;,      X500Name.SURNAME_OID,      false, false);
+<i>1348</i>&nbsp;        new AVAKeyword(&quot;GIVENNAME&quot;,    X500Name.GIVENNAME_OID,    false, false);
+<i>1349</i>&nbsp;        new AVAKeyword(&quot;INITIALS&quot;,     X500Name.INITIALS_OID,     false, false);
+<i>1350</i>&nbsp;        new AVAKeyword(&quot;GENERATION&quot;,   X500Name.GENERATIONQUALIFIER_OID,
+<i>1351</i>&nbsp;                                                                  false, false);
+<i>1352</i>&nbsp;        new AVAKeyword(&quot;EMAIL&quot;, PKCS9Attribute.EMAIL_ADDRESS_OID, false, false);
+<i>1353</i>&nbsp;        new AVAKeyword(&quot;EMAILADDRESS&quot;, PKCS9Attribute.EMAIL_ADDRESS_OID,
+<i>1354</i>&nbsp;                                                                  false, false);
+<i>1355</i>&nbsp;        new AVAKeyword(&quot;UID&quot;,          X500Name.userid_oid,       false, true);
+<i>1356</i>&nbsp;        new AVAKeyword(&quot;SERIALNUMBER&quot;, X500Name.SERIALNUMBER_OID, false, false);
+<i>1357</i>&nbsp;    }
+<i>1358</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,1386 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: LdapSchemaParser</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.jndi.ldap</a> ]
+</div>
+
+<h1>Coverage Summary for Class: LdapSchemaParser (com.sun.jndi.ldap)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">LdapSchemaParser</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 34)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 494)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1999, 2011, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.jndi.ldap;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import javax.naming.*;
+<i>29</i>&nbsp;import javax.naming.directory.*;
+<i>30</i>&nbsp;import java.util.Vector;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;/**
+<i>33</i>&nbsp; * Netscape&#39;s 3.1 servers have some schema bugs:
+<i>34</i>&nbsp; * - It puts quotes around OIDs (such as those for SUP, SYNTAX).
+<i>35</i>&nbsp; * - When you try to write out the MUST/MAY list (such as &quot;MUST cn&quot;),
+<i>36</i>&nbsp; *   it wants (&quot;MUST (cn)&quot;) instead
+<i>37</i>&nbsp; */
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;final class LdapSchemaParser {
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;    // do debugging
+<i>42</i>&nbsp;    private static final boolean debug = false;
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;    // names of attribute IDs in the LDAP schema entry
+<i>46</i>&nbsp;    static final String OBJECTCLASSDESC_ATTR_ID = &quot;objectClasses&quot;;
+<i>47</i>&nbsp;    static final String ATTRIBUTEDESC_ATTR_ID = &quot;attributeTypes&quot;;
+<i>48</i>&nbsp;    static final String SYNTAXDESC_ATTR_ID = &quot;ldapSyntaxes&quot;;
+<i>49</i>&nbsp;    static final String MATCHRULEDESC_ATTR_ID = &quot;matchingRules&quot;;
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;    // information for creating internal nodes in JNDI schema tree
+<i>52</i>&nbsp;    static final String OBJECTCLASS_DEFINITION_NAME =
+<i>53</i>&nbsp;                        &quot;ClassDefinition&quot;;
+<b class="nc"><i>54</i>&nbsp;    private static final String[] CLASS_DEF_ATTRS = {</b>
+<i>55</i>&nbsp;                         &quot;objectclass&quot;, &quot;ClassDefinition&quot;};
+<i>56</i>&nbsp;            static final String ATTRIBUTE_DEFINITION_NAME =
+<i>57</i>&nbsp;                        &quot;AttributeDefinition&quot;;
+<b class="nc"><i>58</i>&nbsp;    private static final String[] ATTR_DEF_ATTRS = {</b>
+<i>59</i>&nbsp;                        &quot;objectclass&quot;, &quot;AttributeDefinition&quot; };
+<i>60</i>&nbsp;            static final String SYNTAX_DEFINITION_NAME =
+<i>61</i>&nbsp;                        &quot;SyntaxDefinition&quot;;
+<b class="nc"><i>62</i>&nbsp;    private static final String[] SYNTAX_DEF_ATTRS = {</b>
+<i>63</i>&nbsp;                        &quot;objectclass&quot;, &quot;SyntaxDefinition&quot; };
+<i>64</i>&nbsp;            static final String MATCHRULE_DEFINITION_NAME =
+<i>65</i>&nbsp;                        &quot;MatchingRule&quot;;
+<b class="nc"><i>66</i>&nbsp;    private static final String[] MATCHRULE_DEF_ATTRS = {</b>
+<i>67</i>&nbsp;                        &quot;objectclass&quot;, &quot;MatchingRule&quot; };
+<i>68</i>&nbsp;
+<i>69</i>&nbsp;    // special tokens used in LDAP schema descriptions
+<i>70</i>&nbsp;    private static final char   SINGLE_QUOTE = &#39;\&#39;&#39;;
+<i>71</i>&nbsp;    private static final char   WHSP = &#39; &#39;;
+<i>72</i>&nbsp;    private static final char   OID_LIST_BEGIN = &#39;(&#39;;
+<i>73</i>&nbsp;    private static final char   OID_LIST_END = &#39;)&#39;;
+<i>74</i>&nbsp;    private static final char   OID_SEPARATOR = &#39;$&#39;;
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    // common IDs
+<i>77</i>&nbsp;    private static final String  NUMERICOID_ID = &quot;NUMERICOID&quot;;
+<i>78</i>&nbsp;    private static final String        NAME_ID = &quot;NAME&quot;;
+<i>79</i>&nbsp;    private static final String        DESC_ID = &quot;DESC&quot;;
+<i>80</i>&nbsp;    private static final String    OBSOLETE_ID = &quot;OBSOLETE&quot;;
+<i>81</i>&nbsp;    private static final String         SUP_ID = &quot;SUP&quot;;
+<i>82</i>&nbsp;    private static final String     PRIVATE_ID = &quot;X-&quot;;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    // Object Class specific IDs
+<i>85</i>&nbsp;    private static final String    ABSTRACT_ID = &quot;ABSTRACT&quot;;
+<i>86</i>&nbsp;    private static final String  STRUCTURAL_ID = &quot;STRUCTURAL&quot;;
+<i>87</i>&nbsp;    private static final String   AUXILIARY_ID = &quot;AUXILIARY&quot;;
+<i>88</i>&nbsp;    private static final String        MUST_ID = &quot;MUST&quot;;
+<i>89</i>&nbsp;    private static final String         MAY_ID = &quot;MAY&quot;;
+<i>90</i>&nbsp;
+<i>91</i>&nbsp;    // Attribute Type specific IDs
+<i>92</i>&nbsp;    private static final String    EQUALITY_ID = &quot;EQUALITY&quot;;
+<i>93</i>&nbsp;    private static final String    ORDERING_ID = &quot;ORDERING&quot;;
+<i>94</i>&nbsp;    private static final String      SUBSTR_ID = &quot;SUBSTR&quot;;
+<i>95</i>&nbsp;    private static final String      SYNTAX_ID = &quot;SYNTAX&quot;;
+<i>96</i>&nbsp;    private static final String  SINGLE_VAL_ID = &quot;SINGLE-VALUE&quot;;
+<i>97</i>&nbsp;    private static final String  COLLECTIVE_ID = &quot;COLLECTIVE&quot;;
+<i>98</i>&nbsp;    private static final String NO_USER_MOD_ID = &quot;NO-USER-MODIFICATION&quot;;
+<i>99</i>&nbsp;    private static final String       USAGE_ID = &quot;USAGE&quot;;
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;    // The string value we give to boolean variables
+<i>102</i>&nbsp;    private static final String SCHEMA_TRUE_VALUE = &quot;true&quot;;
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;    // To get around writing schemas that crash Netscape server
+<i>105</i>&nbsp;    private boolean netscapeBug;
+<i>106</i>&nbsp;
+<b class="nc"><i>107</i>&nbsp;    LdapSchemaParser(boolean netscapeBug) {</b>
+<b class="nc"><i>108</i>&nbsp;        this.netscapeBug = netscapeBug;</b>
+<i>109</i>&nbsp;    }
+<i>110</i>&nbsp;
+<i>111</i>&nbsp;    final static void LDAP2JNDISchema(Attributes schemaAttrs,
+<i>112</i>&nbsp;        LdapSchemaCtx schemaRoot) throws NamingException {
+<b class="nc"><i>113</i>&nbsp;        Attribute               objectClassesAttr = null;</b>
+<b class="nc"><i>114</i>&nbsp;        Attribute               attributeDefAttr = null;</b>
+<b class="nc"><i>115</i>&nbsp;        Attribute               syntaxDefAttr = null;</b>
+<b class="nc"><i>116</i>&nbsp;        Attribute               matchRuleDefAttr = null;</b>
+<i>117</i>&nbsp;
+<b class="nc"><i>118</i>&nbsp;        objectClassesAttr = schemaAttrs.get(OBJECTCLASSDESC_ATTR_ID);</b>
+<b class="nc"><i>119</i>&nbsp;        if(objectClassesAttr != null) {</b>
+<b class="nc"><i>120</i>&nbsp;            objectDescs2ClassDefs(objectClassesAttr,schemaRoot);</b>
+<i>121</i>&nbsp;        }
+<i>122</i>&nbsp;
+<b class="nc"><i>123</i>&nbsp;        attributeDefAttr = schemaAttrs.get(ATTRIBUTEDESC_ATTR_ID);</b>
+<b class="nc"><i>124</i>&nbsp;        if(attributeDefAttr != null) {</b>
+<b class="nc"><i>125</i>&nbsp;            attrDescs2AttrDefs(attributeDefAttr, schemaRoot);</b>
+<i>126</i>&nbsp;        }
+<i>127</i>&nbsp;
+<b class="nc"><i>128</i>&nbsp;        syntaxDefAttr = schemaAttrs.get(SYNTAXDESC_ATTR_ID);</b>
+<b class="nc"><i>129</i>&nbsp;        if(syntaxDefAttr != null) {</b>
+<b class="nc"><i>130</i>&nbsp;            syntaxDescs2SyntaxDefs(syntaxDefAttr, schemaRoot);</b>
+<i>131</i>&nbsp;        }
+<i>132</i>&nbsp;
+<b class="nc"><i>133</i>&nbsp;        matchRuleDefAttr = schemaAttrs.get(MATCHRULEDESC_ATTR_ID);</b>
+<b class="nc"><i>134</i>&nbsp;        if(matchRuleDefAttr != null) {</b>
+<b class="nc"><i>135</i>&nbsp;            matchRuleDescs2MatchRuleDefs(matchRuleDefAttr, schemaRoot);</b>
+<i>136</i>&nbsp;        }
+<i>137</i>&nbsp;    }
+<i>138</i>&nbsp;
+<i>139</i>&nbsp;    final private static DirContext objectDescs2ClassDefs(Attribute objDescsAttr,
+<i>140</i>&nbsp;                                                   LdapSchemaCtx schemaRoot)
+<i>141</i>&nbsp;        throws NamingException {
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;        NamingEnumeration&lt;?&gt; objDescs;
+<i>144</i>&nbsp;        Attributes                objDef;
+<i>145</i>&nbsp;        LdapSchemaCtx             classDefTree;
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;        // create the class def subtree
+<b class="nc"><i>148</i>&nbsp;        Attributes attrs = new BasicAttributes(LdapClient.caseIgnore);</b>
+<b class="nc"><i>149</i>&nbsp;        attrs.put(CLASS_DEF_ATTRS[0], CLASS_DEF_ATTRS[1]);</b>
+<b class="nc"><i>150</i>&nbsp;        classDefTree = schemaRoot.setup(LdapSchemaCtx.OBJECTCLASS_ROOT,</b>
+<i>151</i>&nbsp;            OBJECTCLASS_DEFINITION_NAME, attrs);
+<i>152</i>&nbsp;
+<b class="nc"><i>153</i>&nbsp;        objDescs = objDescsAttr.getAll();</b>
+<i>154</i>&nbsp;        String currentName;
+<b class="nc"><i>155</i>&nbsp;        while(objDescs.hasMore()) {</b>
+<b class="nc"><i>156</i>&nbsp;            String objDesc = (String)objDescs.next();</b>
+<i>157</i>&nbsp;            try {
+<b class="nc"><i>158</i>&nbsp;                Object[] def = desc2Def(objDesc);</b>
+<b class="nc"><i>159</i>&nbsp;                currentName = (String) def[0];</b>
+<b class="nc"><i>160</i>&nbsp;                objDef = (Attributes) def[1];</b>
+<b class="nc"><i>161</i>&nbsp;                classDefTree.setup(LdapSchemaCtx.OBJECTCLASS,</b>
+<i>162</i>&nbsp;                    currentName, objDef);
+<b class="nc"><i>163</i>&nbsp;            } catch (NamingException ne) {</b>
+<i>164</i>&nbsp;                // error occurred while parsing, ignore current entry
+<b class="nc"><i>165</i>&nbsp;            }</b>
+<b class="nc"><i>166</i>&nbsp;        }</b>
+<i>167</i>&nbsp;
+<b class="nc"><i>168</i>&nbsp;        return classDefTree;</b>
+<i>169</i>&nbsp;    }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;    final private static DirContext attrDescs2AttrDefs(Attribute attributeDescAttr,
+<i>172</i>&nbsp;                                                LdapSchemaCtx schemaRoot)
+<i>173</i>&nbsp;        throws NamingException {
+<i>174</i>&nbsp;
+<i>175</i>&nbsp;        NamingEnumeration&lt;?&gt; attrDescs;
+<i>176</i>&nbsp;        Attributes           attrDef;
+<i>177</i>&nbsp;        LdapSchemaCtx        attrDefTree;
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;        // create the AttributeDef subtree
+<b class="nc"><i>180</i>&nbsp;        Attributes attrs = new BasicAttributes(LdapClient.caseIgnore);</b>
+<b class="nc"><i>181</i>&nbsp;        attrs.put(ATTR_DEF_ATTRS[0], ATTR_DEF_ATTRS[1]);</b>
+<b class="nc"><i>182</i>&nbsp;        attrDefTree = schemaRoot.setup(LdapSchemaCtx.ATTRIBUTE_ROOT,</b>
+<i>183</i>&nbsp;            ATTRIBUTE_DEFINITION_NAME, attrs);
+<i>184</i>&nbsp;
+<b class="nc"><i>185</i>&nbsp;        attrDescs = attributeDescAttr.getAll();</b>
+<i>186</i>&nbsp;        String currentName;
+<b class="nc"><i>187</i>&nbsp;        while(attrDescs.hasMore()) {</b>
+<b class="nc"><i>188</i>&nbsp;            String attrDesc = (String)attrDescs.next();</b>
+<i>189</i>&nbsp;            try {
+<b class="nc"><i>190</i>&nbsp;                Object[] def = desc2Def(attrDesc);</b>
+<b class="nc"><i>191</i>&nbsp;                currentName = (String) def[0];</b>
+<b class="nc"><i>192</i>&nbsp;                attrDef = (Attributes) def[1];</b>
+<b class="nc"><i>193</i>&nbsp;                attrDefTree.setup(LdapSchemaCtx.ATTRIBUTE,</b>
+<i>194</i>&nbsp;                    currentName, attrDef);
+<b class="nc"><i>195</i>&nbsp;            } catch (NamingException ne) {</b>
+<i>196</i>&nbsp;                // error occurred while parsing, ignore current entry
+<b class="nc"><i>197</i>&nbsp;            }</b>
+<b class="nc"><i>198</i>&nbsp;        }</b>
+<i>199</i>&nbsp;
+<b class="nc"><i>200</i>&nbsp;        return attrDefTree;</b>
+<i>201</i>&nbsp;    }
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;    final private static DirContext syntaxDescs2SyntaxDefs(
+<i>204</i>&nbsp;                                                Attribute syntaxDescAttr,
+<i>205</i>&nbsp;                                                LdapSchemaCtx schemaRoot)
+<i>206</i>&nbsp;        throws NamingException {
+<i>207</i>&nbsp;
+<i>208</i>&nbsp;        NamingEnumeration&lt;?&gt; syntaxDescs;
+<i>209</i>&nbsp;        Attributes           syntaxDef;
+<i>210</i>&nbsp;        LdapSchemaCtx        syntaxDefTree;
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;        // create the SyntaxDef subtree
+<b class="nc"><i>213</i>&nbsp;        Attributes attrs = new BasicAttributes(LdapClient.caseIgnore);</b>
+<b class="nc"><i>214</i>&nbsp;        attrs.put(SYNTAX_DEF_ATTRS[0], SYNTAX_DEF_ATTRS[1]);</b>
+<b class="nc"><i>215</i>&nbsp;        syntaxDefTree = schemaRoot.setup(LdapSchemaCtx.SYNTAX_ROOT,</b>
+<i>216</i>&nbsp;            SYNTAX_DEFINITION_NAME, attrs);
+<i>217</i>&nbsp;
+<b class="nc"><i>218</i>&nbsp;        syntaxDescs = syntaxDescAttr.getAll();</b>
+<i>219</i>&nbsp;        String currentName;
+<b class="nc"><i>220</i>&nbsp;        while(syntaxDescs.hasMore()) {</b>
+<b class="nc"><i>221</i>&nbsp;            String syntaxDesc = (String)syntaxDescs.next();</b>
+<i>222</i>&nbsp;            try {
+<b class="nc"><i>223</i>&nbsp;                Object[] def = desc2Def(syntaxDesc);</b>
+<b class="nc"><i>224</i>&nbsp;                currentName = (String) def[0];</b>
+<b class="nc"><i>225</i>&nbsp;                syntaxDef = (Attributes) def[1];</b>
+<b class="nc"><i>226</i>&nbsp;                syntaxDefTree.setup(LdapSchemaCtx.SYNTAX,</b>
+<i>227</i>&nbsp;                    currentName, syntaxDef);
+<b class="nc"><i>228</i>&nbsp;            } catch (NamingException ne) {</b>
+<i>229</i>&nbsp;                // error occurred while parsing, ignore current entry
+<b class="nc"><i>230</i>&nbsp;            }</b>
+<b class="nc"><i>231</i>&nbsp;        }</b>
+<i>232</i>&nbsp;
+<b class="nc"><i>233</i>&nbsp;        return syntaxDefTree;</b>
+<i>234</i>&nbsp;    }
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;    final private static DirContext matchRuleDescs2MatchRuleDefs(
+<i>237</i>&nbsp;                                                Attribute matchRuleDescAttr,
+<i>238</i>&nbsp;                                                LdapSchemaCtx schemaRoot)
+<i>239</i>&nbsp;        throws NamingException {
+<i>240</i>&nbsp;
+<i>241</i>&nbsp;        NamingEnumeration&lt;?&gt; matchRuleDescs;
+<i>242</i>&nbsp;        Attributes           matchRuleDef;
+<i>243</i>&nbsp;        LdapSchemaCtx        matchRuleDefTree;
+<i>244</i>&nbsp;
+<i>245</i>&nbsp;        // create the MatchRuleDef subtree
+<b class="nc"><i>246</i>&nbsp;        Attributes attrs = new BasicAttributes(LdapClient.caseIgnore);</b>
+<b class="nc"><i>247</i>&nbsp;        attrs.put(MATCHRULE_DEF_ATTRS[0], MATCHRULE_DEF_ATTRS[1]);</b>
+<b class="nc"><i>248</i>&nbsp;        matchRuleDefTree = schemaRoot.setup(LdapSchemaCtx.MATCHRULE_ROOT,</b>
+<i>249</i>&nbsp;            MATCHRULE_DEFINITION_NAME, attrs);
+<i>250</i>&nbsp;
+<b class="nc"><i>251</i>&nbsp;        matchRuleDescs = matchRuleDescAttr.getAll();</b>
+<i>252</i>&nbsp;        String currentName;
+<b class="nc"><i>253</i>&nbsp;        while(matchRuleDescs.hasMore()) {</b>
+<b class="nc"><i>254</i>&nbsp;            String matchRuleDesc = (String)matchRuleDescs.next();</b>
+<i>255</i>&nbsp;            try {
+<b class="nc"><i>256</i>&nbsp;                Object[] def = desc2Def(matchRuleDesc);</b>
+<b class="nc"><i>257</i>&nbsp;                currentName = (String) def[0];</b>
+<b class="nc"><i>258</i>&nbsp;                matchRuleDef = (Attributes) def[1];</b>
+<b class="nc"><i>259</i>&nbsp;                matchRuleDefTree.setup(LdapSchemaCtx.MATCHRULE,</b>
+<i>260</i>&nbsp;                    currentName, matchRuleDef);
+<b class="nc"><i>261</i>&nbsp;            } catch (NamingException ne) {</b>
+<i>262</i>&nbsp;                // error occurred while parsing, ignore current entry
+<b class="nc"><i>263</i>&nbsp;            }</b>
+<b class="nc"><i>264</i>&nbsp;        }</b>
+<i>265</i>&nbsp;
+<b class="nc"><i>266</i>&nbsp;        return matchRuleDefTree;</b>
+<i>267</i>&nbsp;    }
+<i>268</i>&nbsp;
+<i>269</i>&nbsp;    final private static Object[] desc2Def(String desc)
+<i>270</i>&nbsp;        throws NamingException {
+<i>271</i>&nbsp;            //System.err.println(desc);
+<i>272</i>&nbsp;
+<b class="nc"><i>273</i>&nbsp;        Attributes      attrs = new BasicAttributes(LdapClient.caseIgnore);</b>
+<b class="nc"><i>274</i>&nbsp;        Attribute       attr = null;</b>
+<b class="nc"><i>275</i>&nbsp;        int[]           pos = new int[]{1}; // tolerate missing leading space</b>
+<b class="nc"><i>276</i>&nbsp;        boolean         moreTags = true;</b>
+<i>277</i>&nbsp;
+<i>278</i>&nbsp;        // Always begins with &lt;whsp numericoid whsp&gt;
+<b class="nc"><i>279</i>&nbsp;        attr = readNumericOID(desc, pos);</b>
+<b class="nc"><i>280</i>&nbsp;        String currentName = (String) attr.get(0);  // name is OID by default</b>
+<b class="nc"><i>281</i>&nbsp;        attrs.put(attr);</b>
+<i>282</i>&nbsp;
+<b class="nc"><i>283</i>&nbsp;        skipWhitespace(desc, pos);</b>
+<i>284</i>&nbsp;
+<b class="nc"><i>285</i>&nbsp;        while (moreTags) {</b>
+<b class="nc"><i>286</i>&nbsp;            attr = readNextTag(desc, pos);</b>
+<b class="nc"><i>287</i>&nbsp;            attrs.put(attr);</b>
+<i>288</i>&nbsp;
+<b class="nc"><i>289</i>&nbsp;            if (attr.getID().equals(NAME_ID)) {</b>
+<b class="nc"><i>290</i>&nbsp;                currentName = (String) attr.get(0);  // use NAME attribute as name</b>
+<i>291</i>&nbsp;            }
+<i>292</i>&nbsp;
+<b class="nc"><i>293</i>&nbsp;            skipWhitespace(desc, pos);</b>
+<i>294</i>&nbsp;
+<b class="nc"><i>295</i>&nbsp;            if( pos[0] &gt;= desc.length() -1 ) {</b>
+<b class="nc"><i>296</i>&nbsp;                moreTags = false;</b>
+<i>297</i>&nbsp;            }
+<i>298</i>&nbsp;        }
+<i>299</i>&nbsp;
+<b class="nc"><i>300</i>&nbsp;        return new Object[] {currentName, attrs};</b>
+<i>301</i>&nbsp;    }
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;    // returns the index of the first whitespace char of a linear whitespace
+<i>304</i>&nbsp;    // sequence ending at the given position.
+<i>305</i>&nbsp;    final private static int findTrailingWhitespace(String string, int pos) {
+<b class="nc"><i>306</i>&nbsp;        for(int i = pos; i &gt; 0; i--) {</b>
+<b class="nc"><i>307</i>&nbsp;            if(string.charAt(i) != WHSP) {</b>
+<b class="nc"><i>308</i>&nbsp;                return i + 1;</b>
+<i>309</i>&nbsp;            }
+<i>310</i>&nbsp;        }
+<b class="nc"><i>311</i>&nbsp;        return 0;</b>
+<i>312</i>&nbsp;    }
+<i>313</i>&nbsp;
+<i>314</i>&nbsp;    final private static void skipWhitespace(String string, int[] pos) {
+<b class="nc"><i>315</i>&nbsp;        for(int i=pos[0]; i &lt; string.length(); i++) {</b>
+<b class="nc"><i>316</i>&nbsp;            if(string.charAt(i) != WHSP) {</b>
+<b class="nc"><i>317</i>&nbsp;                pos[0] = i;</b>
+<i>318</i>&nbsp;                if (debug) {
+<i>319</i>&nbsp;                    System.err.println(&quot;skipWhitespace: skipping to &quot;+i);
+<i>320</i>&nbsp;                }
+<i>321</i>&nbsp;                return;
+<i>322</i>&nbsp;            }
+<i>323</i>&nbsp;        }
+<i>324</i>&nbsp;    }
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;    final private static Attribute readNumericOID(String string, int[] pos)
+<i>327</i>&nbsp;        throws NamingException {
+<i>328</i>&nbsp;
+<i>329</i>&nbsp;        if (debug) {
+<i>330</i>&nbsp;            System.err.println(&quot;readNumericoid: pos=&quot;+pos[0]);
+<i>331</i>&nbsp;        }
+<i>332</i>&nbsp;
+<i>333</i>&nbsp;        int begin, end;
+<b class="nc"><i>334</i>&nbsp;        String value = null;</b>
+<i>335</i>&nbsp;
+<b class="nc"><i>336</i>&nbsp;        skipWhitespace(string, pos);</b>
+<i>337</i>&nbsp;
+<b class="nc"><i>338</i>&nbsp;        begin = pos[0];</b>
+<b class="nc"><i>339</i>&nbsp;        end = string.indexOf(WHSP, begin);</b>
+<i>340</i>&nbsp;
+<b class="nc"><i>341</i>&nbsp;        if (end == -1 || end - begin &lt; 1) {</b>
+<b class="nc"><i>342</i>&nbsp;            throw new InvalidAttributeValueException(&quot;no numericoid found: &quot;</b>
+<i>343</i>&nbsp;                                                     + string);
+<i>344</i>&nbsp;        }
+<i>345</i>&nbsp;
+<b class="nc"><i>346</i>&nbsp;        value = string.substring(begin, end);</b>
+<i>347</i>&nbsp;
+<b class="nc"><i>348</i>&nbsp;        pos[0] += value.length();</b>
+<i>349</i>&nbsp;
+<b class="nc"><i>350</i>&nbsp;        return new BasicAttribute(NUMERICOID_ID, value);</b>
+<i>351</i>&nbsp;    }
+<i>352</i>&nbsp;
+<i>353</i>&nbsp;    final private static Attribute readNextTag(String string, int[] pos)
+<i>354</i>&nbsp;        throws NamingException {
+<i>355</i>&nbsp;
+<b class="nc"><i>356</i>&nbsp;        Attribute       attr = null;</b>
+<b class="nc"><i>357</i>&nbsp;        String          tagName = null;</b>
+<b class="nc"><i>358</i>&nbsp;        String[]        values = null;</b>
+<i>359</i>&nbsp;
+<b class="nc"><i>360</i>&nbsp;        skipWhitespace(string, pos);</b>
+<i>361</i>&nbsp;
+<i>362</i>&nbsp;        if (debug) {
+<i>363</i>&nbsp;            System.err.println(&quot;readNextTag: pos=&quot;+pos[0]);
+<i>364</i>&nbsp;        }
+<i>365</i>&nbsp;
+<i>366</i>&nbsp;        // get the name and values of the attribute to return
+<b class="nc"><i>367</i>&nbsp;        int trailingSpace = string.indexOf( WHSP, pos[0] );</b>
+<i>368</i>&nbsp;
+<i>369</i>&nbsp;        // tolerate a schema that omits the trailing space
+<b class="nc"><i>370</i>&nbsp;        if (trailingSpace &lt; 0) {</b>
+<b class="nc"><i>371</i>&nbsp;            tagName = string.substring( pos[0], string.length() - 1);</b>
+<i>372</i>&nbsp;        } else {
+<b class="nc"><i>373</i>&nbsp;            tagName = string.substring( pos[0], trailingSpace );</b>
+<i>374</i>&nbsp;        }
+<i>375</i>&nbsp;
+<b class="nc"><i>376</i>&nbsp;        values = readTag(tagName, string, pos);</b>
+<i>377</i>&nbsp;
+<i>378</i>&nbsp;        // make sure at least one value was returned
+<b class="nc"><i>379</i>&nbsp;        if(values.length &lt; 0) {</b>
+<b class="nc"><i>380</i>&nbsp;            throw new InvalidAttributeValueException(&quot;no values for &quot; +</b>
+<i>381</i>&nbsp;                                                     &quot;attribute \&quot;&quot; +
+<i>382</i>&nbsp;                                                     tagName + &quot;\&quot;&quot;);
+<i>383</i>&nbsp;        }
+<i>384</i>&nbsp;
+<i>385</i>&nbsp;        // create the attribute, using the first value
+<b class="nc"><i>386</i>&nbsp;        attr = new BasicAttribute(tagName, values[0]);</b>
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;        // add other values if there are any
+<b class="nc"><i>389</i>&nbsp;        for(int i = 1; i &lt; values.length; i++) {</b>
+<b class="nc"><i>390</i>&nbsp;            attr.add(values[i]);</b>
+<i>391</i>&nbsp;        }
+<i>392</i>&nbsp;
+<b class="nc"><i>393</i>&nbsp;        return attr;</b>
+<i>394</i>&nbsp;    }
+<i>395</i>&nbsp;
+<i>396</i>&nbsp;    final private static String[] readTag(String tag, String string, int[] pos)
+<i>397</i>&nbsp;        throws NamingException {
+<i>398</i>&nbsp;
+<i>399</i>&nbsp;        if (debug) {
+<i>400</i>&nbsp;            System.err.println(&quot;ReadTag: &quot; + tag + &quot; pos=&quot;+pos[0]);
+<i>401</i>&nbsp;        }
+<i>402</i>&nbsp;
+<i>403</i>&nbsp;        // move parser past tag name
+<b class="nc"><i>404</i>&nbsp;        pos[0] += tag.length();</b>
+<b class="nc"><i>405</i>&nbsp;        skipWhitespace(string, pos);</b>
+<i>406</i>&nbsp;
+<b class="nc"><i>407</i>&nbsp;        if (tag.equals(NAME_ID)) {</b>
+<b class="nc"><i>408</i>&nbsp;            return readQDescrs(string, pos);  // names[0] is NAME</b>
+<i>409</i>&nbsp;        }
+<i>410</i>&nbsp;
+<b class="nc"><i>411</i>&nbsp;        if(tag.equals(DESC_ID)) {</b>
+<b class="nc"><i>412</i>&nbsp;           return readQDString(string, pos);</b>
+<i>413</i>&nbsp;        }
+<i>414</i>&nbsp;
+<b class="nc"><i>415</i>&nbsp;        if (</b>
+<b class="nc"><i>416</i>&nbsp;           tag.equals(EQUALITY_ID) ||</b>
+<b class="nc"><i>417</i>&nbsp;           tag.equals(ORDERING_ID) ||</b>
+<b class="nc"><i>418</i>&nbsp;           tag.equals(SUBSTR_ID) ||</b>
+<b class="nc"><i>419</i>&nbsp;           tag.equals(SYNTAX_ID)) {</b>
+<b class="nc"><i>420</i>&nbsp;            return readWOID(string, pos);</b>
+<i>421</i>&nbsp;        }
+<i>422</i>&nbsp;
+<b class="nc"><i>423</i>&nbsp;        if (tag.equals(OBSOLETE_ID) ||</b>
+<b class="nc"><i>424</i>&nbsp;            tag.equals(ABSTRACT_ID) ||</b>
+<b class="nc"><i>425</i>&nbsp;            tag.equals(STRUCTURAL_ID) ||</b>
+<b class="nc"><i>426</i>&nbsp;            tag.equals(AUXILIARY_ID) ||</b>
+<b class="nc"><i>427</i>&nbsp;            tag.equals(SINGLE_VAL_ID) ||</b>
+<b class="nc"><i>428</i>&nbsp;            tag.equals(COLLECTIVE_ID) ||</b>
+<b class="nc"><i>429</i>&nbsp;            tag.equals(NO_USER_MOD_ID)) {</b>
+<b class="nc"><i>430</i>&nbsp;            return new String[] {SCHEMA_TRUE_VALUE};</b>
+<i>431</i>&nbsp;        }
+<i>432</i>&nbsp;
+<b class="nc"><i>433</i>&nbsp;        if (tag.equals(SUP_ID) ||   // oid list for object class; WOID for attribute</b>
+<b class="nc"><i>434</i>&nbsp;            tag.equals(MUST_ID) ||</b>
+<b class="nc"><i>435</i>&nbsp;            tag.equals(MAY_ID) ||</b>
+<b class="nc"><i>436</i>&nbsp;            tag.equals(USAGE_ID)) {</b>
+<b class="nc"><i>437</i>&nbsp;            return readOIDs(string, pos);</b>
+<i>438</i>&nbsp;        }
+<i>439</i>&nbsp;
+<i>440</i>&nbsp;        // otherwise it&#39;s a schema element with a quoted string value
+<b class="nc"><i>441</i>&nbsp;        return readQDStrings(string, pos);</b>
+<i>442</i>&nbsp;    }
+<i>443</i>&nbsp;
+<i>444</i>&nbsp;    final private static String[] readQDString(String string, int[] pos)
+<i>445</i>&nbsp;        throws NamingException {
+<i>446</i>&nbsp;
+<i>447</i>&nbsp;        int begin, end;
+<i>448</i>&nbsp;
+<b class="nc"><i>449</i>&nbsp;        begin = string.indexOf(SINGLE_QUOTE, pos[0]) + 1;</b>
+<b class="nc"><i>450</i>&nbsp;        end = string.indexOf(SINGLE_QUOTE, begin);</b>
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;        if (debug) {
+<i>453</i>&nbsp;            System.err.println(&quot;ReadQDString: pos=&quot; + pos[0] +
+<i>454</i>&nbsp;                               &quot; begin=&quot; + begin + &quot; end=&quot; + end);
+<i>455</i>&nbsp;        }
+<i>456</i>&nbsp;
+<b class="nc"><i>457</i>&nbsp;        if(begin == -1 || end == -1 || begin == end) {</b>
+<b class="nc"><i>458</i>&nbsp;            throw new InvalidAttributeIdentifierException(&quot;malformed &quot; +</b>
+<i>459</i>&nbsp;                                                          &quot;QDString: &quot; +
+<i>460</i>&nbsp;                                                          string);
+<i>461</i>&nbsp;        }
+<i>462</i>&nbsp;
+<i>463</i>&nbsp;        // make sure the qdstring end symbol is there
+<b class="nc"><i>464</i>&nbsp;        if (string.charAt(begin - 1) != SINGLE_QUOTE) {</b>
+<b class="nc"><i>465</i>&nbsp;            throw new InvalidAttributeIdentifierException(&quot;qdstring has &quot; +</b>
+<i>466</i>&nbsp;                                                          &quot;no end mark: &quot; +
+<i>467</i>&nbsp;                                                          string);
+<i>468</i>&nbsp;        }
+<i>469</i>&nbsp;
+<b class="nc"><i>470</i>&nbsp;        pos[0] = end+1;</b>
+<b class="nc"><i>471</i>&nbsp;        return new String[] {string.substring(begin, end)};</b>
+<i>472</i>&nbsp;    }
+<i>473</i>&nbsp;
+<i>474</i>&nbsp;   /**
+<i>475</i>&nbsp;    * dstring         = 1*utf8
+<i>476</i>&nbsp;    * qdstring        = whsp &quot;&#39;&quot; dstring &quot;&#39;&quot; whsp
+<i>477</i>&nbsp;    * qdstringlist    = [ qdstring *( qdstring ) ]
+<i>478</i>&nbsp;    * qdstrings       = qdstring / ( whsp &quot;(&quot; qdstringlist &quot;)&quot; whsp )
+<i>479</i>&nbsp;    */
+<i>480</i>&nbsp;    private final static String[] readQDStrings(String string, int[] pos)
+<i>481</i>&nbsp;        throws NamingException {
+<i>482</i>&nbsp;
+<b class="nc"><i>483</i>&nbsp;        return readQDescrs(string, pos);</b>
+<i>484</i>&nbsp;    }
+<i>485</i>&nbsp;
+<i>486</i>&nbsp;    /**
+<i>487</i>&nbsp;     * ; object descriptors used as schema element names
+<i>488</i>&nbsp;     * qdescrs         = qdescr / ( whsp &quot;(&quot; qdescrlist &quot;)&quot; whsp )
+<i>489</i>&nbsp;     * qdescrlist      = [ qdescr *( qdescr ) ]
+<i>490</i>&nbsp;     * qdescr          = whsp &quot;&#39;&quot; descr &quot;&#39;&quot; whsp
+<i>491</i>&nbsp;     * descr           = keystring
+<i>492</i>&nbsp;     */
+<i>493</i>&nbsp;    final private static String[] readQDescrs(String string, int[] pos)
+<i>494</i>&nbsp;        throws NamingException {
+<i>495</i>&nbsp;
+<i>496</i>&nbsp;        if (debug) {
+<i>497</i>&nbsp;            System.err.println(&quot;readQDescrs: pos=&quot;+pos[0]);
+<i>498</i>&nbsp;        }
+<i>499</i>&nbsp;
+<b class="nc"><i>500</i>&nbsp;        skipWhitespace(string, pos);</b>
+<i>501</i>&nbsp;
+<b class="nc"><i>502</i>&nbsp;        switch( string.charAt(pos[0]) ) {</b>
+<i>503</i>&nbsp;        case OID_LIST_BEGIN:
+<b class="nc"><i>504</i>&nbsp;            return readQDescrList(string, pos);</b>
+<i>505</i>&nbsp;        case SINGLE_QUOTE:
+<b class="nc"><i>506</i>&nbsp;            return readQDString(string, pos);</b>
+<i>507</i>&nbsp;        default:
+<b class="nc"><i>508</i>&nbsp;            throw new InvalidAttributeValueException(&quot;unexpected oids &quot; +</b>
+<i>509</i>&nbsp;                                                     &quot;string: &quot; + string);
+<i>510</i>&nbsp;        }
+<i>511</i>&nbsp;    }
+<i>512</i>&nbsp;
+<i>513</i>&nbsp;    /**
+<i>514</i>&nbsp;     * qdescrlist      = [ qdescr *( qdescr ) ]
+<i>515</i>&nbsp;     * qdescr          = whsp &quot;&#39;&quot; descr &quot;&#39;&quot; whsp
+<i>516</i>&nbsp;     * descr           = keystring
+<i>517</i>&nbsp;     */
+<i>518</i>&nbsp;    final private static String[] readQDescrList(String string, int[] pos)
+<i>519</i>&nbsp;        throws NamingException {
+<i>520</i>&nbsp;
+<i>521</i>&nbsp;        int begin, end;
+<b class="nc"><i>522</i>&nbsp;        Vector&lt;String&gt; values = new Vector&lt;&gt;(5);</b>
+<i>523</i>&nbsp;
+<i>524</i>&nbsp;        if (debug) {
+<i>525</i>&nbsp;            System.err.println(&quot;ReadQDescrList: pos=&quot;+pos[0]);
+<i>526</i>&nbsp;        }
+<i>527</i>&nbsp;
+<b class="nc"><i>528</i>&nbsp;        pos[0]++; // skip &#39;(&#39;</b>
+<b class="nc"><i>529</i>&nbsp;        skipWhitespace(string, pos);</b>
+<b class="nc"><i>530</i>&nbsp;        begin = pos[0];</b>
+<b class="nc"><i>531</i>&nbsp;        end = string.indexOf(OID_LIST_END, begin);</b>
+<i>532</i>&nbsp;
+<b class="nc"><i>533</i>&nbsp;        if(end == -1) {</b>
+<b class="nc"><i>534</i>&nbsp;            throw new InvalidAttributeValueException (&quot;oidlist has no end &quot;+</b>
+<i>535</i>&nbsp;                                                      &quot;mark: &quot; + string);
+<i>536</i>&nbsp;        }
+<i>537</i>&nbsp;
+<b class="nc"><i>538</i>&nbsp;        while(begin &lt; end) {</b>
+<b class="nc"><i>539</i>&nbsp;            String[] one = readQDString(string,  pos);</b>
+<i>540</i>&nbsp;
+<i>541</i>&nbsp;            if (debug) {
+<i>542</i>&nbsp;                System.err.println(&quot;ReadQDescrList: found &#39;&quot; + one[0] +
+<i>543</i>&nbsp;                                   &quot;&#39; at begin=&quot; + begin + &quot; end =&quot; + end);
+<i>544</i>&nbsp;            }
+<i>545</i>&nbsp;
+<b class="nc"><i>546</i>&nbsp;            values.addElement(one[0]);</b>
+<b class="nc"><i>547</i>&nbsp;            skipWhitespace(string, pos);</b>
+<b class="nc"><i>548</i>&nbsp;            begin = pos[0];</b>
+<b class="nc"><i>549</i>&nbsp;        }</b>
+<i>550</i>&nbsp;
+<b class="nc"><i>551</i>&nbsp;        pos[0] = end+1; // skip &#39;)&#39;</b>
+<i>552</i>&nbsp;
+<b class="nc"><i>553</i>&nbsp;        String[] answer = new String[values.size()];</b>
+<b class="nc"><i>554</i>&nbsp;        for (int i = 0; i &lt; answer.length; i++) {</b>
+<b class="nc"><i>555</i>&nbsp;            answer[i] = values.elementAt(i);</b>
+<i>556</i>&nbsp;        }
+<b class="nc"><i>557</i>&nbsp;        return answer;</b>
+<i>558</i>&nbsp;    }
+<i>559</i>&nbsp;
+<i>560</i>&nbsp;    final private static String[] readWOID(String string, int[] pos)
+<i>561</i>&nbsp;        throws NamingException {
+<i>562</i>&nbsp;
+<i>563</i>&nbsp;        if (debug) {
+<i>564</i>&nbsp;            System.err.println(&quot;readWOIDs: pos=&quot;+pos[0]);
+<i>565</i>&nbsp;        }
+<i>566</i>&nbsp;
+<b class="nc"><i>567</i>&nbsp;        skipWhitespace(string, pos);</b>
+<i>568</i>&nbsp;
+<b class="nc"><i>569</i>&nbsp;        if (string.charAt(pos[0]) == SINGLE_QUOTE) {</b>
+<i>570</i>&nbsp;            // %%% workaround for Netscape schema bug
+<b class="nc"><i>571</i>&nbsp;            return readQDString(string, pos);</b>
+<i>572</i>&nbsp;        }
+<i>573</i>&nbsp;
+<i>574</i>&nbsp;        int begin, end;
+<i>575</i>&nbsp;
+<b class="nc"><i>576</i>&nbsp;        begin = pos[0];</b>
+<b class="nc"><i>577</i>&nbsp;        end = string.indexOf(WHSP, begin);</b>
+<i>578</i>&nbsp;
+<i>579</i>&nbsp;        if (debug) {
+<i>580</i>&nbsp;            System.err.println(&quot;ReadWOID: pos=&quot; + pos[0] +
+<i>581</i>&nbsp;                               &quot; begin=&quot; + begin + &quot; end=&quot; + end);
+<i>582</i>&nbsp;        }
+<i>583</i>&nbsp;
+<b class="nc"><i>584</i>&nbsp;        if(end == -1 || begin == end) {</b>
+<b class="nc"><i>585</i>&nbsp;            throw new InvalidAttributeIdentifierException(&quot;malformed &quot; +</b>
+<i>586</i>&nbsp;                                                          &quot;OID: &quot; +
+<i>587</i>&nbsp;                                                          string);
+<i>588</i>&nbsp;        }
+<b class="nc"><i>589</i>&nbsp;        pos[0] = end+1;</b>
+<i>590</i>&nbsp;
+<b class="nc"><i>591</i>&nbsp;        return new String[] {string.substring(begin, end)};</b>
+<i>592</i>&nbsp;    }
+<i>593</i>&nbsp;
+<i>594</i>&nbsp;    /*
+<i>595</i>&nbsp;     * oids            = woid / ( &quot;(&quot; oidlist &quot;)&quot; )
+<i>596</i>&nbsp;     * oidlist         = woid *( &quot;$&quot; woid )
+<i>597</i>&nbsp;     */
+<i>598</i>&nbsp;    final private static String[] readOIDs(String string, int[] pos)
+<i>599</i>&nbsp;        throws NamingException {
+<i>600</i>&nbsp;
+<i>601</i>&nbsp;        if (debug) {
+<i>602</i>&nbsp;            System.err.println(&quot;readOIDs: pos=&quot;+pos[0]);
+<i>603</i>&nbsp;        }
+<i>604</i>&nbsp;
+<b class="nc"><i>605</i>&nbsp;        skipWhitespace(string, pos);</b>
+<i>606</i>&nbsp;
+<i>607</i>&nbsp;        // Single OID
+<b class="nc"><i>608</i>&nbsp;        if (string.charAt(pos[0]) != OID_LIST_BEGIN) {</b>
+<b class="nc"><i>609</i>&nbsp;            return readWOID(string, pos);</b>
+<i>610</i>&nbsp;        }
+<i>611</i>&nbsp;
+<i>612</i>&nbsp;        // Multiple OIDs
+<i>613</i>&nbsp;
+<i>614</i>&nbsp;        int     begin, cur, end;
+<b class="nc"><i>615</i>&nbsp;        String  oidName = null;</b>
+<b class="nc"><i>616</i>&nbsp;        Vector&lt;String&gt; values = new Vector&lt;&gt;(5);</b>
+<i>617</i>&nbsp;
+<i>618</i>&nbsp;        if (debug) {
+<i>619</i>&nbsp;            System.err.println(&quot;ReadOIDList: pos=&quot;+pos[0]);
+<i>620</i>&nbsp;        }
+<i>621</i>&nbsp;
+<b class="nc"><i>622</i>&nbsp;        pos[0]++;</b>
+<b class="nc"><i>623</i>&nbsp;        skipWhitespace(string, pos);</b>
+<b class="nc"><i>624</i>&nbsp;        begin = pos[0];</b>
+<b class="nc"><i>625</i>&nbsp;        end = string.indexOf(OID_LIST_END, begin);</b>
+<b class="nc"><i>626</i>&nbsp;        cur = string.indexOf(OID_SEPARATOR, begin);</b>
+<i>627</i>&nbsp;
+<b class="nc"><i>628</i>&nbsp;        if(end == -1) {</b>
+<b class="nc"><i>629</i>&nbsp;            throw new InvalidAttributeValueException (&quot;oidlist has no end &quot;+</b>
+<i>630</i>&nbsp;                                                      &quot;mark: &quot; + string);
+<i>631</i>&nbsp;        }
+<i>632</i>&nbsp;
+<b class="nc"><i>633</i>&nbsp;        if(cur == -1 || end &lt; cur) {</b>
+<b class="nc"><i>634</i>&nbsp;            cur = end;</b>
+<i>635</i>&nbsp;        }
+<i>636</i>&nbsp;
+<b class="nc"><i>637</i>&nbsp;        while(cur &lt; end &amp;&amp; cur &gt; 0) {</b>
+<b class="nc"><i>638</i>&nbsp;            int wsBegin = findTrailingWhitespace(string, cur - 1);</b>
+<b class="nc"><i>639</i>&nbsp;            oidName = string.substring(begin, wsBegin);</b>
+<i>640</i>&nbsp;            if (debug) {
+<i>641</i>&nbsp;                System.err.println(&quot;ReadOIDList: found &#39;&quot; + oidName +
+<i>642</i>&nbsp;                                   &quot;&#39; at begin=&quot; + begin + &quot; end =&quot; + end);
+<i>643</i>&nbsp;            }
+<b class="nc"><i>644</i>&nbsp;            values.addElement(oidName);</b>
+<b class="nc"><i>645</i>&nbsp;            pos[0] = cur + 1;</b>
+<b class="nc"><i>646</i>&nbsp;            skipWhitespace(string, pos);</b>
+<b class="nc"><i>647</i>&nbsp;            begin = pos[0];</b>
+<b class="nc"><i>648</i>&nbsp;            cur = string.indexOf(OID_SEPARATOR, begin);</b>
+<i>649</i>&nbsp;            if(debug) {System.err.println(&quot;ReadOIDList: begin = &quot; + begin);}
+<b class="nc"><i>650</i>&nbsp;        }</b>
+<i>651</i>&nbsp;
+<i>652</i>&nbsp;        if (debug) {
+<i>653</i>&nbsp;            System.err.println(&quot;ReadOIDList: found &#39;&quot; + oidName +
+<i>654</i>&nbsp;                               &quot;&#39; at begin=&quot; + begin + &quot; end =&quot; + end);
+<i>655</i>&nbsp;        }
+<i>656</i>&nbsp;
+<b class="nc"><i>657</i>&nbsp;        int wsBegin = findTrailingWhitespace(string, end - 1);</b>
+<b class="nc"><i>658</i>&nbsp;        oidName = string.substring(begin, wsBegin);</b>
+<b class="nc"><i>659</i>&nbsp;        values.addElement(oidName);</b>
+<i>660</i>&nbsp;
+<b class="nc"><i>661</i>&nbsp;        pos[0] = end+1;</b>
+<i>662</i>&nbsp;
+<b class="nc"><i>663</i>&nbsp;        String[] answer = new String[values.size()];</b>
+<b class="nc"><i>664</i>&nbsp;        for (int i = 0; i &lt; answer.length; i++) {</b>
+<b class="nc"><i>665</i>&nbsp;            answer[i] = values.elementAt(i);</b>
+<i>666</i>&nbsp;        }
+<b class="nc"><i>667</i>&nbsp;        return answer;</b>
+<i>668</i>&nbsp;    }
+<i>669</i>&nbsp;
+<i>670</i>&nbsp;// ----------------- &quot;unparser&quot; methods
+<i>671</i>&nbsp;// Methods that are used for translating a node in the schema tree
+<i>672</i>&nbsp;// into RFC2252 format for storage back into the LDAP directory
+<i>673</i>&nbsp;/*
+<i>674</i>&nbsp;     static Attributes JNDI2LDAPSchema(DirContext schemaRoot)
+<i>675</i>&nbsp;        throws NamingException {
+<i>676</i>&nbsp;
+<i>677</i>&nbsp;        Attribute objDescAttr = new BasicAttribute(OBJECTCLASSDESC_ATTR_ID);
+<i>678</i>&nbsp;        Attribute attrDescAttr = new BasicAttribute(ATTRIBUTEDESC_ATTR_ID);
+<i>679</i>&nbsp;        Attribute syntaxDescAttr = new BasicAttribute(SYNTAXDESC_ATTR_ID);
+<i>680</i>&nbsp;        Attributes attrs = new BasicAttributes(LdapClient.caseIgnore);
+<i>681</i>&nbsp;        DirContext classDefs, attributeDefs, syntaxDefs;
+<i>682</i>&nbsp;        Attributes classDefsAttrs, attributeDefsAttrs, syntaxDefsAttrs;
+<i>683</i>&nbsp;        NamingEnumeration defs;
+<i>684</i>&nbsp;        Object obj;
+<i>685</i>&nbsp;        int i = 0;
+<i>686</i>&nbsp;
+<i>687</i>&nbsp;        try {
+<i>688</i>&nbsp;            obj = schemaRoot.lookup(OBJECTCLASS_DEFINITION_NAME);
+<i>689</i>&nbsp;            if(obj != null &amp;&amp; obj instanceof DirContext) {
+<i>690</i>&nbsp;                classDefs = (DirContext)obj;
+<i>691</i>&nbsp;                defs = classDefs.listBindings(&quot;&quot;);
+<i>692</i>&nbsp;                while(defs.hasMoreElements()) {
+<i>693</i>&nbsp;                    i++;
+<i>694</i>&nbsp;                    DirContext classDef = (DirContext)
+<i>695</i>&nbsp;                        ((Binding)(defs.next())).getObject();
+<i>696</i>&nbsp;                    classDefAttrs = classDef.getAttributes(&quot;&quot;);
+<i>697</i>&nbsp;                    objDescAttr.add(classDef2ObjectDesc(classDefAttrs));
+<i>698</i>&nbsp;                }
+<i>699</i>&nbsp;                if (debug)
+<i>700</i>&nbsp;                    System.err.println(i + &quot; total object classes&quot;);
+<i>701</i>&nbsp;                attrs.put(objDescAttr);
+<i>702</i>&nbsp;            } else {
+<i>703</i>&nbsp;                throw new NamingException(
+<i>704</i>&nbsp;                    &quot;Problem with Schema tree: the object named &quot; +
+<i>705</i>&nbsp;                    OBJECTCLASS_DEFINITION_NAME + &quot; is not a &quot; +
+<i>706</i>&nbsp;                    &quot;DirContext&quot;);
+<i>707</i>&nbsp;            }
+<i>708</i>&nbsp;        } catch (NameNotFoundException e) {} // ignore
+<i>709</i>&nbsp;
+<i>710</i>&nbsp;        i=0;
+<i>711</i>&nbsp;        try {
+<i>712</i>&nbsp;            obj = schemaRoot.lookup(ATTRIBUTE_DEFINITION_NAME);
+<i>713</i>&nbsp;            if(obj instanceof DirContext) {
+<i>714</i>&nbsp;                attributeDefs = (DirContext)obj;
+<i>715</i>&nbsp;                defs = attributeDefs.listBindings(&quot;&quot;);
+<i>716</i>&nbsp;                while(defs.hasMoreElements()) {
+<i>717</i>&nbsp;                    i++;
+<i>718</i>&nbsp;                    DirContext attrDef = (DirContext)
+<i>719</i>&nbsp;                        ((Binding)defs.next()).getObject();
+<i>720</i>&nbsp;                    attrDefAttrs = attrDef.getAttributes(&quot;&quot;);
+<i>721</i>&nbsp;                    attrDescAttr.add(attrDef2AttrDesc(attrDefAttrs));
+<i>722</i>&nbsp;                }
+<i>723</i>&nbsp;                if (debug)
+<i>724</i>&nbsp;                    System.err.println(i + &quot; attribute definitions&quot;);
+<i>725</i>&nbsp;                attrs.put(attrDescAttr);
+<i>726</i>&nbsp;            } else {
+<i>727</i>&nbsp;                throw new NamingException(
+<i>728</i>&nbsp;                    &quot;Problem with schema tree: the object named &quot; +
+<i>729</i>&nbsp;                    ATTRIBUTE_DEFINITION_NAME + &quot; is not a &quot; +
+<i>730</i>&nbsp;                    &quot;DirContext&quot;);
+<i>731</i>&nbsp;            }
+<i>732</i>&nbsp;        } catch (NameNotFoundException e) {} // ignore
+<i>733</i>&nbsp;
+<i>734</i>&nbsp;        i=0;
+<i>735</i>&nbsp;        try {
+<i>736</i>&nbsp;            obj = schemaRoot.lookup(SYNTAX_DEFINITION_NAME);
+<i>737</i>&nbsp;            if(obj instanceof DirContext) {
+<i>738</i>&nbsp;                syntaxDefs = (DirContext)obj;
+<i>739</i>&nbsp;                defs =syntaxDefs.listBindings(&quot;&quot;);
+<i>740</i>&nbsp;                while(defs.hasMoreElements()) {
+<i>741</i>&nbsp;                    i++;
+<i>742</i>&nbsp;                    DirContext syntaxDef = (DirContext)
+<i>743</i>&nbsp;                        ((Binding)defs.next()).getObject();
+<i>744</i>&nbsp;                    syntaxDefAttrs = syntaxDef.getAttributes(&quot;&quot;);
+<i>745</i>&nbsp;                    syntaxDescAttr.add(syntaxDef2SyntaxDesc(syntaxDefAttrs));
+<i>746</i>&nbsp;                }
+<i>747</i>&nbsp;                if (debug)
+<i>748</i>&nbsp;                    System.err.println(i + &quot; total syntax definitions&quot;);
+<i>749</i>&nbsp;                attrs.put(syntaxDescAttr);
+<i>750</i>&nbsp;            } else {
+<i>751</i>&nbsp;                throw new NamingException(
+<i>752</i>&nbsp;                    &quot;Problem with schema tree: the object named &quot; +
+<i>753</i>&nbsp;                    SYNTAX_DEFINITION_NAME + &quot; is not a &quot; +
+<i>754</i>&nbsp;                    &quot;DirContext&quot;);
+<i>755</i>&nbsp;            }
+<i>756</i>&nbsp;        } catch (NameNotFoundException e) {} // ignore
+<i>757</i>&nbsp;
+<i>758</i>&nbsp;        return attrs;
+<i>759</i>&nbsp;    }
+<i>760</i>&nbsp;
+<i>761</i>&nbsp;*/
+<i>762</i>&nbsp;
+<i>763</i>&nbsp;    /**
+<i>764</i>&nbsp;      * Translate attributes that describe an object class into the
+<i>765</i>&nbsp;      * string description as defined in RFC 2252.
+<i>766</i>&nbsp;      */
+<i>767</i>&nbsp;    final private String classDef2ObjectDesc(Attributes attrs)
+<i>768</i>&nbsp;        throws NamingException {
+<i>769</i>&nbsp;
+<b class="nc"><i>770</i>&nbsp;        StringBuilder objectDesc = new StringBuilder(&quot;( &quot;);</b>
+<i>771</i>&nbsp;
+<b class="nc"><i>772</i>&nbsp;        Attribute attr = null;</b>
+<b class="nc"><i>773</i>&nbsp;        int count = 0;</b>
+<i>774</i>&nbsp;
+<i>775</i>&nbsp;        // extract attributes by ID to guarantee ordering
+<i>776</i>&nbsp;
+<b class="nc"><i>777</i>&nbsp;        attr = attrs.get(NUMERICOID_ID);</b>
+<b class="nc"><i>778</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>779</i>&nbsp;            objectDesc.append(writeNumericOID(attr));</b>
+<b class="nc"><i>780</i>&nbsp;            count++;</b>
+<i>781</i>&nbsp;        } else {
+<b class="nc"><i>782</i>&nbsp;            throw new ConfigurationException(&quot;Class definition doesn&#39;t&quot; +</b>
+<i>783</i>&nbsp;                                             &quot;have a numeric OID&quot;);
+<i>784</i>&nbsp;        }
+<i>785</i>&nbsp;
+<b class="nc"><i>786</i>&nbsp;        attr = attrs.get(NAME_ID);</b>
+<b class="nc"><i>787</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>788</i>&nbsp;            objectDesc.append(writeQDescrs(attr));</b>
+<b class="nc"><i>789</i>&nbsp;            count++;</b>
+<i>790</i>&nbsp;        }
+<i>791</i>&nbsp;
+<b class="nc"><i>792</i>&nbsp;        attr = attrs.get(DESC_ID);</b>
+<b class="nc"><i>793</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>794</i>&nbsp;            objectDesc.append(writeQDString(attr));</b>
+<b class="nc"><i>795</i>&nbsp;            count++;</b>
+<i>796</i>&nbsp;        }
+<i>797</i>&nbsp;
+<b class="nc"><i>798</i>&nbsp;        attr = attrs.get(OBSOLETE_ID);</b>
+<b class="nc"><i>799</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>800</i>&nbsp;            objectDesc.append(writeBoolean(attr));</b>
+<b class="nc"><i>801</i>&nbsp;            count++;</b>
+<i>802</i>&nbsp;        }
+<i>803</i>&nbsp;
+<b class="nc"><i>804</i>&nbsp;        attr = attrs.get(SUP_ID);</b>
+<b class="nc"><i>805</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>806</i>&nbsp;            objectDesc.append(writeOIDs(attr));</b>
+<b class="nc"><i>807</i>&nbsp;            count++;</b>
+<i>808</i>&nbsp;        }
+<i>809</i>&nbsp;
+<b class="nc"><i>810</i>&nbsp;        attr = attrs.get(ABSTRACT_ID);</b>
+<b class="nc"><i>811</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>812</i>&nbsp;            objectDesc.append(writeBoolean(attr));</b>
+<b class="nc"><i>813</i>&nbsp;            count++;</b>
+<i>814</i>&nbsp;        }
+<i>815</i>&nbsp;
+<b class="nc"><i>816</i>&nbsp;        attr = attrs.get(STRUCTURAL_ID);</b>
+<b class="nc"><i>817</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>818</i>&nbsp;            objectDesc.append(writeBoolean(attr));</b>
+<b class="nc"><i>819</i>&nbsp;            count++;</b>
+<i>820</i>&nbsp;        }
+<i>821</i>&nbsp;
+<b class="nc"><i>822</i>&nbsp;        attr = attrs.get(AUXILIARY_ID);</b>
+<b class="nc"><i>823</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>824</i>&nbsp;            objectDesc.append(writeBoolean(attr));</b>
+<b class="nc"><i>825</i>&nbsp;            count++;</b>
+<i>826</i>&nbsp;        }
+<i>827</i>&nbsp;
+<b class="nc"><i>828</i>&nbsp;        attr = attrs.get(MUST_ID);</b>
+<b class="nc"><i>829</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>830</i>&nbsp;            objectDesc.append(writeOIDs(attr));</b>
+<b class="nc"><i>831</i>&nbsp;            count++;</b>
+<i>832</i>&nbsp;        }
+<i>833</i>&nbsp;
+<b class="nc"><i>834</i>&nbsp;        attr = attrs.get(MAY_ID);</b>
+<b class="nc"><i>835</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>836</i>&nbsp;            objectDesc.append(writeOIDs(attr));</b>
+<b class="nc"><i>837</i>&nbsp;            count++;</b>
+<i>838</i>&nbsp;        }
+<i>839</i>&nbsp;
+<i>840</i>&nbsp;        // process any remaining attributes
+<b class="nc"><i>841</i>&nbsp;        if (count &lt; attrs.size()) {</b>
+<b class="nc"><i>842</i>&nbsp;            String attrId = null;</b>
+<i>843</i>&nbsp;
+<i>844</i>&nbsp;            // use enumeration because attribute ID is not known
+<b class="nc"><i>845</i>&nbsp;            for (NamingEnumeration&lt;? extends Attribute&gt; ae = attrs.getAll();</b>
+<b class="nc"><i>846</i>&nbsp;                ae.hasMoreElements(); ) {</b>
+<i>847</i>&nbsp;
+<b class="nc"><i>848</i>&nbsp;                attr = ae.next();</b>
+<b class="nc"><i>849</i>&nbsp;                attrId = attr.getID();</b>
+<i>850</i>&nbsp;
+<i>851</i>&nbsp;                // skip those already processed
+<b class="nc"><i>852</i>&nbsp;                if (attrId.equals(NUMERICOID_ID) ||</b>
+<b class="nc"><i>853</i>&nbsp;                    attrId.equals(NAME_ID) ||</b>
+<b class="nc"><i>854</i>&nbsp;                    attrId.equals(SUP_ID) ||</b>
+<b class="nc"><i>855</i>&nbsp;                    attrId.equals(MAY_ID) ||</b>
+<b class="nc"><i>856</i>&nbsp;                    attrId.equals(MUST_ID) ||</b>
+<b class="nc"><i>857</i>&nbsp;                    attrId.equals(STRUCTURAL_ID) ||</b>
+<b class="nc"><i>858</i>&nbsp;                    attrId.equals(DESC_ID) ||</b>
+<b class="nc"><i>859</i>&nbsp;                    attrId.equals(AUXILIARY_ID) ||</b>
+<b class="nc"><i>860</i>&nbsp;                    attrId.equals(ABSTRACT_ID) ||</b>
+<b class="nc"><i>861</i>&nbsp;                    attrId.equals(OBSOLETE_ID)) {</b>
+<b class="nc"><i>862</i>&nbsp;                    continue;</b>
+<i>863</i>&nbsp;
+<i>864</i>&nbsp;                } else {
+<b class="nc"><i>865</i>&nbsp;                    objectDesc.append(writeQDStrings(attr));</b>
+<i>866</i>&nbsp;                }
+<i>867</i>&nbsp;            }
+<i>868</i>&nbsp;        }
+<i>869</i>&nbsp;
+<b class="nc"><i>870</i>&nbsp;        objectDesc.append(&quot;)&quot;);</b>
+<i>871</i>&nbsp;
+<b class="nc"><i>872</i>&nbsp;        return objectDesc.toString();</b>
+<i>873</i>&nbsp;    }
+<i>874</i>&nbsp;
+<i>875</i>&nbsp;    /**
+<i>876</i>&nbsp;      * Translate attributes that describe an attribute definition into the
+<i>877</i>&nbsp;      * string description as defined in RFC 2252.
+<i>878</i>&nbsp;      */
+<i>879</i>&nbsp;    final private String attrDef2AttrDesc(Attributes attrs)
+<i>880</i>&nbsp;        throws NamingException {
+<i>881</i>&nbsp;
+<b class="nc"><i>882</i>&nbsp;        StringBuilder attrDesc = new StringBuilder(&quot;( &quot;); // opening parens</b>
+<i>883</i>&nbsp;
+<b class="nc"><i>884</i>&nbsp;        Attribute attr = null;</b>
+<b class="nc"><i>885</i>&nbsp;        int count = 0;</b>
+<i>886</i>&nbsp;
+<i>887</i>&nbsp;        // extract attributes by ID to guarantee ordering
+<i>888</i>&nbsp;
+<b class="nc"><i>889</i>&nbsp;        attr = attrs.get(NUMERICOID_ID);</b>
+<b class="nc"><i>890</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>891</i>&nbsp;            attrDesc.append(writeNumericOID(attr));</b>
+<b class="nc"><i>892</i>&nbsp;            count++;</b>
+<i>893</i>&nbsp;        } else {
+<b class="nc"><i>894</i>&nbsp;            throw new ConfigurationException(&quot;Attribute type doesn&#39;t&quot; +</b>
+<i>895</i>&nbsp;                                             &quot;have a numeric OID&quot;);
+<i>896</i>&nbsp;        }
+<i>897</i>&nbsp;
+<b class="nc"><i>898</i>&nbsp;        attr = attrs.get(NAME_ID);</b>
+<b class="nc"><i>899</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>900</i>&nbsp;            attrDesc.append(writeQDescrs(attr));</b>
+<b class="nc"><i>901</i>&nbsp;            count++;</b>
+<i>902</i>&nbsp;        }
+<i>903</i>&nbsp;
+<b class="nc"><i>904</i>&nbsp;        attr = attrs.get(DESC_ID);</b>
+<b class="nc"><i>905</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>906</i>&nbsp;            attrDesc.append(writeQDString(attr));</b>
+<b class="nc"><i>907</i>&nbsp;            count++;</b>
+<i>908</i>&nbsp;        }
+<i>909</i>&nbsp;
+<b class="nc"><i>910</i>&nbsp;        attr = attrs.get(OBSOLETE_ID);</b>
+<b class="nc"><i>911</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>912</i>&nbsp;            attrDesc.append(writeBoolean(attr));</b>
+<b class="nc"><i>913</i>&nbsp;            count++;</b>
+<i>914</i>&nbsp;        }
+<i>915</i>&nbsp;
+<b class="nc"><i>916</i>&nbsp;        attr = attrs.get(SUP_ID);</b>
+<b class="nc"><i>917</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>918</i>&nbsp;            attrDesc.append(writeWOID(attr));</b>
+<b class="nc"><i>919</i>&nbsp;            count++;</b>
+<i>920</i>&nbsp;        }
+<i>921</i>&nbsp;
+<b class="nc"><i>922</i>&nbsp;        attr = attrs.get(EQUALITY_ID);</b>
+<b class="nc"><i>923</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>924</i>&nbsp;            attrDesc.append(writeWOID(attr));</b>
+<b class="nc"><i>925</i>&nbsp;            count++;</b>
+<i>926</i>&nbsp;        }
+<i>927</i>&nbsp;
+<b class="nc"><i>928</i>&nbsp;        attr = attrs.get(ORDERING_ID);</b>
+<b class="nc"><i>929</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>930</i>&nbsp;            attrDesc.append(writeWOID(attr));</b>
+<b class="nc"><i>931</i>&nbsp;            count++;</b>
+<i>932</i>&nbsp;        }
+<i>933</i>&nbsp;
+<b class="nc"><i>934</i>&nbsp;        attr = attrs.get(SUBSTR_ID);</b>
+<b class="nc"><i>935</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>936</i>&nbsp;            attrDesc.append(writeWOID(attr));</b>
+<b class="nc"><i>937</i>&nbsp;            count++;</b>
+<i>938</i>&nbsp;        }
+<i>939</i>&nbsp;
+<b class="nc"><i>940</i>&nbsp;        attr = attrs.get(SYNTAX_ID);</b>
+<b class="nc"><i>941</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>942</i>&nbsp;            attrDesc.append(writeWOID(attr));</b>
+<b class="nc"><i>943</i>&nbsp;            count++;</b>
+<i>944</i>&nbsp;        }
+<i>945</i>&nbsp;
+<b class="nc"><i>946</i>&nbsp;        attr = attrs.get(SINGLE_VAL_ID);</b>
+<b class="nc"><i>947</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>948</i>&nbsp;            attrDesc.append(writeBoolean(attr));</b>
+<b class="nc"><i>949</i>&nbsp;            count++;</b>
+<i>950</i>&nbsp;        }
+<i>951</i>&nbsp;
+<b class="nc"><i>952</i>&nbsp;        attr = attrs.get(COLLECTIVE_ID);</b>
+<b class="nc"><i>953</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>954</i>&nbsp;            attrDesc.append(writeBoolean(attr));</b>
+<b class="nc"><i>955</i>&nbsp;            count++;</b>
+<i>956</i>&nbsp;        }
+<i>957</i>&nbsp;
+<b class="nc"><i>958</i>&nbsp;        attr = attrs.get(NO_USER_MOD_ID);</b>
+<b class="nc"><i>959</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>960</i>&nbsp;            attrDesc.append(writeBoolean(attr));</b>
+<b class="nc"><i>961</i>&nbsp;            count++;</b>
+<i>962</i>&nbsp;        }
+<i>963</i>&nbsp;
+<b class="nc"><i>964</i>&nbsp;        attr = attrs.get(USAGE_ID);</b>
+<b class="nc"><i>965</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>966</i>&nbsp;            attrDesc.append(writeQDString(attr));</b>
+<b class="nc"><i>967</i>&nbsp;            count++;</b>
+<i>968</i>&nbsp;        }
+<i>969</i>&nbsp;
+<i>970</i>&nbsp;        // process any remaining attributes
+<b class="nc"><i>971</i>&nbsp;        if (count &lt; attrs.size()) {</b>
+<b class="nc"><i>972</i>&nbsp;            String attrId = null;</b>
+<i>973</i>&nbsp;
+<i>974</i>&nbsp;            // use enumeration because attribute ID is not known
+<b class="nc"><i>975</i>&nbsp;            for (NamingEnumeration&lt;? extends Attribute&gt; ae = attrs.getAll();</b>
+<b class="nc"><i>976</i>&nbsp;                ae.hasMoreElements(); ) {</b>
+<i>977</i>&nbsp;
+<b class="nc"><i>978</i>&nbsp;                attr = ae.next();</b>
+<b class="nc"><i>979</i>&nbsp;                attrId = attr.getID();</b>
+<i>980</i>&nbsp;
+<i>981</i>&nbsp;                // skip those already processed
+<b class="nc"><i>982</i>&nbsp;                if (attrId.equals(NUMERICOID_ID) ||</b>
+<b class="nc"><i>983</i>&nbsp;                    attrId.equals(NAME_ID) ||</b>
+<b class="nc"><i>984</i>&nbsp;                    attrId.equals(SYNTAX_ID) ||</b>
+<b class="nc"><i>985</i>&nbsp;                    attrId.equals(DESC_ID) ||</b>
+<b class="nc"><i>986</i>&nbsp;                    attrId.equals(SINGLE_VAL_ID) ||</b>
+<b class="nc"><i>987</i>&nbsp;                    attrId.equals(EQUALITY_ID) ||</b>
+<b class="nc"><i>988</i>&nbsp;                    attrId.equals(ORDERING_ID) ||</b>
+<b class="nc"><i>989</i>&nbsp;                    attrId.equals(SUBSTR_ID) ||</b>
+<b class="nc"><i>990</i>&nbsp;                    attrId.equals(NO_USER_MOD_ID) ||</b>
+<b class="nc"><i>991</i>&nbsp;                    attrId.equals(USAGE_ID) ||</b>
+<b class="nc"><i>992</i>&nbsp;                    attrId.equals(SUP_ID) ||</b>
+<b class="nc"><i>993</i>&nbsp;                    attrId.equals(COLLECTIVE_ID) ||</b>
+<b class="nc"><i>994</i>&nbsp;                    attrId.equals(OBSOLETE_ID)) {</b>
+<b class="nc"><i>995</i>&nbsp;                    continue;</b>
+<i>996</i>&nbsp;
+<i>997</i>&nbsp;                } else {
+<b class="nc"><i>998</i>&nbsp;                    attrDesc.append(writeQDStrings(attr));</b>
+<i>999</i>&nbsp;                }
+<i>1000</i>&nbsp;            }
+<i>1001</i>&nbsp;        }
+<i>1002</i>&nbsp;
+<b class="nc"><i>1003</i>&nbsp;        attrDesc.append(&quot;)&quot;);  // add closing parens</b>
+<i>1004</i>&nbsp;
+<b class="nc"><i>1005</i>&nbsp;        return attrDesc.toString();</b>
+<i>1006</i>&nbsp;    }
+<i>1007</i>&nbsp;
+<i>1008</i>&nbsp;    /**
+<i>1009</i>&nbsp;      * Translate attributes that describe an attribute syntax definition into the
+<i>1010</i>&nbsp;      * string description as defined in RFC 2252.
+<i>1011</i>&nbsp;      */
+<i>1012</i>&nbsp;    final private String syntaxDef2SyntaxDesc(Attributes attrs)
+<i>1013</i>&nbsp;        throws NamingException {
+<i>1014</i>&nbsp;
+<b class="nc"><i>1015</i>&nbsp;        StringBuilder syntaxDesc = new StringBuilder(&quot;( &quot;); // opening parens</b>
+<i>1016</i>&nbsp;
+<b class="nc"><i>1017</i>&nbsp;        Attribute attr = null;</b>
+<b class="nc"><i>1018</i>&nbsp;        int count = 0;</b>
+<i>1019</i>&nbsp;
+<i>1020</i>&nbsp;        // extract attributes by ID to guarantee ordering
+<i>1021</i>&nbsp;
+<b class="nc"><i>1022</i>&nbsp;        attr = attrs.get(NUMERICOID_ID);</b>
+<b class="nc"><i>1023</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>1024</i>&nbsp;            syntaxDesc.append(writeNumericOID(attr));</b>
+<b class="nc"><i>1025</i>&nbsp;            count++;</b>
+<i>1026</i>&nbsp;        } else {
+<b class="nc"><i>1027</i>&nbsp;            throw new ConfigurationException(&quot;Attribute type doesn&#39;t&quot; +</b>
+<i>1028</i>&nbsp;                                             &quot;have a numeric OID&quot;);
+<i>1029</i>&nbsp;        }
+<i>1030</i>&nbsp;
+<b class="nc"><i>1031</i>&nbsp;        attr = attrs.get(DESC_ID);</b>
+<b class="nc"><i>1032</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>1033</i>&nbsp;            syntaxDesc.append(writeQDString(attr));</b>
+<b class="nc"><i>1034</i>&nbsp;            count++;</b>
+<i>1035</i>&nbsp;        }
+<i>1036</i>&nbsp;
+<i>1037</i>&nbsp;        // process any remaining attributes
+<b class="nc"><i>1038</i>&nbsp;        if (count &lt; attrs.size()) {</b>
+<b class="nc"><i>1039</i>&nbsp;            String attrId = null;</b>
+<i>1040</i>&nbsp;
+<i>1041</i>&nbsp;            // use enumeration because attribute ID is not known
+<b class="nc"><i>1042</i>&nbsp;            for (NamingEnumeration&lt;? extends Attribute&gt; ae = attrs.getAll();</b>
+<b class="nc"><i>1043</i>&nbsp;                ae.hasMoreElements(); ) {</b>
+<i>1044</i>&nbsp;
+<b class="nc"><i>1045</i>&nbsp;                attr = ae.next();</b>
+<b class="nc"><i>1046</i>&nbsp;                attrId = attr.getID();</b>
+<i>1047</i>&nbsp;
+<i>1048</i>&nbsp;                // skip those already processed
+<b class="nc"><i>1049</i>&nbsp;                if (attrId.equals(NUMERICOID_ID) ||</b>
+<b class="nc"><i>1050</i>&nbsp;                    attrId.equals(DESC_ID)) {</b>
+<b class="nc"><i>1051</i>&nbsp;                    continue;</b>
+<i>1052</i>&nbsp;
+<i>1053</i>&nbsp;                } else {
+<b class="nc"><i>1054</i>&nbsp;                    syntaxDesc.append(writeQDStrings(attr));</b>
+<i>1055</i>&nbsp;                }
+<i>1056</i>&nbsp;            }
+<i>1057</i>&nbsp;        }
+<i>1058</i>&nbsp;
+<b class="nc"><i>1059</i>&nbsp;        syntaxDesc.append(&quot;)&quot;);</b>
+<i>1060</i>&nbsp;
+<b class="nc"><i>1061</i>&nbsp;        return syntaxDesc.toString();</b>
+<i>1062</i>&nbsp;    }
+<i>1063</i>&nbsp;
+<i>1064</i>&nbsp;    /**
+<i>1065</i>&nbsp;      * Translate attributes that describe an attribute matching rule
+<i>1066</i>&nbsp;      * definition into the string description as defined in RFC 2252.
+<i>1067</i>&nbsp;      */
+<i>1068</i>&nbsp;    final private String matchRuleDef2MatchRuleDesc(Attributes attrs)
+<i>1069</i>&nbsp;        throws NamingException {
+<i>1070</i>&nbsp;
+<b class="nc"><i>1071</i>&nbsp;        StringBuilder matchRuleDesc = new StringBuilder(&quot;( &quot;); // opening parens</b>
+<i>1072</i>&nbsp;
+<b class="nc"><i>1073</i>&nbsp;        Attribute attr = null;</b>
+<b class="nc"><i>1074</i>&nbsp;        int count = 0;</b>
+<i>1075</i>&nbsp;
+<i>1076</i>&nbsp;        // extract attributes by ID to guarantee ordering
+<i>1077</i>&nbsp;
+<b class="nc"><i>1078</i>&nbsp;        attr = attrs.get(NUMERICOID_ID);</b>
+<b class="nc"><i>1079</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>1080</i>&nbsp;            matchRuleDesc.append(writeNumericOID(attr));</b>
+<b class="nc"><i>1081</i>&nbsp;            count++;</b>
+<i>1082</i>&nbsp;        } else {
+<b class="nc"><i>1083</i>&nbsp;            throw new ConfigurationException(&quot;Attribute type doesn&#39;t&quot; +</b>
+<i>1084</i>&nbsp;                                             &quot;have a numeric OID&quot;);
+<i>1085</i>&nbsp;        }
+<i>1086</i>&nbsp;
+<b class="nc"><i>1087</i>&nbsp;        attr = attrs.get(NAME_ID);</b>
+<b class="nc"><i>1088</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>1089</i>&nbsp;            matchRuleDesc.append(writeQDescrs(attr));</b>
+<b class="nc"><i>1090</i>&nbsp;            count++;</b>
+<i>1091</i>&nbsp;        }
+<i>1092</i>&nbsp;
+<b class="nc"><i>1093</i>&nbsp;        attr = attrs.get(DESC_ID);</b>
+<b class="nc"><i>1094</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>1095</i>&nbsp;            matchRuleDesc.append(writeQDString(attr));</b>
+<b class="nc"><i>1096</i>&nbsp;            count++;</b>
+<i>1097</i>&nbsp;        }
+<i>1098</i>&nbsp;
+<b class="nc"><i>1099</i>&nbsp;        attr = attrs.get(OBSOLETE_ID);</b>
+<b class="nc"><i>1100</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>1101</i>&nbsp;            matchRuleDesc.append(writeBoolean(attr));</b>
+<b class="nc"><i>1102</i>&nbsp;            count++;</b>
+<i>1103</i>&nbsp;        }
+<i>1104</i>&nbsp;
+<b class="nc"><i>1105</i>&nbsp;        attr = attrs.get(SYNTAX_ID);</b>
+<b class="nc"><i>1106</i>&nbsp;        if (attr != null) {</b>
+<b class="nc"><i>1107</i>&nbsp;            matchRuleDesc.append(writeWOID(attr));</b>
+<b class="nc"><i>1108</i>&nbsp;            count++;</b>
+<i>1109</i>&nbsp;        } else {
+<b class="nc"><i>1110</i>&nbsp;            throw new ConfigurationException(&quot;Attribute type doesn&#39;t&quot; +</b>
+<i>1111</i>&nbsp;                                             &quot;have a syntax OID&quot;);
+<i>1112</i>&nbsp;        }
+<i>1113</i>&nbsp;
+<i>1114</i>&nbsp;        // process any remaining attributes
+<b class="nc"><i>1115</i>&nbsp;        if (count &lt; attrs.size()) {</b>
+<b class="nc"><i>1116</i>&nbsp;            String attrId = null;</b>
+<i>1117</i>&nbsp;
+<i>1118</i>&nbsp;            // use enumeration because attribute ID is not known
+<b class="nc"><i>1119</i>&nbsp;            for (NamingEnumeration&lt;? extends Attribute&gt; ae = attrs.getAll();</b>
+<b class="nc"><i>1120</i>&nbsp;                ae.hasMoreElements(); ) {</b>
+<i>1121</i>&nbsp;
+<b class="nc"><i>1122</i>&nbsp;                attr = ae.next();</b>
+<b class="nc"><i>1123</i>&nbsp;                attrId = attr.getID();</b>
+<i>1124</i>&nbsp;
+<i>1125</i>&nbsp;                // skip those already processed
+<b class="nc"><i>1126</i>&nbsp;                if (attrId.equals(NUMERICOID_ID) ||</b>
+<b class="nc"><i>1127</i>&nbsp;                    attrId.equals(NAME_ID) ||</b>
+<b class="nc"><i>1128</i>&nbsp;                    attrId.equals(SYNTAX_ID) ||</b>
+<b class="nc"><i>1129</i>&nbsp;                    attrId.equals(DESC_ID) ||</b>
+<b class="nc"><i>1130</i>&nbsp;                    attrId.equals(OBSOLETE_ID)) {</b>
+<b class="nc"><i>1131</i>&nbsp;                    continue;</b>
+<i>1132</i>&nbsp;
+<i>1133</i>&nbsp;                } else {
+<b class="nc"><i>1134</i>&nbsp;                    matchRuleDesc.append(writeQDStrings(attr));</b>
+<i>1135</i>&nbsp;                }
+<i>1136</i>&nbsp;            }
+<i>1137</i>&nbsp;        }
+<i>1138</i>&nbsp;
+<b class="nc"><i>1139</i>&nbsp;        matchRuleDesc.append(&quot;)&quot;);</b>
+<i>1140</i>&nbsp;
+<b class="nc"><i>1141</i>&nbsp;        return matchRuleDesc.toString();</b>
+<i>1142</i>&nbsp;    }
+<i>1143</i>&nbsp;
+<i>1144</i>&nbsp;    final private String writeNumericOID(Attribute nOIDAttr)
+<i>1145</i>&nbsp;        throws NamingException {
+<b class="nc"><i>1146</i>&nbsp;        if(nOIDAttr.size() != 1) {</b>
+<b class="nc"><i>1147</i>&nbsp;            throw new InvalidAttributeValueException(</b>
+<i>1148</i>&nbsp;                &quot;A class definition must have exactly one numeric OID&quot;);
+<i>1149</i>&nbsp;        }
+<b class="nc"><i>1150</i>&nbsp;        return (String)(nOIDAttr.get()) + WHSP;</b>
+<i>1151</i>&nbsp;    }
+<i>1152</i>&nbsp;
+<i>1153</i>&nbsp;    final private String writeWOID(Attribute attr) throws NamingException {
+<b class="nc"><i>1154</i>&nbsp;        if (netscapeBug)</b>
+<b class="nc"><i>1155</i>&nbsp;            return writeQDString(attr);</b>
+<i>1156</i>&nbsp;        else
+<b class="nc"><i>1157</i>&nbsp;            return attr.getID() + WHSP + attr.get() + WHSP;</b>
+<i>1158</i>&nbsp;    }
+<i>1159</i>&nbsp;
+<i>1160</i>&nbsp;    /*  qdescr          = whsp &quot;&#39;&quot; descr &quot;&#39;&quot; whsp */
+<i>1161</i>&nbsp;    final private String writeQDString(Attribute qdStringAttr)
+<i>1162</i>&nbsp;        throws NamingException {
+<b class="nc"><i>1163</i>&nbsp;        if(qdStringAttr.size() != 1) {</b>
+<b class="nc"><i>1164</i>&nbsp;            throw new InvalidAttributeValueException(</b>
+<b class="nc"><i>1165</i>&nbsp;                qdStringAttr.getID() + &quot; must have exactly one value&quot;);</b>
+<i>1166</i>&nbsp;        }
+<i>1167</i>&nbsp;
+<b class="nc"><i>1168</i>&nbsp;        return qdStringAttr.getID() + WHSP +</b>
+<b class="nc"><i>1169</i>&nbsp;            SINGLE_QUOTE + qdStringAttr.get() + SINGLE_QUOTE + WHSP;</b>
+<i>1170</i>&nbsp;    }
+<i>1171</i>&nbsp;
+<i>1172</i>&nbsp;   /**
+<i>1173</i>&nbsp;    * dstring         = 1*utf8
+<i>1174</i>&nbsp;    * qdstring        = whsp &quot;&#39;&quot; dstring &quot;&#39;&quot; whsp
+<i>1175</i>&nbsp;    * qdstringlist    = [ qdstring *( qdstring ) ]
+<i>1176</i>&nbsp;    * qdstrings       = qdstring / ( whsp &quot;(&quot; qdstringlist &quot;)&quot; whsp )
+<i>1177</i>&nbsp;    */
+<i>1178</i>&nbsp;    private final String writeQDStrings(Attribute attr) throws NamingException {
+<b class="nc"><i>1179</i>&nbsp;        return writeQDescrs(attr);</b>
+<i>1180</i>&nbsp;    }
+<i>1181</i>&nbsp;
+<i>1182</i>&nbsp;    /**
+<i>1183</i>&nbsp;     * qdescrs         = qdescr / ( whsp &quot;(&quot; qdescrlist &quot;)&quot; whsp )
+<i>1184</i>&nbsp;     * qdescrlist      = [ qdescr *( qdescr ) ]
+<i>1185</i>&nbsp;     * qdescr          = whsp &quot;&#39;&quot; descr &quot;&#39;&quot; whsp
+<i>1186</i>&nbsp;     * descr           = keystring
+<i>1187</i>&nbsp;     */
+<i>1188</i>&nbsp;    private final String writeQDescrs(Attribute attr) throws NamingException {
+<b class="nc"><i>1189</i>&nbsp;        switch(attr.size()) {</b>
+<i>1190</i>&nbsp;        case 0:
+<b class="nc"><i>1191</i>&nbsp;            throw new InvalidAttributeValueException(</b>
+<b class="nc"><i>1192</i>&nbsp;                attr.getID() + &quot;has no values&quot;);</b>
+<i>1193</i>&nbsp;        case 1:
+<b class="nc"><i>1194</i>&nbsp;            return writeQDString(attr);</b>
+<i>1195</i>&nbsp;        }
+<i>1196</i>&nbsp;
+<i>1197</i>&nbsp;        // write QDList
+<i>1198</i>&nbsp;
+<b class="nc"><i>1199</i>&nbsp;        StringBuilder qdList = new StringBuilder(attr.getID());</b>
+<b class="nc"><i>1200</i>&nbsp;        qdList.append(WHSP);</b>
+<b class="nc"><i>1201</i>&nbsp;        qdList.append(OID_LIST_BEGIN);</b>
+<i>1202</i>&nbsp;
+<b class="nc"><i>1203</i>&nbsp;        NamingEnumeration&lt;?&gt; values = attr.getAll();</b>
+<i>1204</i>&nbsp;
+<b class="nc"><i>1205</i>&nbsp;        while(values.hasMore()) {</b>
+<b class="nc"><i>1206</i>&nbsp;            qdList.append(WHSP);</b>
+<b class="nc"><i>1207</i>&nbsp;            qdList.append(SINGLE_QUOTE);</b>
+<b class="nc"><i>1208</i>&nbsp;            qdList.append((String)values.next());</b>
+<b class="nc"><i>1209</i>&nbsp;            qdList.append(SINGLE_QUOTE);</b>
+<b class="nc"><i>1210</i>&nbsp;            qdList.append(WHSP);</b>
+<i>1211</i>&nbsp;        }
+<i>1212</i>&nbsp;
+<b class="nc"><i>1213</i>&nbsp;        qdList.append(OID_LIST_END);</b>
+<b class="nc"><i>1214</i>&nbsp;        qdList.append(WHSP);</b>
+<i>1215</i>&nbsp;
+<b class="nc"><i>1216</i>&nbsp;        return qdList.toString();</b>
+<i>1217</i>&nbsp;    }
+<i>1218</i>&nbsp;
+<i>1219</i>&nbsp;    final private String writeOIDs(Attribute oidsAttr)
+<i>1220</i>&nbsp;        throws NamingException {
+<i>1221</i>&nbsp;
+<b class="nc"><i>1222</i>&nbsp;        switch(oidsAttr.size()) {</b>
+<i>1223</i>&nbsp;        case 0:
+<b class="nc"><i>1224</i>&nbsp;            throw new InvalidAttributeValueException(</b>
+<b class="nc"><i>1225</i>&nbsp;                oidsAttr.getID() + &quot;has no values&quot;);</b>
+<i>1226</i>&nbsp;
+<i>1227</i>&nbsp;        case 1:
+<b class="nc"><i>1228</i>&nbsp;            if (netscapeBug) {</b>
+<b class="nc"><i>1229</i>&nbsp;                break; // %%% write out as list to avoid crashing server</b>
+<i>1230</i>&nbsp;            }
+<b class="nc"><i>1231</i>&nbsp;            return writeWOID(oidsAttr);</b>
+<i>1232</i>&nbsp;        }
+<i>1233</i>&nbsp;
+<i>1234</i>&nbsp;        // write OID List
+<i>1235</i>&nbsp;
+<b class="nc"><i>1236</i>&nbsp;        StringBuilder oidList = new StringBuilder(oidsAttr.getID());</b>
+<b class="nc"><i>1237</i>&nbsp;        oidList.append(WHSP);</b>
+<b class="nc"><i>1238</i>&nbsp;        oidList.append(OID_LIST_BEGIN);</b>
+<i>1239</i>&nbsp;
+<b class="nc"><i>1240</i>&nbsp;        NamingEnumeration&lt;?&gt; values = oidsAttr.getAll();</b>
+<b class="nc"><i>1241</i>&nbsp;        oidList.append(WHSP);</b>
+<b class="nc"><i>1242</i>&nbsp;        oidList.append(values.next());</b>
+<i>1243</i>&nbsp;
+<b class="nc"><i>1244</i>&nbsp;        while(values.hasMore()) {</b>
+<b class="nc"><i>1245</i>&nbsp;            oidList.append(WHSP);</b>
+<b class="nc"><i>1246</i>&nbsp;            oidList.append(OID_SEPARATOR);</b>
+<b class="nc"><i>1247</i>&nbsp;            oidList.append(WHSP);</b>
+<b class="nc"><i>1248</i>&nbsp;            oidList.append((String)values.next());</b>
+<i>1249</i>&nbsp;        }
+<i>1250</i>&nbsp;
+<b class="nc"><i>1251</i>&nbsp;        oidList.append(WHSP);</b>
+<b class="nc"><i>1252</i>&nbsp;        oidList.append(OID_LIST_END);</b>
+<b class="nc"><i>1253</i>&nbsp;        oidList.append(WHSP);</b>
+<i>1254</i>&nbsp;
+<b class="nc"><i>1255</i>&nbsp;        return oidList.toString();</b>
+<i>1256</i>&nbsp;    }
+<i>1257</i>&nbsp;
+<i>1258</i>&nbsp;    private final String writeBoolean(Attribute booleanAttr)
+<i>1259</i>&nbsp;        throws NamingException {
+<b class="nc"><i>1260</i>&nbsp;            return booleanAttr.getID() + WHSP;</b>
+<i>1261</i>&nbsp;    }
+<i>1262</i>&nbsp;
+<i>1263</i>&nbsp;    /**
+<i>1264</i>&nbsp;     * Returns an attribute for updating the Object Class Definition schema
+<i>1265</i>&nbsp;     * attribute
+<i>1266</i>&nbsp;     */
+<i>1267</i>&nbsp;    final Attribute stringifyObjDesc(Attributes classDefAttrs)
+<i>1268</i>&nbsp;        throws NamingException {
+<b class="nc"><i>1269</i>&nbsp;        Attribute objDescAttr = new BasicAttribute(OBJECTCLASSDESC_ATTR_ID);</b>
+<b class="nc"><i>1270</i>&nbsp;        objDescAttr.add(classDef2ObjectDesc(classDefAttrs));</b>
+<b class="nc"><i>1271</i>&nbsp;        return objDescAttr;</b>
+<i>1272</i>&nbsp;    }
+<i>1273</i>&nbsp;
+<i>1274</i>&nbsp;    /**
+<i>1275</i>&nbsp;     * Returns an attribute for updating the Attribute Definition schema attribute
+<i>1276</i>&nbsp;     */
+<i>1277</i>&nbsp;    final Attribute stringifyAttrDesc(Attributes attrDefAttrs)
+<i>1278</i>&nbsp;        throws NamingException {
+<b class="nc"><i>1279</i>&nbsp;        Attribute attrDescAttr = new BasicAttribute(ATTRIBUTEDESC_ATTR_ID);</b>
+<b class="nc"><i>1280</i>&nbsp;        attrDescAttr.add(attrDef2AttrDesc(attrDefAttrs));</b>
+<b class="nc"><i>1281</i>&nbsp;        return attrDescAttr;</b>
+<i>1282</i>&nbsp;    }
+<i>1283</i>&nbsp;
+<i>1284</i>&nbsp;    /**
+<i>1285</i>&nbsp;     * Returns an attribute for updating the Syntax schema attribute
+<i>1286</i>&nbsp;     */
+<i>1287</i>&nbsp;    final Attribute stringifySyntaxDesc(Attributes syntaxDefAttrs)
+<i>1288</i>&nbsp;    throws NamingException {
+<b class="nc"><i>1289</i>&nbsp;        Attribute syntaxDescAttr = new BasicAttribute(SYNTAXDESC_ATTR_ID);</b>
+<b class="nc"><i>1290</i>&nbsp;        syntaxDescAttr.add(syntaxDef2SyntaxDesc(syntaxDefAttrs));</b>
+<b class="nc"><i>1291</i>&nbsp;        return syntaxDescAttr;</b>
+<i>1292</i>&nbsp;    }
+<i>1293</i>&nbsp;
+<i>1294</i>&nbsp;    /**
+<i>1295</i>&nbsp;     * Returns an attribute for updating the Matching Rule schema attribute
+<i>1296</i>&nbsp;     */
+<i>1297</i>&nbsp;    final Attribute stringifyMatchRuleDesc(Attributes matchRuleDefAttrs)
+<i>1298</i>&nbsp;    throws NamingException {
+<b class="nc"><i>1299</i>&nbsp;        Attribute matchRuleDescAttr = new BasicAttribute(MATCHRULEDESC_ATTR_ID);</b>
+<b class="nc"><i>1300</i>&nbsp;        matchRuleDescAttr.add(matchRuleDef2MatchRuleDesc(matchRuleDefAttrs));</b>
+<b class="nc"><i>1301</i>&nbsp;        return matchRuleDescAttr;</b>
+<i>1302</i>&nbsp;    }
+<i>1303</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

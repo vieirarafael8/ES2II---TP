@@ -1,0 +1,505 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AWTAutoShutdown</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.awt</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AWTAutoShutdown (sun.awt)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AWTAutoShutdown</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 18)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 120)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">AWTAutoShutdown$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 19)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 121)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.awt;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.awt.AWTEvent;
+<i>29</i>&nbsp;import java.security.AccessController;
+<i>30</i>&nbsp;import java.security.PrivilegedAction;
+<i>31</i>&nbsp;import java.util.HashSet;
+<i>32</i>&nbsp;import java.util.IdentityHashMap;
+<i>33</i>&nbsp;import java.util.Map;
+<i>34</i>&nbsp;import java.util.Set;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import sun.awt.util.ThreadGroupUtils;
+<i>37</i>&nbsp;import sun.util.logging.PlatformLogger;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp; * This class is to let AWT shutdown automatically when a user is done
+<i>41</i>&nbsp; * with AWT. It tracks AWT state using the following parameters:
+<i>42</i>&nbsp; * &lt;ul&gt;
+<i>43</i>&nbsp; * &lt;li&gt;{@code peerMap} - the map between the existing peer objects
+<i>44</i>&nbsp; *     and their associated targets
+<i>45</i>&nbsp; * &lt;li&gt;{@code toolkitThreadBusy} - whether the toolkit thread
+<i>46</i>&nbsp; *     is waiting for a new native event to appear in its queue
+<i>47</i>&nbsp; *     or is dispatching an event
+<i>48</i>&nbsp; * &lt;li&gt;{@code busyThreadSet} - a set of all the event dispatch
+<i>49</i>&nbsp; *     threads that are busy at this moment, i.e. those that are not
+<i>50</i>&nbsp; *     waiting for a new event to appear in their event queue.
+<i>51</i>&nbsp; * &lt;/ul&gt;&lt;p&gt;
+<i>52</i>&nbsp; * AWT is considered to be in ready-to-shutdown state when
+<i>53</i>&nbsp; * {@code peerMap} is empty and {@code toolkitThreadBusy}
+<i>54</i>&nbsp; * is false and {@code busyThreadSet} is empty.
+<i>55</i>&nbsp; * The internal AWTAutoShutdown logic secures that the single non-daemon
+<i>56</i>&nbsp; * thread ({@code blockerThread}) is running when AWT is not in
+<i>57</i>&nbsp; * ready-to-shutdown state. This blocker thread is to prevent AWT from
+<i>58</i>&nbsp; * exiting since the toolkit thread is now daemon and all the event
+<i>59</i>&nbsp; * dispatch threads are started only when needed. Once it is detected
+<i>60</i>&nbsp; * that AWT is in ready-to-shutdown state this blocker thread waits
+<i>61</i>&nbsp; * for a certain timeout and if AWT state doesn&#39;t change during timeout
+<i>62</i>&nbsp; * this blocker thread terminates all the event dispatch threads and
+<i>63</i>&nbsp; * exits.
+<i>64</i>&nbsp; */
+<i>65</i>&nbsp;public final class AWTAutoShutdown implements Runnable {
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;    private static final AWTAutoShutdown theInstance = new AWTAutoShutdown();
+<b class="nc"><i>68</i>&nbsp;</b>
+<i>69</i>&nbsp;    /**
+<i>70</i>&nbsp;     * This lock object is used to synchronize shutdown operations.
+<i>71</i>&nbsp;     */
+<i>72</i>&nbsp;    private final Object mainLock = new Object();
+<b class="nc"><i>73</i>&nbsp;</b>
+<i>74</i>&nbsp;    /**
+<i>75</i>&nbsp;     * This lock object is to secure that when a new blocker thread is
+<i>76</i>&nbsp;     * started it will be the first who acquire the main lock after
+<i>77</i>&nbsp;     * the thread that created the new blocker released the main lock
+<i>78</i>&nbsp;     * by calling lock.wait() to wait for the blocker to start.
+<i>79</i>&nbsp;     */
+<i>80</i>&nbsp;    private final Object activationLock = new Object();
+<b class="nc"><i>81</i>&nbsp;</b>
+<i>82</i>&nbsp;    /**
+<i>83</i>&nbsp;     * This set keeps references to all the event dispatch threads that
+<i>84</i>&nbsp;     * are busy at this moment, i.e. those that are not waiting for a
+<i>85</i>&nbsp;     * new event to appear in their event queue.
+<i>86</i>&nbsp;     * Access is synchronized on the main lock object.
+<i>87</i>&nbsp;     */
+<i>88</i>&nbsp;    private final Set&lt;Thread&gt; busyThreadSet = new HashSet&lt;&gt;(7);
+<b class="nc"><i>89</i>&nbsp;</b>
+<i>90</i>&nbsp;    /**
+<i>91</i>&nbsp;     * Indicates whether the toolkit thread is waiting for a new native
+<i>92</i>&nbsp;     * event to appear or is dispatching an event.
+<i>93</i>&nbsp;     */
+<i>94</i>&nbsp;    private boolean toolkitThreadBusy = false;
+<b class="nc"><i>95</i>&nbsp;</b>
+<i>96</i>&nbsp;    /**
+<i>97</i>&nbsp;     * This is a map between components and their peers.
+<i>98</i>&nbsp;     * we should work with in under activationLock&amp;mainLock lock.
+<i>99</i>&nbsp;     */
+<i>100</i>&nbsp;    private final Map&lt;Object, Object&gt; peerMap = new IdentityHashMap&lt;&gt;();
+<b class="nc"><i>101</i>&nbsp;</b>
+<i>102</i>&nbsp;    /**
+<i>103</i>&nbsp;     * References the alive non-daemon thread that is currently used
+<i>104</i>&nbsp;     * for keeping AWT from exiting.
+<i>105</i>&nbsp;     */
+<i>106</i>&nbsp;    private Thread blockerThread = null;
+<b class="nc"><i>107</i>&nbsp;</b>
+<i>108</i>&nbsp;    /**
+<i>109</i>&nbsp;     * We need this flag to secure that AWT state hasn&#39;t changed while
+<i>110</i>&nbsp;     * we were waiting for the safety timeout to pass.
+<i>111</i>&nbsp;     */
+<i>112</i>&nbsp;    private boolean timeoutPassed = false;
+<b class="nc"><i>113</i>&nbsp;</b>
+<i>114</i>&nbsp;    /**
+<i>115</i>&nbsp;     * Once we detect that AWT is ready to shutdown we wait for a certain
+<i>116</i>&nbsp;     * timeout to pass before stopping event dispatch threads.
+<i>117</i>&nbsp;     */
+<i>118</i>&nbsp;    private static final int SAFETY_TIMEOUT = 1000;
+<i>119</i>&nbsp;
+<i>120</i>&nbsp;    /**
+<i>121</i>&nbsp;     * Constructor method is intentionally made private to secure
+<i>122</i>&nbsp;     * a single instance. Use getInstance() to reference it.
+<i>123</i>&nbsp;     *
+<i>124</i>&nbsp;     * @see     AWTAutoShutdown#getInstance
+<i>125</i>&nbsp;     */
+<i>126</i>&nbsp;    private AWTAutoShutdown() {}
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;    /**
+<i>129</i>&nbsp;     * Returns reference to a single AWTAutoShutdown instance.
+<i>130</i>&nbsp;     */
+<i>131</i>&nbsp;    public static AWTAutoShutdown getInstance() {
+<i>132</i>&nbsp;        return theInstance;
+<b class="nc"><i>133</i>&nbsp;    }</b>
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;    /**
+<i>136</i>&nbsp;     * Notify that the toolkit thread is not waiting for a native event
+<i>137</i>&nbsp;     * to appear in its queue.
+<i>138</i>&nbsp;     *
+<i>139</i>&nbsp;     * @see     AWTAutoShutdown#notifyToolkitThreadFree
+<i>140</i>&nbsp;     * @see     AWTAutoShutdown#setToolkitBusy
+<i>141</i>&nbsp;     * @see     AWTAutoShutdown#isReadyToShutdown
+<i>142</i>&nbsp;     */
+<i>143</i>&nbsp;    public static void notifyToolkitThreadBusy() {
+<i>144</i>&nbsp;        getInstance().setToolkitBusy(true);
+<b class="nc"><i>145</i>&nbsp;    }</b>
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;    /**
+<i>148</i>&nbsp;     * Notify that the toolkit thread is waiting for a native event
+<i>149</i>&nbsp;     * to appear in its queue.
+<i>150</i>&nbsp;     *
+<i>151</i>&nbsp;     * @see     AWTAutoShutdown#notifyToolkitThreadFree
+<i>152</i>&nbsp;     * @see     AWTAutoShutdown#setToolkitBusy
+<i>153</i>&nbsp;     * @see     AWTAutoShutdown#isReadyToShutdown
+<i>154</i>&nbsp;     */
+<i>155</i>&nbsp;    public static void notifyToolkitThreadFree() {
+<i>156</i>&nbsp;        getInstance().setToolkitBusy(false);
+<b class="nc"><i>157</i>&nbsp;    }</b>
+<i>158</i>&nbsp;
+<i>159</i>&nbsp;    /**
+<i>160</i>&nbsp;     * Add a specified thread to the set of busy event dispatch threads.
+<i>161</i>&nbsp;     * If this set already contains the specified thread or the thread is null,
+<i>162</i>&nbsp;     * the call leaves this set unchanged and returns silently.
+<i>163</i>&nbsp;     *
+<i>164</i>&nbsp;     * @param thread thread to be added to this set, if not present.
+<i>165</i>&nbsp;     * @see     AWTAutoShutdown#notifyThreadFree
+<i>166</i>&nbsp;     * @see     AWTAutoShutdown#isReadyToShutdown
+<i>167</i>&nbsp;     */
+<i>168</i>&nbsp;    public void notifyThreadBusy(final Thread thread) {
+<i>169</i>&nbsp;        if (thread == null) {
+<b class="nc"><i>170</i>&nbsp;            return;</b>
+<i>171</i>&nbsp;        }
+<i>172</i>&nbsp;        synchronized (activationLock) {
+<b class="nc"><i>173</i>&nbsp;            synchronized (mainLock) {</b>
+<b class="nc"><i>174</i>&nbsp;                if (blockerThread == null) {</b>
+<b class="nc"><i>175</i>&nbsp;                    activateBlockerThread();</b>
+<b class="nc"><i>176</i>&nbsp;                } else if (isReadyToShutdown()) {</b>
+<b class="nc"><i>177</i>&nbsp;                    mainLock.notifyAll();</b>
+<b class="nc"><i>178</i>&nbsp;                    timeoutPassed = false;</b>
+<b class="nc"><i>179</i>&nbsp;                }</b>
+<i>180</i>&nbsp;                busyThreadSet.add(thread);
+<b class="nc"><i>181</i>&nbsp;            }</b>
+<b class="nc"><i>182</i>&nbsp;        }</b>
+<b class="nc"><i>183</i>&nbsp;    }</b>
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;    /**
+<i>186</i>&nbsp;     * Remove a specified thread from the set of busy event dispatch threads.
+<i>187</i>&nbsp;     * If this set doesn&#39;t contain the specified thread or the thread is null,
+<i>188</i>&nbsp;     * the call leaves this set unchanged and returns silently.
+<i>189</i>&nbsp;     *
+<i>190</i>&nbsp;     * @param thread thread to be removed from this set, if present.
+<i>191</i>&nbsp;     * @see     AWTAutoShutdown#notifyThreadBusy
+<i>192</i>&nbsp;     * @see     AWTAutoShutdown#isReadyToShutdown
+<i>193</i>&nbsp;     */
+<i>194</i>&nbsp;    public void notifyThreadFree(final Thread thread) {
+<i>195</i>&nbsp;        if (thread == null) {
+<b class="nc"><i>196</i>&nbsp;            return;</b>
+<i>197</i>&nbsp;        }
+<i>198</i>&nbsp;        synchronized (activationLock) {
+<b class="nc"><i>199</i>&nbsp;            synchronized (mainLock) {</b>
+<b class="nc"><i>200</i>&nbsp;                busyThreadSet.remove(thread);</b>
+<b class="nc"><i>201</i>&nbsp;                if (isReadyToShutdown()) {</b>
+<b class="nc"><i>202</i>&nbsp;                    mainLock.notifyAll();</b>
+<b class="nc"><i>203</i>&nbsp;                    timeoutPassed = false;</b>
+<b class="nc"><i>204</i>&nbsp;                }</b>
+<i>205</i>&nbsp;            }
+<b class="nc"><i>206</i>&nbsp;        }</b>
+<b class="nc"><i>207</i>&nbsp;    }</b>
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    /**
+<i>210</i>&nbsp;     * Notify that the peermap has been updated, that means a new peer
+<i>211</i>&nbsp;     * has been created or some existing peer has been disposed.
+<i>212</i>&nbsp;     *
+<i>213</i>&nbsp;     * @see     AWTAutoShutdown#isReadyToShutdown
+<i>214</i>&nbsp;     */
+<i>215</i>&nbsp;    void notifyPeerMapUpdated() {
+<i>216</i>&nbsp;        synchronized (activationLock) {
+<b class="nc"><i>217</i>&nbsp;            synchronized (mainLock) {</b>
+<b class="nc"><i>218</i>&nbsp;                if (!isReadyToShutdown() &amp;&amp; blockerThread == null) {</b>
+<b class="nc"><i>219</i>&nbsp;                    activateBlockerThread();</b>
+<b class="nc"><i>220</i>&nbsp;                } else {</b>
+<b class="nc"><i>221</i>&nbsp;                    mainLock.notifyAll();</b>
+<b class="nc"><i>222</i>&nbsp;                    timeoutPassed = false;</b>
+<i>223</i>&nbsp;                }
+<i>224</i>&nbsp;            }
+<b class="nc"><i>225</i>&nbsp;        }</b>
+<b class="nc"><i>226</i>&nbsp;    }</b>
+<i>227</i>&nbsp;
+<b class="nc"><i>228</i>&nbsp;    /**</b>
+<b class="nc"><i>229</i>&nbsp;     * Determine whether AWT is currently in ready-to-shutdown state.</b>
+<i>230</i>&nbsp;     * AWT is considered to be in ready-to-shutdown state if
+<i>231</i>&nbsp;     * {@code peerMap} is empty and {@code toolkitThreadBusy}
+<i>232</i>&nbsp;     * is false and {@code busyThreadSet} is empty.
+<i>233</i>&nbsp;     *
+<i>234</i>&nbsp;     * @return true if AWT is in ready-to-shutdown state.
+<i>235</i>&nbsp;     */
+<i>236</i>&nbsp;    private boolean isReadyToShutdown() {
+<i>237</i>&nbsp;        return (!toolkitThreadBusy &amp;&amp;
+<i>238</i>&nbsp;                 peerMap.isEmpty() &amp;&amp;
+<i>239</i>&nbsp;                 busyThreadSet.isEmpty());
+<i>240</i>&nbsp;    }
+<b class="nc"><i>241</i>&nbsp;</b>
+<b class="nc"><i>242</i>&nbsp;    /**</b>
+<b class="nc"><i>243</i>&nbsp;     * Notify about the toolkit thread state change.</b>
+<i>244</i>&nbsp;     *
+<i>245</i>&nbsp;     * @param busy true if the toolkit thread state changes from idle
+<i>246</i>&nbsp;     *             to busy.
+<i>247</i>&nbsp;     * @see     AWTAutoShutdown#notifyToolkitThreadBusy
+<i>248</i>&nbsp;     * @see     AWTAutoShutdown#notifyToolkitThreadFree
+<i>249</i>&nbsp;     * @see     AWTAutoShutdown#isReadyToShutdown
+<i>250</i>&nbsp;     */
+<i>251</i>&nbsp;    private void setToolkitBusy(final boolean busy) {
+<i>252</i>&nbsp;        if (busy != toolkitThreadBusy) {
+<i>253</i>&nbsp;            synchronized (activationLock) {
+<i>254</i>&nbsp;                synchronized (mainLock) {
+<i>255</i>&nbsp;                    if (busy != toolkitThreadBusy) {
+<b class="nc"><i>256</i>&nbsp;                        if (busy) {</b>
+<b class="nc"><i>257</i>&nbsp;                            if (blockerThread == null) {</b>
+<b class="nc"><i>258</i>&nbsp;                                activateBlockerThread();</b>
+<b class="nc"><i>259</i>&nbsp;                            } else if (isReadyToShutdown()) {</b>
+<b class="nc"><i>260</i>&nbsp;                                mainLock.notifyAll();</b>
+<b class="nc"><i>261</i>&nbsp;                                timeoutPassed = false;</b>
+<b class="nc"><i>262</i>&nbsp;                            }</b>
+<b class="nc"><i>263</i>&nbsp;                            toolkitThreadBusy = busy;</b>
+<b class="nc"><i>264</i>&nbsp;                        } else {</b>
+<b class="nc"><i>265</i>&nbsp;                            toolkitThreadBusy = busy;</b>
+<i>266</i>&nbsp;                            if (isReadyToShutdown()) {
+<b class="nc"><i>267</i>&nbsp;                                mainLock.notifyAll();</b>
+<i>268</i>&nbsp;                                timeoutPassed = false;
+<b class="nc"><i>269</i>&nbsp;                            }</b>
+<b class="nc"><i>270</i>&nbsp;                        }</b>
+<b class="nc"><i>271</i>&nbsp;                    }</b>
+<b class="nc"><i>272</i>&nbsp;                }</b>
+<i>273</i>&nbsp;            }
+<i>274</i>&nbsp;        }
+<i>275</i>&nbsp;    }
+<b class="nc"><i>276</i>&nbsp;</b>
+<b class="nc"><i>277</i>&nbsp;    /**</b>
+<i>278</i>&nbsp;     * Implementation of the Runnable interface.
+<i>279</i>&nbsp;     * Incapsulates the blocker thread functionality.
+<i>280</i>&nbsp;     *
+<i>281</i>&nbsp;     * @see     AWTAutoShutdown#isReadyToShutdown
+<i>282</i>&nbsp;     */
+<i>283</i>&nbsp;    public void run() {
+<i>284</i>&nbsp;        Thread currentThread = Thread.currentThread();
+<i>285</i>&nbsp;        boolean interrupted = false;
+<i>286</i>&nbsp;        synchronized (mainLock) {
+<i>287</i>&nbsp;            try {
+<b class="nc"><i>288</i>&nbsp;                /* Notify that the thread is started. */</b>
+<b class="nc"><i>289</i>&nbsp;                mainLock.notifyAll();</b>
+<b class="nc"><i>290</i>&nbsp;                while (blockerThread == currentThread) {</b>
+<i>291</i>&nbsp;                    mainLock.wait();
+<i>292</i>&nbsp;                    timeoutPassed = false;
+<b class="nc"><i>293</i>&nbsp;                    /*</b>
+<b class="nc"><i>294</i>&nbsp;                     * This loop is introduced to handle the following case:</b>
+<b class="nc"><i>295</i>&nbsp;                     * it is possible that while we are waiting for the</b>
+<b class="nc"><i>296</i>&nbsp;                     * safety timeout to pass AWT state can change to</b>
+<i>297</i>&nbsp;                     * not-ready-to-shutdown and back to ready-to-shutdown.
+<i>298</i>&nbsp;                     * In this case we have to wait once again.
+<i>299</i>&nbsp;                     * NOTE: we shouldn&#39;t break into the outer loop
+<i>300</i>&nbsp;                     * in this case, since we may never be notified
+<i>301</i>&nbsp;                     * in an outer infinite wait at this point.
+<i>302</i>&nbsp;                     */
+<i>303</i>&nbsp;                    while (isReadyToShutdown()) {
+<i>304</i>&nbsp;                        if (timeoutPassed) {
+<i>305</i>&nbsp;                            timeoutPassed = false;
+<i>306</i>&nbsp;                            blockerThread = null;
+<b class="nc"><i>307</i>&nbsp;                            break;</b>
+<b class="nc"><i>308</i>&nbsp;                        }</b>
+<b class="nc"><i>309</i>&nbsp;                        timeoutPassed = true;</b>
+<b class="nc"><i>310</i>&nbsp;                        mainLock.wait(SAFETY_TIMEOUT);</b>
+<b class="nc"><i>311</i>&nbsp;                    }</b>
+<i>312</i>&nbsp;                }
+<b class="nc"><i>313</i>&nbsp;            } catch (InterruptedException e) {</b>
+<b class="nc"><i>314</i>&nbsp;                interrupted = true;</b>
+<i>315</i>&nbsp;            } finally {
+<i>316</i>&nbsp;                if (blockerThread == currentThread) {
+<b class="nc"><i>317</i>&nbsp;                    blockerThread = null;</b>
+<b class="nc"><i>318</i>&nbsp;                }</b>
+<i>319</i>&nbsp;            }
+<b class="nc"><i>320</i>&nbsp;        }</b>
+<b class="nc"><i>321</i>&nbsp;        if (!interrupted) {</b>
+<i>322</i>&nbsp;            AppContext.stopEventDispatchThreads();
+<i>323</i>&nbsp;        }
+<b class="nc"><i>324</i>&nbsp;    }</b>
+<b class="nc"><i>325</i>&nbsp;</b>
+<b class="nc"><i>326</i>&nbsp;    @SuppressWarnings(&quot;serial&quot;)</b>
+<i>327</i>&nbsp;    static AWTEvent getShutdownEvent() {
+<i>328</i>&nbsp;        return new AWTEvent(getInstance(), 0) {
+<i>329</i>&nbsp;        };
+<i>330</i>&nbsp;    }
+<i>331</i>&nbsp;
+<b class="nc"><i>332</i>&nbsp;    /**</b>
+<i>333</i>&nbsp;     * Creates and starts a new blocker thread. Doesn&#39;t return until
+<i>334</i>&nbsp;     * the new blocker thread starts.
+<i>335</i>&nbsp;     */
+<i>336</i>&nbsp;    private void activateBlockerThread() {
+<i>337</i>&nbsp;        AccessController.doPrivileged((PrivilegedAction&lt;Thread&gt;) () -&gt; {
+<i>338</i>&nbsp;            String name = &quot;AWT-Shutdown&quot;;
+<i>339</i>&nbsp;            Thread thread = new Thread(
+<i>340</i>&nbsp;                   ThreadGroupUtils.getRootThreadGroup(), this, name, 0, false);
+<i>341</i>&nbsp;            thread.setContextClassLoader(null);
+<i>342</i>&nbsp;            thread.setDaemon(false);
+<b class="nc"><i>343</i>&nbsp;            blockerThread = thread;</b>
+<b class="nc"><i>344</i>&nbsp;            return thread;</b>
+<b class="nc"><i>345</i>&nbsp;        }).start();</b>
+<b class="nc"><i>346</i>&nbsp;        try {</b>
+<b class="nc"><i>347</i>&nbsp;            /* Wait for the blocker thread to start. */</b>
+<i>348</i>&nbsp;            mainLock.wait();
+<i>349</i>&nbsp;        } catch (InterruptedException e) {
+<b class="nc"><i>350</i>&nbsp;            System.err.println(&quot;AWT blocker activation interrupted:&quot;);</b>
+<b class="nc"><i>351</i>&nbsp;            e.printStackTrace();</b>
+<b class="nc"><i>352</i>&nbsp;        }</b>
+<b class="nc"><i>353</i>&nbsp;    }</b>
+<b class="nc"><i>354</i>&nbsp;</b>
+<i>355</i>&nbsp;    void registerPeer(final Object target, final Object peer) {
+<i>356</i>&nbsp;        synchronized (activationLock) {
+<i>357</i>&nbsp;            synchronized (mainLock) {
+<b class="nc"><i>358</i>&nbsp;                peerMap.put(target, peer);</b>
+<b class="nc"><i>359</i>&nbsp;                notifyPeerMapUpdated();</b>
+<b class="nc"><i>360</i>&nbsp;            }</b>
+<b class="nc"><i>361</i>&nbsp;        }</b>
+<b class="nc"><i>362</i>&nbsp;    }</b>
+<b class="nc"><i>363</i>&nbsp;</b>
+<i>364</i>&nbsp;    void unregisterPeer(final Object target, final Object peer) {
+<i>365</i>&nbsp;        synchronized (activationLock) {
+<i>366</i>&nbsp;            synchronized (mainLock) {
+<b class="nc"><i>367</i>&nbsp;                if (peerMap.get(target) == peer) {</b>
+<b class="nc"><i>368</i>&nbsp;                    peerMap.remove(target);</b>
+<b class="nc"><i>369</i>&nbsp;                    notifyPeerMapUpdated();</b>
+<b class="nc"><i>370</i>&nbsp;                }</b>
+<b class="nc"><i>371</i>&nbsp;            }</b>
+<i>372</i>&nbsp;        }
+<b class="nc"><i>373</i>&nbsp;    }</b>
+<b class="nc"><i>374</i>&nbsp;</b>
+<i>375</i>&nbsp;    Object getPeer(final Object target) {
+<i>376</i>&nbsp;        synchronized (activationLock) {
+<i>377</i>&nbsp;            synchronized (mainLock) {
+<b class="nc"><i>378</i>&nbsp;                return peerMap.get(target);</b>
+<b class="nc"><i>379</i>&nbsp;            }</b>
+<b class="nc"><i>380</i>&nbsp;        }</b>
+<b class="nc"><i>381</i>&nbsp;    }</b>
+<b class="nc"><i>382</i>&nbsp;</b>
+<i>383</i>&nbsp;    void dumpPeers(final PlatformLogger aLog) {
+<i>384</i>&nbsp;        if (aLog.isLoggable(PlatformLogger.Level.FINE)) {
+<i>385</i>&nbsp;            synchronized (activationLock) {
+<b class="nc"><i>386</i>&nbsp;                synchronized (mainLock) {</b>
+<b class="nc"><i>387</i>&nbsp;                    aLog.fine(&quot;Mapped peers:&quot;);</b>
+<b class="nc"><i>388</i>&nbsp;                    for (Object key : peerMap.keySet()) {</b>
+<b class="nc"><i>389</i>&nbsp;                        aLog.fine(key + &quot;-&gt;&quot; + peerMap.get(key));</b>
+<b class="nc"><i>390</i>&nbsp;                    }</b>
+<b class="nc"><i>391</i>&nbsp;                }</b>
+<b class="nc"><i>392</i>&nbsp;            }</b>
+<b class="nc"><i>393</i>&nbsp;        }</b>
+<b class="nc"><i>394</i>&nbsp;    }</b>
+<i>395</i>&nbsp;
+<i>396</i>&nbsp;} // class AWTAutoShutdown
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

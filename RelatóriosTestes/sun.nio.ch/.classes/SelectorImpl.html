@@ -1,0 +1,394 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: SelectorImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.ch</a> ]
+</div>
+
+<h1>Coverage Summary for Class: SelectorImpl (sun.nio.ch)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SelectorImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 58)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.ch;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.nio.channels.ClosedSelectorException;
+<i>30</i>&nbsp;import java.nio.channels.IllegalSelectorException;
+<i>31</i>&nbsp;import java.nio.channels.SelectableChannel;
+<i>32</i>&nbsp;import java.nio.channels.SelectionKey;
+<i>33</i>&nbsp;import java.nio.channels.spi.AbstractSelectableChannel;
+<i>34</i>&nbsp;import java.nio.channels.spi.AbstractSelector;
+<i>35</i>&nbsp;import java.nio.channels.spi.SelectorProvider;
+<i>36</i>&nbsp;import java.util.Collections;
+<i>37</i>&nbsp;import java.util.HashSet;
+<i>38</i>&nbsp;import java.util.Iterator;
+<i>39</i>&nbsp;import java.util.Objects;
+<i>40</i>&nbsp;import java.util.Set;
+<i>41</i>&nbsp;import java.util.concurrent.ConcurrentHashMap;
+<i>42</i>&nbsp;import java.util.function.Consumer;
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;/**
+<i>46</i>&nbsp; * Base Selector implementation class.
+<i>47</i>&nbsp; */
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;abstract class SelectorImpl
+<i>50</i>&nbsp;    extends AbstractSelector
+<i>51</i>&nbsp;{
+<i>52</i>&nbsp;    // The set of keys registered with this Selector
+<i>53</i>&nbsp;    private final Set&lt;SelectionKey&gt; keys;
+<b class="nc"><i>54</i>&nbsp;</b>
+<b class="nc"><i>55</i>&nbsp;    // The set of keys with data ready for an operation</b>
+<b class="nc"><i>56</i>&nbsp;    private final Set&lt;SelectionKey&gt; selectedKeys;</b>
+<b class="nc"><i>57</i>&nbsp;</b>
+<b class="nc"><i>58</i>&nbsp;    // Public views of the key sets</b>
+<b class="nc"><i>59</i>&nbsp;    private final Set&lt;SelectionKey&gt; publicKeys;             // Immutable</b>
+<i>60</i>&nbsp;    private final Set&lt;SelectionKey&gt; publicSelectedKeys;     // Removal allowed, but not addition
+<b class="nc"><i>61</i>&nbsp;</b>
+<b class="nc"><i>62</i>&nbsp;    // used to check for reentrancy</b>
+<i>63</i>&nbsp;    private boolean inSelect;
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    protected SelectorImpl(SelectorProvider sp) {
+<i>66</i>&nbsp;        super(sp);
+<b class="nc"><i>67</i>&nbsp;        keys = ConcurrentHashMap.newKeySet();</b>
+<b class="nc"><i>68</i>&nbsp;        selectedKeys = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>69</i>&nbsp;        publicKeys = Collections.unmodifiableSet(keys);</b>
+<i>70</i>&nbsp;        publicSelectedKeys = Util.ungrowableSet(selectedKeys);
+<i>71</i>&nbsp;    }
+<i>72</i>&nbsp;
+<b class="nc"><i>73</i>&nbsp;    private void ensureOpen() {</b>
+<b class="nc"><i>74</i>&nbsp;        if (!isOpen())</b>
+<b class="nc"><i>75</i>&nbsp;            throw new ClosedSelectorException();</b>
+<i>76</i>&nbsp;    }
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    @Override
+<i>79</i>&nbsp;    public final Set&lt;SelectionKey&gt; keys() {
+<i>80</i>&nbsp;        ensureOpen();
+<b class="nc"><i>81</i>&nbsp;        return publicKeys;</b>
+<b class="nc"><i>82</i>&nbsp;    }</b>
+<b class="nc"><i>83</i>&nbsp;</b>
+<b class="nc"><i>84</i>&nbsp;    @Override</b>
+<b class="nc"><i>85</i>&nbsp;    public final Set&lt;SelectionKey&gt; selectedKeys() {</b>
+<b class="nc"><i>86</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>87</i>&nbsp;        return publicSelectedKeys;</b>
+<b class="nc"><i>88</i>&nbsp;    }</b>
+<b class="nc"><i>89</i>&nbsp;</b>
+<i>90</i>&nbsp;    /**
+<i>91</i>&nbsp;     * Marks the beginning of a select operation that might block
+<i>92</i>&nbsp;     */
+<i>93</i>&nbsp;    protected final void begin(boolean blocking) {
+<i>94</i>&nbsp;        if (blocking) begin();
+<b class="nc"><i>95</i>&nbsp;    }</b>
+<b class="nc"><i>96</i>&nbsp;</b>
+<b class="nc"><i>97</i>&nbsp;    /**</b>
+<i>98</i>&nbsp;     * Marks the end of a select operation that may have blocked
+<i>99</i>&nbsp;     */
+<i>100</i>&nbsp;    protected final void end(boolean blocking) {
+<b class="nc"><i>101</i>&nbsp;        if (blocking) end();</b>
+<i>102</i>&nbsp;    }
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;    /**
+<b class="nc"><i>105</i>&nbsp;     * Selects the keys for channels that are ready for I/O operations.</b>
+<i>106</i>&nbsp;     *
+<i>107</i>&nbsp;     * @param action  the action to perform, can be null
+<i>108</i>&nbsp;     * @param timeout timeout in milliseconds to wait, 0 to not wait, -1 to
+<b class="nc"><i>109</i>&nbsp;     *                wait indefinitely</b>
+<b class="nc"><i>110</i>&nbsp;     */</b>
+<b class="nc"><i>111</i>&nbsp;    protected abstract int doSelect(Consumer&lt;SelectionKey&gt; action, long timeout)</b>
+<b class="nc"><i>112</i>&nbsp;        throws IOException;</b>
+<b class="nc"><i>113</i>&nbsp;</b>
+<b class="nc"><i>114</i>&nbsp;    private int lockAndDoSelect(Consumer&lt;SelectionKey&gt; action, long timeout)</b>
+<b class="nc"><i>115</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>116</i>&nbsp;    {</b>
+<i>117</i>&nbsp;        synchronized (this) {
+<i>118</i>&nbsp;            ensureOpen();
+<i>119</i>&nbsp;            if (inSelect)
+<i>120</i>&nbsp;                throw new IllegalStateException(&quot;select in progress&quot;);
+<i>121</i>&nbsp;            inSelect = true;
+<i>122</i>&nbsp;            try {
+<i>123</i>&nbsp;                synchronized (publicSelectedKeys) {
+<i>124</i>&nbsp;                    return doSelect(action, timeout);
+<i>125</i>&nbsp;                }
+<i>126</i>&nbsp;            } finally {
+<b class="nc"><i>127</i>&nbsp;                inSelect = false;</b>
+<b class="nc"><i>128</i>&nbsp;            }</b>
+<b class="nc"><i>129</i>&nbsp;        }</b>
+<b class="nc"><i>130</i>&nbsp;    }</b>
+<b class="nc"><i>131</i>&nbsp;</b>
+<b class="nc"><i>132</i>&nbsp;    @Override</b>
+<b class="nc"><i>133</i>&nbsp;    public final int select(long timeout) throws IOException {</b>
+<b class="nc"><i>134</i>&nbsp;        if (timeout &lt; 0)</b>
+<b class="nc"><i>135</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative timeout&quot;);</b>
+<i>136</i>&nbsp;        return lockAndDoSelect(null, (timeout == 0) ? -1 : timeout);
+<i>137</i>&nbsp;    }
+<i>138</i>&nbsp;
+<i>139</i>&nbsp;    @Override
+<i>140</i>&nbsp;    public final int select() throws IOException {
+<i>141</i>&nbsp;        return lockAndDoSelect(null, -1);
+<b class="nc"><i>142</i>&nbsp;    }</b>
+<b class="nc"><i>143</i>&nbsp;</b>
+<b class="nc"><i>144</i>&nbsp;    @Override</b>
+<b class="nc"><i>145</i>&nbsp;    public final int selectNow() throws IOException {</b>
+<b class="nc"><i>146</i>&nbsp;        return lockAndDoSelect(null, 0);</b>
+<b class="nc"><i>147</i>&nbsp;    }</b>
+<i>148</i>&nbsp;
+<b class="nc"><i>149</i>&nbsp;    @Override</b>
+<b class="nc"><i>150</i>&nbsp;    public final int select(Consumer&lt;SelectionKey&gt; action, long timeout)</b>
+<b class="nc"><i>151</i>&nbsp;        throws IOException</b>
+<i>152</i>&nbsp;    {
+<b class="nc"><i>153</i>&nbsp;        Objects.requireNonNull(action);</b>
+<b class="nc"><i>154</i>&nbsp;        if (timeout &lt; 0)</b>
+<b class="nc"><i>155</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative timeout&quot;);</b>
+<i>156</i>&nbsp;        return lockAndDoSelect(action, (timeout == 0) ? -1 : timeout);
+<b class="nc"><i>157</i>&nbsp;    }</b>
+<i>158</i>&nbsp;
+<i>159</i>&nbsp;    @Override
+<i>160</i>&nbsp;    public final int select(Consumer&lt;SelectionKey&gt; action) throws IOException {
+<i>161</i>&nbsp;        Objects.requireNonNull(action);
+<i>162</i>&nbsp;        return lockAndDoSelect(action, -1);
+<i>163</i>&nbsp;    }
+<i>164</i>&nbsp;
+<i>165</i>&nbsp;    @Override
+<i>166</i>&nbsp;    public final int selectNow(Consumer&lt;SelectionKey&gt; action) throws IOException {
+<i>167</i>&nbsp;        Objects.requireNonNull(action);
+<i>168</i>&nbsp;        return lockAndDoSelect(action, 0);
+<i>169</i>&nbsp;    }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;    /**
+<i>172</i>&nbsp;     * Invoked by implCloseSelector to close the selector.
+<i>173</i>&nbsp;     */
+<i>174</i>&nbsp;    protected abstract void implClose() throws IOException;
+<i>175</i>&nbsp;
+<i>176</i>&nbsp;    @Override
+<i>177</i>&nbsp;    public final void implCloseSelector() throws IOException {
+<i>178</i>&nbsp;        wakeup();
+<i>179</i>&nbsp;        synchronized (this) {
+<i>180</i>&nbsp;            implClose();
+<i>181</i>&nbsp;            synchronized (publicSelectedKeys) {
+<i>182</i>&nbsp;                // Deregister channels
+<i>183</i>&nbsp;                Iterator&lt;SelectionKey&gt; i = keys.iterator();
+<i>184</i>&nbsp;                while (i.hasNext()) {
+<i>185</i>&nbsp;                    SelectionKeyImpl ski = (SelectionKeyImpl)i.next();
+<i>186</i>&nbsp;                    deregister(ski);
+<i>187</i>&nbsp;                    SelectableChannel selch = ski.channel();
+<i>188</i>&nbsp;                    if (!selch.isOpen() &amp;&amp; !selch.isRegistered())
+<i>189</i>&nbsp;                        ((SelChImpl)selch).kill();
+<i>190</i>&nbsp;                    selectedKeys.remove(ski);
+<i>191</i>&nbsp;                    i.remove();
+<i>192</i>&nbsp;                }
+<i>193</i>&nbsp;                assert selectedKeys.isEmpty() &amp;&amp; keys.isEmpty();
+<i>194</i>&nbsp;            }
+<i>195</i>&nbsp;        }
+<i>196</i>&nbsp;    }
+<i>197</i>&nbsp;
+<i>198</i>&nbsp;    @Override
+<i>199</i>&nbsp;    protected final SelectionKey register(AbstractSelectableChannel ch,
+<i>200</i>&nbsp;                                          int ops,
+<i>201</i>&nbsp;                                          Object attachment)
+<i>202</i>&nbsp;    {
+<i>203</i>&nbsp;        if (!(ch instanceof SelChImpl))
+<i>204</i>&nbsp;            throw new IllegalSelectorException();
+<i>205</i>&nbsp;        SelectionKeyImpl k = new SelectionKeyImpl((SelChImpl)ch, this);
+<i>206</i>&nbsp;        k.attach(attachment);
+<i>207</i>&nbsp;
+<i>208</i>&nbsp;        // register (if needed) before adding to key set
+<i>209</i>&nbsp;        implRegister(k);
+<i>210</i>&nbsp;
+<i>211</i>&nbsp;        // add to the selector&#39;s key set, removing it immediately if the selector
+<i>212</i>&nbsp;        // is closed. The key is not in the channel&#39;s key set at this point but
+<i>213</i>&nbsp;        // it may be observed by a thread iterating over the selector&#39;s key set.
+<i>214</i>&nbsp;        keys.add(k);
+<i>215</i>&nbsp;        try {
+<i>216</i>&nbsp;            k.interestOps(ops);
+<i>217</i>&nbsp;        } catch (ClosedSelectorException e) {
+<i>218</i>&nbsp;            assert ch.keyFor(this) == null;
+<i>219</i>&nbsp;            keys.remove(k);
+<i>220</i>&nbsp;            k.cancel();
+<i>221</i>&nbsp;            throw e;
+<i>222</i>&nbsp;        }
+<i>223</i>&nbsp;        return k;
+<i>224</i>&nbsp;    }
+<i>225</i>&nbsp;
+<i>226</i>&nbsp;    /**
+<i>227</i>&nbsp;     * Register the key in the selector.
+<i>228</i>&nbsp;     *
+<i>229</i>&nbsp;     * The default implementation checks if the selector is open. It should
+<i>230</i>&nbsp;     * be overridden by selector implementations as needed.
+<i>231</i>&nbsp;     */
+<i>232</i>&nbsp;    protected void implRegister(SelectionKeyImpl ski) {
+<i>233</i>&nbsp;        ensureOpen();
+<i>234</i>&nbsp;    }
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;    /**
+<i>237</i>&nbsp;     * Removes the key from the selector
+<i>238</i>&nbsp;     */
+<i>239</i>&nbsp;    protected abstract void implDereg(SelectionKeyImpl ski) throws IOException;
+<i>240</i>&nbsp;
+<i>241</i>&nbsp;    /**
+<i>242</i>&nbsp;     * Invoked by selection operations to process the cancelled-key set
+<i>243</i>&nbsp;     */
+<i>244</i>&nbsp;    protected final void processDeregisterQueue() throws IOException {
+<i>245</i>&nbsp;        assert Thread.holdsLock(this);
+<i>246</i>&nbsp;        assert Thread.holdsLock(publicSelectedKeys);
+<i>247</i>&nbsp;
+<i>248</i>&nbsp;        Set&lt;SelectionKey&gt; cks = cancelledKeys();
+<i>249</i>&nbsp;        synchronized (cks) {
+<i>250</i>&nbsp;            if (!cks.isEmpty()) {
+<i>251</i>&nbsp;                Iterator&lt;SelectionKey&gt; i = cks.iterator();
+<i>252</i>&nbsp;                while (i.hasNext()) {
+<i>253</i>&nbsp;                    SelectionKeyImpl ski = (SelectionKeyImpl)i.next();
+<i>254</i>&nbsp;                    i.remove();
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;                    // remove the key from the selector
+<i>257</i>&nbsp;                    implDereg(ski);
+<i>258</i>&nbsp;
+<i>259</i>&nbsp;                    selectedKeys.remove(ski);
+<i>260</i>&nbsp;                    keys.remove(ski);
+<i>261</i>&nbsp;
+<i>262</i>&nbsp;                    // remove from channel&#39;s key set
+<i>263</i>&nbsp;                    deregister(ski);
+<i>264</i>&nbsp;
+<i>265</i>&nbsp;                    SelectableChannel ch = ski.channel();
+<i>266</i>&nbsp;                    if (!ch.isOpen() &amp;&amp; !ch.isRegistered())
+<i>267</i>&nbsp;                        ((SelChImpl)ch).kill();
+<i>268</i>&nbsp;                }
+<i>269</i>&nbsp;            }
+<i>270</i>&nbsp;        }
+<i>271</i>&nbsp;    }
+<i>272</i>&nbsp;
+<i>273</i>&nbsp;    /**
+<i>274</i>&nbsp;     * Invoked by selection operations to handle ready events. If an action
+<i>275</i>&nbsp;     * is specified then it is invoked to handle the key, otherwise the key
+<i>276</i>&nbsp;     * is added to the selected-key set (or updated when it is already in the
+<i>277</i>&nbsp;     * set).
+<i>278</i>&nbsp;     */
+<i>279</i>&nbsp;    protected final int processReadyEvents(int rOps,
+<i>280</i>&nbsp;                                           SelectionKeyImpl ski,
+<i>281</i>&nbsp;                                           Consumer&lt;SelectionKey&gt; action) {
+<i>282</i>&nbsp;        if (action != null) {
+<i>283</i>&nbsp;            ski.translateAndSetReadyOps(rOps);
+<i>284</i>&nbsp;            if ((ski.nioReadyOps() &amp; ski.nioInterestOps()) != 0) {
+<i>285</i>&nbsp;                action.accept(ski);
+<i>286</i>&nbsp;                ensureOpen();
+<i>287</i>&nbsp;                return 1;
+<i>288</i>&nbsp;            }
+<i>289</i>&nbsp;        } else {
+<i>290</i>&nbsp;            assert Thread.holdsLock(publicSelectedKeys);
+<i>291</i>&nbsp;            if (selectedKeys.contains(ski)) {
+<i>292</i>&nbsp;                if (ski.translateAndUpdateReadyOps(rOps)) {
+<i>293</i>&nbsp;                    return 1;
+<i>294</i>&nbsp;                }
+<i>295</i>&nbsp;            } else {
+<i>296</i>&nbsp;                ski.translateAndSetReadyOps(rOps);
+<i>297</i>&nbsp;                if ((ski.nioReadyOps() &amp; ski.nioInterestOps()) != 0) {
+<i>298</i>&nbsp;                    selectedKeys.add(ski);
+<i>299</i>&nbsp;                    return 1;
+<i>300</i>&nbsp;                }
+<i>301</i>&nbsp;            }
+<i>302</i>&nbsp;        }
+<i>303</i>&nbsp;        return 0;
+<i>304</i>&nbsp;    }
+<i>305</i>&nbsp;
+<i>306</i>&nbsp;    /**
+<i>307</i>&nbsp;     * Invoked by interestOps to ensure the interest ops are updated at the
+<i>308</i>&nbsp;     * next selection operation.
+<i>309</i>&nbsp;     */
+<i>310</i>&nbsp;    protected abstract void setEventOps(SelectionKeyImpl ski);
+<i>311</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

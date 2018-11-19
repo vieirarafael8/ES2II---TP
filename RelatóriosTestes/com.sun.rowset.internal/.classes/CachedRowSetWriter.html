@@ -1,0 +1,1557 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: CachedRowSetWriter</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.rowset.internal</a> ]
+</div>
+
+<h1>Coverage Summary for Class: CachedRowSetWriter (com.sun.rowset.internal)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">CachedRowSetWriter</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 18)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 452)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.rowset.internal;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.sql.*;
+<i>29</i>&nbsp;import javax.sql.*;
+<i>30</i>&nbsp;import java.util.*;
+<i>31</i>&nbsp;import java.io.*;
+<i>32</i>&nbsp;import sun.reflect.misc.ReflectUtil;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import com.sun.rowset.*;
+<i>35</i>&nbsp;import java.text.MessageFormat;
+<i>36</i>&nbsp;import javax.sql.rowset.*;
+<i>37</i>&nbsp;import javax.sql.rowset.serial.SQLInputImpl;
+<i>38</i>&nbsp;import javax.sql.rowset.serial.SerialArray;
+<i>39</i>&nbsp;import javax.sql.rowset.serial.SerialBlob;
+<i>40</i>&nbsp;import javax.sql.rowset.serial.SerialClob;
+<i>41</i>&nbsp;import javax.sql.rowset.serial.SerialStruct;
+<i>42</i>&nbsp;import javax.sql.rowset.spi.*;
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;/**
+<i>46</i>&nbsp; * The facility called on internally by the {@code RIOptimisticProvider} implementation to
+<i>47</i>&nbsp; * propagate changes back to the data source from which the rowset got its data.
+<i>48</i>&nbsp; * &lt;P&gt;
+<i>49</i>&nbsp; * A {@code CachedRowSetWriter} object, called a writer, has the public
+<i>50</i>&nbsp; * method {@code writeData} for writing modified data to the underlying data source.
+<i>51</i>&nbsp; * This method is invoked by the rowset internally and is never invoked directly by an application.
+<i>52</i>&nbsp; * A writer also has public methods for setting and getting
+<i>53</i>&nbsp; * the {@code CachedRowSetReader} object, called a reader, that is associated
+<i>54</i>&nbsp; * with the writer. The remainder of the methods in this class are private and
+<i>55</i>&nbsp; * are invoked internally, either directly or indirectly, by the method
+<i>56</i>&nbsp; * {@code writeData}.
+<i>57</i>&nbsp; * &lt;P&gt;
+<i>58</i>&nbsp; * Typically the {@code SyncFactory} manages the {@code RowSetReader} and
+<i>59</i>&nbsp; * the {@code RowSetWriter} implementations using {@code SyncProvider} objects.
+<i>60</i>&nbsp; * Standard JDBC RowSet implementations provide an object instance of this
+<i>61</i>&nbsp; * writer by invoking the {@code SyncProvider.getRowSetWriter()} method.
+<i>62</i>&nbsp; *
+<i>63</i>&nbsp; * @version 0.2
+<i>64</i>&nbsp; * @author Jonathan Bruce
+<i>65</i>&nbsp; * @see javax.sql.rowset.spi.SyncProvider
+<i>66</i>&nbsp; * @see javax.sql.rowset.spi.SyncFactory
+<i>67</i>&nbsp; * @see javax.sql.rowset.spi.SyncFactoryException
+<i>68</i>&nbsp; */
+<i>69</i>&nbsp;public class CachedRowSetWriter implements TransactionalWriter, Serializable {
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;/**
+<i>72</i>&nbsp; * The {@code Connection} object that this writer will use to make a
+<i>73</i>&nbsp; * connection to the data source to which it will write data.
+<i>74</i>&nbsp; *
+<i>75</i>&nbsp; */
+<i>76</i>&nbsp;    private transient Connection con;
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;/**
+<i>79</i>&nbsp; * The SQL {@code SELECT} command that this writer will call
+<i>80</i>&nbsp; * internally. The method {@code initSQLStatements} builds this
+<i>81</i>&nbsp; * command by supplying the words &quot;SELECT&quot; and &quot;FROM,&quot; and using
+<i>82</i>&nbsp; * metadata to get the table name and column names .
+<i>83</i>&nbsp; *
+<i>84</i>&nbsp; * @serial
+<i>85</i>&nbsp; */
+<i>86</i>&nbsp;    private String selectCmd;
+<i>87</i>&nbsp;
+<i>88</i>&nbsp;/**
+<i>89</i>&nbsp; * The SQL {@code UPDATE} command that this writer will call
+<i>90</i>&nbsp; * internally to write data to the rowset&#39;s underlying data source.
+<i>91</i>&nbsp; * The method {@code initSQLStatements} builds this {@code String}
+<i>92</i>&nbsp; * object.
+<i>93</i>&nbsp; *
+<i>94</i>&nbsp; * @serial
+<i>95</i>&nbsp; */
+<i>96</i>&nbsp;    private String updateCmd;
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;/**
+<i>99</i>&nbsp; * The SQL {@code WHERE} clause the writer will use for update
+<i>100</i>&nbsp; * statements in the {@code PreparedStatement} object
+<i>101</i>&nbsp; * it sends to the underlying data source.
+<i>102</i>&nbsp; *
+<i>103</i>&nbsp; * @serial
+<i>104</i>&nbsp; */
+<i>105</i>&nbsp;    private String updateWhere;
+<i>106</i>&nbsp;
+<i>107</i>&nbsp;/**
+<i>108</i>&nbsp; * The SQL {@code DELETE} command that this writer will call
+<i>109</i>&nbsp; * internally to delete a row in the rowset&#39;s underlying data source.
+<i>110</i>&nbsp; *
+<i>111</i>&nbsp; * @serial
+<i>112</i>&nbsp; */
+<i>113</i>&nbsp;    private String deleteCmd;
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;/**
+<i>116</i>&nbsp; * The SQL {@code WHERE} clause the writer will use for delete
+<i>117</i>&nbsp; * statements in the {@code PreparedStatement} object
+<i>118</i>&nbsp; * it sends to the underlying data source.
+<i>119</i>&nbsp; *
+<i>120</i>&nbsp; * @serial
+<i>121</i>&nbsp; */
+<i>122</i>&nbsp;    private String deleteWhere;
+<i>123</i>&nbsp;
+<i>124</i>&nbsp;/**
+<i>125</i>&nbsp; * The SQL {@code INSERT INTO} command that this writer will internally use
+<i>126</i>&nbsp; * to insert data into the rowset&#39;s underlying data source.  The method
+<i>127</i>&nbsp; * {@code initSQLStatements} builds this command with a question
+<i>128</i>&nbsp; * mark parameter placeholder for each column in the rowset.
+<i>129</i>&nbsp; *
+<i>130</i>&nbsp; * @serial
+<i>131</i>&nbsp; */
+<i>132</i>&nbsp;    private String insertCmd;
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;/**
+<i>135</i>&nbsp; * An array containing the column numbers of the columns that are
+<i>136</i>&nbsp; * needed to uniquely identify a row in the {@code CachedRowSet} object
+<i>137</i>&nbsp; * for which this {@code CachedRowSetWriter} object is the writer.
+<i>138</i>&nbsp; *
+<i>139</i>&nbsp; * @serial
+<i>140</i>&nbsp; */
+<i>141</i>&nbsp;    private int[] keyCols;
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;/**
+<i>144</i>&nbsp; * An array of the parameters that should be used to set the parameter
+<i>145</i>&nbsp; * placeholders in a {@code PreparedStatement} object that this
+<i>146</i>&nbsp; * writer will execute.
+<i>147</i>&nbsp; *
+<i>148</i>&nbsp; * @serial
+<i>149</i>&nbsp; */
+<i>150</i>&nbsp;    private Object[] params;
+<i>151</i>&nbsp;
+<i>152</i>&nbsp;/**
+<i>153</i>&nbsp; * The {@code CachedRowSetReader} object that has been
+<i>154</i>&nbsp; * set as the reader for the {@code CachedRowSet} object
+<i>155</i>&nbsp; * for which this {@code CachedRowSetWriter} object is the writer.
+<i>156</i>&nbsp; *
+<i>157</i>&nbsp; * @serial
+<i>158</i>&nbsp; */
+<i>159</i>&nbsp;    private CachedRowSetReader reader;
+<i>160</i>&nbsp;
+<i>161</i>&nbsp;/**
+<i>162</i>&nbsp; * The {@code ResultSetMetaData} object that contains information
+<i>163</i>&nbsp; * about the columns in the {@code CachedRowSet} object
+<i>164</i>&nbsp; * for which this {@code CachedRowSetWriter} object is the writer.
+<i>165</i>&nbsp; *
+<i>166</i>&nbsp; * @serial
+<i>167</i>&nbsp; */
+<i>168</i>&nbsp;    private ResultSetMetaData callerMd;
+<i>169</i>&nbsp;
+<i>170</i>&nbsp;/**
+<i>171</i>&nbsp; * The number of columns in the {@code CachedRowSet} object
+<i>172</i>&nbsp; * for which this {@code CachedRowSetWriter} object is the writer.
+<i>173</i>&nbsp; *
+<i>174</i>&nbsp; * @serial
+<i>175</i>&nbsp; */
+<i>176</i>&nbsp;    private int callerColumnCount;
+<i>177</i>&nbsp;
+<i>178</i>&nbsp;/**
+<i>179</i>&nbsp; * This {@code CachedRowSet} will hold the conflicting values
+<i>180</i>&nbsp; *  retrieved from the db and hold it.
+<i>181</i>&nbsp; */
+<i>182</i>&nbsp;    private CachedRowSetImpl crsResolve;
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;/**
+<i>185</i>&nbsp; * This {@code ArrayList} will hold the values of SyncResolver.*
+<i>186</i>&nbsp; */
+<i>187</i>&nbsp;    private ArrayList&lt;Integer&gt; status;
+<i>188</i>&nbsp;
+<i>189</i>&nbsp;/**
+<i>190</i>&nbsp; * This will check whether the same field value has changed both
+<i>191</i>&nbsp; * in database and CachedRowSet.
+<i>192</i>&nbsp; */
+<i>193</i>&nbsp;    private int iChangedValsInDbAndCRS;
+<i>194</i>&nbsp;
+<i>195</i>&nbsp;/**
+<i>196</i>&nbsp; * This will hold the number of cols for which the values have
+<i>197</i>&nbsp; * changed only in database.
+<i>198</i>&nbsp; */
+<i>199</i>&nbsp;    private int iChangedValsinDbOnly ;
+<i>200</i>&nbsp;
+<i>201</i>&nbsp;    private JdbcRowSetResourceBundle resBundle;
+<i>202</i>&nbsp;
+<b class="nc"><i>203</i>&nbsp;    public CachedRowSetWriter() {</b>
+<i>204</i>&nbsp;       try {
+<b class="nc"><i>205</i>&nbsp;               resBundle = JdbcRowSetResourceBundle.getJdbcRowSetResourceBundle();</b>
+<b class="nc"><i>206</i>&nbsp;       } catch(IOException ioe) {</b>
+<b class="nc"><i>207</i>&nbsp;               throw new RuntimeException(ioe);</b>
+<b class="nc"><i>208</i>&nbsp;       }</b>
+<i>209</i>&nbsp;    }
+<i>210</i>&nbsp;
+<i>211</i>&nbsp;/**
+<i>212</i>&nbsp; * Propagates changes in the given {@code RowSet} object
+<i>213</i>&nbsp; * back to its underlying data source and returns {@code true}
+<i>214</i>&nbsp; * if successful. The writer will check to see if
+<i>215</i>&nbsp; * the data in the pre-modified rowset (the original values) differ
+<i>216</i>&nbsp; * from the data in the underlying data source.  If data in the data
+<i>217</i>&nbsp; * source has been modified by someone else, there is a conflict,
+<i>218</i>&nbsp; * and in that case, the writer will not write to the data source.
+<i>219</i>&nbsp; * In other words, the writer uses an optimistic concurrency algorithm:
+<i>220</i>&nbsp; * It checks for conflicts before making changes rather than restricting
+<i>221</i>&nbsp; * access for concurrent users.
+<i>222</i>&nbsp; * &lt;P&gt;
+<i>223</i>&nbsp; * This method is called by the rowset internally when
+<i>224</i>&nbsp; * the application invokes the method {@code acceptChanges}.
+<i>225</i>&nbsp; * The {@code writeData} method in turn calls private methods that
+<i>226</i>&nbsp; * it defines internally.
+<i>227</i>&nbsp; * The following is a general summary of what the method
+<i>228</i>&nbsp; * {@code writeData} does, much of which is accomplished
+<i>229</i>&nbsp; * through calls to its own internal methods.
+<i>230</i>&nbsp; * &lt;OL&gt;
+<i>231</i>&nbsp; * &lt;LI&gt;Creates a {@code CachedRowSet} object from the given
+<i>232</i>&nbsp; *     {@code RowSet} object
+<i>233</i>&nbsp; * &lt;LI&gt;Makes a connection with the data source
+<i>234</i>&nbsp; *   &lt;UL&gt;
+<i>235</i>&nbsp; *      &lt;LI&gt;Disables autocommit mode if it is not already disabled
+<i>236</i>&nbsp; *      &lt;LI&gt;Sets the transaction isolation level to that of the rowset
+<i>237</i>&nbsp; *   &lt;/UL&gt;
+<i>238</i>&nbsp; * &lt;LI&gt;Checks to see if the reader has read new data since the writer
+<i>239</i>&nbsp; *     was last called and, if so, calls the method
+<i>240</i>&nbsp; *    {@code initSQLStatements} to initialize new SQL statements
+<i>241</i>&nbsp; *   &lt;UL&gt;
+<i>242</i>&nbsp; *       &lt;LI&gt;Builds new {@code SELECT}, {@code UPDATE},
+<i>243</i>&nbsp; *           {@code INSERT}, and {@code DELETE} statements
+<i>244</i>&nbsp; *       &lt;LI&gt;Uses the {@code CachedRowSet} object&#39;s metadata to
+<i>245</i>&nbsp; *           determine the table name, column names, and the columns
+<i>246</i>&nbsp; *           that make up the primary key
+<i>247</i>&nbsp; *   &lt;/UL&gt;
+<i>248</i>&nbsp; * &lt;LI&gt;When there is no conflict, propagates changes made to the
+<i>249</i>&nbsp; *     {@code CachedRowSet} object back to its underlying data source
+<i>250</i>&nbsp; *   &lt;UL&gt;
+<i>251</i>&nbsp; *      &lt;LI&gt;Iterates through each row of the {@code CachedRowSet} object
+<i>252</i>&nbsp; *          to determine whether it has been updated, inserted, or deleted
+<i>253</i>&nbsp; *      &lt;LI&gt;If the corresponding row in the data source has not been changed
+<i>254</i>&nbsp; *          since the rowset last read its
+<i>255</i>&nbsp; *          values, the writer will use the appropriate command to update,
+<i>256</i>&nbsp; *          insert, or delete the row
+<i>257</i>&nbsp; *      &lt;LI&gt;If any data in the data source does not match the original values
+<i>258</i>&nbsp; *          for the {@code CachedRowSet} object, the writer will roll
+<i>259</i>&nbsp; *          back any changes it has made to the row in the data source.
+<i>260</i>&nbsp; *   &lt;/UL&gt;
+<i>261</i>&nbsp; * &lt;/OL&gt;
+<i>262</i>&nbsp; *
+<i>263</i>&nbsp; * @return {@code true} if changes to the rowset were successfully
+<i>264</i>&nbsp; *         written to the rowset&#39;s underlying data source;
+<i>265</i>&nbsp; *         {@code false} otherwise
+<i>266</i>&nbsp; */
+<i>267</i>&nbsp;    public boolean writeData(RowSetInternal caller) throws SQLException {
+<b class="nc"><i>268</i>&nbsp;        long conflicts = 0;</b>
+<b class="nc"><i>269</i>&nbsp;        boolean showDel = false;</b>
+<b class="nc"><i>270</i>&nbsp;        PreparedStatement pstmtIns = null;</b>
+<b class="nc"><i>271</i>&nbsp;        iChangedValsInDbAndCRS = 0;</b>
+<b class="nc"><i>272</i>&nbsp;        iChangedValsinDbOnly = 0;</b>
+<i>273</i>&nbsp;
+<i>274</i>&nbsp;        // We assume caller is a CachedRowSet
+<b class="nc"><i>275</i>&nbsp;        CachedRowSetImpl crs = (CachedRowSetImpl)caller;</b>
+<i>276</i>&nbsp;        // crsResolve = new CachedRowSetImpl();
+<b class="nc"><i>277</i>&nbsp;        this.crsResolve = new CachedRowSetImpl();;</b>
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;        // The reader is registered with the writer at design time.
+<i>280</i>&nbsp;        // This is not required, in general.  The reader has logic
+<i>281</i>&nbsp;        // to get a JDBC connection, so call it.
+<i>282</i>&nbsp;
+<b class="nc"><i>283</i>&nbsp;        con = reader.connect(caller);</b>
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;
+<b class="nc"><i>286</i>&nbsp;        if (con == null) {</b>
+<b class="nc"><i>287</i>&nbsp;            throw new SQLException(resBundle.handleGetObject(&quot;crswriter.connect&quot;).toString());</b>
+<i>288</i>&nbsp;        }
+<i>289</i>&nbsp;
+<i>290</i>&nbsp;        /*
+<i>291</i>&nbsp;         // Fix 6200646.
+<i>292</i>&nbsp;         // Don&#39;t change the connection or transaction properties. This will fail in a
+<i>293</i>&nbsp;         // J2EE container.
+<i>294</i>&nbsp;        if (con.getAutoCommit() == true)  {
+<i>295</i>&nbsp;            con.setAutoCommit(false);
+<i>296</i>&nbsp;        }
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;        con.setTransactionIsolation(crs.getTransactionIsolation());
+<i>299</i>&nbsp;        */
+<i>300</i>&nbsp;
+<b class="nc"><i>301</i>&nbsp;        initSQLStatements(crs);</b>
+<i>302</i>&nbsp;        int iColCount;
+<i>303</i>&nbsp;
+<b class="nc"><i>304</i>&nbsp;        RowSetMetaDataImpl rsmdWrite = (RowSetMetaDataImpl)crs.getMetaData();</b>
+<b class="nc"><i>305</i>&nbsp;        RowSetMetaDataImpl rsmdResolv = new RowSetMetaDataImpl();</b>
+<i>306</i>&nbsp;
+<b class="nc"><i>307</i>&nbsp;        iColCount = rsmdWrite.getColumnCount();</b>
+<b class="nc"><i>308</i>&nbsp;        int sz= crs.size()+1;</b>
+<b class="nc"><i>309</i>&nbsp;        status = new ArrayList&lt;&gt;(sz);</b>
+<i>310</i>&nbsp;
+<b class="nc"><i>311</i>&nbsp;        status.add(0,null);</b>
+<b class="nc"><i>312</i>&nbsp;        rsmdResolv.setColumnCount(iColCount);</b>
+<i>313</i>&nbsp;
+<b class="nc"><i>314</i>&nbsp;        for(int i =1; i &lt;= iColCount; i++) {</b>
+<b class="nc"><i>315</i>&nbsp;            rsmdResolv.setColumnType(i, rsmdWrite.getColumnType(i));</b>
+<b class="nc"><i>316</i>&nbsp;            rsmdResolv.setColumnName(i, rsmdWrite.getColumnName(i));</b>
+<b class="nc"><i>317</i>&nbsp;            rsmdResolv.setNullable(i, ResultSetMetaData.columnNullableUnknown);</b>
+<i>318</i>&nbsp;        }
+<b class="nc"><i>319</i>&nbsp;        this.crsResolve.setMetaData(rsmdResolv);</b>
+<i>320</i>&nbsp;
+<i>321</i>&nbsp;        // moved outside the insert inner loop
+<i>322</i>&nbsp;        //pstmtIns = con.prepareStatement(insertCmd);
+<i>323</i>&nbsp;
+<b class="nc"><i>324</i>&nbsp;        if (callerColumnCount &lt; 1) {</b>
+<i>325</i>&nbsp;            // No data, so return success.
+<b class="nc"><i>326</i>&nbsp;            if (reader.getCloseConnection() == true)</b>
+<b class="nc"><i>327</i>&nbsp;                    con.close();</b>
+<b class="nc"><i>328</i>&nbsp;            return true;</b>
+<i>329</i>&nbsp;        }
+<i>330</i>&nbsp;        // We need to see rows marked for deletion.
+<b class="nc"><i>331</i>&nbsp;        showDel = crs.getShowDeleted();</b>
+<b class="nc"><i>332</i>&nbsp;        crs.setShowDeleted(true);</b>
+<i>333</i>&nbsp;
+<i>334</i>&nbsp;        // Look at all the rows.
+<b class="nc"><i>335</i>&nbsp;        crs.beforeFirst();</b>
+<i>336</i>&nbsp;
+<b class="nc"><i>337</i>&nbsp;        int rows =1;</b>
+<b class="nc"><i>338</i>&nbsp;        while (crs.next()) {</b>
+<b class="nc"><i>339</i>&nbsp;            if (crs.rowDeleted()) {</b>
+<i>340</i>&nbsp;                // The row has been deleted.
+<b class="nc"><i>341</i>&nbsp;                if (deleteOriginalRow(crs, this.crsResolve)) {</b>
+<b class="nc"><i>342</i>&nbsp;                       status.add(rows, SyncResolver.DELETE_ROW_CONFLICT);</b>
+<b class="nc"><i>343</i>&nbsp;                       conflicts++;</b>
+<i>344</i>&nbsp;                } else {
+<i>345</i>&nbsp;                      // delete happened without any occurrence of conflicts
+<i>346</i>&nbsp;                      // so update status accordingly
+<b class="nc"><i>347</i>&nbsp;                       status.add(rows, SyncResolver.NO_ROW_CONFLICT);</b>
+<i>348</i>&nbsp;                }
+<i>349</i>&nbsp;
+<b class="nc"><i>350</i>&nbsp;           } else if (crs.rowInserted()) {</b>
+<i>351</i>&nbsp;                // The row has been inserted.
+<i>352</i>&nbsp;
+<b class="nc"><i>353</i>&nbsp;                pstmtIns = con.prepareStatement(insertCmd);</b>
+<b class="nc"><i>354</i>&nbsp;                if (insertNewRow(crs, pstmtIns, this.crsResolve)) {</b>
+<b class="nc"><i>355</i>&nbsp;                          status.add(rows, SyncResolver.INSERT_ROW_CONFLICT);</b>
+<b class="nc"><i>356</i>&nbsp;                          conflicts++;</b>
+<i>357</i>&nbsp;                } else {
+<i>358</i>&nbsp;                      // insert happened without any occurrence of conflicts
+<i>359</i>&nbsp;                      // so update status accordingly
+<b class="nc"><i>360</i>&nbsp;                       status.add(rows, SyncResolver.NO_ROW_CONFLICT);</b>
+<i>361</i>&nbsp;                }
+<b class="nc"><i>362</i>&nbsp;            } else  if (crs.rowUpdated()) {</b>
+<i>363</i>&nbsp;                  // The row has been updated.
+<b class="nc"><i>364</i>&nbsp;                       if (updateOriginalRow(crs)) {</b>
+<b class="nc"><i>365</i>&nbsp;                             status.add(rows, SyncResolver.UPDATE_ROW_CONFLICT);</b>
+<b class="nc"><i>366</i>&nbsp;                             conflicts++;</b>
+<i>367</i>&nbsp;               } else {
+<i>368</i>&nbsp;                      // update happened without any occurrence of conflicts
+<i>369</i>&nbsp;                      // so update status accordingly
+<b class="nc"><i>370</i>&nbsp;                      status.add(rows, SyncResolver.NO_ROW_CONFLICT);</b>
+<i>371</i>&nbsp;               }
+<i>372</i>&nbsp;
+<i>373</i>&nbsp;            } else {
+<i>374</i>&nbsp;               /** The row is neither of inserted, updated or deleted.
+<i>375</i>&nbsp;                *  So set nulls in the this.crsResolve for this row,
+<i>376</i>&nbsp;                *  as nothing is to be done for such rows.
+<i>377</i>&nbsp;                *  Also note that if such a row has been changed in database
+<i>378</i>&nbsp;                *  and we have not changed(inserted, updated or deleted)
+<i>379</i>&nbsp;                *  that is fine.
+<i>380</i>&nbsp;                **/
+<b class="nc"><i>381</i>&nbsp;                int icolCount = crs.getMetaData().getColumnCount();</b>
+<b class="nc"><i>382</i>&nbsp;                status.add(rows, SyncResolver.NO_ROW_CONFLICT);</b>
+<i>383</i>&nbsp;
+<b class="nc"><i>384</i>&nbsp;                this.crsResolve.moveToInsertRow();</b>
+<b class="nc"><i>385</i>&nbsp;                for(int cols=0;cols&lt;iColCount;cols++) {</b>
+<b class="nc"><i>386</i>&nbsp;                   this.crsResolve.updateNull(cols+1);</b>
+<i>387</i>&nbsp;                } //end for
+<i>388</i>&nbsp;
+<b class="nc"><i>389</i>&nbsp;                this.crsResolve.insertRow();</b>
+<b class="nc"><i>390</i>&nbsp;                this.crsResolve.moveToCurrentRow();</b>
+<i>391</i>&nbsp;
+<i>392</i>&nbsp;                } //end if
+<b class="nc"><i>393</i>&nbsp;         rows++;</b>
+<i>394</i>&nbsp;      } //end while
+<i>395</i>&nbsp;
+<i>396</i>&nbsp;        // close the insert statement
+<b class="nc"><i>397</i>&nbsp;        if(pstmtIns!=null)</b>
+<b class="nc"><i>398</i>&nbsp;        pstmtIns.close();</b>
+<i>399</i>&nbsp;        // reset
+<b class="nc"><i>400</i>&nbsp;        crs.setShowDeleted(showDel);</b>
+<i>401</i>&nbsp;
+<b class="nc"><i>402</i>&nbsp;        crs.beforeFirst();</b>
+<b class="nc"><i>403</i>&nbsp;        this.crsResolve.beforeFirst();</b>
+<i>404</i>&nbsp;
+<b class="nc"><i>405</i>&nbsp;    if(conflicts != 0) {</b>
+<b class="nc"><i>406</i>&nbsp;        SyncProviderException spe = new SyncProviderException(conflicts + &quot; &quot; +</b>
+<b class="nc"><i>407</i>&nbsp;                resBundle.handleGetObject(&quot;crswriter.conflictsno&quot;).toString());</b>
+<i>408</i>&nbsp;        //SyncResolver syncRes = spe.getSyncResolver();
+<i>409</i>&nbsp;
+<b class="nc"><i>410</i>&nbsp;         SyncResolverImpl syncResImpl = (SyncResolverImpl) spe.getSyncResolver();</b>
+<i>411</i>&nbsp;
+<b class="nc"><i>412</i>&nbsp;         syncResImpl.setCachedRowSet(crs);</b>
+<b class="nc"><i>413</i>&nbsp;         syncResImpl.setCachedRowSetResolver(this.crsResolve);</b>
+<i>414</i>&nbsp;
+<b class="nc"><i>415</i>&nbsp;         syncResImpl.setStatus(status);</b>
+<b class="nc"><i>416</i>&nbsp;         syncResImpl.setCachedRowSetWriter(this);</b>
+<i>417</i>&nbsp;
+<b class="nc"><i>418</i>&nbsp;        throw spe;</b>
+<i>419</i>&nbsp;    } else {
+<b class="nc"><i>420</i>&nbsp;         return true;</b>
+<i>421</i>&nbsp;    }
+<i>422</i>&nbsp;       /*
+<i>423</i>&nbsp;       if (conflict == true) {
+<i>424</i>&nbsp;            con.rollback();
+<i>425</i>&nbsp;            return false;
+<i>426</i>&nbsp;        } else {
+<i>427</i>&nbsp;            con.commit();
+<i>428</i>&nbsp;                if (reader.getCloseConnection() == true) {
+<i>429</i>&nbsp;                       con.close();
+<i>430</i>&nbsp;                }
+<i>431</i>&nbsp;            return true;
+<i>432</i>&nbsp;        }
+<i>433</i>&nbsp;        */
+<i>434</i>&nbsp;
+<i>435</i>&nbsp;  } //end writeData
+<i>436</i>&nbsp;
+<i>437</i>&nbsp;    /**
+<i>438</i>&nbsp;     * Updates the given {@code CachedRowSet} object&#39;s underlying data
+<i>439</i>&nbsp;     * source so that updates to the rowset are reflected in the original
+<i>440</i>&nbsp;     * data source, and returns {@code false} if the update was successful.
+<i>441</i>&nbsp;     * A return value of {@code true} indicates that there is a conflict,
+<i>442</i>&nbsp;     * meaning that a value updated in the rowset has already been changed by
+<i>443</i>&nbsp;     * someone else in the underlying data source.  A conflict can also exist
+<i>444</i>&nbsp;     * if, for example, more than one row in the data source would be affected
+<i>445</i>&nbsp;     * by the update or if no rows would be affected.  In any case, if there is
+<i>446</i>&nbsp;     * a conflict, this method does not update the underlying data source.
+<i>447</i>&nbsp;     * &lt;P&gt;
+<i>448</i>&nbsp;     * This method is called internally by the method {@code writeData}
+<i>449</i>&nbsp;     * if a row in the {@code CachedRowSet} object for which this
+<i>450</i>&nbsp;     * {@code CachedRowSetWriter} object is the writer has been updated.
+<i>451</i>&nbsp;     *
+<i>452</i>&nbsp;     * @return {@code false} if the update to the underlying data source is
+<i>453</i>&nbsp;     *         successful; {@code true} otherwise
+<i>454</i>&nbsp;     * @throws SQLException if a database access error occurs
+<i>455</i>&nbsp;     */
+<i>456</i>&nbsp;    private boolean updateOriginalRow(CachedRowSet crs)
+<i>457</i>&nbsp;        throws SQLException {
+<i>458</i>&nbsp;        PreparedStatement pstmt;
+<b class="nc"><i>459</i>&nbsp;        int i = 0;</b>
+<b class="nc"><i>460</i>&nbsp;        int idx = 0;</b>
+<i>461</i>&nbsp;
+<i>462</i>&nbsp;        // Select the row from the database.
+<b class="nc"><i>463</i>&nbsp;        ResultSet origVals = crs.getOriginalRow();</b>
+<b class="nc"><i>464</i>&nbsp;        origVals.next();</b>
+<i>465</i>&nbsp;
+<i>466</i>&nbsp;        try {
+<b class="nc"><i>467</i>&nbsp;            updateWhere = buildWhereClause(updateWhere, origVals);</b>
+<i>468</i>&nbsp;
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;             /**
+<i>471</i>&nbsp;              *  The following block of code is for checking a particular type of
+<i>472</i>&nbsp;              *  query where in there is a where clause. Without this block, if a
+<i>473</i>&nbsp;              *  SQL statement is built the &quot;where&quot; clause will appear twice hence
+<i>474</i>&nbsp;              *  the DB errors out and a SQLException is thrown. This code also
+<i>475</i>&nbsp;              *  considers that the where clause is in the right place as the
+<i>476</i>&nbsp;              *  CachedRowSet object would already have been populated with this
+<i>477</i>&nbsp;              *  query before coming to this point.
+<i>478</i>&nbsp;              **/
+<i>479</i>&nbsp;
+<i>480</i>&nbsp;
+<b class="nc"><i>481</i>&nbsp;            String tempselectCmd = selectCmd.toLowerCase();</b>
+<i>482</i>&nbsp;
+<b class="nc"><i>483</i>&nbsp;            int idxWhere = tempselectCmd.indexOf(&quot;where&quot;);</b>
+<i>484</i>&nbsp;
+<b class="nc"><i>485</i>&nbsp;            if(idxWhere != -1)</b>
+<i>486</i>&nbsp;            {
+<b class="nc"><i>487</i>&nbsp;               String tempSelect = selectCmd.substring(0,idxWhere);</b>
+<b class="nc"><i>488</i>&nbsp;               selectCmd = tempSelect;</b>
+<i>489</i>&nbsp;            }
+<i>490</i>&nbsp;
+<b class="nc"><i>491</i>&nbsp;            pstmt = con.prepareStatement(selectCmd + updateWhere,</b>
+<i>492</i>&nbsp;                        ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_READ_ONLY);
+<i>493</i>&nbsp;
+<b class="nc"><i>494</i>&nbsp;            for (i = 0; i &lt; keyCols.length; i++) {</b>
+<b class="nc"><i>495</i>&nbsp;                if (params[i] != null) {</b>
+<b class="nc"><i>496</i>&nbsp;                    pstmt.setObject(++idx, params[i]);</b>
+<i>497</i>&nbsp;                } else {
+<i>498</i>&nbsp;                    continue;
+<i>499</i>&nbsp;                }
+<i>500</i>&nbsp;            }
+<i>501</i>&nbsp;
+<i>502</i>&nbsp;            try {
+<b class="nc"><i>503</i>&nbsp;                pstmt.setMaxRows(crs.getMaxRows());</b>
+<b class="nc"><i>504</i>&nbsp;                pstmt.setMaxFieldSize(crs.getMaxFieldSize());</b>
+<b class="nc"><i>505</i>&nbsp;                pstmt.setEscapeProcessing(crs.getEscapeProcessing());</b>
+<b class="nc"><i>506</i>&nbsp;                pstmt.setQueryTimeout(crs.getQueryTimeout());</b>
+<b class="nc"><i>507</i>&nbsp;            } catch (Exception ex) {</b>
+<i>508</i>&nbsp;                // Older driver don&#39;t support these operations.
+<b class="nc"><i>509</i>&nbsp;            }</b>
+<i>510</i>&nbsp;
+<b class="nc"><i>511</i>&nbsp;            ResultSet rs = null;</b>
+<b class="nc"><i>512</i>&nbsp;            rs = pstmt.executeQuery();</b>
+<b class="nc"><i>513</i>&nbsp;            ResultSetMetaData rsmd = rs.getMetaData();</b>
+<i>514</i>&nbsp;
+<b class="nc"><i>515</i>&nbsp;            if (rs.next()) {</b>
+<b class="nc"><i>516</i>&nbsp;                if (rs.next()) {</b>
+<i>517</i>&nbsp;                   /** More than one row conflict.
+<i>518</i>&nbsp;                    *  If rs has only one row we are able to
+<i>519</i>&nbsp;                    *  uniquely identify the row where update
+<i>520</i>&nbsp;                    *  have to happen else if more than one
+<i>521</i>&nbsp;                    *  row implies we cannot uniquely identify the row
+<i>522</i>&nbsp;                    *  where we have to do updates.
+<i>523</i>&nbsp;                    *  crs.setKeyColumns needs to be set to
+<i>524</i>&nbsp;                    *  come out of this situation.
+<i>525</i>&nbsp;                    */
+<i>526</i>&nbsp;
+<b class="nc"><i>527</i>&nbsp;                   return true;</b>
+<i>528</i>&nbsp;                }
+<i>529</i>&nbsp;
+<i>530</i>&nbsp;                // don&#39;t close the rs
+<i>531</i>&nbsp;                // we require the record in rs to be used.
+<i>532</i>&nbsp;                // rs.close();
+<i>533</i>&nbsp;                // pstmt.close();
+<b class="nc"><i>534</i>&nbsp;                rs.first();</b>
+<i>535</i>&nbsp;
+<i>536</i>&nbsp;                // how many fields need to be updated
+<b class="nc"><i>537</i>&nbsp;                int colsNotChanged = 0;</b>
+<b class="nc"><i>538</i>&nbsp;                Vector&lt;Integer&gt; cols = new Vector&lt;&gt;();</b>
+<b class="nc"><i>539</i>&nbsp;                String updateExec = updateCmd;</b>
+<i>540</i>&nbsp;                Object orig;
+<i>541</i>&nbsp;                Object curr;
+<i>542</i>&nbsp;                Object rsval;
+<b class="nc"><i>543</i>&nbsp;                boolean boolNull = true;</b>
+<b class="nc"><i>544</i>&nbsp;                Object objVal = null;</b>
+<i>545</i>&nbsp;
+<i>546</i>&nbsp;                // There&#39;s only one row and the cursor
+<i>547</i>&nbsp;                // needs to be on that row.
+<i>548</i>&nbsp;
+<b class="nc"><i>549</i>&nbsp;                boolean first = true;</b>
+<b class="nc"><i>550</i>&nbsp;                boolean flag = true;</b>
+<i>551</i>&nbsp;
+<b class="nc"><i>552</i>&nbsp;          this.crsResolve.moveToInsertRow();</b>
+<i>553</i>&nbsp;
+<b class="nc"><i>554</i>&nbsp;          for (i = 1; i &lt;= callerColumnCount; i++) {</b>
+<b class="nc"><i>555</i>&nbsp;                orig = origVals.getObject(i);</b>
+<b class="nc"><i>556</i>&nbsp;                curr = crs.getObject(i);</b>
+<b class="nc"><i>557</i>&nbsp;                rsval = rs.getObject(i);</b>
+<i>558</i>&nbsp;                /*
+<i>559</i>&nbsp;                 * the following block creates equivalent objects
+<i>560</i>&nbsp;                 * that would have been created if this rs is populated
+<i>561</i>&nbsp;                 * into a CachedRowSet so that comparison of the column values
+<i>562</i>&nbsp;                 * from the ResultSet and CachedRowSet are possible
+<i>563</i>&nbsp;                 */
+<b class="nc"><i>564</i>&nbsp;                Map&lt;String, Class&lt;?&gt;&gt; map = (crs.getTypeMap() == null)?con.getTypeMap():crs.getTypeMap();</b>
+<b class="nc"><i>565</i>&nbsp;                if (rsval instanceof Struct) {</b>
+<i>566</i>&nbsp;
+<b class="nc"><i>567</i>&nbsp;                    Struct s = (Struct)rsval;</b>
+<i>568</i>&nbsp;
+<i>569</i>&nbsp;                    // look up the class in the map
+<b class="nc"><i>570</i>&nbsp;                    Class&lt;?&gt; c = null;</b>
+<b class="nc"><i>571</i>&nbsp;                    c = map.get(s.getSQLTypeName());</b>
+<b class="nc"><i>572</i>&nbsp;                    if (c != null) {</b>
+<i>573</i>&nbsp;                        // create new instance of the class
+<b class="nc"><i>574</i>&nbsp;                        SQLData obj = null;</b>
+<i>575</i>&nbsp;                        try {
+<b class="nc"><i>576</i>&nbsp;                            ReflectUtil.checkPackageAccess(c);</b>
+<b class="nc"><i>577</i>&nbsp;                            @SuppressWarnings(&quot;deprecation&quot;)</b>
+<b class="nc"><i>578</i>&nbsp;                            Object tmp = c.newInstance();</b>
+<b class="nc"><i>579</i>&nbsp;                            obj = (SQLData)tmp;</b>
+<i>580</i>&nbsp;                        } catch (Exception ex) {
+<b class="nc"><i>581</i>&nbsp;                            throw new SQLException(&quot;Unable to Instantiate: &quot;, ex);</b>
+<i>582</i>&nbsp;                        }
+<b class="nc"><i>583</i>&nbsp;                        // get the attributes from the struct</b>
+<i>584</i>&nbsp;                        Object attribs[] = s.getAttributes(map);
+<b class="nc"><i>585</i>&nbsp;                        // create the SQLInput &quot;stream&quot;</b>
+<b class="nc"><i>586</i>&nbsp;                        SQLInputImpl sqlInput = new SQLInputImpl(attribs, map);</b>
+<i>587</i>&nbsp;                        // read the values...
+<b class="nc"><i>588</i>&nbsp;                        obj.readSQL(sqlInput, s.getSQLTypeName());</b>
+<b class="nc"><i>589</i>&nbsp;                        rsval = obj;</b>
+<b class="nc"><i>590</i>&nbsp;                    }</b>
+<b class="nc"><i>591</i>&nbsp;                } else if (rsval instanceof SQLData) {</b>
+<b class="nc"><i>592</i>&nbsp;                    rsval = new SerialStruct((SQLData)rsval, map);</b>
+<b class="nc"><i>593</i>&nbsp;                } else if (rsval instanceof Blob) {</b>
+<b class="nc"><i>594</i>&nbsp;                    rsval = new SerialBlob((Blob)rsval);</b>
+<b class="nc"><i>595</i>&nbsp;                } else if (rsval instanceof Clob) {</b>
+<i>596</i>&nbsp;                    rsval = new SerialClob((Clob)rsval);
+<i>597</i>&nbsp;                } else if (rsval instanceof java.sql.Array) {
+<i>598</i>&nbsp;                    rsval = new SerialArray((java.sql.Array)rsval, map);
+<b class="nc"><i>599</i>&nbsp;                }</b>
+<i>600</i>&nbsp;
+<i>601</i>&nbsp;                // reset boolNull if it had been set
+<i>602</i>&nbsp;                boolNull = true;
+<i>603</i>&nbsp;
+<i>604</i>&nbsp;                /** This addtional checking has been added when the current value
+<i>605</i>&nbsp;                 *  in the DB is null, but the DB had a different value when the
+<b class="nc"><i>606</i>&nbsp;                 *  data was actaully fetched into the CachedRowSet.</b>
+<i>607</i>&nbsp;                 **/
+<i>608</i>&nbsp;
+<i>609</i>&nbsp;                if(rsval == null &amp;&amp; orig != null) {
+<i>610</i>&nbsp;                   // value in db has changed
+<b class="nc"><i>611</i>&nbsp;                    // don&#39;t proceed with synchronization</b>
+<i>612</i>&nbsp;                    // get the value in db and pass it to the resolver.
+<i>613</i>&nbsp;
+<b class="nc"><i>614</i>&nbsp;                    iChangedValsinDbOnly++;</b>
+<b class="nc"><i>615</i>&nbsp;                   // Set the boolNull to false,</b>
+<i>616</i>&nbsp;                   // in order to set the actual value;
+<i>617</i>&nbsp;                     boolNull = false;
+<i>618</i>&nbsp;                     objVal = rsval;
+<i>619</i>&nbsp;                }
+<i>620</i>&nbsp;
+<i>621</i>&nbsp;                /** Adding the checking for rsval to be &quot;not&quot; null or else
+<i>622</i>&nbsp;                 *  it would through a NullPointerException when the values
+<b class="nc"><i>623</i>&nbsp;                 *  are compared.</b>
+<i>624</i>&nbsp;                 **/
+<i>625</i>&nbsp;
+<i>626</i>&nbsp;                else if(rsval != null &amp;&amp; (!rsval.equals(orig)))
+<i>627</i>&nbsp;                {
+<i>628</i>&nbsp;                    // value in db has changed
+<b class="nc"><i>629</i>&nbsp;                    // don&#39;t proceed with synchronization</b>
+<i>630</i>&nbsp;                    // get the value in db and pass it to the resolver.
+<i>631</i>&nbsp;
+<b class="nc"><i>632</i>&nbsp;                    iChangedValsinDbOnly++;</b>
+<b class="nc"><i>633</i>&nbsp;                   // Set the boolNull to false,</b>
+<b class="nc"><i>634</i>&nbsp;                   // in order to set the actual value;</b>
+<i>635</i>&nbsp;                     boolNull = false;
+<i>636</i>&nbsp;                     objVal = rsval;
+<i>637</i>&nbsp;                } else if (  (orig == null || curr == null) ) {
+<i>638</i>&nbsp;
+<i>639</i>&nbsp;                        /** Adding the additonal condition of checking for &quot;flag&quot;
+<i>640</i>&nbsp;                         *  boolean variable, which would otherwise result in
+<i>641</i>&nbsp;                         *  building a invalid query, as the comma would not be
+<b class="nc"><i>642</i>&nbsp;                         *  added to the query string.</b>
+<b class="nc"><i>643</i>&nbsp;                         **/</b>
+<i>644</i>&nbsp;
+<b class="nc"><i>645</i>&nbsp;                        if (first == false || flag == false) {</b>
+<b class="nc"><i>646</i>&nbsp;                          updateExec += &quot;, &quot;;</b>
+<b class="nc"><i>647</i>&nbsp;                         }</b>
+<b class="nc"><i>648</i>&nbsp;                        updateExec += crs.getMetaData().getColumnName(i);</b>
+<i>649</i>&nbsp;                        cols.add(i);
+<i>650</i>&nbsp;                        updateExec += &quot; = ? &quot;;
+<i>651</i>&nbsp;                        first = false;
+<i>652</i>&nbsp;
+<i>653</i>&nbsp;                /** Adding the extra condition for orig to be &quot;not&quot; null as the
+<i>654</i>&nbsp;                 *  condition for orig to be null is take prior to this, if this
+<i>655</i>&nbsp;                 *  is not added it will result in a NullPointerException when
+<b class="nc"><i>656</i>&nbsp;                 *  the values are compared.</b>
+<b class="nc"><i>657</i>&nbsp;                 **/</b>
+<i>658</i>&nbsp;
+<i>659</i>&nbsp;                }  else if (orig.equals(curr)) {
+<i>660</i>&nbsp;                       colsNotChanged++;
+<i>661</i>&nbsp;                     //nothing to update in this case since values are equal
+<i>662</i>&nbsp;
+<i>663</i>&nbsp;                /** Adding the extra condition for orig to be &quot;not&quot; null as the
+<i>664</i>&nbsp;                 *  condition for orig to be null is take prior to this, if this
+<i>665</i>&nbsp;                 *  is not added it will result in a NullPointerException when
+<b class="nc"><i>666</i>&nbsp;                 *  the values are compared.</b>
+<i>667</i>&nbsp;                 **/
+<i>668</i>&nbsp;
+<i>669</i>&nbsp;                } else if(orig.equals(curr) == false) {
+<i>670</i>&nbsp;                      // When values from db and values in CachedRowSet are not equal,
+<i>671</i>&nbsp;                      // if db value is same as before updation for each col in
+<i>672</i>&nbsp;                      // the row before fetching into CachedRowSet,
+<i>673</i>&nbsp;                      // only then we go ahead with updation, else we
+<i>674</i>&nbsp;                      // throw SyncProviderException.
+<i>675</i>&nbsp;
+<i>676</i>&nbsp;                      // if value has changed in db after fetching from db
+<i>677</i>&nbsp;                      // for some cols of the row and at the same time, some other cols
+<i>678</i>&nbsp;                      // have changed in CachedRowSet, no synchronization happens
+<i>679</i>&nbsp;
+<i>680</i>&nbsp;                      // Synchronization happens only when data when fetching is
+<i>681</i>&nbsp;                      // same or at most has changed in cachedrowset
+<i>682</i>&nbsp;
+<b class="nc"><i>683</i>&nbsp;                      // check orig value with what is there in crs for a column</b>
+<b class="nc"><i>684</i>&nbsp;                      // before updation in crs.</b>
+<i>685</i>&nbsp;
+<i>686</i>&nbsp;                         if(crs.columnUpdated(i)) {
+<i>687</i>&nbsp;                             if(rsval.equals(orig)) {
+<b class="nc"><i>688</i>&nbsp;                               // At this point we are sure that</b>
+<b class="nc"><i>689</i>&nbsp;                               // the value updated in crs was from</b>
+<i>690</i>&nbsp;                               // what is in db now and has not changed
+<b class="nc"><i>691</i>&nbsp;                                 if (flag == false || first == false) {</b>
+<b class="nc"><i>692</i>&nbsp;                                    updateExec += &quot;, &quot;;</b>
+<b class="nc"><i>693</i>&nbsp;                                 }</b>
+<b class="nc"><i>694</i>&nbsp;                                updateExec += crs.getMetaData().getColumnName(i);</b>
+<i>695</i>&nbsp;                                cols.add(i);
+<i>696</i>&nbsp;                                updateExec += &quot; = ? &quot;;
+<i>697</i>&nbsp;                                flag = false;
+<i>698</i>&nbsp;                             } else {
+<i>699</i>&nbsp;                               // Here the value has changed in the db after
+<b class="nc"><i>700</i>&nbsp;                               // data was fetched</b>
+<b class="nc"><i>701</i>&nbsp;                               // Plus store this row from CachedRowSet and keep it</b>
+<b class="nc"><i>702</i>&nbsp;                               // in a new CachedRowSet</b>
+<i>703</i>&nbsp;                               boolNull= false;
+<i>704</i>&nbsp;                               objVal = rsval;
+<i>705</i>&nbsp;                               iChangedValsInDbAndCRS++;
+<i>706</i>&nbsp;                             }
+<b class="nc"><i>707</i>&nbsp;                         }</b>
+<b class="nc"><i>708</i>&nbsp;                  }</b>
+<i>709</i>&nbsp;
+<b class="nc"><i>710</i>&nbsp;                    if(!boolNull) {</b>
+<i>711</i>&nbsp;                        this.crsResolve.updateObject(i,objVal);
+<i>712</i>&nbsp;                                 } else {
+<i>713</i>&nbsp;                                      this.crsResolve.updateNull(i);
+<b class="nc"><i>714</i>&nbsp;                                 }</b>
+<b class="nc"><i>715</i>&nbsp;                } //end for</b>
+<i>716</i>&nbsp;
+<b class="nc"><i>717</i>&nbsp;                rs.close();</b>
+<b class="nc"><i>718</i>&nbsp;                pstmt.close();</b>
+<i>719</i>&nbsp;
+<i>720</i>&nbsp;               this.crsResolve.insertRow();
+<i>721</i>&nbsp;                   this.crsResolve.moveToCurrentRow();
+<i>722</i>&nbsp;
+<i>723</i>&nbsp;                /**
+<i>724</i>&nbsp;                 * if nothing has changed return now - this can happen
+<i>725</i>&nbsp;                 * if column is updated to the same value.
+<i>726</i>&nbsp;                 * if colsNotChanged == callerColumnCount implies we are updating
+<b class="nc"><i>727</i>&nbsp;                 * the database with ALL COLUMNS HAVING SAME VALUES,</b>
+<i>728</i>&nbsp;                 * so skip going to database, else do as usual.
+<b class="nc"><i>729</i>&nbsp;                 **/</b>
+<i>730</i>&nbsp;                if ( (first == false &amp;&amp; cols.size() == 0)  ||
+<i>731</i>&nbsp;                     colsNotChanged == callerColumnCount ) {
+<b class="nc"><i>732</i>&nbsp;                    return false;</b>
+<b class="nc"><i>733</i>&nbsp;                }</b>
+<i>734</i>&nbsp;
+<i>735</i>&nbsp;                if(iChangedValsInDbAndCRS != 0 || iChangedValsinDbOnly != 0) {
+<i>736</i>&nbsp;                   return true;
+<b class="nc"><i>737</i>&nbsp;                }</b>
+<i>738</i>&nbsp;
+<b class="nc"><i>739</i>&nbsp;</b>
+<i>740</i>&nbsp;                updateExec += updateWhere;
+<i>741</i>&nbsp;
+<b class="nc"><i>742</i>&nbsp;                pstmt = con.prepareStatement(updateExec);</b>
+<b class="nc"><i>743</i>&nbsp;</b>
+<b class="nc"><i>744</i>&nbsp;                // Comments needed here</b>
+<b class="nc"><i>745</i>&nbsp;                for (i = 0; i &lt; cols.size(); i++) {</b>
+<i>746</i>&nbsp;                    Object obj = crs.getObject(cols.get(i));
+<b class="nc"><i>747</i>&nbsp;                    if (obj != null)</b>
+<i>748</i>&nbsp;                        pstmt.setObject(i + 1, obj);
+<b class="nc"><i>749</i>&nbsp;                    else</b>
+<i>750</i>&nbsp;                        pstmt.setNull(i + 1,crs.getMetaData().getColumnType(i + 1));
+<i>751</i>&nbsp;                }
+<b class="nc"><i>752</i>&nbsp;                idx = i;</b>
+<b class="nc"><i>753</i>&nbsp;</b>
+<b class="nc"><i>754</i>&nbsp;                // Comments needed here</b>
+<i>755</i>&nbsp;                for (i = 0; i &lt; keyCols.length; i++) {
+<i>756</i>&nbsp;                    if (params[i] != null) {
+<i>757</i>&nbsp;                        pstmt.setObject(++idx, params[i]);
+<i>758</i>&nbsp;                    } else {
+<i>759</i>&nbsp;                        continue;
+<b class="nc"><i>760</i>&nbsp;                    }</b>
+<i>761</i>&nbsp;                }
+<i>762</i>&nbsp;
+<i>763</i>&nbsp;                i = pstmt.executeUpdate();
+<i>764</i>&nbsp;
+<i>765</i>&nbsp;               /**
+<i>766</i>&nbsp;                * i should be equal to 1(row count), because we update
+<i>767</i>&nbsp;                * one row(returned as row count) at a time, if all goes well.
+<i>768</i>&nbsp;                * if 1 != 1, this implies we have not been able to
+<i>769</i>&nbsp;                * do updations properly i.e there is a conflict in database
+<b class="nc"><i>770</i>&nbsp;                * versus what is in CachedRowSet for this particular row.</b>
+<i>771</i>&nbsp;                **/
+<i>772</i>&nbsp;
+<i>773</i>&nbsp;                 return false;
+<i>774</i>&nbsp;
+<i>775</i>&nbsp;            } else {
+<i>776</i>&nbsp;                /**
+<i>777</i>&nbsp;                 * Cursor will be here, if the ResultSet may not return even a single row
+<i>778</i>&nbsp;                 * i.e. we can&#39;t find the row where to update because it has been deleted
+<i>779</i>&nbsp;                 * etc. from the db.
+<i>780</i>&nbsp;                 * Present the whole row as null to user, to force null to be sync&#39;ed
+<i>781</i>&nbsp;                 * and hence nothing to be synced.
+<i>782</i>&nbsp;                 *
+<i>783</i>&nbsp;                 * NOTE:
+<i>784</i>&nbsp;                 * ------
+<i>785</i>&nbsp;                 * In the database if a column that is mapped to java.sql.Types.REAL stores
+<i>786</i>&nbsp;                 * a Double value and is compared with value got from ResultSet.getFloat()
+<b class="nc"><i>787</i>&nbsp;                 * no row is retrieved and will throw a SyncProviderException. For details</b>
+<i>788</i>&nbsp;                 * see bug Id 5053830
+<b class="nc"><i>789</i>&nbsp;                 **/</b>
+<b class="nc"><i>790</i>&nbsp;                return true;</b>
+<i>791</i>&nbsp;            }
+<i>792</i>&nbsp;        } catch (SQLException ex) {
+<b class="nc"><i>793</i>&nbsp;            ex.printStackTrace();</b>
+<i>794</i>&nbsp;            // if executeUpdate fails it will come here,
+<b class="nc"><i>795</i>&nbsp;            // update crsResolve with null rows</b>
+<b class="nc"><i>796</i>&nbsp;            this.crsResolve.moveToInsertRow();</b>
+<i>797</i>&nbsp;
+<i>798</i>&nbsp;            for(i = 1; i &lt;= callerColumnCount; i++) {
+<b class="nc"><i>799</i>&nbsp;               this.crsResolve.updateNull(i);</b>
+<b class="nc"><i>800</i>&nbsp;            }</b>
+<i>801</i>&nbsp;
+<b class="nc"><i>802</i>&nbsp;            this.crsResolve.insertRow();</b>
+<i>803</i>&nbsp;            this.crsResolve.moveToCurrentRow();
+<i>804</i>&nbsp;
+<i>805</i>&nbsp;            return true;
+<i>806</i>&nbsp;        }
+<i>807</i>&nbsp;    }
+<i>808</i>&nbsp;
+<i>809</i>&nbsp;   /**
+<i>810</i>&nbsp;    * Inserts a row that has been inserted into the given
+<i>811</i>&nbsp;    * {@code CachedRowSet} object into the data source from which
+<i>812</i>&nbsp;    * the rowset is derived, returning {@code false} if the insertion
+<i>813</i>&nbsp;    * was successful.
+<i>814</i>&nbsp;    *
+<i>815</i>&nbsp;    * @param crs the {@code CachedRowSet} object that has had a row inserted
+<i>816</i>&nbsp;    *            and to whose underlying data source the row will be inserted
+<i>817</i>&nbsp;    * @param pstmt the {@code PreparedStatement} object that will be used
+<i>818</i>&nbsp;    *              to execute the insertion
+<i>819</i>&nbsp;    * @return {@code false} to indicate that the insertion was successful;
+<i>820</i>&nbsp;    *         {@code true} otherwise
+<i>821</i>&nbsp;    * @throws SQLException if a database access error occurs
+<i>822</i>&nbsp;    */
+<b class="nc"><i>823</i>&nbsp;   private boolean insertNewRow(CachedRowSet crs,</b>
+<i>824</i>&nbsp;       PreparedStatement pstmt, CachedRowSetImpl crsRes) throws SQLException {
+<b class="nc"><i>825</i>&nbsp;</b>
+<i>826</i>&nbsp;       boolean returnVal = false;
+<i>827</i>&nbsp;
+<b class="nc"><i>828</i>&nbsp;       try (PreparedStatement pstmtSel = con.prepareStatement(selectCmd,</b>
+<b class="nc"><i>829</i>&nbsp;                       ResultSet.TYPE_SCROLL_SENSITIVE,</b>
+<b class="nc"><i>830</i>&nbsp;                       ResultSet.CONCUR_READ_ONLY);</b>
+<i>831</i>&nbsp;            ResultSet rs = pstmtSel.executeQuery();
+<i>832</i>&nbsp;            ResultSet rs2 = con.getMetaData().getPrimaryKeys(null, null,
+<b class="nc"><i>833</i>&nbsp;                       crs.getTableName())</b>
+<b class="nc"><i>834</i>&nbsp;       ) {</b>
+<b class="nc"><i>835</i>&nbsp;</b>
+<b class="nc"><i>836</i>&nbsp;           ResultSetMetaData rsmd = crs.getMetaData();</b>
+<b class="nc"><i>837</i>&nbsp;           int icolCount = rsmd.getColumnCount();</b>
+<b class="nc"><i>838</i>&nbsp;           String[] primaryKeys = new String[icolCount];</b>
+<b class="nc"><i>839</i>&nbsp;           int k = 0;</b>
+<i>840</i>&nbsp;           while (rs2.next()) {
+<i>841</i>&nbsp;               primaryKeys[k] = rs2.getString(&quot;COLUMN_NAME&quot;);
+<b class="nc"><i>842</i>&nbsp;               k++;</b>
+<b class="nc"><i>843</i>&nbsp;           }</b>
+<b class="nc"><i>844</i>&nbsp;</b>
+<i>845</i>&nbsp;           if (rs.next()) {
+<i>846</i>&nbsp;               for (String pkName : primaryKeys) {
+<i>847</i>&nbsp;                   if (!isPKNameValid(pkName, rsmd)) {
+<i>848</i>&nbsp;
+<i>849</i>&nbsp;                       /* We came here as one of the primary keys
+<i>850</i>&nbsp;                        * of the table is not present in the cached
+<i>851</i>&nbsp;                        * rowset object, it should be an autoincrement column
+<b class="nc"><i>852</i>&nbsp;                        * and not included while creating CachedRowSet</b>
+<i>853</i>&nbsp;                        * Object, proceed to check for other primary keys
+<i>854</i>&nbsp;                        */
+<b class="nc"><i>855</i>&nbsp;                       continue;</b>
+<b class="nc"><i>856</i>&nbsp;                   }</b>
+<i>857</i>&nbsp;
+<i>858</i>&nbsp;                   Object crsPK = crs.getObject(pkName);
+<i>859</i>&nbsp;                   if (crsPK == null) {
+<i>860</i>&nbsp;                       /*
+<b class="nc"><i>861</i>&nbsp;                        * It is possible that the PK is null on some databases</b>
+<i>862</i>&nbsp;                        * and will be filled in at insert time (MySQL for example)
+<i>863</i>&nbsp;                        */
+<b class="nc"><i>864</i>&nbsp;                       break;</b>
+<b class="nc"><i>865</i>&nbsp;                   }</b>
+<b class="nc"><i>866</i>&nbsp;</b>
+<b class="nc"><i>867</i>&nbsp;                   String rsPK = rs.getObject(pkName).toString();</b>
+<b class="nc"><i>868</i>&nbsp;                   if (crsPK.toString().equals(rsPK)) {</b>
+<b class="nc"><i>869</i>&nbsp;                       returnVal = true;</b>
+<b class="nc"><i>870</i>&nbsp;                       this.crsResolve.moveToInsertRow();</b>
+<b class="nc"><i>871</i>&nbsp;                       for (int i = 1; i &lt;= icolCount; i++) {</b>
+<i>872</i>&nbsp;                           String colname = (rs.getMetaData()).getColumnName(i);
+<b class="nc"><i>873</i>&nbsp;                           if (colname.equals(pkName))</b>
+<i>874</i>&nbsp;                               this.crsResolve.updateObject(i,rsPK);
+<b class="nc"><i>875</i>&nbsp;                           else</b>
+<b class="nc"><i>876</i>&nbsp;                               this.crsResolve.updateNull(i);</b>
+<i>877</i>&nbsp;                       }
+<i>878</i>&nbsp;                       this.crsResolve.insertRow();
+<i>879</i>&nbsp;                       this.crsResolve.moveToCurrentRow();
+<i>880</i>&nbsp;                   }
+<b class="nc"><i>881</i>&nbsp;               }</b>
+<b class="nc"><i>882</i>&nbsp;           }</b>
+<i>883</i>&nbsp;
+<i>884</i>&nbsp;           if (returnVal) {
+<i>885</i>&nbsp;               return returnVal;
+<b class="nc"><i>886</i>&nbsp;           }</b>
+<b class="nc"><i>887</i>&nbsp;</b>
+<b class="nc"><i>888</i>&nbsp;           try {</b>
+<b class="nc"><i>889</i>&nbsp;               for (int i = 1; i &lt;= icolCount; i++) {</b>
+<i>890</i>&nbsp;                   Object obj = crs.getObject(i);
+<b class="nc"><i>891</i>&nbsp;                   if (obj != null) {</b>
+<i>892</i>&nbsp;                       pstmt.setObject(i, obj);
+<i>893</i>&nbsp;                   } else {
+<i>894</i>&nbsp;                       pstmt.setNull(i,crs.getMetaData().getColumnType(i));
+<b class="nc"><i>895</i>&nbsp;                   }</b>
+<b class="nc"><i>896</i>&nbsp;               }</b>
+<i>897</i>&nbsp;
+<b class="nc"><i>898</i>&nbsp;               pstmt.executeUpdate();</b>
+<i>899</i>&nbsp;               return false;
+<i>900</i>&nbsp;
+<i>901</i>&nbsp;           } catch (SQLException ex) {
+<i>902</i>&nbsp;               /*
+<i>903</i>&nbsp;                * Cursor will come here if executeUpdate fails.
+<i>904</i>&nbsp;                * There can be many reasons why the insertion failed,
+<i>905</i>&nbsp;                * one can be violation of primary key.
+<b class="nc"><i>906</i>&nbsp;                * Hence we cannot exactly identify why the insertion failed,</b>
+<i>907</i>&nbsp;                * present the current row as a null row to the caller.
+<b class="nc"><i>908</i>&nbsp;                */</b>
+<b class="nc"><i>909</i>&nbsp;               this.crsResolve.moveToInsertRow();</b>
+<i>910</i>&nbsp;
+<i>911</i>&nbsp;               for (int i = 1; i &lt;= icolCount; i++) {
+<b class="nc"><i>912</i>&nbsp;                   this.crsResolve.updateNull(i);</b>
+<b class="nc"><i>913</i>&nbsp;               }</b>
+<i>914</i>&nbsp;
+<b class="nc"><i>915</i>&nbsp;               this.crsResolve.insertRow();</b>
+<i>916</i>&nbsp;               this.crsResolve.moveToCurrentRow();
+<b class="nc"><i>917</i>&nbsp;</b>
+<i>918</i>&nbsp;               return true;
+<i>919</i>&nbsp;           }
+<i>920</i>&nbsp;       }
+<i>921</i>&nbsp;   }
+<i>922</i>&nbsp;
+<i>923</i>&nbsp;   /**
+<i>924</i>&nbsp;    * Deletes the row in the underlying data source that corresponds to
+<i>925</i>&nbsp;    * a row that has been deleted in the given {@code  CachedRowSet} object
+<i>926</i>&nbsp;    * and returns {@code false} if the deletion was successful.
+<i>927</i>&nbsp;    * &lt;P&gt;
+<i>928</i>&nbsp;    * This method is called internally by this writer&#39;s {@code writeData}
+<i>929</i>&nbsp;    * method when a row in the rowset has been deleted. The values in the
+<i>930</i>&nbsp;    * deleted row are the same as those that are stored in the original row
+<i>931</i>&nbsp;    * of the given {@code CachedRowSet} object.  If the values in the
+<i>932</i>&nbsp;    * original row differ from the row in the underlying data source, the row
+<i>933</i>&nbsp;    * in the data source is not deleted, and {@code deleteOriginalRow}
+<i>934</i>&nbsp;    * returns {@code true} to indicate that there was a conflict.
+<i>935</i>&nbsp;    *
+<i>936</i>&nbsp;    *
+<i>937</i>&nbsp;    * @return {@code false} if the deletion was successful, which means that
+<i>938</i>&nbsp;    *         there was no conflict; {@code true} otherwise
+<i>939</i>&nbsp;    * @throws SQLException if there was a database access error
+<i>940</i>&nbsp;    */
+<b class="nc"><i>941</i>&nbsp;    private boolean deleteOriginalRow(CachedRowSet crs, CachedRowSetImpl crsRes) throws SQLException {</b>
+<i>942</i>&nbsp;        PreparedStatement pstmt;
+<i>943</i>&nbsp;        int i;
+<b class="nc"><i>944</i>&nbsp;        int idx = 0;</b>
+<b class="nc"><i>945</i>&nbsp;        String strSelect;</b>
+<i>946</i>&nbsp;    // Select the row from the database.
+<b class="nc"><i>947</i>&nbsp;        ResultSet origVals = crs.getOriginalRow();</b>
+<b class="nc"><i>948</i>&nbsp;        origVals.next();</b>
+<i>949</i>&nbsp;
+<i>950</i>&nbsp;        deleteWhere = buildWhereClause(deleteWhere, origVals);
+<b class="nc"><i>951</i>&nbsp;        pstmt = con.prepareStatement(selectCmd + deleteWhere,</b>
+<b class="nc"><i>952</i>&nbsp;                ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_READ_ONLY);</b>
+<b class="nc"><i>953</i>&nbsp;</b>
+<i>954</i>&nbsp;        for (i = 0; i &lt; keyCols.length; i++) {
+<i>955</i>&nbsp;            if (params[i] != null) {
+<i>956</i>&nbsp;                pstmt.setObject(++idx, params[i]);
+<i>957</i>&nbsp;            } else {
+<i>958</i>&nbsp;                continue;
+<i>959</i>&nbsp;            }
+<b class="nc"><i>960</i>&nbsp;        }</b>
+<b class="nc"><i>961</i>&nbsp;</b>
+<b class="nc"><i>962</i>&nbsp;        try {</b>
+<b class="nc"><i>963</i>&nbsp;            pstmt.setMaxRows(crs.getMaxRows());</b>
+<b class="nc"><i>964</i>&nbsp;            pstmt.setMaxFieldSize(crs.getMaxFieldSize());</b>
+<i>965</i>&nbsp;            pstmt.setEscapeProcessing(crs.getEscapeProcessing());
+<i>966</i>&nbsp;            pstmt.setQueryTimeout(crs.getQueryTimeout());
+<i>967</i>&nbsp;        } catch (Exception ex) {
+<i>968</i>&nbsp;            /*
+<b class="nc"><i>969</i>&nbsp;             * Older driver don&#39;t support these operations...</b>
+<i>970</i>&nbsp;             */
+<b class="nc"><i>971</i>&nbsp;            ;</b>
+<i>972</i>&nbsp;        }
+<b class="nc"><i>973</i>&nbsp;</b>
+<b class="nc"><i>974</i>&nbsp;        ResultSet rs = pstmt.executeQuery();</b>
+<i>975</i>&nbsp;
+<b class="nc"><i>976</i>&nbsp;        if (rs.next() == true) {</b>
+<i>977</i>&nbsp;            if (rs.next()) {
+<b class="nc"><i>978</i>&nbsp;                // more than one row</b>
+<i>979</i>&nbsp;                return true;
+<i>980</i>&nbsp;            }
+<i>981</i>&nbsp;            rs.first();
+<b class="nc"><i>982</i>&nbsp;</b>
+<i>983</i>&nbsp;            // Now check all the values in rs to be same in
+<b class="nc"><i>984</i>&nbsp;            // db also before actually going ahead with deleting</b>
+<i>985</i>&nbsp;            boolean boolChanged = false;
+<b class="nc"><i>986</i>&nbsp;</b>
+<i>987</i>&nbsp;            crsRes.moveToInsertRow();
+<b class="nc"><i>988</i>&nbsp;</b>
+<b class="nc"><i>989</i>&nbsp;            for (i = 1; i &lt;= crs.getMetaData().getColumnCount(); i++) {</b>
+<i>990</i>&nbsp;
+<b class="nc"><i>991</i>&nbsp;                Object original = origVals.getObject(i);</b>
+<b class="nc"><i>992</i>&nbsp;                Object changed = rs.getObject(i);</b>
+<b class="nc"><i>993</i>&nbsp;</b>
+<b class="nc"><i>994</i>&nbsp;                if(original != null &amp;&amp; changed != null ) {</b>
+<i>995</i>&nbsp;                  if(! (original.toString()).equals(changed.toString()) ) {
+<i>996</i>&nbsp;                      boolChanged = true;
+<b class="nc"><i>997</i>&nbsp;                      crsRes.updateObject(i,origVals.getObject(i));</b>
+<i>998</i>&nbsp;                  }
+<i>999</i>&nbsp;                } else {
+<i>1000</i>&nbsp;                   crsRes.updateNull(i);
+<b class="nc"><i>1001</i>&nbsp;               }</b>
+<b class="nc"><i>1002</i>&nbsp;            }</b>
+<i>1003</i>&nbsp;
+<b class="nc"><i>1004</i>&nbsp;           crsRes.insertRow();</b>
+<i>1005</i>&nbsp;           crsRes.moveToCurrentRow();
+<i>1006</i>&nbsp;
+<i>1007</i>&nbsp;           if(boolChanged) {
+<b class="nc"><i>1008</i>&nbsp;               // do not delete as values in db have changed</b>
+<i>1009</i>&nbsp;               // deletion will not happen for this row from db
+<i>1010</i>&nbsp;                   // exit now returning true. i.e. conflict
+<i>1011</i>&nbsp;               return true;
+<i>1012</i>&nbsp;            } else {
+<i>1013</i>&nbsp;                // delete the row.
+<i>1014</i>&nbsp;                // Go ahead with deleting,
+<b class="nc"><i>1015</i>&nbsp;                // don&#39;t do anything here</b>
+<b class="nc"><i>1016</i>&nbsp;            }</b>
+<i>1017</i>&nbsp;
+<b class="nc"><i>1018</i>&nbsp;            String cmd = deleteCmd + deleteWhere;</b>
+<b class="nc"><i>1019</i>&nbsp;            pstmt = con.prepareStatement(cmd);</b>
+<b class="nc"><i>1020</i>&nbsp;</b>
+<b class="nc"><i>1021</i>&nbsp;            idx = 0;</b>
+<i>1022</i>&nbsp;            for (i = 0; i &lt; keyCols.length; i++) {
+<i>1023</i>&nbsp;                if (params[i] != null) {
+<i>1024</i>&nbsp;                    pstmt.setObject(++idx, params[i]);
+<i>1025</i>&nbsp;                } else {
+<i>1026</i>&nbsp;                    continue;
+<b class="nc"><i>1027</i>&nbsp;                }</b>
+<b class="nc"><i>1028</i>&nbsp;            }</b>
+<i>1029</i>&nbsp;
+<b class="nc"><i>1030</i>&nbsp;            if (pstmt.executeUpdate() != 1) {</b>
+<b class="nc"><i>1031</i>&nbsp;                return true;</b>
+<i>1032</i>&nbsp;            }
+<b class="nc"><i>1033</i>&nbsp;            pstmt.close();</b>
+<i>1034</i>&nbsp;        } else {
+<i>1035</i>&nbsp;            // didn&#39;t find the row
+<i>1036</i>&nbsp;            return true;
+<b class="nc"><i>1037</i>&nbsp;        }</b>
+<i>1038</i>&nbsp;
+<i>1039</i>&nbsp;        // no conflict
+<i>1040</i>&nbsp;        return false;
+<i>1041</i>&nbsp;    }
+<i>1042</i>&nbsp;
+<i>1043</i>&nbsp;    /**
+<i>1044</i>&nbsp;     * Sets the reader for this writer to the given reader.
+<i>1045</i>&nbsp;     *
+<b class="nc"><i>1046</i>&nbsp;     * @throws SQLException if a database access error occurs</b>
+<i>1047</i>&nbsp;     */
+<i>1048</i>&nbsp;    public void setReader(CachedRowSetReader reader) throws SQLException {
+<i>1049</i>&nbsp;        this.reader = reader;
+<i>1050</i>&nbsp;    }
+<i>1051</i>&nbsp;
+<i>1052</i>&nbsp;    /**
+<i>1053</i>&nbsp;     * Gets the reader for this writer.
+<i>1054</i>&nbsp;     *
+<b class="nc"><i>1055</i>&nbsp;     * @throws SQLException if a database access error occurs</b>
+<i>1056</i>&nbsp;     */
+<i>1057</i>&nbsp;    public CachedRowSetReader getReader() throws SQLException {
+<i>1058</i>&nbsp;        return reader;
+<i>1059</i>&nbsp;    }
+<i>1060</i>&nbsp;
+<i>1061</i>&nbsp;    /**
+<i>1062</i>&nbsp;     * Composes a {@code SELECT}, {@code UPDATE}, {@code INSERT},
+<i>1063</i>&nbsp;     * and {@code DELETE} statement that can be used by this writer to
+<i>1064</i>&nbsp;     * write data to the data source backing the given {@code CachedRowSet}
+<i>1065</i>&nbsp;     * object.
+<i>1066</i>&nbsp;     *
+<i>1067</i>&nbsp;     * @param caller a {@code CachedRowSet} object for which this
+<i>1068</i>&nbsp;     *        {@code CachedRowSetWriter} object is the writer
+<i>1069</i>&nbsp;     * @throws SQLException if a database access error occurs
+<i>1070</i>&nbsp;     */
+<i>1071</i>&nbsp;    private void initSQLStatements(CachedRowSet caller) throws SQLException {
+<b class="nc"><i>1072</i>&nbsp;</b>
+<b class="nc"><i>1073</i>&nbsp;        int i;</b>
+<b class="nc"><i>1074</i>&nbsp;</b>
+<i>1075</i>&nbsp;        callerMd = caller.getMetaData();
+<i>1076</i>&nbsp;        callerColumnCount = callerMd.getColumnCount();
+<i>1077</i>&nbsp;        if (callerColumnCount &lt; 1)
+<i>1078</i>&nbsp;            // No data, so return.
+<i>1079</i>&nbsp;            return;
+<i>1080</i>&nbsp;
+<i>1081</i>&nbsp;        /*
+<i>1082</i>&nbsp;         * If the RowSet has a Table name we should use it.
+<b class="nc"><i>1083</i>&nbsp;         * This is really a hack to get round the fact that</b>
+<b class="nc"><i>1084</i>&nbsp;         * a lot of the jdbc drivers can&#39;t provide the tab.</b>
+<i>1085</i>&nbsp;         */
+<i>1086</i>&nbsp;        String table = caller.getTableName();
+<i>1087</i>&nbsp;        if (table == null) {
+<i>1088</i>&nbsp;            /*
+<i>1089</i>&nbsp;             * attempt to build a table name using the info
+<b class="nc"><i>1090</i>&nbsp;             * that the driver gave us for the first column</b>
+<b class="nc"><i>1091</i>&nbsp;             * in the source result set.</b>
+<b class="nc"><i>1092</i>&nbsp;             */</b>
+<i>1093</i>&nbsp;            table = callerMd.getTableName(1);
+<i>1094</i>&nbsp;            if (table == null || table.length() == 0) {
+<b class="nc"><i>1095</i>&nbsp;                throw new SQLException(resBundle.handleGetObject(&quot;crswriter.tname&quot;).toString());</b>
+<b class="nc"><i>1096</i>&nbsp;            }</b>
+<b class="nc"><i>1097</i>&nbsp;        }</b>
+<i>1098</i>&nbsp;        String catalog = callerMd.getCatalogName(1);
+<i>1099</i>&nbsp;            String schema = callerMd.getSchemaName(1);
+<i>1100</i>&nbsp;        DatabaseMetaData dbmd = con.getMetaData();
+<i>1101</i>&nbsp;
+<i>1102</i>&nbsp;        /*
+<i>1103</i>&nbsp;         * Compose a SELECT statement.  There are three parts.
+<b class="nc"><i>1104</i>&nbsp;         */</b>
+<b class="nc"><i>1105</i>&nbsp;</b>
+<b class="nc"><i>1106</i>&nbsp;        // Project List</b>
+<b class="nc"><i>1107</i>&nbsp;        selectCmd = &quot;SELECT &quot;;</b>
+<b class="nc"><i>1108</i>&nbsp;        for (i=1; i &lt;= callerColumnCount; i++) {</b>
+<i>1109</i>&nbsp;            selectCmd += callerMd.getColumnName(i);
+<b class="nc"><i>1110</i>&nbsp;            if ( i &lt;  callerMd.getColumnCount() )</b>
+<i>1111</i>&nbsp;                selectCmd += &quot;, &quot;;
+<i>1112</i>&nbsp;            else
+<i>1113</i>&nbsp;                selectCmd += &quot; &quot;;
+<b class="nc"><i>1114</i>&nbsp;        }</b>
+<i>1115</i>&nbsp;
+<i>1116</i>&nbsp;        // FROM clause.
+<i>1117</i>&nbsp;        selectCmd += &quot;FROM &quot; + buildTableName(dbmd, catalog, schema, table);
+<i>1118</i>&nbsp;
+<b class="nc"><i>1119</i>&nbsp;        /*</b>
+<i>1120</i>&nbsp;         * Compose an UPDATE statement.
+<i>1121</i>&nbsp;         */
+<i>1122</i>&nbsp;        updateCmd = &quot;UPDATE &quot; + buildTableName(dbmd, catalog, schema, table);
+<i>1123</i>&nbsp;
+<i>1124</i>&nbsp;
+<i>1125</i>&nbsp;        /**
+<i>1126</i>&nbsp;         *  The following block of code is for checking a particular type of
+<i>1127</i>&nbsp;         *  query where in there is a where clause. Without this block, if a
+<i>1128</i>&nbsp;         *  SQL statement is built the &quot;where&quot; clause will appear twice hence
+<i>1129</i>&nbsp;         *  the DB errors out and a SQLException is thrown. This code also
+<i>1130</i>&nbsp;         *  considers that the where clause is in the right place as the
+<i>1131</i>&nbsp;         *  CachedRowSet object would already have been populated with this
+<b class="nc"><i>1132</i>&nbsp;         *  query before coming to this point.</b>
+<i>1133</i>&nbsp;         **/
+<b class="nc"><i>1134</i>&nbsp;</b>
+<i>1135</i>&nbsp;        String tempupdCmd = updateCmd.toLowerCase();
+<b class="nc"><i>1136</i>&nbsp;</b>
+<i>1137</i>&nbsp;        int idxupWhere = tempupdCmd.indexOf(&quot;where&quot;);
+<b class="nc"><i>1138</i>&nbsp;</b>
+<i>1139</i>&nbsp;        if(idxupWhere != -1)
+<b class="nc"><i>1140</i>&nbsp;        {</b>
+<i>1141</i>&nbsp;           updateCmd = updateCmd.substring(0,idxupWhere);
+<i>1142</i>&nbsp;        }
+<i>1143</i>&nbsp;        updateCmd += &quot;SET &quot;;
+<i>1144</i>&nbsp;
+<b class="nc"><i>1145</i>&nbsp;        /*</b>
+<i>1146</i>&nbsp;         * Compose an INSERT statement.
+<b class="nc"><i>1147</i>&nbsp;         */</b>
+<b class="nc"><i>1148</i>&nbsp;        insertCmd = &quot;INSERT INTO &quot; + buildTableName(dbmd, catalog, schema, table);</b>
+<b class="nc"><i>1149</i>&nbsp;        // Column list</b>
+<b class="nc"><i>1150</i>&nbsp;        insertCmd += &quot;(&quot;;</b>
+<b class="nc"><i>1151</i>&nbsp;        for (i=1; i &lt;= callerColumnCount; i++) {</b>
+<i>1152</i>&nbsp;            insertCmd += callerMd.getColumnName(i);
+<b class="nc"><i>1153</i>&nbsp;            if ( i &lt;  callerMd.getColumnCount() )</b>
+<i>1154</i>&nbsp;                insertCmd += &quot;, &quot;;
+<b class="nc"><i>1155</i>&nbsp;            else</b>
+<b class="nc"><i>1156</i>&nbsp;                insertCmd += &quot;) VALUES (&quot;;</b>
+<b class="nc"><i>1157</i>&nbsp;        }</b>
+<b class="nc"><i>1158</i>&nbsp;        for (i=1; i &lt;= callerColumnCount; i++) {</b>
+<i>1159</i>&nbsp;            insertCmd += &quot;?&quot;;
+<b class="nc"><i>1160</i>&nbsp;            if (i &lt; callerColumnCount)</b>
+<i>1161</i>&nbsp;                insertCmd += &quot;, &quot;;
+<i>1162</i>&nbsp;            else
+<i>1163</i>&nbsp;                insertCmd += &quot;)&quot;;
+<i>1164</i>&nbsp;        }
+<i>1165</i>&nbsp;
+<b class="nc"><i>1166</i>&nbsp;        /*</b>
+<i>1167</i>&nbsp;         * Compose a DELETE statement.
+<i>1168</i>&nbsp;         */
+<i>1169</i>&nbsp;        deleteCmd = &quot;DELETE FROM &quot; + buildTableName(dbmd, catalog, schema, table);
+<i>1170</i>&nbsp;
+<i>1171</i>&nbsp;        /*
+<b class="nc"><i>1172</i>&nbsp;         * set the key desriptors that will be</b>
+<i>1173</i>&nbsp;         * needed to construct where clauses.
+<i>1174</i>&nbsp;         */
+<i>1175</i>&nbsp;        buildKeyDesc(caller);
+<i>1176</i>&nbsp;    }
+<i>1177</i>&nbsp;
+<i>1178</i>&nbsp;    /**
+<i>1179</i>&nbsp;     * Returns a fully qualified table name built from the given catalog and
+<i>1180</i>&nbsp;     * table names. The given metadata object is used to get the proper order
+<i>1181</i>&nbsp;     * and separator.
+<i>1182</i>&nbsp;     *
+<i>1183</i>&nbsp;     * @param dbmd a {@code DatabaseMetaData} object that contains metadata
+<i>1184</i>&nbsp;     *          about this writer&#39;s {@code CachedRowSet} object
+<i>1185</i>&nbsp;     * @param catalog a {@code String} object with the rowset&#39;s catalog
+<i>1186</i>&nbsp;     *          name
+<i>1187</i>&nbsp;     * @param table a {@code String} object with the name of the table from
+<i>1188</i>&nbsp;     *          which this writer&#39;s rowset was derived
+<i>1189</i>&nbsp;     * @return a {@code String} object with the fully qualified name of the
+<i>1190</i>&nbsp;     *          table from which this writer&#39;s rowset was derived
+<i>1191</i>&nbsp;     * @throws SQLException if a database access error occurs
+<i>1192</i>&nbsp;     */
+<i>1193</i>&nbsp;    private String buildTableName(DatabaseMetaData dbmd,
+<i>1194</i>&nbsp;        String catalog, String schema, String table) throws SQLException {
+<i>1195</i>&nbsp;
+<b class="nc"><i>1196</i>&nbsp;       // trim all the leading and trailing whitespaces,</b>
+<i>1197</i>&nbsp;       // white spaces can never be catalog, schema or a table name.
+<b class="nc"><i>1198</i>&nbsp;</b>
+<b class="nc"><i>1199</i>&nbsp;        String cmd = &quot;&quot;;</b>
+<b class="nc"><i>1200</i>&nbsp;</b>
+<i>1201</i>&nbsp;        catalog = catalog.trim();
+<b class="nc"><i>1202</i>&nbsp;        schema = schema.trim();</b>
+<b class="nc"><i>1203</i>&nbsp;        table = table.trim();</b>
+<b class="nc"><i>1204</i>&nbsp;</b>
+<i>1205</i>&nbsp;        if (dbmd.isCatalogAtStart() == true) {
+<b class="nc"><i>1206</i>&nbsp;            if (catalog != null &amp;&amp; catalog.length() &gt; 0) {</b>
+<b class="nc"><i>1207</i>&nbsp;                cmd += catalog + dbmd.getCatalogSeparator();</b>
+<i>1208</i>&nbsp;            }
+<b class="nc"><i>1209</i>&nbsp;            if (schema != null &amp;&amp; schema.length() &gt; 0) {</b>
+<i>1210</i>&nbsp;                cmd += schema + &quot;.&quot;;
+<b class="nc"><i>1211</i>&nbsp;            }</b>
+<b class="nc"><i>1212</i>&nbsp;            cmd += table;</b>
+<i>1213</i>&nbsp;        } else {
+<b class="nc"><i>1214</i>&nbsp;            if (schema != null &amp;&amp; schema.length() &gt; 0) {</b>
+<b class="nc"><i>1215</i>&nbsp;                cmd += schema + &quot;.&quot;;</b>
+<b class="nc"><i>1216</i>&nbsp;            }</b>
+<i>1217</i>&nbsp;            cmd += table;
+<i>1218</i>&nbsp;            if (catalog != null &amp;&amp; catalog.length() &gt; 0) {
+<b class="nc"><i>1219</i>&nbsp;                cmd += dbmd.getCatalogSeparator() + catalog;</b>
+<b class="nc"><i>1220</i>&nbsp;            }</b>
+<i>1221</i>&nbsp;        }
+<i>1222</i>&nbsp;        cmd += &quot; &quot;;
+<i>1223</i>&nbsp;        return cmd;
+<i>1224</i>&nbsp;    }
+<i>1225</i>&nbsp;
+<i>1226</i>&nbsp;    /**
+<i>1227</i>&nbsp;     * Assigns to the given {@code CachedRowSet} object&#39;s
+<i>1228</i>&nbsp;     * {@code params}
+<i>1229</i>&nbsp;     * field an array whose length equals the number of columns needed
+<i>1230</i>&nbsp;     * to uniquely identify a row in the rowset. The array is given
+<i>1231</i>&nbsp;     * values by the method {@code buildWhereClause}.
+<i>1232</i>&nbsp;     * &lt;P&gt;
+<i>1233</i>&nbsp;     * If the {@code CachedRowSet} object&#39;s {@code keyCols}
+<i>1234</i>&nbsp;     * field has length {@code 0} or is {@code null}, the array
+<i>1235</i>&nbsp;     * is set with the column number of every column in the rowset.
+<i>1236</i>&nbsp;     * Otherwise, the array in the field {@code keyCols} is set with only
+<i>1237</i>&nbsp;     * the column numbers of the columns that are required to form a unique
+<i>1238</i>&nbsp;     * identifier for a row.
+<i>1239</i>&nbsp;     *
+<i>1240</i>&nbsp;     * @param crs the {@code CachedRowSet} object for which this
+<i>1241</i>&nbsp;     *     {@code CachedRowSetWriter} object is the writer
+<i>1242</i>&nbsp;     *
+<i>1243</i>&nbsp;     * @throws SQLException if a database access error occurs
+<b class="nc"><i>1244</i>&nbsp;     */</b>
+<b class="nc"><i>1245</i>&nbsp;    private void buildKeyDesc(CachedRowSet crs) throws SQLException {</b>
+<b class="nc"><i>1246</i>&nbsp;</b>
+<b class="nc"><i>1247</i>&nbsp;        keyCols = crs.getKeyColumns();</b>
+<i>1248</i>&nbsp;        ResultSetMetaData resultsetmd = crs.getMetaData();
+<b class="nc"><i>1249</i>&nbsp;        if (keyCols == null || keyCols.length == 0) {</b>
+<b class="nc"><i>1250</i>&nbsp;            ArrayList&lt;Integer&gt; listKeys = new ArrayList&lt;Integer&gt;();</b>
+<b class="nc"><i>1251</i>&nbsp;</b>
+<b class="nc"><i>1252</i>&nbsp;            for (int i = 0; i &lt; callerColumnCount; i++ ) {</b>
+<b class="nc"><i>1253</i>&nbsp;                if(resultsetmd.getColumnType(i+1) != java.sql.Types.CLOB &amp;&amp;</b>
+<b class="nc"><i>1254</i>&nbsp;                        resultsetmd.getColumnType(i+1) != java.sql.Types.STRUCT &amp;&amp;</b>
+<b class="nc"><i>1255</i>&nbsp;                        resultsetmd.getColumnType(i+1) != java.sql.Types.SQLXML &amp;&amp;</b>
+<b class="nc"><i>1256</i>&nbsp;                        resultsetmd.getColumnType(i+1) != java.sql.Types.BLOB &amp;&amp;</b>
+<i>1257</i>&nbsp;                        resultsetmd.getColumnType(i+1) != java.sql.Types.ARRAY &amp;&amp;
+<b class="nc"><i>1258</i>&nbsp;                        resultsetmd.getColumnType(i+1) != java.sql.Types.OTHER )</b>
+<b class="nc"><i>1259</i>&nbsp;                    listKeys.add(i+1);</b>
+<b class="nc"><i>1260</i>&nbsp;            }</b>
+<i>1261</i>&nbsp;            keyCols = new int[listKeys.size()];
+<b class="nc"><i>1262</i>&nbsp;            for (int i = 0; i &lt; listKeys.size(); i++ )</b>
+<i>1263</i>&nbsp;                keyCols[i] = listKeys.get(i);
+<i>1264</i>&nbsp;        }
+<i>1265</i>&nbsp;        params = new Object[keyCols.length];
+<i>1266</i>&nbsp;    }
+<i>1267</i>&nbsp;
+<i>1268</i>&nbsp;    /**
+<i>1269</i>&nbsp;     * Constructs an SQL {@code WHERE} clause using the given
+<i>1270</i>&nbsp;     * string as a starting point. The resulting clause will contain
+<i>1271</i>&nbsp;     * a column name and &quot; = ?&quot; for each key column, that is, each column
+<i>1272</i>&nbsp;     * that is needed to form a unique identifier for a row in the rowset.
+<i>1273</i>&nbsp;     * This {@code WHERE} clause can be added to
+<i>1274</i>&nbsp;     * a {@code PreparedStatement} object that updates, inserts, or
+<i>1275</i>&nbsp;     * deletes a row.
+<i>1276</i>&nbsp;     * &lt;P&gt;
+<i>1277</i>&nbsp;     * This method uses the given result set to access values in the
+<i>1278</i>&nbsp;     * {@code CachedRowSet} object that called this writer.  These
+<i>1279</i>&nbsp;     * values are used to build the array of parameters that will serve as
+<i>1280</i>&nbsp;     * replacements for the &quot;?&quot; parameter placeholders in the
+<i>1281</i>&nbsp;     * {@code PreparedStatement} object that is sent to the
+<i>1282</i>&nbsp;     * {@code CachedRowSet} object&#39;s underlying data source.
+<i>1283</i>&nbsp;     *
+<i>1284</i>&nbsp;     * @param whereClause a {@code String} object that is an empty
+<i>1285</i>&nbsp;     *                    string (&quot;&quot;)
+<i>1286</i>&nbsp;     * @param rs a {@code ResultSet} object that can be used
+<i>1287</i>&nbsp;     *           to access the {@code CachedRowSet} object&#39;s data
+<i>1288</i>&nbsp;     * @return a {@code WHERE} clause of the form &quot;{@code WHERE}
+<i>1289</i>&nbsp;     *         columnName = ? AND columnName = ? AND columnName = ? ...&quot;
+<i>1290</i>&nbsp;     * @throws SQLException if a database access error occurs
+<b class="nc"><i>1291</i>&nbsp;     */</b>
+<i>1292</i>&nbsp;    private String buildWhereClause(String whereClause,
+<b class="nc"><i>1293</i>&nbsp;                                    ResultSet rs) throws SQLException {</b>
+<b class="nc"><i>1294</i>&nbsp;        whereClause = &quot;WHERE &quot;;</b>
+<b class="nc"><i>1295</i>&nbsp;</b>
+<i>1296</i>&nbsp;        for (int i = 0; i &lt; keyCols.length; i++) {
+<b class="nc"><i>1297</i>&nbsp;            if (i &gt; 0) {</b>
+<b class="nc"><i>1298</i>&nbsp;                    whereClause += &quot;AND &quot;;</b>
+<b class="nc"><i>1299</i>&nbsp;            }</b>
+<b class="nc"><i>1300</i>&nbsp;            whereClause += callerMd.getColumnName(keyCols[i]);</b>
+<i>1301</i>&nbsp;            params[i] = rs.getObject(keyCols[i]);
+<b class="nc"><i>1302</i>&nbsp;            if (rs.wasNull() == true) {</b>
+<i>1303</i>&nbsp;                whereClause += &quot; IS NULL &quot;;
+<i>1304</i>&nbsp;            } else {
+<b class="nc"><i>1305</i>&nbsp;                whereClause += &quot; = ? &quot;;</b>
+<i>1306</i>&nbsp;            }
+<i>1307</i>&nbsp;        }
+<i>1308</i>&nbsp;        return whereClause;
+<i>1309</i>&nbsp;    }
+<i>1310</i>&nbsp;
+<b class="nc"><i>1311</i>&nbsp;    void updateResolvedConflictToDB(CachedRowSet crs, Connection con) throws SQLException {</b>
+<b class="nc"><i>1312</i>&nbsp;          //String updateExe = ;</b>
+<b class="nc"><i>1313</i>&nbsp;          PreparedStatement pStmt  ;</b>
+<b class="nc"><i>1314</i>&nbsp;          String strWhere = &quot;WHERE &quot; ;</b>
+<b class="nc"><i>1315</i>&nbsp;          String strExec =&quot; &quot;;</b>
+<i>1316</i>&nbsp;          String strUpdate = &quot;UPDATE &quot;;
+<b class="nc"><i>1317</i>&nbsp;          int icolCount = crs.getMetaData().getColumnCount();</b>
+<i>1318</i>&nbsp;          int keyColumns[] = crs.getKeyColumns();
+<b class="nc"><i>1319</i>&nbsp;          Object param[];</b>
+<i>1320</i>&nbsp;          String strSet=&quot;&quot;;
+<b class="nc"><i>1321</i>&nbsp;</b>
+<b class="nc"><i>1322</i>&nbsp;        strWhere = buildWhereClause(strWhere, crs);</b>
+<b class="nc"><i>1323</i>&nbsp;</b>
+<b class="nc"><i>1324</i>&nbsp;        if (keyColumns == null || keyColumns.length == 0) {</b>
+<i>1325</i>&nbsp;            keyColumns = new int[icolCount];
+<i>1326</i>&nbsp;            for (int i = 0; i &lt; keyColumns.length; ) {
+<b class="nc"><i>1327</i>&nbsp;                keyColumns[i] = ++i;</b>
+<i>1328</i>&nbsp;            }
+<b class="nc"><i>1329</i>&nbsp;          }</b>
+<b class="nc"><i>1330</i>&nbsp;          param = new Object[keyColumns.length];</b>
+<b class="nc"><i>1331</i>&nbsp;</b>
+<b class="nc"><i>1332</i>&nbsp;         strUpdate = &quot;UPDATE &quot; + buildTableName(con.getMetaData(),</b>
+<i>1333</i>&nbsp;                            crs.getMetaData().getCatalogName(1),
+<i>1334</i>&nbsp;                           crs.getMetaData().getSchemaName(1),
+<i>1335</i>&nbsp;                           crs.getTableName());
+<b class="nc"><i>1336</i>&nbsp;</b>
+<i>1337</i>&nbsp;         // changed or updated values will become part of
+<b class="nc"><i>1338</i>&nbsp;         // set clause here</b>
+<i>1339</i>&nbsp;         strUpdate += &quot;SET &quot;;
+<b class="nc"><i>1340</i>&nbsp;</b>
+<b class="nc"><i>1341</i>&nbsp;        boolean first = true;</b>
+<b class="nc"><i>1342</i>&nbsp;</b>
+<b class="nc"><i>1343</i>&nbsp;        for (int i=1; i&lt;=icolCount;i++) {</b>
+<i>1344</i>&nbsp;           if (crs.columnUpdated(i)) {
+<b class="nc"><i>1345</i>&nbsp;                  if (first == false) {</b>
+<b class="nc"><i>1346</i>&nbsp;                    strSet += &quot;, &quot;;</b>
+<b class="nc"><i>1347</i>&nbsp;                  }</b>
+<i>1348</i>&nbsp;                 strSet += crs.getMetaData().getColumnName(i);
+<i>1349</i>&nbsp;                 strSet += &quot; = ? &quot;;
+<i>1350</i>&nbsp;                 first = false;
+<i>1351</i>&nbsp;         } //end if
+<b class="nc"><i>1352</i>&nbsp;      } //end for</b>
+<b class="nc"><i>1353</i>&nbsp;</b>
+<i>1354</i>&nbsp;         // keycols will become part of where clause
+<b class="nc"><i>1355</i>&nbsp;         strUpdate += strSet;</b>
+<b class="nc"><i>1356</i>&nbsp;         strWhere = &quot;WHERE &quot;;</b>
+<b class="nc"><i>1357</i>&nbsp;</b>
+<i>1358</i>&nbsp;        for (int i = 0; i &lt; keyColumns.length; i++) {
+<b class="nc"><i>1359</i>&nbsp;            if (i &gt; 0) {</b>
+<b class="nc"><i>1360</i>&nbsp;                    strWhere += &quot;AND &quot;;</b>
+<b class="nc"><i>1361</i>&nbsp;            }</b>
+<b class="nc"><i>1362</i>&nbsp;            strWhere += crs.getMetaData().getColumnName(keyColumns[i]);</b>
+<i>1363</i>&nbsp;            param[i] = crs.getObject(keyColumns[i]);
+<b class="nc"><i>1364</i>&nbsp;            if (crs.wasNull() == true) {</b>
+<i>1365</i>&nbsp;                strWhere += &quot; IS NULL &quot;;
+<i>1366</i>&nbsp;            } else {
+<b class="nc"><i>1367</i>&nbsp;                strWhere += &quot; = ? &quot;;</b>
+<i>1368</i>&nbsp;            }
+<b class="nc"><i>1369</i>&nbsp;        }</b>
+<i>1370</i>&nbsp;          strUpdate += strWhere;
+<b class="nc"><i>1371</i>&nbsp;</b>
+<b class="nc"><i>1372</i>&nbsp;        pStmt = con.prepareStatement(strUpdate);</b>
+<b class="nc"><i>1373</i>&nbsp;</b>
+<b class="nc"><i>1374</i>&nbsp;        int idx =0;</b>
+<b class="nc"><i>1375</i>&nbsp;          for (int i = 0; i &lt; icolCount; i++) {</b>
+<b class="nc"><i>1376</i>&nbsp;             if(crs.columnUpdated(i+1)) {</b>
+<i>1377</i>&nbsp;              Object obj = crs.getObject(i+1);
+<b class="nc"><i>1378</i>&nbsp;              if (obj != null) {</b>
+<i>1379</i>&nbsp;                  pStmt.setObject(++idx, obj);
+<i>1380</i>&nbsp;              } else {
+<i>1381</i>&nbsp;                  pStmt.setNull(i + 1,crs.getMetaData().getColumnType(i + 1));
+<i>1382</i>&nbsp;             } //end if ..else
+<i>1383</i>&nbsp;           } //end if crs.column...
+<b class="nc"><i>1384</i>&nbsp;        } //end for</b>
+<b class="nc"><i>1385</i>&nbsp;</b>
+<b class="nc"><i>1386</i>&nbsp;          // Set the key cols for after WHERE =? clause</b>
+<i>1387</i>&nbsp;          for (int i = 0; i &lt; keyColumns.length; i++) {
+<i>1388</i>&nbsp;              if (param[i] != null) {
+<i>1389</i>&nbsp;                  pStmt.setObject(++idx, param[i]);
+<b class="nc"><i>1390</i>&nbsp;              }</b>
+<i>1391</i>&nbsp;          }
+<i>1392</i>&nbsp;
+<i>1393</i>&nbsp;        int id = pStmt.executeUpdate();
+<i>1394</i>&nbsp;      }
+<i>1395</i>&nbsp;
+<i>1396</i>&nbsp;
+<i>1397</i>&nbsp;    /**
+<b class="nc"><i>1398</i>&nbsp;     *</b>
+<b class="nc"><i>1399</i>&nbsp;     */</b>
+<b class="nc"><i>1400</i>&nbsp;    public void commit() throws SQLException {</b>
+<i>1401</i>&nbsp;        con.commit();
+<i>1402</i>&nbsp;        if (reader.getCloseConnection() == true) {
+<i>1403</i>&nbsp;            con.close();
+<i>1404</i>&nbsp;        }
+<b class="nc"><i>1405</i>&nbsp;    }</b>
+<b class="nc"><i>1406</i>&nbsp;</b>
+<b class="nc"><i>1407</i>&nbsp;     public void commit(CachedRowSetImpl crs, boolean updateRowset) throws SQLException {</b>
+<b class="nc"><i>1408</i>&nbsp;        con.commit();</b>
+<i>1409</i>&nbsp;        if(updateRowset) {
+<i>1410</i>&nbsp;          if(crs.getCommand() != null)
+<b class="nc"><i>1411</i>&nbsp;            crs.execute(con);</b>
+<b class="nc"><i>1412</i>&nbsp;        }</b>
+<i>1413</i>&nbsp;
+<i>1414</i>&nbsp;        if (reader.getCloseConnection() == true) {
+<i>1415</i>&nbsp;            con.close();
+<i>1416</i>&nbsp;        }
+<i>1417</i>&nbsp;    }
+<i>1418</i>&nbsp;
+<i>1419</i>&nbsp;    /**
+<b class="nc"><i>1420</i>&nbsp;     *</b>
+<b class="nc"><i>1421</i>&nbsp;     */</b>
+<b class="nc"><i>1422</i>&nbsp;    public void rollback() throws SQLException {</b>
+<i>1423</i>&nbsp;        con.rollback();
+<i>1424</i>&nbsp;        if (reader.getCloseConnection() == true) {
+<i>1425</i>&nbsp;            con.close();
+<i>1426</i>&nbsp;        }
+<i>1427</i>&nbsp;    }
+<i>1428</i>&nbsp;
+<i>1429</i>&nbsp;    /**
+<b class="nc"><i>1430</i>&nbsp;     *</b>
+<b class="nc"><i>1431</i>&nbsp;     */</b>
+<b class="nc"><i>1432</i>&nbsp;    public void rollback(Savepoint s) throws SQLException {</b>
+<i>1433</i>&nbsp;        con.rollback(s);
+<i>1434</i>&nbsp;        if (reader.getCloseConnection() == true) {
+<i>1435</i>&nbsp;            con.close();
+<i>1436</i>&nbsp;        }
+<i>1437</i>&nbsp;    }
+<b class="nc"><i>1438</i>&nbsp;</b>
+<i>1439</i>&nbsp;    private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException {
+<i>1440</i>&nbsp;        // Default state initialization happens here
+<b class="nc"><i>1441</i>&nbsp;        ois.defaultReadObject();</b>
+<b class="nc"><i>1442</i>&nbsp;        // Initialization of  Res Bundle happens here .</b>
+<b class="nc"><i>1443</i>&nbsp;        try {</b>
+<b class="nc"><i>1444</i>&nbsp;           resBundle = JdbcRowSetResourceBundle.getJdbcRowSetResourceBundle();</b>
+<i>1445</i>&nbsp;        } catch(IOException ioe) {
+<i>1446</i>&nbsp;            throw new RuntimeException(ioe);
+<i>1447</i>&nbsp;        }
+<i>1448</i>&nbsp;
+<i>1449</i>&nbsp;    }
+<i>1450</i>&nbsp;
+<i>1451</i>&nbsp;    static final long serialVersionUID =-8506030970299413976L;
+<i>1452</i>&nbsp;
+<i>1453</i>&nbsp;    /**
+<i>1454</i>&nbsp;     * Validate whether the Primary Key is known to the CachedRowSet.  If it is
+<i>1455</i>&nbsp;     * not, it is an auto-generated key
+<i>1456</i>&nbsp;     * @param pk - Primary Key to validate
+<i>1457</i>&nbsp;     * @param rsmd - ResultSetMetadata for the RowSet
+<b class="nc"><i>1458</i>&nbsp;     * @return true if found, false otherwise (auto generated key)</b>
+<b class="nc"><i>1459</i>&nbsp;     */</b>
+<b class="nc"><i>1460</i>&nbsp;    private boolean isPKNameValid(String pk, ResultSetMetaData rsmd) throws SQLException {</b>
+<b class="nc"><i>1461</i>&nbsp;        boolean isValid = false;</b>
+<b class="nc"><i>1462</i>&nbsp;        int cols = rsmd.getColumnCount();</b>
+<b class="nc"><i>1463</i>&nbsp;        for(int i = 1; i&lt;= cols; i++) {</b>
+<b class="nc"><i>1464</i>&nbsp;            String colName = rsmd.getColumnClassName(i);</b>
+<i>1465</i>&nbsp;            if(colName.equalsIgnoreCase(pk)) {
+<i>1466</i>&nbsp;                isValid = true;
+<i>1467</i>&nbsp;                break;
+<b class="nc"><i>1468</i>&nbsp;            }</b>
+<i>1469</i>&nbsp;        }
+<i>1470</i>&nbsp;
+<i>1471</i>&nbsp;        return isValid;
+<i>1472</i>&nbsp;    }
+<i>1473</i>&nbsp;
+<i>1474</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,1060 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: WindowsPath</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.fs</a> ]
+</div>
+
+<h1>Coverage Summary for Class: WindowsPath (sun.nio.fs)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WindowsPath</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 44)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 372)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">WindowsPath$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">WindowsPath$WindowsPathWithAttributes</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 48)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 377)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2008, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.fs;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.file.*;
+<i>29</i>&nbsp;import java.nio.file.attribute.*;
+<i>30</i>&nbsp;import java.io.*;
+<i>31</i>&nbsp;import java.net.URI;
+<i>32</i>&nbsp;import java.util.*;
+<i>33</i>&nbsp;import java.lang.ref.WeakReference;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;import static sun.nio.fs.WindowsNativeDispatcher.*;
+<i>36</i>&nbsp;import static sun.nio.fs.WindowsConstants.*;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * Windows implementation of Path
+<i>40</i>&nbsp; */
+<i>41</i>&nbsp;
+<i>42</i>&nbsp;class WindowsPath implements Path {
+<i>43</i>&nbsp;
+<b class="nc"><i>44</i>&nbsp;    // The maximum path that does not require long path prefix. On Windows</b>
+<i>45</i>&nbsp;    // the maximum path is 260 minus 1 (NUL) but for directories it is 260
+<i>46</i>&nbsp;    // minus 12 minus 1 (to allow for the creation of a 8.3 file in the
+<i>47</i>&nbsp;    // directory).
+<i>48</i>&nbsp;    private static final int MAX_PATH = 247;
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;    // Maximum extended-length path
+<i>51</i>&nbsp;    private static final int MAX_LONG_PATH = 32000;
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;    // FIXME - eliminate this reference to reduce space
+<i>54</i>&nbsp;    private final WindowsFileSystem fs;
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;    // path type
+<i>57</i>&nbsp;    private final WindowsPathType type;
+<i>58</i>&nbsp;    // root component (may be empty)
+<i>59</i>&nbsp;    private final String root;
+<i>60</i>&nbsp;    // normalized path
+<i>61</i>&nbsp;    private final String path;
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    // the path to use in Win32 calls. This differs from path for relative
+<i>64</i>&nbsp;    // paths and has a long path prefix for all paths longer than MAX_PATH.
+<i>65</i>&nbsp;    private volatile WeakReference&lt;String&gt; pathForWin32Calls;
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;    // offsets into name components (computed lazily)
+<i>68</i>&nbsp;    private volatile Integer[] offsets;
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    // computed hash code (computed lazily, no need to be volatile)
+<i>71</i>&nbsp;    private int hash;
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    /**
+<i>75</i>&nbsp;     * Initializes a new instance of this class.
+<i>76</i>&nbsp;     */
+<i>77</i>&nbsp;    private WindowsPath(WindowsFileSystem fs,
+<i>78</i>&nbsp;                        WindowsPathType type,
+<i>79</i>&nbsp;                        String root,
+<i>80</i>&nbsp;                        String path)
+<i>81</i>&nbsp;    {
+<i>82</i>&nbsp;        this.fs = fs;
+<b class="nc"><i>83</i>&nbsp;        this.type = type;</b>
+<b class="nc"><i>84</i>&nbsp;        this.root = root;</b>
+<b class="nc"><i>85</i>&nbsp;        this.path = path;</b>
+<b class="nc"><i>86</i>&nbsp;    }</b>
+<b class="nc"><i>87</i>&nbsp;</b>
+<i>88</i>&nbsp;    /**
+<i>89</i>&nbsp;     * Creates a Path by parsing the given path.
+<i>90</i>&nbsp;     */
+<i>91</i>&nbsp;    static WindowsPath parse(WindowsFileSystem fs, String path) {
+<i>92</i>&nbsp;        WindowsPathParser.Result result = WindowsPathParser.parse(path);
+<i>93</i>&nbsp;        return new WindowsPath(fs, result.type(), result.root(), result.path());
+<b class="nc"><i>94</i>&nbsp;    }</b>
+<b class="nc"><i>95</i>&nbsp;</b>
+<i>96</i>&nbsp;    /**
+<i>97</i>&nbsp;     * Creates a Path from a given path that is known to be normalized.
+<i>98</i>&nbsp;     */
+<i>99</i>&nbsp;    static WindowsPath createFromNormalizedPath(WindowsFileSystem fs,
+<i>100</i>&nbsp;                                                String path,
+<i>101</i>&nbsp;                                                BasicFileAttributes attrs)
+<i>102</i>&nbsp;    {
+<i>103</i>&nbsp;        try {
+<i>104</i>&nbsp;            WindowsPathParser.Result result =
+<i>105</i>&nbsp;                WindowsPathParser.parseNormalizedPath(path);
+<b class="nc"><i>106</i>&nbsp;            if (attrs == null) {</b>
+<b class="nc"><i>107</i>&nbsp;                return new WindowsPath(fs,</b>
+<b class="nc"><i>108</i>&nbsp;                                       result.type(),</b>
+<b class="nc"><i>109</i>&nbsp;                                       result.root(),</b>
+<b class="nc"><i>110</i>&nbsp;                                       result.path());</b>
+<b class="nc"><i>111</i>&nbsp;            } else {</b>
+<b class="nc"><i>112</i>&nbsp;                return new WindowsPathWithAttributes(fs,</b>
+<i>113</i>&nbsp;                                                     result.type(),
+<b class="nc"><i>114</i>&nbsp;                                                     result.root(),</b>
+<b class="nc"><i>115</i>&nbsp;                                                     result.path(),</b>
+<b class="nc"><i>116</i>&nbsp;                                                     attrs);</b>
+<b class="nc"><i>117</i>&nbsp;            }</b>
+<i>118</i>&nbsp;        } catch (InvalidPathException x) {
+<i>119</i>&nbsp;            throw new AssertionError(x.getMessage());
+<b class="nc"><i>120</i>&nbsp;        }</b>
+<b class="nc"><i>121</i>&nbsp;    }</b>
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;    /**
+<i>124</i>&nbsp;     * Creates a WindowsPath from a given path that is known to be normalized.
+<i>125</i>&nbsp;     */
+<i>126</i>&nbsp;    static WindowsPath createFromNormalizedPath(WindowsFileSystem fs,
+<i>127</i>&nbsp;                                                String path)
+<i>128</i>&nbsp;    {
+<i>129</i>&nbsp;        return createFromNormalizedPath(fs, path, null);
+<i>130</i>&nbsp;    }
+<b class="nc"><i>131</i>&nbsp;</b>
+<i>132</i>&nbsp;    /**
+<i>133</i>&nbsp;     * Special implementation with attached/cached attributes (used to quicken
+<i>134</i>&nbsp;     * file tree traversal)
+<i>135</i>&nbsp;     */
+<i>136</i>&nbsp;    private static class WindowsPathWithAttributes
+<i>137</i>&nbsp;        extends WindowsPath implements BasicFileAttributesHolder
+<i>138</i>&nbsp;    {
+<i>139</i>&nbsp;        final WeakReference&lt;BasicFileAttributes&gt; ref;
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;        WindowsPathWithAttributes(WindowsFileSystem fs,
+<i>142</i>&nbsp;                                  WindowsPathType type,
+<i>143</i>&nbsp;                                  String root,
+<i>144</i>&nbsp;                                  String path,
+<i>145</i>&nbsp;                                  BasicFileAttributes attrs)
+<i>146</i>&nbsp;        {
+<i>147</i>&nbsp;            super(fs, type, root, path);
+<i>148</i>&nbsp;            ref = new WeakReference&lt;BasicFileAttributes&gt;(attrs);
+<b class="nc"><i>149</i>&nbsp;        }</b>
+<b class="nc"><i>150</i>&nbsp;</b>
+<i>151</i>&nbsp;        @Override
+<i>152</i>&nbsp;        public BasicFileAttributes get() {
+<i>153</i>&nbsp;            return ref.get();
+<i>154</i>&nbsp;        }
+<b class="nc"><i>155</i>&nbsp;</b>
+<i>156</i>&nbsp;        @Override
+<i>157</i>&nbsp;        public void invalidate() {
+<i>158</i>&nbsp;            ref.clear();
+<i>159</i>&nbsp;        }
+<b class="nc"><i>160</i>&nbsp;</b>
+<i>161</i>&nbsp;        // no need to override equals/hashCode.
+<i>162</i>&nbsp;    }
+<i>163</i>&nbsp;
+<i>164</i>&nbsp;    // use this message when throwing exceptions
+<i>165</i>&nbsp;    String getPathForExceptionMessage() {
+<i>166</i>&nbsp;        return path;
+<i>167</i>&nbsp;    }
+<b class="nc"><i>168</i>&nbsp;</b>
+<i>169</i>&nbsp;    // use this path for permission checks
+<i>170</i>&nbsp;    String getPathForPermissionCheck() {
+<i>171</i>&nbsp;        return path;
+<i>172</i>&nbsp;    }
+<b class="nc"><i>173</i>&nbsp;</b>
+<i>174</i>&nbsp;    // use this path for Win32 calls
+<i>175</i>&nbsp;    // This method will prefix long paths with \\?\ or \\?\UNC as required.
+<i>176</i>&nbsp;    String getPathForWin32Calls() throws WindowsException {
+<i>177</i>&nbsp;        // short absolute paths can be used directly
+<i>178</i>&nbsp;        if (isAbsolute() &amp;&amp; path.length() &lt;= MAX_PATH)
+<i>179</i>&nbsp;            return path;
+<b class="nc"><i>180</i>&nbsp;</b>
+<b class="nc"><i>181</i>&nbsp;        // return cached values if available</b>
+<i>182</i>&nbsp;        WeakReference&lt;String&gt; ref = pathForWin32Calls;
+<i>183</i>&nbsp;        String resolved = (ref != null) ? ref.get() : null;
+<b class="nc"><i>184</i>&nbsp;        if (resolved != null) {</b>
+<b class="nc"><i>185</i>&nbsp;            // Win32 path already available</b>
+<b class="nc"><i>186</i>&nbsp;            return resolved;</b>
+<i>187</i>&nbsp;        }
+<b class="nc"><i>188</i>&nbsp;</b>
+<i>189</i>&nbsp;        // resolve against default directory
+<i>190</i>&nbsp;        resolved = getAbsolutePath();
+<i>191</i>&nbsp;
+<b class="nc"><i>192</i>&nbsp;        // Long paths need to have &quot;.&quot; and &quot;..&quot; removed and be prefixed with</b>
+<i>193</i>&nbsp;        // &quot;\\?\&quot;. Note that it is okay to remove &quot;..&quot; even when it follows
+<i>194</i>&nbsp;        // a link - for example, it is okay for foo/link/../bar to be changed
+<i>195</i>&nbsp;        // to foo/bar. The reason is that Win32 APIs to access foo/link/../bar
+<i>196</i>&nbsp;        // will access foo/bar anyway (which differs to Unix systems)
+<i>197</i>&nbsp;        if (resolved.length() &gt; MAX_PATH) {
+<i>198</i>&nbsp;            if (resolved.length() &gt; MAX_LONG_PATH) {
+<b class="nc"><i>199</i>&nbsp;                throw new WindowsException(&quot;Cannot access file with path exceeding &quot;</b>
+<b class="nc"><i>200</i>&nbsp;                    + MAX_LONG_PATH + &quot; characters&quot;);</b>
+<b class="nc"><i>201</i>&nbsp;            }</b>
+<i>202</i>&nbsp;            resolved = addPrefixIfNeeded(GetFullPathName(resolved));
+<i>203</i>&nbsp;        }
+<b class="nc"><i>204</i>&nbsp;</b>
+<i>205</i>&nbsp;        // cache the resolved path (except drive relative paths as the working
+<i>206</i>&nbsp;        // directory on removal media devices can change during the lifetime
+<i>207</i>&nbsp;        // of the VM)
+<i>208</i>&nbsp;        if (type != WindowsPathType.DRIVE_RELATIVE) {
+<i>209</i>&nbsp;            synchronized (path) {
+<b class="nc"><i>210</i>&nbsp;                pathForWin32Calls = new WeakReference&lt;String&gt;(resolved);</b>
+<b class="nc"><i>211</i>&nbsp;            }</b>
+<b class="nc"><i>212</i>&nbsp;        }</b>
+<b class="nc"><i>213</i>&nbsp;        return resolved;</b>
+<i>214</i>&nbsp;    }
+<b class="nc"><i>215</i>&nbsp;</b>
+<i>216</i>&nbsp;    // return this path resolved against the file system&#39;s default directory
+<i>217</i>&nbsp;    private String getAbsolutePath() throws WindowsException {
+<i>218</i>&nbsp;        if (isAbsolute())
+<i>219</i>&nbsp;            return path;
+<b class="nc"><i>220</i>&nbsp;</b>
+<b class="nc"><i>221</i>&nbsp;        // Relative path (&quot;foo&quot; for example)</b>
+<i>222</i>&nbsp;        if (type == WindowsPathType.RELATIVE) {
+<i>223</i>&nbsp;            String defaultDirectory = getFileSystem().defaultDirectory();
+<b class="nc"><i>224</i>&nbsp;            if (isEmpty())</b>
+<b class="nc"><i>225</i>&nbsp;                return defaultDirectory;</b>
+<b class="nc"><i>226</i>&nbsp;            if (defaultDirectory.endsWith(&quot;\\&quot;)) {</b>
+<b class="nc"><i>227</i>&nbsp;                return defaultDirectory + path;</b>
+<b class="nc"><i>228</i>&nbsp;            } else {</b>
+<b class="nc"><i>229</i>&nbsp;                StringBuilder sb =</b>
+<i>230</i>&nbsp;                    new StringBuilder(defaultDirectory.length() + path.length() + 1);
+<b class="nc"><i>231</i>&nbsp;                return sb.append(defaultDirectory).append(&#39;\\&#39;).append(path).toString();</b>
+<b class="nc"><i>232</i>&nbsp;            }</b>
+<b class="nc"><i>233</i>&nbsp;        }</b>
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;        // Directory relative path (&quot;\foo&quot; for example)
+<i>236</i>&nbsp;        if (type == WindowsPathType.DIRECTORY_RELATIVE) {
+<i>237</i>&nbsp;            String defaultRoot = getFileSystem().defaultRoot();
+<b class="nc"><i>238</i>&nbsp;            return defaultRoot + path.substring(1);</b>
+<b class="nc"><i>239</i>&nbsp;        }</b>
+<b class="nc"><i>240</i>&nbsp;</b>
+<i>241</i>&nbsp;        // Drive relative path (&quot;C:foo&quot; for example).
+<i>242</i>&nbsp;        if (isSameDrive(root, getFileSystem().defaultRoot())) {
+<i>243</i>&nbsp;            // relative to default directory
+<b class="nc"><i>244</i>&nbsp;            String remaining = path.substring(root.length());</b>
+<i>245</i>&nbsp;            String defaultDirectory = getFileSystem().defaultDirectory();
+<b class="nc"><i>246</i>&nbsp;            if (remaining.length() == 0) {</b>
+<b class="nc"><i>247</i>&nbsp;                return defaultDirectory;</b>
+<i>248</i>&nbsp;            } else if (defaultDirectory.endsWith(&quot;\\&quot;)) {
+<b class="nc"><i>249</i>&nbsp;                 return defaultDirectory + remaining;</b>
+<b class="nc"><i>250</i>&nbsp;            } else {</b>
+<i>251</i>&nbsp;                return defaultDirectory + &quot;\\&quot; + remaining;
+<b class="nc"><i>252</i>&nbsp;            }</b>
+<i>253</i>&nbsp;        } else {
+<b class="nc"><i>254</i>&nbsp;            // relative to some other drive</b>
+<i>255</i>&nbsp;            String wd;
+<i>256</i>&nbsp;            try {
+<i>257</i>&nbsp;                int dt = GetDriveType(root + &quot;\\&quot;);
+<i>258</i>&nbsp;                if (dt == DRIVE_UNKNOWN || dt == DRIVE_NO_ROOT_DIR)
+<b class="nc"><i>259</i>&nbsp;                    throw new WindowsException(&quot;&quot;);</b>
+<b class="nc"><i>260</i>&nbsp;                wd = GetFullPathName(root + &quot;.&quot;);</b>
+<b class="nc"><i>261</i>&nbsp;            } catch (WindowsException x) {</b>
+<b class="nc"><i>262</i>&nbsp;                throw new WindowsException(&quot;Unable to get working directory of drive &#39;&quot; +</b>
+<b class="nc"><i>263</i>&nbsp;                    Character.toUpperCase(root.charAt(0)) + &quot;&#39;&quot;);</b>
+<b class="nc"><i>264</i>&nbsp;            }</b>
+<b class="nc"><i>265</i>&nbsp;            String result = wd;</b>
+<b class="nc"><i>266</i>&nbsp;            if (wd.endsWith(&quot;\\&quot;)) {</b>
+<b class="nc"><i>267</i>&nbsp;                result += path.substring(root.length());</b>
+<b class="nc"><i>268</i>&nbsp;            } else {</b>
+<b class="nc"><i>269</i>&nbsp;                if (path.length() &gt; root.length())</b>
+<i>270</i>&nbsp;                    result += &quot;\\&quot; + path.substring(root.length());
+<b class="nc"><i>271</i>&nbsp;            }</b>
+<b class="nc"><i>272</i>&nbsp;            return result;</b>
+<i>273</i>&nbsp;        }
+<b class="nc"><i>274</i>&nbsp;    }</b>
+<i>275</i>&nbsp;
+<i>276</i>&nbsp;    // returns true if same drive letter
+<i>277</i>&nbsp;    private static boolean isSameDrive(String root1, String root2) {
+<i>278</i>&nbsp;        return Character.toUpperCase(root1.charAt(0)) ==
+<i>279</i>&nbsp;               Character.toUpperCase(root2.charAt(0));
+<b class="nc"><i>280</i>&nbsp;    }</b>
+<b class="nc"><i>281</i>&nbsp;</b>
+<i>282</i>&nbsp;    // Add long path prefix to path if required
+<i>283</i>&nbsp;    static String addPrefixIfNeeded(String path) {
+<i>284</i>&nbsp;        if (path.length() &gt; MAX_PATH) {
+<i>285</i>&nbsp;            if (path.startsWith(&quot;\\\\&quot;)) {
+<b class="nc"><i>286</i>&nbsp;                path = &quot;\\\\?\\UNC&quot; + path.substring(1, path.length());</b>
+<b class="nc"><i>287</i>&nbsp;            } else {</b>
+<b class="nc"><i>288</i>&nbsp;                path = &quot;\\\\?\\&quot; + path;</b>
+<i>289</i>&nbsp;            }
+<b class="nc"><i>290</i>&nbsp;        }</b>
+<i>291</i>&nbsp;        return path;
+<i>292</i>&nbsp;    }
+<b class="nc"><i>293</i>&nbsp;</b>
+<i>294</i>&nbsp;    @Override
+<i>295</i>&nbsp;    public WindowsFileSystem getFileSystem() {
+<i>296</i>&nbsp;        return fs;
+<i>297</i>&nbsp;    }
+<b class="nc"><i>298</i>&nbsp;</b>
+<i>299</i>&nbsp;    // -- Path operations --
+<i>300</i>&nbsp;
+<i>301</i>&nbsp;    private boolean isEmpty() {
+<i>302</i>&nbsp;        return path.length() == 0;
+<i>303</i>&nbsp;    }
+<b class="nc"><i>304</i>&nbsp;</b>
+<i>305</i>&nbsp;    private WindowsPath emptyPath() {
+<i>306</i>&nbsp;        return new WindowsPath(getFileSystem(), WindowsPathType.RELATIVE, &quot;&quot;, &quot;&quot;);
+<i>307</i>&nbsp;    }
+<b class="nc"><i>308</i>&nbsp;</b>
+<i>309</i>&nbsp;    @Override
+<i>310</i>&nbsp;    public Path getFileName() {
+<i>311</i>&nbsp;        int len = path.length();
+<i>312</i>&nbsp;        // represents empty path
+<b class="nc"><i>313</i>&nbsp;        if (len == 0)</b>
+<i>314</i>&nbsp;            return this;
+<b class="nc"><i>315</i>&nbsp;        // represents root component only</b>
+<b class="nc"><i>316</i>&nbsp;        if (root.length() == len)</b>
+<i>317</i>&nbsp;            return null;
+<b class="nc"><i>318</i>&nbsp;        int off = path.lastIndexOf(&#39;\\&#39;);</b>
+<b class="nc"><i>319</i>&nbsp;        if (off &lt; root.length())</b>
+<b class="nc"><i>320</i>&nbsp;            off = root.length();</b>
+<b class="nc"><i>321</i>&nbsp;        else</b>
+<b class="nc"><i>322</i>&nbsp;            off++;</b>
+<i>323</i>&nbsp;        return new WindowsPath(getFileSystem(), WindowsPathType.RELATIVE, &quot;&quot;, path.substring(off));
+<b class="nc"><i>324</i>&nbsp;    }</b>
+<b class="nc"><i>325</i>&nbsp;</b>
+<i>326</i>&nbsp;    @Override
+<i>327</i>&nbsp;    public WindowsPath getParent() {
+<i>328</i>&nbsp;        // represents root component only
+<i>329</i>&nbsp;        if (root.length() == path.length())
+<i>330</i>&nbsp;            return null;
+<b class="nc"><i>331</i>&nbsp;        int off = path.lastIndexOf(&#39;\\&#39;);</b>
+<b class="nc"><i>332</i>&nbsp;        if (off &lt; root.length())</b>
+<b class="nc"><i>333</i>&nbsp;            return getRoot();</b>
+<b class="nc"><i>334</i>&nbsp;        else</b>
+<b class="nc"><i>335</i>&nbsp;            return new WindowsPath(getFileSystem(),</b>
+<i>336</i>&nbsp;                                   type,
+<b class="nc"><i>337</i>&nbsp;                                   root,</b>
+<i>338</i>&nbsp;                                   path.substring(0, off));
+<i>339</i>&nbsp;    }
+<b class="nc"><i>340</i>&nbsp;</b>
+<i>341</i>&nbsp;    @Override
+<i>342</i>&nbsp;    public WindowsPath getRoot() {
+<i>343</i>&nbsp;        if (root.length() == 0)
+<i>344</i>&nbsp;            return null;
+<b class="nc"><i>345</i>&nbsp;        return new WindowsPath(getFileSystem(), type, root, root);</b>
+<b class="nc"><i>346</i>&nbsp;    }</b>
+<b class="nc"><i>347</i>&nbsp;</b>
+<i>348</i>&nbsp;    // package-private
+<i>349</i>&nbsp;    WindowsPathType type() {
+<i>350</i>&nbsp;        return type;
+<i>351</i>&nbsp;    }
+<b class="nc"><i>352</i>&nbsp;</b>
+<i>353</i>&nbsp;    // package-private
+<i>354</i>&nbsp;    boolean isUnc() {
+<i>355</i>&nbsp;        return type == WindowsPathType.UNC;
+<i>356</i>&nbsp;    }
+<b class="nc"><i>357</i>&nbsp;</b>
+<i>358</i>&nbsp;    boolean needsSlashWhenResolving() {
+<i>359</i>&nbsp;        if (path.endsWith(&quot;\\&quot;))
+<i>360</i>&nbsp;            return false;
+<b class="nc"><i>361</i>&nbsp;        return path.length() &gt; root.length();</b>
+<b class="nc"><i>362</i>&nbsp;    }</b>
+<b class="nc"><i>363</i>&nbsp;</b>
+<i>364</i>&nbsp;    @Override
+<i>365</i>&nbsp;    public boolean isAbsolute() {
+<i>366</i>&nbsp;        return type == WindowsPathType.ABSOLUTE || type == WindowsPathType.UNC;
+<i>367</i>&nbsp;    }
+<b class="nc"><i>368</i>&nbsp;</b>
+<i>369</i>&nbsp;    static WindowsPath toWindowsPath(Path path) {
+<i>370</i>&nbsp;        if (path == null)
+<i>371</i>&nbsp;            throw new NullPointerException();
+<b class="nc"><i>372</i>&nbsp;        if (!(path instanceof WindowsPath)) {</b>
+<b class="nc"><i>373</i>&nbsp;            throw new ProviderMismatchException();</b>
+<b class="nc"><i>374</i>&nbsp;        }</b>
+<b class="nc"><i>375</i>&nbsp;        return (WindowsPath)path;</b>
+<i>376</i>&nbsp;    }
+<b class="nc"><i>377</i>&nbsp;</b>
+<i>378</i>&nbsp;    // return true if this path has &quot;.&quot; or &quot;..&quot;
+<i>379</i>&nbsp;    private boolean hasDotOrDotDot() {
+<i>380</i>&nbsp;        int n = getNameCount();
+<i>381</i>&nbsp;        for (int i=0; i&lt;n; i++) {
+<b class="nc"><i>382</i>&nbsp;            String name = elementAsString(i);</b>
+<b class="nc"><i>383</i>&nbsp;            if (name.length() == 1 &amp;&amp; name.charAt(0) == &#39;.&#39;)</b>
+<b class="nc"><i>384</i>&nbsp;                return true;</b>
+<i>385</i>&nbsp;            if (name.length() == 2
+<i>386</i>&nbsp;                    &amp;&amp; name.charAt(0) == &#39;.&#39; &amp;&amp; name.charAt(1) == &#39;.&#39;)
+<b class="nc"><i>387</i>&nbsp;                return true;</b>
+<b class="nc"><i>388</i>&nbsp;        }</b>
+<i>389</i>&nbsp;        return false;
+<i>390</i>&nbsp;    }
+<b class="nc"><i>391</i>&nbsp;</b>
+<b class="nc"><i>392</i>&nbsp;    @Override</b>
+<i>393</i>&nbsp;    public WindowsPath relativize(Path obj) {
+<b class="nc"><i>394</i>&nbsp;        WindowsPath child = toWindowsPath(obj);</b>
+<b class="nc"><i>395</i>&nbsp;        if (this.equals(child))</b>
+<i>396</i>&nbsp;            return emptyPath();
+<i>397</i>&nbsp;
+<b class="nc"><i>398</i>&nbsp;        // can only relativize paths of the same type</b>
+<b class="nc"><i>399</i>&nbsp;        if (this.type != child.type)</b>
+<b class="nc"><i>400</i>&nbsp;            throw new IllegalArgumentException(&quot;&#39;other&#39; is different type of Path&quot;);</b>
+<b class="nc"><i>401</i>&nbsp;</b>
+<b class="nc"><i>402</i>&nbsp;        // can only relativize paths if root component matches</b>
+<b class="nc"><i>403</i>&nbsp;        if (!this.root.equalsIgnoreCase(child.root))</b>
+<i>404</i>&nbsp;            throw new IllegalArgumentException(&quot;&#39;other&#39; has different root&quot;);
+<i>405</i>&nbsp;
+<i>406</i>&nbsp;        // this path is the empty path
+<b class="nc"><i>407</i>&nbsp;        if (this.isEmpty())</b>
+<b class="nc"><i>408</i>&nbsp;            return child;</b>
+<b class="nc"><i>409</i>&nbsp;</b>
+<i>410</i>&nbsp;
+<i>411</i>&nbsp;        WindowsPath base = this;
+<i>412</i>&nbsp;        if (base.hasDotOrDotDot() || child.hasDotOrDotDot()) {
+<b class="nc"><i>413</i>&nbsp;            base = base.normalize();</b>
+<b class="nc"><i>414</i>&nbsp;            child = child.normalize();</b>
+<b class="nc"><i>415</i>&nbsp;        }</b>
+<i>416</i>&nbsp;
+<i>417</i>&nbsp;        int baseCount = base.getNameCount();
+<i>418</i>&nbsp;        int childCount = child.getNameCount();
+<b class="nc"><i>419</i>&nbsp;</b>
+<b class="nc"><i>420</i>&nbsp;        // skip matching names</b>
+<i>421</i>&nbsp;        int n = Math.min(baseCount, childCount);
+<i>422</i>&nbsp;        int i = 0;
+<i>423</i>&nbsp;        while (i &lt; n) {
+<i>424</i>&nbsp;            if (!base.getName(i).equals(child.getName(i)))
+<b class="nc"><i>425</i>&nbsp;                break;</b>
+<b class="nc"><i>426</i>&nbsp;            i++;</b>
+<b class="nc"><i>427</i>&nbsp;        }</b>
+<i>428</i>&nbsp;
+<b class="nc"><i>429</i>&nbsp;        // remaining elements in child</b>
+<b class="nc"><i>430</i>&nbsp;        WindowsPath childRemaining;</b>
+<i>431</i>&nbsp;        boolean isChildEmpty;
+<i>432</i>&nbsp;        if (i == childCount) {
+<i>433</i>&nbsp;            childRemaining = emptyPath();
+<i>434</i>&nbsp;            isChildEmpty = true;
+<b class="nc"><i>435</i>&nbsp;        } else {</b>
+<b class="nc"><i>436</i>&nbsp;            childRemaining = child.subpath(i, childCount);</b>
+<b class="nc"><i>437</i>&nbsp;            isChildEmpty = childRemaining.isEmpty();</b>
+<b class="nc"><i>438</i>&nbsp;        }</b>
+<b class="nc"><i>439</i>&nbsp;</b>
+<i>440</i>&nbsp;        // matched all of base
+<b class="nc"><i>441</i>&nbsp;        if (i == baseCount) {</b>
+<i>442</i>&nbsp;            return childRemaining;
+<i>443</i>&nbsp;        }
+<b class="nc"><i>444</i>&nbsp;</b>
+<b class="nc"><i>445</i>&nbsp;        // the remainder of base cannot contain &quot;..&quot;</b>
+<b class="nc"><i>446</i>&nbsp;        WindowsPath baseRemaining = base.subpath(i, baseCount);</b>
+<i>447</i>&nbsp;        if (baseRemaining.hasDotOrDotDot()) {
+<i>448</i>&nbsp;            throw new IllegalArgumentException(&quot;Unable to compute relative &quot;
+<i>449</i>&nbsp;                    + &quot; path from &quot; + this + &quot; to &quot; + obj);
+<b class="nc"><i>450</i>&nbsp;        }</b>
+<i>451</i>&nbsp;        if (baseRemaining.isEmpty())
+<b class="nc"><i>452</i>&nbsp;            return childRemaining;</b>
+<b class="nc"><i>453</i>&nbsp;</b>
+<b class="nc"><i>454</i>&nbsp;        // number of &quot;..&quot; needed</b>
+<i>455</i>&nbsp;        int dotdots = baseRemaining.getNameCount();
+<b class="nc"><i>456</i>&nbsp;        if (dotdots == 0) {</b>
+<i>457</i>&nbsp;            return childRemaining;
+<b class="nc"><i>458</i>&nbsp;        }</b>
+<i>459</i>&nbsp;
+<i>460</i>&nbsp;        StringBuilder result = new StringBuilder();
+<i>461</i>&nbsp;        for (int j=0; j&lt;dotdots; j++) {
+<b class="nc"><i>462</i>&nbsp;            result.append(&quot;..\\&quot;);</b>
+<b class="nc"><i>463</i>&nbsp;        }</b>
+<b class="nc"><i>464</i>&nbsp;</b>
+<i>465</i>&nbsp;        // append remaining names in child
+<i>466</i>&nbsp;        if (!isChildEmpty) {
+<i>467</i>&nbsp;            for (int j=0; j&lt;childRemaining.getNameCount(); j++) {
+<b class="nc"><i>468</i>&nbsp;                result.append(childRemaining.getName(j).toString());</b>
+<i>469</i>&nbsp;                result.append(&quot;\\&quot;);
+<i>470</i>&nbsp;            }
+<b class="nc"><i>471</i>&nbsp;        }</b>
+<b class="nc"><i>472</i>&nbsp;</b>
+<b class="nc"><i>473</i>&nbsp;        // drop trailing slash</b>
+<b class="nc"><i>474</i>&nbsp;        result.setLength(result.length()-1);</b>
+<i>475</i>&nbsp;        return createFromNormalizedPath(getFileSystem(), result.toString());
+<i>476</i>&nbsp;    }
+<i>477</i>&nbsp;
+<i>478</i>&nbsp;    @Override
+<i>479</i>&nbsp;    public WindowsPath normalize() {
+<b class="nc"><i>480</i>&nbsp;        final int count = getNameCount();</b>
+<b class="nc"><i>481</i>&nbsp;        if (count == 0 || isEmpty())</b>
+<b class="nc"><i>482</i>&nbsp;            return this;</b>
+<b class="nc"><i>483</i>&nbsp;</b>
+<b class="nc"><i>484</i>&nbsp;        boolean[] ignore = new boolean[count];      // true =&gt; ignore name</b>
+<b class="nc"><i>485</i>&nbsp;        int remaining = count;                      // number of names remaining</b>
+<i>486</i>&nbsp;
+<i>487</i>&nbsp;        // multiple passes to eliminate all occurrences of &quot;.&quot; and &quot;name/..&quot;
+<b class="nc"><i>488</i>&nbsp;        int prevRemaining;</b>
+<i>489</i>&nbsp;        do {
+<b class="nc"><i>490</i>&nbsp;            prevRemaining = remaining;</b>
+<b class="nc"><i>491</i>&nbsp;            int prevName = -1;</b>
+<i>492</i>&nbsp;            for (int i=0; i&lt;count; i++) {
+<i>493</i>&nbsp;                if (ignore[i])
+<i>494</i>&nbsp;                    continue;
+<i>495</i>&nbsp;
+<b class="nc"><i>496</i>&nbsp;                String name = elementAsString(i);</b>
+<i>497</i>&nbsp;
+<i>498</i>&nbsp;                // not &quot;.&quot; or &quot;..&quot;
+<b class="nc"><i>499</i>&nbsp;                if (name.length() &gt; 2) {</b>
+<b class="nc"><i>500</i>&nbsp;                    prevName = i;</b>
+<i>501</i>&nbsp;                    continue;
+<i>502</i>&nbsp;                }
+<b class="nc"><i>503</i>&nbsp;</b>
+<b class="nc"><i>504</i>&nbsp;                // &quot;.&quot; or something else</b>
+<i>505</i>&nbsp;                if (name.length() == 1) {
+<i>506</i>&nbsp;                    // ignore &quot;.&quot;
+<i>507</i>&nbsp;                    if (name.charAt(0) == &#39;.&#39;) {
+<b class="nc"><i>508</i>&nbsp;                        ignore[i] = true;</b>
+<b class="nc"><i>509</i>&nbsp;                        remaining--;</b>
+<b class="nc"><i>510</i>&nbsp;                    } else {</b>
+<b class="nc"><i>511</i>&nbsp;                        prevName = i;</b>
+<b class="nc"><i>512</i>&nbsp;                    }</b>
+<b class="nc"><i>513</i>&nbsp;                    continue;</b>
+<b class="nc"><i>514</i>&nbsp;                }</b>
+<i>515</i>&nbsp;
+<i>516</i>&nbsp;                // not &quot;..&quot;
+<i>517</i>&nbsp;                if (name.charAt(0) != &#39;.&#39; || name.charAt(1) != &#39;.&#39;) {
+<i>518</i>&nbsp;                    prevName = i;
+<b class="nc"><i>519</i>&nbsp;                    continue;</b>
+<b class="nc"><i>520</i>&nbsp;                }</b>
+<i>521</i>&nbsp;
+<i>522</i>&nbsp;                // &quot;..&quot; found
+<i>523</i>&nbsp;                if (prevName &gt;= 0) {
+<i>524</i>&nbsp;                    // name/&lt;ignored&gt;/.. found so mark name and &quot;..&quot; to be
+<b class="nc"><i>525</i>&nbsp;                    // ignored</b>
+<b class="nc"><i>526</i>&nbsp;                    ignore[prevName] = true;</b>
+<b class="nc"><i>527</i>&nbsp;                    ignore[i] = true;</b>
+<b class="nc"><i>528</i>&nbsp;                    remaining = remaining - 2;</b>
+<b class="nc"><i>529</i>&nbsp;                    prevName = -1;</b>
+<i>530</i>&nbsp;                } else {
+<b class="nc"><i>531</i>&nbsp;                    // Cases:</b>
+<i>532</i>&nbsp;                    //    C:\&lt;ignored&gt;\..
+<i>533</i>&nbsp;                    //    \\server\\share\&lt;ignored&gt;\..
+<b class="nc"><i>534</i>&nbsp;                    //    \&lt;ignored&gt;..</b>
+<b class="nc"><i>535</i>&nbsp;                    if (isAbsolute() || type == WindowsPathType.DIRECTORY_RELATIVE) {</b>
+<i>536</i>&nbsp;                        boolean hasPrevious = false;
+<b class="nc"><i>537</i>&nbsp;                        for (int j=0; j&lt;i; j++) {</b>
+<i>538</i>&nbsp;                            if (!ignore[j]) {
+<b class="nc"><i>539</i>&nbsp;                                hasPrevious = true;</b>
+<i>540</i>&nbsp;                                break;
+<i>541</i>&nbsp;                            }
+<i>542</i>&nbsp;                        }
+<i>543</i>&nbsp;                        if (!hasPrevious) {
+<b class="nc"><i>544</i>&nbsp;                            // all proceeding names are ignored</b>
+<b class="nc"><i>545</i>&nbsp;                            ignore[i] = true;</b>
+<i>546</i>&nbsp;                            remaining--;
+<b class="nc"><i>547</i>&nbsp;                        }</b>
+<i>548</i>&nbsp;                    }
+<b class="nc"><i>549</i>&nbsp;                }</b>
+<i>550</i>&nbsp;            }
+<i>551</i>&nbsp;        } while (prevRemaining &gt; remaining);
+<i>552</i>&nbsp;
+<b class="nc"><i>553</i>&nbsp;        // no redundant names</b>
+<b class="nc"><i>554</i>&nbsp;        if (remaining == count)</b>
+<i>555</i>&nbsp;            return this;
+<b class="nc"><i>556</i>&nbsp;</b>
+<b class="nc"><i>557</i>&nbsp;        // corner case - all names removed</b>
+<b class="nc"><i>558</i>&nbsp;        if (remaining == 0) {</b>
+<i>559</i>&nbsp;            return (root.length() == 0) ? emptyPath() : getRoot();
+<b class="nc"><i>560</i>&nbsp;        }</b>
+<i>561</i>&nbsp;
+<b class="nc"><i>562</i>&nbsp;        // re-constitute the path from the remaining names.</b>
+<b class="nc"><i>563</i>&nbsp;        StringBuilder result = new StringBuilder();</b>
+<i>564</i>&nbsp;        if (root != null)
+<b class="nc"><i>565</i>&nbsp;            result.append(root);</b>
+<i>566</i>&nbsp;        for (int i=0; i&lt;count; i++) {
+<b class="nc"><i>567</i>&nbsp;            if (!ignore[i]) {</b>
+<i>568</i>&nbsp;                result.append(getName(i));
+<i>569</i>&nbsp;                result.append(&quot;\\&quot;);
+<i>570</i>&nbsp;            }
+<b class="nc"><i>571</i>&nbsp;        }</b>
+<i>572</i>&nbsp;
+<i>573</i>&nbsp;        // drop trailing slash in result
+<i>574</i>&nbsp;        result.setLength(result.length()-1);
+<i>575</i>&nbsp;        return createFromNormalizedPath(getFileSystem(), result.toString());
+<i>576</i>&nbsp;    }
+<b class="nc"><i>577</i>&nbsp;</b>
+<b class="nc"><i>578</i>&nbsp;    @Override</b>
+<b class="nc"><i>579</i>&nbsp;    public WindowsPath resolve(Path obj) {</b>
+<i>580</i>&nbsp;        WindowsPath other = toWindowsPath(obj);
+<b class="nc"><i>581</i>&nbsp;        if (other.isEmpty())</b>
+<i>582</i>&nbsp;            return this;
+<b class="nc"><i>583</i>&nbsp;        if (other.isAbsolute())</b>
+<b class="nc"><i>584</i>&nbsp;            return other;</b>
+<b class="nc"><i>585</i>&nbsp;</b>
+<b class="nc"><i>586</i>&nbsp;        switch (other.type) {</b>
+<b class="nc"><i>587</i>&nbsp;            case RELATIVE: {</b>
+<i>588</i>&nbsp;                String result;
+<b class="nc"><i>589</i>&nbsp;                if (path.endsWith(&quot;\\&quot;) || (root.length() == path.length())) {</b>
+<b class="nc"><i>590</i>&nbsp;                    result = path + other.path;</b>
+<i>591</i>&nbsp;                } else {
+<i>592</i>&nbsp;                    result = path + &quot;\\&quot; + other.path;
+<b class="nc"><i>593</i>&nbsp;                }</b>
+<b class="nc"><i>594</i>&nbsp;                return new WindowsPath(getFileSystem(), type, root, result);</b>
+<i>595</i>&nbsp;            }
+<b class="nc"><i>596</i>&nbsp;</b>
+<b class="nc"><i>597</i>&nbsp;            case DIRECTORY_RELATIVE: {</b>
+<b class="nc"><i>598</i>&nbsp;                String result;</b>
+<b class="nc"><i>599</i>&nbsp;                if (root.endsWith(&quot;\\&quot;)) {</b>
+<i>600</i>&nbsp;                    result = root + other.path.substring(1);
+<i>601</i>&nbsp;                } else {
+<i>602</i>&nbsp;                    result = root + other.path;
+<i>603</i>&nbsp;                }
+<i>604</i>&nbsp;                return createFromNormalizedPath(getFileSystem(), result);
+<b class="nc"><i>605</i>&nbsp;            }</b>
+<b class="nc"><i>606</i>&nbsp;</b>
+<i>607</i>&nbsp;            case DRIVE_RELATIVE: {
+<i>608</i>&nbsp;                if (!root.endsWith(&quot;\\&quot;))
+<i>609</i>&nbsp;                    return other;
+<b class="nc"><i>610</i>&nbsp;                // if different roots then return other</b>
+<b class="nc"><i>611</i>&nbsp;                String thisRoot = root.substring(0, root.length()-1);</b>
+<b class="nc"><i>612</i>&nbsp;                if (!thisRoot.equalsIgnoreCase(other.root))</b>
+<b class="nc"><i>613</i>&nbsp;                    return other;</b>
+<i>614</i>&nbsp;                // same roots
+<i>615</i>&nbsp;                String remaining = other.path.substring(other.root.length());
+<i>616</i>&nbsp;                String result;
+<i>617</i>&nbsp;                if (path.endsWith(&quot;\\&quot;)) {
+<b class="nc"><i>618</i>&nbsp;                    result = path + remaining;</b>
+<b class="nc"><i>619</i>&nbsp;                } else {</b>
+<b class="nc"><i>620</i>&nbsp;                    result = path + &quot;\\&quot; + remaining;</b>
+<b class="nc"><i>621</i>&nbsp;                }</b>
+<i>622</i>&nbsp;                return createFromNormalizedPath(getFileSystem(), result);
+<i>623</i>&nbsp;            }
+<i>624</i>&nbsp;
+<i>625</i>&nbsp;            default:
+<b class="nc"><i>626</i>&nbsp;                throw new AssertionError();</b>
+<b class="nc"><i>627</i>&nbsp;        }</b>
+<b class="nc"><i>628</i>&nbsp;    }</b>
+<b class="nc"><i>629</i>&nbsp;</b>
+<b class="nc"><i>630</i>&nbsp;    // generate offset array</b>
+<b class="nc"><i>631</i>&nbsp;    private void initOffsets() {</b>
+<b class="nc"><i>632</i>&nbsp;        if (offsets == null) {</b>
+<b class="nc"><i>633</i>&nbsp;            ArrayList&lt;Integer&gt; list = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>634</i>&nbsp;            if (isEmpty()) {</b>
+<i>635</i>&nbsp;                // empty path considered to have one name element
+<b class="nc"><i>636</i>&nbsp;                list.add(0);</b>
+<b class="nc"><i>637</i>&nbsp;            } else {</b>
+<b class="nc"><i>638</i>&nbsp;                int start = root.length();</b>
+<b class="nc"><i>639</i>&nbsp;                int off = root.length();</b>
+<b class="nc"><i>640</i>&nbsp;                while (off &lt; path.length()) {</b>
+<b class="nc"><i>641</i>&nbsp;                    if (path.charAt(off) != &#39;\\&#39;) {</b>
+<b class="nc"><i>642</i>&nbsp;                        off++;</b>
+<i>643</i>&nbsp;                    } else {
+<b class="nc"><i>644</i>&nbsp;                        list.add(start);</b>
+<i>645</i>&nbsp;                        start = ++off;
+<i>646</i>&nbsp;                    }
+<i>647</i>&nbsp;                }
+<i>648</i>&nbsp;                if (start != off)
+<b class="nc"><i>649</i>&nbsp;                    list.add(start);</b>
+<b class="nc"><i>650</i>&nbsp;            }</b>
+<b class="nc"><i>651</i>&nbsp;            synchronized (this) {</b>
+<i>652</i>&nbsp;                if (offsets == null)
+<i>653</i>&nbsp;                    offsets = list.toArray(new Integer[list.size()]);
+<b class="nc"><i>654</i>&nbsp;            }</b>
+<b class="nc"><i>655</i>&nbsp;        }</b>
+<i>656</i>&nbsp;    }
+<i>657</i>&nbsp;
+<i>658</i>&nbsp;    @Override
+<b class="nc"><i>659</i>&nbsp;    public int getNameCount() {</b>
+<b class="nc"><i>660</i>&nbsp;        initOffsets();</b>
+<i>661</i>&nbsp;        return offsets.length;
+<i>662</i>&nbsp;    }
+<b class="nc"><i>663</i>&nbsp;</b>
+<b class="nc"><i>664</i>&nbsp;    private String elementAsString(int i) {</b>
+<b class="nc"><i>665</i>&nbsp;        initOffsets();</b>
+<b class="nc"><i>666</i>&nbsp;        if (i == (offsets.length-1))</b>
+<b class="nc"><i>667</i>&nbsp;            return path.substring(offsets[i]);</b>
+<b class="nc"><i>668</i>&nbsp;        return path.substring(offsets[i], offsets[i+1]-1);</b>
+<i>669</i>&nbsp;    }
+<b class="nc"><i>670</i>&nbsp;</b>
+<b class="nc"><i>671</i>&nbsp;    @Override</b>
+<b class="nc"><i>672</i>&nbsp;    public WindowsPath getName(int index) {</b>
+<b class="nc"><i>673</i>&nbsp;        initOffsets();</b>
+<i>674</i>&nbsp;        if (index &lt; 0 || index &gt;= offsets.length)
+<b class="nc"><i>675</i>&nbsp;            throw new IllegalArgumentException();</b>
+<i>676</i>&nbsp;        return new WindowsPath(getFileSystem(), WindowsPathType.RELATIVE, &quot;&quot;, elementAsString(index));
+<i>677</i>&nbsp;    }
+<i>678</i>&nbsp;
+<i>679</i>&nbsp;    @Override
+<b class="nc"><i>680</i>&nbsp;    public WindowsPath subpath(int beginIndex, int endIndex) {</b>
+<b class="nc"><i>681</i>&nbsp;        initOffsets();</b>
+<b class="nc"><i>682</i>&nbsp;        if (beginIndex &lt; 0)</b>
+<i>683</i>&nbsp;            throw new IllegalArgumentException();
+<i>684</i>&nbsp;        if (beginIndex &gt;= offsets.length)
+<b class="nc"><i>685</i>&nbsp;            throw new IllegalArgumentException();</b>
+<b class="nc"><i>686</i>&nbsp;        if (endIndex &gt; offsets.length)</b>
+<i>687</i>&nbsp;            throw new IllegalArgumentException();
+<i>688</i>&nbsp;        if (beginIndex &gt;= endIndex)
+<i>689</i>&nbsp;            throw new IllegalArgumentException();
+<b class="nc"><i>690</i>&nbsp;</b>
+<b class="nc"><i>691</i>&nbsp;        StringBuilder sb = new StringBuilder();</b>
+<i>692</i>&nbsp;        Integer[] nelems = new Integer[endIndex - beginIndex];
+<i>693</i>&nbsp;        for (int i = beginIndex; i &lt; endIndex; i++) {
+<b class="nc"><i>694</i>&nbsp;            nelems[i-beginIndex] = sb.length();</b>
+<b class="nc"><i>695</i>&nbsp;            sb.append(elementAsString(i));</b>
+<i>696</i>&nbsp;            if (i != (endIndex-1))
+<i>697</i>&nbsp;                sb.append(&quot;\\&quot;);
+<b class="nc"><i>698</i>&nbsp;        }</b>
+<b class="nc"><i>699</i>&nbsp;        return new WindowsPath(getFileSystem(), WindowsPathType.RELATIVE, &quot;&quot;, sb.toString());</b>
+<i>700</i>&nbsp;    }
+<i>701</i>&nbsp;
+<i>702</i>&nbsp;    @Override
+<b class="nc"><i>703</i>&nbsp;    public boolean startsWith(Path obj) {</b>
+<b class="nc"><i>704</i>&nbsp;        if (!(Objects.requireNonNull(obj) instanceof WindowsPath))</b>
+<b class="nc"><i>705</i>&nbsp;            return false;</b>
+<i>706</i>&nbsp;        WindowsPath other = (WindowsPath)obj;
+<b class="nc"><i>707</i>&nbsp;</b>
+<b class="nc"><i>708</i>&nbsp;        // if this path has a root component the given path&#39;s root must match</b>
+<i>709</i>&nbsp;        if (!this.root.equalsIgnoreCase(other.root)) {
+<i>710</i>&nbsp;            return false;
+<i>711</i>&nbsp;        }
+<b class="nc"><i>712</i>&nbsp;</b>
+<b class="nc"><i>713</i>&nbsp;        // empty path starts with itself</b>
+<b class="nc"><i>714</i>&nbsp;        if (other.isEmpty())</b>
+<b class="nc"><i>715</i>&nbsp;            return this.isEmpty();</b>
+<i>716</i>&nbsp;
+<b class="nc"><i>717</i>&nbsp;        // roots match so compare elements</b>
+<b class="nc"><i>718</i>&nbsp;        int thisCount = getNameCount();</b>
+<b class="nc"><i>719</i>&nbsp;        int otherCount = other.getNameCount();</b>
+<b class="nc"><i>720</i>&nbsp;        if (otherCount &lt;= thisCount) {</b>
+<i>721</i>&nbsp;            while (--otherCount &gt;= 0) {
+<i>722</i>&nbsp;                String thisElement = this.elementAsString(otherCount);
+<i>723</i>&nbsp;                String otherElement = other.elementAsString(otherCount);
+<i>724</i>&nbsp;                // FIXME: should compare in uppercase
+<b class="nc"><i>725</i>&nbsp;                if (!thisElement.equalsIgnoreCase(otherElement))</b>
+<b class="nc"><i>726</i>&nbsp;                    return false;</b>
+<b class="nc"><i>727</i>&nbsp;            }</b>
+<b class="nc"><i>728</i>&nbsp;            return true;</b>
+<b class="nc"><i>729</i>&nbsp;        }</b>
+<b class="nc"><i>730</i>&nbsp;        return false;</b>
+<b class="nc"><i>731</i>&nbsp;    }</b>
+<b class="nc"><i>732</i>&nbsp;</b>
+<b class="nc"><i>733</i>&nbsp;    @Override</b>
+<b class="nc"><i>734</i>&nbsp;    public boolean endsWith(Path obj) {</b>
+<b class="nc"><i>735</i>&nbsp;        if (!(Objects.requireNonNull(obj) instanceof WindowsPath))</b>
+<b class="nc"><i>736</i>&nbsp;            return false;</b>
+<b class="nc"><i>737</i>&nbsp;        WindowsPath other = (WindowsPath)obj;</b>
+<b class="nc"><i>738</i>&nbsp;</b>
+<b class="nc"><i>739</i>&nbsp;        // other path is longer</b>
+<i>740</i>&nbsp;        if (other.path.length() &gt; this.path.length()) {
+<i>741</i>&nbsp;            return false;
+<i>742</i>&nbsp;        }
+<b class="nc"><i>743</i>&nbsp;</b>
+<i>744</i>&nbsp;        // empty path ends in itself
+<i>745</i>&nbsp;        if (other.isEmpty()) {
+<i>746</i>&nbsp;            return this.isEmpty();
+<i>747</i>&nbsp;        }
+<b class="nc"><i>748</i>&nbsp;</b>
+<b class="nc"><i>749</i>&nbsp;        int thisCount = this.getNameCount();</b>
+<i>750</i>&nbsp;        int otherCount = other.getNameCount();
+<b class="nc"><i>751</i>&nbsp;</b>
+<i>752</i>&nbsp;        // given path has more elements that this path
+<i>753</i>&nbsp;        if (otherCount &gt; thisCount) {
+<i>754</i>&nbsp;            return false;
+<i>755</i>&nbsp;        }
+<i>756</i>&nbsp;
+<b class="nc"><i>757</i>&nbsp;        // compare roots</b>
+<b class="nc"><i>758</i>&nbsp;        if (other.root.length() &gt; 0) {</b>
+<b class="nc"><i>759</i>&nbsp;            if (otherCount &lt; thisCount)</b>
+<b class="nc"><i>760</i>&nbsp;                return false;</b>
+<i>761</i>&nbsp;            // FIXME: should compare in uppercase
+<b class="nc"><i>762</i>&nbsp;            if (!this.root.equalsIgnoreCase(other.root))</b>
+<i>763</i>&nbsp;                return false;
+<b class="nc"><i>764</i>&nbsp;        }</b>
+<i>765</i>&nbsp;
+<i>766</i>&nbsp;        // match last &#39;otherCount&#39; elements
+<i>767</i>&nbsp;        int off = thisCount - otherCount;
+<i>768</i>&nbsp;        while (--otherCount &gt;= 0) {
+<b class="nc"><i>769</i>&nbsp;            String thisElement = this.elementAsString(off + otherCount);</b>
+<i>770</i>&nbsp;            String otherElement = other.elementAsString(otherCount);
+<i>771</i>&nbsp;            // FIXME: should compare in uppercase
+<i>772</i>&nbsp;            if (!thisElement.equalsIgnoreCase(otherElement))
+<i>773</i>&nbsp;                return false;
+<i>774</i>&nbsp;        }
+<i>775</i>&nbsp;        return true;
+<i>776</i>&nbsp;    }
+<i>777</i>&nbsp;
+<b class="nc"><i>778</i>&nbsp;    @Override</b>
+<b class="nc"><i>779</i>&nbsp;    public int compareTo(Path obj) {</b>
+<b class="nc"><i>780</i>&nbsp;        if (obj == null)</b>
+<b class="nc"><i>781</i>&nbsp;            throw new NullPointerException();</b>
+<i>782</i>&nbsp;        String s1 = path;
+<i>783</i>&nbsp;        String s2 = ((WindowsPath)obj).path;
+<i>784</i>&nbsp;        int n1 = s1.length();
+<i>785</i>&nbsp;        int n2 = s2.length();
+<i>786</i>&nbsp;        int min = Math.min(n1, n2);
+<i>787</i>&nbsp;        for (int i = 0; i &lt; min; i++) {
+<i>788</i>&nbsp;            char c1 = s1.charAt(i);
+<i>789</i>&nbsp;            char c2 = s2.charAt(i);
+<b class="nc"><i>790</i>&nbsp;             if (c1 != c2) {</b>
+<b class="nc"><i>791</i>&nbsp;                 c1 = Character.toUpperCase(c1);</b>
+<b class="nc"><i>792</i>&nbsp;                 c2 = Character.toUpperCase(c2);</b>
+<i>793</i>&nbsp;                 if (c1 != c2) {
+<i>794</i>&nbsp;                     return c1 - c2;
+<i>795</i>&nbsp;                 }
+<i>796</i>&nbsp;             }
+<b class="nc"><i>797</i>&nbsp;        }</b>
+<b class="nc"><i>798</i>&nbsp;        return n1 - n2;</b>
+<b class="nc"><i>799</i>&nbsp;    }</b>
+<i>800</i>&nbsp;
+<i>801</i>&nbsp;    @Override
+<i>802</i>&nbsp;    public boolean equals(Object obj) {
+<i>803</i>&nbsp;        if ((obj != null) &amp;&amp; (obj instanceof WindowsPath)) {
+<b class="nc"><i>804</i>&nbsp;            return compareTo((Path)obj) == 0;</b>
+<b class="nc"><i>805</i>&nbsp;        }</b>
+<b class="nc"><i>806</i>&nbsp;        return false;</b>
+<i>807</i>&nbsp;    }
+<i>808</i>&nbsp;
+<i>809</i>&nbsp;    @Override
+<i>810</i>&nbsp;    public int hashCode() {
+<i>811</i>&nbsp;        // OK if two or more threads compute hash
+<b class="nc"><i>812</i>&nbsp;        int h = hash;</b>
+<i>813</i>&nbsp;        if (h == 0) {
+<i>814</i>&nbsp;            for (int i = 0; i&lt; path.length(); i++) {
+<i>815</i>&nbsp;                h = 31*h + Character.toUpperCase(path.charAt(i));
+<i>816</i>&nbsp;            }
+<b class="nc"><i>817</i>&nbsp;            hash = h;</b>
+<b class="nc"><i>818</i>&nbsp;        }</b>
+<i>819</i>&nbsp;        return h;
+<i>820</i>&nbsp;    }
+<b class="nc"><i>821</i>&nbsp;</b>
+<b class="nc"><i>822</i>&nbsp;    @Override</b>
+<b class="nc"><i>823</i>&nbsp;    public String toString() {</b>
+<i>824</i>&nbsp;        return path;
+<i>825</i>&nbsp;    }
+<i>826</i>&nbsp;
+<b class="nc"><i>827</i>&nbsp;    // -- file operations --</b>
+<b class="nc"><i>828</i>&nbsp;</b>
+<b class="nc"><i>829</i>&nbsp;    // package-private</b>
+<i>830</i>&nbsp;    long openForReadAttributeAccess(boolean followLinks)
+<i>831</i>&nbsp;        throws WindowsException
+<i>832</i>&nbsp;    {
+<i>833</i>&nbsp;        int flags = FILE_FLAG_BACKUP_SEMANTICS;
+<i>834</i>&nbsp;        if (!followLinks)
+<b class="nc"><i>835</i>&nbsp;            flags |= FILE_FLAG_OPEN_REPARSE_POINT;</b>
+<b class="nc"><i>836</i>&nbsp;        return CreateFile(getPathForWin32Calls(),</b>
+<b class="nc"><i>837</i>&nbsp;                          FILE_READ_ATTRIBUTES,</b>
+<i>838</i>&nbsp;                          (FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE),
+<i>839</i>&nbsp;                          0L,
+<i>840</i>&nbsp;                          OPEN_EXISTING,
+<i>841</i>&nbsp;                          flags);
+<i>842</i>&nbsp;    }
+<i>843</i>&nbsp;
+<i>844</i>&nbsp;    void checkRead() {
+<i>845</i>&nbsp;        SecurityManager sm = System.getSecurityManager();
+<b class="nc"><i>846</i>&nbsp;        if (sm != null) {</b>
+<b class="nc"><i>847</i>&nbsp;            sm.checkRead(getPathForPermissionCheck());</b>
+<b class="nc"><i>848</i>&nbsp;        }</b>
+<b class="nc"><i>849</i>&nbsp;    }</b>
+<i>850</i>&nbsp;
+<i>851</i>&nbsp;    void checkWrite() {
+<i>852</i>&nbsp;        SecurityManager sm = System.getSecurityManager();
+<i>853</i>&nbsp;        if (sm != null) {
+<i>854</i>&nbsp;            sm.checkWrite(getPathForPermissionCheck());
+<b class="nc"><i>855</i>&nbsp;        }</b>
+<b class="nc"><i>856</i>&nbsp;    }</b>
+<b class="nc"><i>857</i>&nbsp;</b>
+<b class="nc"><i>858</i>&nbsp;    void checkDelete() {</b>
+<b class="nc"><i>859</i>&nbsp;        SecurityManager sm = System.getSecurityManager();</b>
+<b class="nc"><i>860</i>&nbsp;        if (sm != null) {</b>
+<b class="nc"><i>861</i>&nbsp;            sm.checkDelete(getPathForPermissionCheck());</b>
+<b class="nc"><i>862</i>&nbsp;        }</b>
+<b class="nc"><i>863</i>&nbsp;    }</b>
+<b class="nc"><i>864</i>&nbsp;</b>
+<b class="nc"><i>865</i>&nbsp;    @Override</b>
+<i>866</i>&nbsp;    public URI toUri() {
+<i>867</i>&nbsp;        return WindowsUriSupport.toUri(this);
+<i>868</i>&nbsp;    }
+<b class="nc"><i>869</i>&nbsp;</b>
+<b class="nc"><i>870</i>&nbsp;    @Override</b>
+<b class="nc"><i>871</i>&nbsp;    public WindowsPath toAbsolutePath() {</b>
+<b class="nc"><i>872</i>&nbsp;        if (isAbsolute())</b>
+<i>873</i>&nbsp;            return this;
+<i>874</i>&nbsp;
+<b class="nc"><i>875</i>&nbsp;        // permission check as per spec</b>
+<i>876</i>&nbsp;        SecurityManager sm = System.getSecurityManager();
+<i>877</i>&nbsp;        if (sm != null) {
+<i>878</i>&nbsp;            sm.checkPropertyAccess(&quot;user.dir&quot;);
+<i>879</i>&nbsp;        }
+<i>880</i>&nbsp;
+<i>881</i>&nbsp;        try {
+<i>882</i>&nbsp;            return createFromNormalizedPath(getFileSystem(), getAbsolutePath());
+<i>883</i>&nbsp;        } catch (WindowsException x) {
+<i>884</i>&nbsp;            throw new IOError(new IOException(x.getMessage()));
+<i>885</i>&nbsp;        }
+<i>886</i>&nbsp;    }
+<i>887</i>&nbsp;
+<i>888</i>&nbsp;    @Override
+<i>889</i>&nbsp;    public WindowsPath toRealPath(LinkOption... options) throws IOException {
+<i>890</i>&nbsp;        checkRead();
+<i>891</i>&nbsp;        String rp = WindowsLinkSupport.getRealPath(this, Util.followLinks(options));
+<i>892</i>&nbsp;        return createFromNormalizedPath(getFileSystem(), rp);
+<i>893</i>&nbsp;    }
+<i>894</i>&nbsp;
+<i>895</i>&nbsp;    @Override
+<i>896</i>&nbsp;    public WatchKey register(WatchService watcher,
+<i>897</i>&nbsp;                             WatchEvent.Kind&lt;?&gt;[] events,
+<i>898</i>&nbsp;                             WatchEvent.Modifier... modifiers)
+<i>899</i>&nbsp;        throws IOException
+<i>900</i>&nbsp;    {
+<i>901</i>&nbsp;        if (watcher == null)
+<i>902</i>&nbsp;            throw new NullPointerException();
+<i>903</i>&nbsp;        if (!(watcher instanceof WindowsWatchService))
+<i>904</i>&nbsp;            throw new ProviderMismatchException();
+<i>905</i>&nbsp;
+<i>906</i>&nbsp;        // When a security manager is set then we need to make a defensive
+<i>907</i>&nbsp;        // copy of the modifiers and check for the Windows specific FILE_TREE
+<i>908</i>&nbsp;        // modifier. When the modifier is present then check that permission
+<i>909</i>&nbsp;        // has been granted recursively.
+<i>910</i>&nbsp;        SecurityManager sm = System.getSecurityManager();
+<i>911</i>&nbsp;        if (sm != null) {
+<i>912</i>&nbsp;            boolean watchSubtree = false;
+<i>913</i>&nbsp;            final int ml = modifiers.length;
+<i>914</i>&nbsp;            if (ml &gt; 0) {
+<i>915</i>&nbsp;                modifiers = Arrays.copyOf(modifiers, ml);
+<i>916</i>&nbsp;                int i=0;
+<i>917</i>&nbsp;                while (i &lt; ml) {
+<i>918</i>&nbsp;                    if (ExtendedOptions.FILE_TREE.matches(modifiers[i++])) {
+<i>919</i>&nbsp;                        watchSubtree = true;
+<i>920</i>&nbsp;                        break;
+<i>921</i>&nbsp;                    }
+<i>922</i>&nbsp;                }
+<i>923</i>&nbsp;            }
+<i>924</i>&nbsp;            String s = getPathForPermissionCheck();
+<i>925</i>&nbsp;            sm.checkRead(s);
+<i>926</i>&nbsp;            if (watchSubtree)
+<i>927</i>&nbsp;                sm.checkRead(s + &quot;\\-&quot;);
+<i>928</i>&nbsp;        }
+<i>929</i>&nbsp;
+<i>930</i>&nbsp;        return ((WindowsWatchService)watcher).register(this, events, modifiers);
+<i>931</i>&nbsp;    }
+<i>932</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

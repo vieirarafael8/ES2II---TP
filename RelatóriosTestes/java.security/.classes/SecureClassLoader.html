@@ -1,0 +1,388 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: SecureClassLoader</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.security</a> ]
+</div>
+
+<h1>Coverage Summary for Class: SecureClassLoader (java.security)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SecureClassLoader</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 33)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.security;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.Map;
+<i>29</i>&nbsp;import java.util.Objects;
+<i>30</i>&nbsp;import java.util.concurrent.ConcurrentHashMap;
+<i>31</i>&nbsp;import java.util.function.Function;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;import sun.security.util.Debug;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;/**
+<i>36</i>&nbsp; * This class extends ClassLoader with additional support for defining
+<i>37</i>&nbsp; * classes with an associated code source and permissions which are
+<i>38</i>&nbsp; * retrieved by the system policy by default.
+<i>39</i>&nbsp; *
+<i>40</i>&nbsp; * @author  Li Gong
+<i>41</i>&nbsp; * @author  Roland Schemers
+<i>42</i>&nbsp; * @since 1.2
+<i>43</i>&nbsp; */
+<i>44</i>&nbsp;public class SecureClassLoader extends ClassLoader {
+<i>45</i>&nbsp;    /*
+<i>46</i>&nbsp;     * If initialization succeed this is set to true and security checks will
+<i>47</i>&nbsp;     * succeed. Otherwise the object is not initialized and the object is
+<i>48</i>&nbsp;     * useless.
+<i>49</i>&nbsp;     */
+<i>50</i>&nbsp;    private final boolean initialized;
+<i>51</i>&nbsp;
+<b class="nc"><i>52</i>&nbsp;    /*</b>
+<i>53</i>&nbsp;     * Map that maps the CodeSource to a ProtectionDomain. The key is a
+<i>54</i>&nbsp;     * CodeSourceKey class that uses a String instead of a URL to avoid
+<b class="nc"><i>55</i>&nbsp;     * potential expensive name service lookups. This does mean that URLs that</b>
+<i>56</i>&nbsp;     * are equivalent after nameservice lookup will be placed in separate
+<i>57</i>&nbsp;     * ProtectionDomains; however during policy enforcement these URLs will be
+<b class="nc"><i>58</i>&nbsp;     * canonicalized and resolved resulting in a consistent set of granted</b>
+<i>59</i>&nbsp;     * permissions.
+<i>60</i>&nbsp;     */
+<i>61</i>&nbsp;    private final Map&lt;CodeSourceKey, ProtectionDomain&gt; pdcache
+<i>62</i>&nbsp;            = new ConcurrentHashMap&lt;&gt;(11);
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    static {
+<i>65</i>&nbsp;        ClassLoader.registerAsParallelCapable();
+<i>66</i>&nbsp;    }
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    /**
+<i>69</i>&nbsp;     * Creates a new SecureClassLoader using the specified parent
+<i>70</i>&nbsp;     * class loader for delegation.
+<i>71</i>&nbsp;     *
+<i>72</i>&nbsp;     * &lt;p&gt;If there is a security manager, this method first
+<i>73</i>&nbsp;     * calls the security manager&#39;s {@code checkCreateClassLoader}
+<i>74</i>&nbsp;     * method  to ensure creation of a class loader is allowed.
+<i>75</i>&nbsp;     *
+<b class="nc"><i>76</i>&nbsp;     * @param parent the parent ClassLoader</b>
+<i>77</i>&nbsp;     * @exception  SecurityException  if a security manager exists and its
+<b class="nc"><i>78</i>&nbsp;     *             {@code checkCreateClassLoader} method doesn&#39;t allow</b>
+<b class="nc"><i>79</i>&nbsp;     *             creation of a class loader.</b>
+<b class="nc"><i>80</i>&nbsp;     * @see SecurityManager#checkCreateClassLoader</b>
+<i>81</i>&nbsp;     */
+<b class="nc"><i>82</i>&nbsp;    protected SecureClassLoader(ClassLoader parent) {</b>
+<i>83</i>&nbsp;        super(parent);
+<i>84</i>&nbsp;        // this is to make the stack depth consistent with 1.1
+<i>85</i>&nbsp;        SecurityManager security = System.getSecurityManager();
+<i>86</i>&nbsp;        if (security != null) {
+<i>87</i>&nbsp;            security.checkCreateClassLoader();
+<i>88</i>&nbsp;        }
+<i>89</i>&nbsp;        initialized = true;
+<i>90</i>&nbsp;    }
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    /**
+<i>93</i>&nbsp;     * Creates a new SecureClassLoader using the default parent class
+<i>94</i>&nbsp;     * loader for delegation.
+<i>95</i>&nbsp;     *
+<i>96</i>&nbsp;     * &lt;p&gt;If there is a security manager, this method first
+<i>97</i>&nbsp;     * calls the security manager&#39;s {@code checkCreateClassLoader}
+<i>98</i>&nbsp;     * method  to ensure creation of a class loader is allowed.
+<b class="nc"><i>99</i>&nbsp;     *</b>
+<i>100</i>&nbsp;     * @exception  SecurityException  if a security manager exists and its
+<b class="nc"><i>101</i>&nbsp;     *             {@code checkCreateClassLoader} method doesn&#39;t allow</b>
+<b class="nc"><i>102</i>&nbsp;     *             creation of a class loader.</b>
+<b class="nc"><i>103</i>&nbsp;     * @see SecurityManager#checkCreateClassLoader</b>
+<i>104</i>&nbsp;     */
+<b class="nc"><i>105</i>&nbsp;    protected SecureClassLoader() {</b>
+<i>106</i>&nbsp;        super();
+<i>107</i>&nbsp;        // this is to make the stack depth consistent with 1.1
+<i>108</i>&nbsp;        SecurityManager security = System.getSecurityManager();
+<i>109</i>&nbsp;        if (security != null) {
+<i>110</i>&nbsp;            security.checkCreateClassLoader();
+<i>111</i>&nbsp;        }
+<i>112</i>&nbsp;        initialized = true;
+<i>113</i>&nbsp;    }
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;    /**
+<i>116</i>&nbsp;     * Creates a new {@code SecureClassLoader} of the specified name and
+<i>117</i>&nbsp;     * using the specified parent class loader for delegation.
+<i>118</i>&nbsp;     *
+<i>119</i>&nbsp;     * @param name class loader name; or {@code null} if not named
+<i>120</i>&nbsp;     * @param parent the parent class loader
+<i>121</i>&nbsp;     *
+<i>122</i>&nbsp;     * @throws IllegalArgumentException if the given name is empty.
+<i>123</i>&nbsp;     *
+<i>124</i>&nbsp;     * @throws SecurityException  if a security manager exists and its
+<i>125</i>&nbsp;     *         {@link SecurityManager#checkCreateClassLoader()} method
+<i>126</i>&nbsp;     *         doesn&#39;t allow creation of a class loader.
+<i>127</i>&nbsp;     *
+<i>128</i>&nbsp;     * @since 9
+<i>129</i>&nbsp;     * @spec JPMS
+<i>130</i>&nbsp;     */
+<i>131</i>&nbsp;    protected SecureClassLoader(String name, ClassLoader parent) {
+<i>132</i>&nbsp;        super(name, parent);
+<i>133</i>&nbsp;        SecurityManager security = System.getSecurityManager();
+<i>134</i>&nbsp;        if (security != null) {
+<i>135</i>&nbsp;            security.checkCreateClassLoader();
+<i>136</i>&nbsp;        }
+<i>137</i>&nbsp;        initialized = true;
+<i>138</i>&nbsp;    }
+<i>139</i>&nbsp;
+<i>140</i>&nbsp;    /**
+<i>141</i>&nbsp;     * Converts an array of bytes into an instance of class Class,
+<b class="nc"><i>142</i>&nbsp;     * with an optional CodeSource. Before the</b>
+<i>143</i>&nbsp;     * class can be used it must be resolved.
+<i>144</i>&nbsp;     * &lt;p&gt;
+<i>145</i>&nbsp;     * If a non-null CodeSource is supplied a ProtectionDomain is
+<i>146</i>&nbsp;     * constructed and associated with the class being defined.
+<i>147</i>&nbsp;     *
+<i>148</i>&nbsp;     * @param      name the expected name of the class, or {@code null}
+<i>149</i>&nbsp;     *                  if not known, using &#39;.&#39; and not &#39;/&#39; as the separator
+<i>150</i>&nbsp;     *                  and without a trailing &quot;.class&quot; suffix.
+<i>151</i>&nbsp;     * @param      b    the bytes that make up the class data. The bytes in
+<i>152</i>&nbsp;     *             positions {@code off} through {@code off+len-1}
+<i>153</i>&nbsp;     *             should have the format of a valid class file as defined by
+<i>154</i>&nbsp;     *             &lt;cite&gt;The Java&amp;trade; Virtual Machine Specification&lt;/cite&gt;.
+<i>155</i>&nbsp;     * @param      off  the start offset in {@code b} of the class data
+<i>156</i>&nbsp;     * @param      len  the length of the class data
+<i>157</i>&nbsp;     * @param      cs   the associated CodeSource, or {@code null} if none
+<i>158</i>&nbsp;     * @return the {@code Class} object created from the data,
+<i>159</i>&nbsp;     *         and optional CodeSource.
+<i>160</i>&nbsp;     * @exception  ClassFormatError if the data did not contain a valid class
+<i>161</i>&nbsp;     * @exception  IndexOutOfBoundsException if either {@code off} or
+<i>162</i>&nbsp;     *             {@code len} is negative, or if
+<i>163</i>&nbsp;     *             {@code off+len} is greater than {@code b.length}.
+<i>164</i>&nbsp;     *
+<i>165</i>&nbsp;     * @exception  SecurityException if an attempt is made to add this class
+<i>166</i>&nbsp;     *             to a package that contains classes that were signed by
+<i>167</i>&nbsp;     *             a different set of certificates than this class, or if
+<i>168</i>&nbsp;     *             the class name begins with &quot;java.&quot;.
+<i>169</i>&nbsp;     */
+<i>170</i>&nbsp;    protected final Class&lt;?&gt; defineClass(String name,
+<i>171</i>&nbsp;                                         byte[] b, int off, int len,
+<i>172</i>&nbsp;                                         CodeSource cs)
+<i>173</i>&nbsp;    {
+<b class="nc"><i>174</i>&nbsp;        return defineClass(name, b, off, len, getProtectionDomain(cs));</b>
+<i>175</i>&nbsp;    }
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * Converts a {@link java.nio.ByteBuffer ByteBuffer}
+<i>179</i>&nbsp;     * into an instance of class {@code Class}, with an optional CodeSource.
+<i>180</i>&nbsp;     * Before the class can be used it must be resolved.
+<i>181</i>&nbsp;     * &lt;p&gt;
+<i>182</i>&nbsp;     * If a non-null CodeSource is supplied a ProtectionDomain is
+<i>183</i>&nbsp;     * constructed and associated with the class being defined.
+<i>184</i>&nbsp;     *
+<i>185</i>&nbsp;     * @param      name the expected name of the class, or {@code null}
+<i>186</i>&nbsp;     *                  if not known, using &#39;.&#39; and not &#39;/&#39; as the separator
+<i>187</i>&nbsp;     *                  and without a trailing &quot;.class&quot; suffix.
+<i>188</i>&nbsp;     * @param      b    the bytes that make up the class data.  The bytes from positions
+<i>189</i>&nbsp;     *                  {@code b.position()} through {@code b.position() + b.limit() -1}
+<i>190</i>&nbsp;     *                  should have the format of a valid class file as defined by
+<b class="nc"><i>191</i>&nbsp;     *                  &lt;cite&gt;The Java&amp;trade; Virtual Machine Specification&lt;/cite&gt;.</b>
+<b class="nc"><i>192</i>&nbsp;     * @param      cs   the associated CodeSource, or {@code null} if none</b>
+<i>193</i>&nbsp;     * @return the {@code Class} object created from the data,
+<i>194</i>&nbsp;     *         and optional CodeSource.
+<i>195</i>&nbsp;     * @exception  ClassFormatError if the data did not contain a valid class
+<i>196</i>&nbsp;     * @exception  SecurityException if an attempt is made to add this class
+<i>197</i>&nbsp;     *             to a package that contains classes that were signed by
+<i>198</i>&nbsp;     *             a different set of certificates than this class, or if
+<b class="nc"><i>199</i>&nbsp;     *             the class name begins with &quot;java.&quot;.</b>
+<b class="nc"><i>200</i>&nbsp;     *</b>
+<i>201</i>&nbsp;     * @since  1.5
+<b class="nc"><i>202</i>&nbsp;     */</b>
+<b class="nc"><i>203</i>&nbsp;    protected final Class&lt;?&gt; defineClass(String name, java.nio.ByteBuffer b,</b>
+<b class="nc"><i>204</i>&nbsp;                                         CodeSource cs)</b>
+<b class="nc"><i>205</i>&nbsp;    {</b>
+<b class="nc"><i>206</i>&nbsp;        return defineClass(name, b, getProtectionDomain(cs));</b>
+<b class="nc"><i>207</i>&nbsp;    }</b>
+<b class="nc"><i>208</i>&nbsp;</b>
+<b class="nc"><i>209</i>&nbsp;    /**</b>
+<b class="nc"><i>210</i>&nbsp;     * Returns the permissions for the given CodeSource object.</b>
+<b class="nc"><i>211</i>&nbsp;     * &lt;p&gt;</b>
+<i>212</i>&nbsp;     * This method is invoked by the defineClass method which takes
+<i>213</i>&nbsp;     * a CodeSource as an argument when it is constructing the
+<b class="nc"><i>214</i>&nbsp;     * ProtectionDomain for the class being defined.</b>
+<b class="nc"><i>215</i>&nbsp;     *</b>
+<i>216</i>&nbsp;     * @param codesource the codesource.
+<i>217</i>&nbsp;     *
+<i>218</i>&nbsp;     * @return the permissions granted to the codesource.
+<i>219</i>&nbsp;     *
+<i>220</i>&nbsp;     */
+<i>221</i>&nbsp;    protected PermissionCollection getPermissions(CodeSource codesource)
+<b class="nc"><i>222</i>&nbsp;    {</b>
+<b class="nc"><i>223</i>&nbsp;        check();</b>
+<i>224</i>&nbsp;        return new Permissions(); // ProtectionDomain defers the binding
+<i>225</i>&nbsp;    }
+<i>226</i>&nbsp;
+<i>227</i>&nbsp;    /*
+<i>228</i>&nbsp;     * holder class for the static field &quot;debug&quot; to delay its initialization
+<i>229</i>&nbsp;     */
+<i>230</i>&nbsp;    private static class DebugHolder {
+<i>231</i>&nbsp;        private static final Debug debug = Debug.getInstance(&quot;scl&quot;);
+<i>232</i>&nbsp;    }
+<i>233</i>&nbsp;
+<i>234</i>&nbsp;    /*
+<i>235</i>&nbsp;     * Returned cached ProtectionDomain for the specified CodeSource.
+<i>236</i>&nbsp;     */
+<i>237</i>&nbsp;    private ProtectionDomain getProtectionDomain(CodeSource cs) {
+<i>238</i>&nbsp;        if (cs == null) {
+<i>239</i>&nbsp;            return null;
+<i>240</i>&nbsp;        }
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;        // Use a CodeSourceKey object key. It should behave in the
+<i>243</i>&nbsp;        // same manner as the CodeSource when compared for equality except
+<i>244</i>&nbsp;        // that no nameservice lookup is done on the hostname (String comparison
+<i>245</i>&nbsp;        // only), and the fragment is not considered.
+<i>246</i>&nbsp;        CodeSourceKey key = new CodeSourceKey(cs);
+<i>247</i>&nbsp;        return pdcache.computeIfAbsent(key, new Function&lt;&gt;() {
+<i>248</i>&nbsp;            @Override
+<i>249</i>&nbsp;            public ProtectionDomain apply(CodeSourceKey key /* not used */) {
+<i>250</i>&nbsp;                PermissionCollection perms
+<i>251</i>&nbsp;                        = SecureClassLoader.this.getPermissions(cs);
+<i>252</i>&nbsp;                ProtectionDomain pd = new ProtectionDomain(
+<i>253</i>&nbsp;                        cs, perms, SecureClassLoader.this, null);
+<i>254</i>&nbsp;                if (DebugHolder.debug != null) {
+<i>255</i>&nbsp;                    DebugHolder.debug.println(&quot; getPermissions &quot; + pd);
+<i>256</i>&nbsp;                    DebugHolder.debug.println(&quot;&quot;);
+<i>257</i>&nbsp;                }
+<i>258</i>&nbsp;                return pd;
+<i>259</i>&nbsp;            }
+<i>260</i>&nbsp;        });
+<i>261</i>&nbsp;    }
+<i>262</i>&nbsp;
+<i>263</i>&nbsp;    /*
+<i>264</i>&nbsp;     * Check to make sure the class loader has been initialized.
+<i>265</i>&nbsp;     */
+<i>266</i>&nbsp;    private void check() {
+<i>267</i>&nbsp;        if (!initialized) {
+<i>268</i>&nbsp;            throw new SecurityException(&quot;ClassLoader object not initialized&quot;);
+<i>269</i>&nbsp;        }
+<i>270</i>&nbsp;    }
+<i>271</i>&nbsp;
+<i>272</i>&nbsp;    private static class CodeSourceKey {
+<i>273</i>&nbsp;        private final CodeSource cs;
+<i>274</i>&nbsp;
+<i>275</i>&nbsp;        CodeSourceKey(CodeSource cs) {
+<i>276</i>&nbsp;            this.cs = cs;
+<i>277</i>&nbsp;        }
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;        @Override
+<i>280</i>&nbsp;        public int hashCode() {
+<i>281</i>&nbsp;            String locationNoFrag = cs.getLocationNoFragString();
+<i>282</i>&nbsp;            return locationNoFrag != null ? locationNoFrag.hashCode() : 0;
+<i>283</i>&nbsp;        }
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;        @Override
+<i>286</i>&nbsp;        public boolean equals(Object obj) {
+<i>287</i>&nbsp;            if (obj == this) {
+<i>288</i>&nbsp;                return true;
+<i>289</i>&nbsp;            }
+<i>290</i>&nbsp;
+<i>291</i>&nbsp;            if (!(obj instanceof CodeSourceKey)) {
+<i>292</i>&nbsp;                return false;
+<i>293</i>&nbsp;            }
+<i>294</i>&nbsp;
+<i>295</i>&nbsp;            CodeSourceKey csk = (CodeSourceKey) obj;
+<i>296</i>&nbsp;
+<i>297</i>&nbsp;            if (!Objects.equals(cs.getLocationNoFragString(),
+<i>298</i>&nbsp;                                csk.cs.getLocationNoFragString())) {
+<i>299</i>&nbsp;                return false;
+<i>300</i>&nbsp;            }
+<i>301</i>&nbsp;
+<i>302</i>&nbsp;            return cs.matchCerts(csk.cs, true);
+<i>303</i>&nbsp;        }
+<i>304</i>&nbsp;    }
+<i>305</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

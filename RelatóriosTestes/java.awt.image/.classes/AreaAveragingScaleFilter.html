@@ -1,0 +1,364 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AreaAveragingScaleFilter</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.awt.image</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AreaAveragingScaleFilter (java.awt.image)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AreaAveragingScaleFilter</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 100)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2002, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.awt.image;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.awt.image.ImageConsumer;
+<i>29</i>&nbsp;import java.awt.image.ColorModel;
+<i>30</i>&nbsp;import java.util.Hashtable;
+<i>31</i>&nbsp;import java.awt.Rectangle;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;/**
+<i>34</i>&nbsp; * An ImageFilter class for scaling images using a simple area averaging
+<i>35</i>&nbsp; * algorithm that produces smoother results than the nearest neighbor
+<i>36</i>&nbsp; * algorithm.
+<i>37</i>&nbsp; * &lt;p&gt;This class extends the basic ImageFilter Class to scale an existing
+<i>38</i>&nbsp; * image and provide a source for a new image containing the resampled
+<i>39</i>&nbsp; * image.  The pixels in the source image are blended to produce pixels
+<i>40</i>&nbsp; * for an image of the specified size.  The blending process is analogous
+<i>41</i>&nbsp; * to scaling up the source image to a multiple of the destination size
+<i>42</i>&nbsp; * using pixel replication and then scaling it back down to the destination
+<i>43</i>&nbsp; * size by simply averaging all the pixels in the supersized image that
+<i>44</i>&nbsp; * fall within a given pixel of the destination image.  If the data from
+<i>45</i>&nbsp; * the source is not delivered in TopDownLeftRight order then the filter
+<i>46</i>&nbsp; * will back off to a simple pixel replication behavior and utilize the
+<i>47</i>&nbsp; * requestTopDownLeftRightResend() method to refilter the pixels in a
+<i>48</i>&nbsp; * better way at the end.
+<i>49</i>&nbsp; * &lt;p&gt;It is meant to be used in conjunction with a FilteredImageSource
+<i>50</i>&nbsp; * object to produce scaled versions of existing images.  Due to
+<i>51</i>&nbsp; * implementation dependencies, there may be differences in pixel values
+<i>52</i>&nbsp; * of an image filtered on different platforms.
+<i>53</i>&nbsp; *
+<i>54</i>&nbsp; * @see FilteredImageSource
+<i>55</i>&nbsp; * @see ReplicateScaleFilter
+<i>56</i>&nbsp; * @see ImageFilter
+<i>57</i>&nbsp; *
+<i>58</i>&nbsp; * @author      Jim Graham
+<i>59</i>&nbsp; */
+<i>60</i>&nbsp;public class AreaAveragingScaleFilter extends ReplicateScaleFilter {
+<b class="nc"><i>61</i>&nbsp;    private static final ColorModel rgbmodel = ColorModel.getRGBdefault();</b>
+<i>62</i>&nbsp;    private static final int neededHints = (TOPDOWNLEFTRIGHT
+<i>63</i>&nbsp;                                            | COMPLETESCANLINES);
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    private boolean passthrough;
+<i>66</i>&nbsp;    private float reds[], greens[], blues[], alphas[];
+<i>67</i>&nbsp;    private int savedy;
+<i>68</i>&nbsp;    private int savedyrem;
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    /**
+<i>71</i>&nbsp;     * Constructs an AreaAveragingScaleFilter that scales the pixels from
+<i>72</i>&nbsp;     * its source Image as specified by the width and height parameters.
+<i>73</i>&nbsp;     * @param width the target width to scale the image
+<i>74</i>&nbsp;     * @param height the target height to scale the image
+<i>75</i>&nbsp;     */
+<i>76</i>&nbsp;    public AreaAveragingScaleFilter(int width, int height) {
+<b class="nc"><i>77</i>&nbsp;        super(width, height);</b>
+<i>78</i>&nbsp;    }
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;    /**
+<i>81</i>&nbsp;     * Detect if the data is being delivered with the necessary hints
+<i>82</i>&nbsp;     * to allow the averaging algorithm to do its work.
+<i>83</i>&nbsp;     * &lt;p&gt;
+<i>84</i>&nbsp;     * Note: This method is intended to be called by the
+<i>85</i>&nbsp;     * {@code ImageProducer} of the {@code Image} whose
+<i>86</i>&nbsp;     * pixels are being filtered.  Developers using
+<i>87</i>&nbsp;     * this class to filter pixels from an image should avoid calling
+<i>88</i>&nbsp;     * this method directly since that operation could interfere
+<i>89</i>&nbsp;     * with the filtering operation.
+<i>90</i>&nbsp;     * @see ImageConsumer#setHints
+<i>91</i>&nbsp;     */
+<i>92</i>&nbsp;    public void setHints(int hints) {
+<b class="nc"><i>93</i>&nbsp;        passthrough = ((hints &amp; neededHints) != neededHints);</b>
+<b class="nc"><i>94</i>&nbsp;        super.setHints(hints);</b>
+<i>95</i>&nbsp;    }
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    private void makeAccumBuffers() {
+<b class="nc"><i>98</i>&nbsp;        reds = new float[destWidth];</b>
+<b class="nc"><i>99</i>&nbsp;        greens = new float[destWidth];</b>
+<b class="nc"><i>100</i>&nbsp;        blues = new float[destWidth];</b>
+<b class="nc"><i>101</i>&nbsp;        alphas = new float[destWidth];</b>
+<i>102</i>&nbsp;    }
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;    private int[] calcRow() {
+<b class="nc"><i>105</i>&nbsp;        float origmult = ((float) srcWidth) * srcHeight;</b>
+<b class="nc"><i>106</i>&nbsp;        if (outpixbuf == null || !(outpixbuf instanceof int[])) {</b>
+<b class="nc"><i>107</i>&nbsp;            outpixbuf = new int[destWidth];</b>
+<i>108</i>&nbsp;        }
+<b class="nc"><i>109</i>&nbsp;        int[] outpix = (int[]) outpixbuf;</b>
+<b class="nc"><i>110</i>&nbsp;        for (int x = 0; x &lt; destWidth; x++) {</b>
+<b class="nc"><i>111</i>&nbsp;            float mult = origmult;</b>
+<b class="nc"><i>112</i>&nbsp;            int a = Math.round(alphas[x] / mult);</b>
+<b class="nc"><i>113</i>&nbsp;            if (a &lt;= 0) {</b>
+<b class="nc"><i>114</i>&nbsp;                a = 0;</b>
+<b class="nc"><i>115</i>&nbsp;            } else if (a &gt;= 255) {</b>
+<b class="nc"><i>116</i>&nbsp;                a = 255;</b>
+<i>117</i>&nbsp;            } else {
+<i>118</i>&nbsp;                // un-premultiply the components (by modifying mult here, we
+<i>119</i>&nbsp;                // are effectively doing the divide by mult and divide by
+<i>120</i>&nbsp;                // alpha in the same step)
+<b class="nc"><i>121</i>&nbsp;                mult = alphas[x] / 255;</b>
+<i>122</i>&nbsp;            }
+<b class="nc"><i>123</i>&nbsp;            int r = Math.round(reds[x] / mult);</b>
+<b class="nc"><i>124</i>&nbsp;            int g = Math.round(greens[x] / mult);</b>
+<b class="nc"><i>125</i>&nbsp;            int b = Math.round(blues[x] / mult);</b>
+<b class="nc"><i>126</i>&nbsp;            if (r &lt; 0) {r = 0;} else if (r &gt; 255) {r = 255;}</b>
+<b class="nc"><i>127</i>&nbsp;            if (g &lt; 0) {g = 0;} else if (g &gt; 255) {g = 255;}</b>
+<b class="nc"><i>128</i>&nbsp;            if (b &lt; 0) {b = 0;} else if (b &gt; 255) {b = 255;}</b>
+<b class="nc"><i>129</i>&nbsp;            outpix[x] = (a &lt;&lt; 24 | r &lt;&lt; 16 | g &lt;&lt; 8 | b);</b>
+<i>130</i>&nbsp;        }
+<b class="nc"><i>131</i>&nbsp;        return outpix;</b>
+<i>132</i>&nbsp;    }
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;    private void accumPixels(int x, int y, int w, int h,
+<i>135</i>&nbsp;                             ColorModel model, Object pixels, int off,
+<i>136</i>&nbsp;                             int scansize) {
+<b class="nc"><i>137</i>&nbsp;        if (reds == null) {</b>
+<b class="nc"><i>138</i>&nbsp;            makeAccumBuffers();</b>
+<i>139</i>&nbsp;        }
+<b class="nc"><i>140</i>&nbsp;        int sy = y;</b>
+<b class="nc"><i>141</i>&nbsp;        int syrem = destHeight;</b>
+<i>142</i>&nbsp;        int dy, dyrem;
+<b class="nc"><i>143</i>&nbsp;        if (sy == 0) {</b>
+<b class="nc"><i>144</i>&nbsp;            dy = 0;</b>
+<b class="nc"><i>145</i>&nbsp;            dyrem = 0;</b>
+<i>146</i>&nbsp;        } else {
+<b class="nc"><i>147</i>&nbsp;            dy = savedy;</b>
+<b class="nc"><i>148</i>&nbsp;            dyrem = savedyrem;</b>
+<i>149</i>&nbsp;        }
+<b class="nc"><i>150</i>&nbsp;        while (sy &lt; y + h) {</b>
+<i>151</i>&nbsp;            int amty;
+<b class="nc"><i>152</i>&nbsp;            if (dyrem == 0) {</b>
+<b class="nc"><i>153</i>&nbsp;                for (int i = 0; i &lt; destWidth; i++) {</b>
+<b class="nc"><i>154</i>&nbsp;                    alphas[i] = reds[i] = greens[i] = blues[i] = 0f;</b>
+<i>155</i>&nbsp;                }
+<b class="nc"><i>156</i>&nbsp;                dyrem = srcHeight;</b>
+<i>157</i>&nbsp;            }
+<b class="nc"><i>158</i>&nbsp;            if (syrem &lt; dyrem) {</b>
+<b class="nc"><i>159</i>&nbsp;                amty = syrem;</b>
+<i>160</i>&nbsp;            } else {
+<b class="nc"><i>161</i>&nbsp;                amty = dyrem;</b>
+<i>162</i>&nbsp;            }
+<b class="nc"><i>163</i>&nbsp;            int sx = 0;</b>
+<b class="nc"><i>164</i>&nbsp;            int dx = 0;</b>
+<b class="nc"><i>165</i>&nbsp;            int sxrem = 0;</b>
+<b class="nc"><i>166</i>&nbsp;            int dxrem = srcWidth;</b>
+<b class="nc"><i>167</i>&nbsp;            float a = 0f, r = 0f, g = 0f, b = 0f;</b>
+<b class="nc"><i>168</i>&nbsp;            while (sx &lt; w) {</b>
+<b class="nc"><i>169</i>&nbsp;                if (sxrem == 0) {</b>
+<b class="nc"><i>170</i>&nbsp;                    sxrem = destWidth;</b>
+<i>171</i>&nbsp;                    int rgb;
+<b class="nc"><i>172</i>&nbsp;                    if (pixels instanceof byte[]) {</b>
+<b class="nc"><i>173</i>&nbsp;                        rgb = ((byte[]) pixels)[off + sx] &amp; 0xff;</b>
+<i>174</i>&nbsp;                    } else {
+<b class="nc"><i>175</i>&nbsp;                        rgb = ((int[]) pixels)[off + sx];</b>
+<i>176</i>&nbsp;                    }
+<i>177</i>&nbsp;                    // getRGB() always returns non-premultiplied components
+<b class="nc"><i>178</i>&nbsp;                    rgb = model.getRGB(rgb);</b>
+<b class="nc"><i>179</i>&nbsp;                    a = rgb &gt;&gt;&gt; 24;</b>
+<b class="nc"><i>180</i>&nbsp;                    r = (rgb &gt;&gt; 16) &amp; 0xff;</b>
+<b class="nc"><i>181</i>&nbsp;                    g = (rgb &gt;&gt;  8) &amp; 0xff;</b>
+<b class="nc"><i>182</i>&nbsp;                    b = rgb &amp; 0xff;</b>
+<i>183</i>&nbsp;                    // premultiply the components if necessary
+<b class="nc"><i>184</i>&nbsp;                    if (a != 255.0f) {</b>
+<b class="nc"><i>185</i>&nbsp;                        float ascale = a / 255.0f;</b>
+<b class="nc"><i>186</i>&nbsp;                        r *= ascale;</b>
+<b class="nc"><i>187</i>&nbsp;                        g *= ascale;</b>
+<b class="nc"><i>188</i>&nbsp;                        b *= ascale;</b>
+<i>189</i>&nbsp;                    }
+<i>190</i>&nbsp;                }
+<i>191</i>&nbsp;                int amtx;
+<b class="nc"><i>192</i>&nbsp;                if (sxrem &lt; dxrem) {</b>
+<b class="nc"><i>193</i>&nbsp;                    amtx = sxrem;</b>
+<i>194</i>&nbsp;                } else {
+<b class="nc"><i>195</i>&nbsp;                    amtx = dxrem;</b>
+<i>196</i>&nbsp;                }
+<b class="nc"><i>197</i>&nbsp;                float mult = ((float) amtx) * amty;</b>
+<b class="nc"><i>198</i>&nbsp;                alphas[dx] += mult * a;</b>
+<b class="nc"><i>199</i>&nbsp;                reds[dx] += mult * r;</b>
+<b class="nc"><i>200</i>&nbsp;                greens[dx] += mult * g;</b>
+<b class="nc"><i>201</i>&nbsp;                blues[dx] += mult * b;</b>
+<b class="nc"><i>202</i>&nbsp;                if ((sxrem -= amtx) == 0) {</b>
+<b class="nc"><i>203</i>&nbsp;                    sx++;</b>
+<i>204</i>&nbsp;                }
+<b class="nc"><i>205</i>&nbsp;                if ((dxrem -= amtx) == 0) {</b>
+<b class="nc"><i>206</i>&nbsp;                    dx++;</b>
+<b class="nc"><i>207</i>&nbsp;                    dxrem = srcWidth;</b>
+<i>208</i>&nbsp;                }
+<b class="nc"><i>209</i>&nbsp;            }</b>
+<b class="nc"><i>210</i>&nbsp;            if ((dyrem -= amty) == 0) {</b>
+<b class="nc"><i>211</i>&nbsp;                int outpix[] = calcRow();</b>
+<i>212</i>&nbsp;                do {
+<b class="nc"><i>213</i>&nbsp;                    consumer.setPixels(0, dy, destWidth, 1,</b>
+<i>214</i>&nbsp;                                       rgbmodel, outpix, 0, destWidth);
+<b class="nc"><i>215</i>&nbsp;                    dy++;</b>
+<b class="nc"><i>216</i>&nbsp;                } while ((syrem -= amty) &gt;= amty &amp;&amp; amty == srcHeight);</b>
+<b class="nc"><i>217</i>&nbsp;            } else {</b>
+<b class="nc"><i>218</i>&nbsp;                syrem -= amty;</b>
+<i>219</i>&nbsp;            }
+<b class="nc"><i>220</i>&nbsp;            if (syrem == 0) {</b>
+<b class="nc"><i>221</i>&nbsp;                syrem = destHeight;</b>
+<b class="nc"><i>222</i>&nbsp;                sy++;</b>
+<b class="nc"><i>223</i>&nbsp;                off += scansize;</b>
+<i>224</i>&nbsp;            }
+<b class="nc"><i>225</i>&nbsp;        }</b>
+<b class="nc"><i>226</i>&nbsp;        savedyrem = dyrem;</b>
+<b class="nc"><i>227</i>&nbsp;        savedy = dy;</b>
+<i>228</i>&nbsp;    }
+<i>229</i>&nbsp;
+<i>230</i>&nbsp;    /**
+<i>231</i>&nbsp;     * Combine the components for the delivered byte pixels into the
+<i>232</i>&nbsp;     * accumulation arrays and send on any averaged data for rows of
+<i>233</i>&nbsp;     * pixels that are complete.  If the correct hints were not
+<i>234</i>&nbsp;     * specified in the setHints call then relay the work to our
+<i>235</i>&nbsp;     * superclass which is capable of scaling pixels regardless of
+<i>236</i>&nbsp;     * the delivery hints.
+<i>237</i>&nbsp;     * &lt;p&gt;
+<i>238</i>&nbsp;     * Note: This method is intended to be called by the
+<i>239</i>&nbsp;     * {@code ImageProducer} of the {@code Image}
+<i>240</i>&nbsp;     * whose pixels are being filtered.  Developers using
+<i>241</i>&nbsp;     * this class to filter pixels from an image should avoid calling
+<i>242</i>&nbsp;     * this method directly since that operation could interfere
+<i>243</i>&nbsp;     * with the filtering operation.
+<i>244</i>&nbsp;     * @see ReplicateScaleFilter
+<i>245</i>&nbsp;     */
+<i>246</i>&nbsp;    public void setPixels(int x, int y, int w, int h,
+<i>247</i>&nbsp;                          ColorModel model, byte pixels[], int off,
+<i>248</i>&nbsp;                          int scansize) {
+<b class="nc"><i>249</i>&nbsp;        if (passthrough) {</b>
+<b class="nc"><i>250</i>&nbsp;            super.setPixels(x, y, w, h, model, pixels, off, scansize);</b>
+<i>251</i>&nbsp;        } else {
+<b class="nc"><i>252</i>&nbsp;            accumPixels(x, y, w, h, model, pixels, off, scansize);</b>
+<i>253</i>&nbsp;        }
+<i>254</i>&nbsp;    }
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;    /**
+<i>257</i>&nbsp;     * Combine the components for the delivered int pixels into the
+<i>258</i>&nbsp;     * accumulation arrays and send on any averaged data for rows of
+<i>259</i>&nbsp;     * pixels that are complete.  If the correct hints were not
+<i>260</i>&nbsp;     * specified in the setHints call then relay the work to our
+<i>261</i>&nbsp;     * superclass which is capable of scaling pixels regardless of
+<i>262</i>&nbsp;     * the delivery hints.
+<i>263</i>&nbsp;     * &lt;p&gt;
+<i>264</i>&nbsp;     * Note: This method is intended to be called by the
+<i>265</i>&nbsp;     * {@code ImageProducer} of the {@code Image}
+<i>266</i>&nbsp;     * whose pixels are being filtered.  Developers using
+<i>267</i>&nbsp;     * this class to filter pixels from an image should avoid calling
+<i>268</i>&nbsp;     * this method directly since that operation could interfere
+<i>269</i>&nbsp;     * with the filtering operation.
+<i>270</i>&nbsp;     * @see ReplicateScaleFilter
+<i>271</i>&nbsp;     */
+<i>272</i>&nbsp;    public void setPixels(int x, int y, int w, int h,
+<i>273</i>&nbsp;                          ColorModel model, int pixels[], int off,
+<i>274</i>&nbsp;                          int scansize) {
+<b class="nc"><i>275</i>&nbsp;        if (passthrough) {</b>
+<b class="nc"><i>276</i>&nbsp;            super.setPixels(x, y, w, h, model, pixels, off, scansize);</b>
+<i>277</i>&nbsp;        } else {
+<b class="nc"><i>278</i>&nbsp;            accumPixels(x, y, w, h, model, pixels, off, scansize);</b>
+<i>279</i>&nbsp;        }
+<i>280</i>&nbsp;    }
+<i>281</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

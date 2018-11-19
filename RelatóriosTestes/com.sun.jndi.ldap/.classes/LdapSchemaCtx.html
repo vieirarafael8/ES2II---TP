@@ -1,0 +1,546 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: LdapSchemaCtx</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.jndi.ldap</a> ]
+</div>
+
+<h1>Coverage Summary for Class: LdapSchemaCtx (com.sun.jndi.ldap)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">LdapSchemaCtx</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 18)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 118)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">LdapSchemaCtx$SchemaInfo</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 17)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 23)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 135)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1999, 2011, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.jndi.ldap;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import javax.naming.*;
+<i>29</i>&nbsp;import javax.naming.directory.*;
+<i>30</i>&nbsp;import java.util.Hashtable;
+<i>31</i>&nbsp;import com.sun.jndi.toolkit.dir.HierMemDirCtx;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;/**
+<i>34</i>&nbsp; * This is the class used to implement LDAP&#39;s GetSchema call.
+<i>35</i>&nbsp; *
+<i>36</i>&nbsp; * It subclasses HierMemDirContext for most of the functionality. It
+<i>37</i>&nbsp; * overrides functions that cause the schema definitions to change.
+<i>38</i>&nbsp; * In such a case, it write the schema to the LdapServer and (assuming
+<i>39</i>&nbsp; * there are no errors), calls it&#39;s superclass&#39;s equivalent function.
+<i>40</i>&nbsp; * Thus, the schema tree and the LDAP server&#39;s schema attributes are
+<i>41</i>&nbsp; * always in sync.
+<i>42</i>&nbsp; */
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;final class LdapSchemaCtx extends HierMemDirCtx {
+<i>45</i>&nbsp;
+<i>46</i>&nbsp;    static private final boolean debug = false;
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;    private static final int LEAF = 0;  // schema object (e.g. attribute type defn)
+<i>49</i>&nbsp;    private static final int SCHEMA_ROOT = 1;   // schema tree root
+<i>50</i>&nbsp;    static final int OBJECTCLASS_ROOT = 2;   // root of object class subtree
+<i>51</i>&nbsp;    static final int ATTRIBUTE_ROOT = 3;     // root of attribute type subtree
+<i>52</i>&nbsp;    static final int SYNTAX_ROOT = 4;        // root of syntax subtree
+<i>53</i>&nbsp;    static final int MATCHRULE_ROOT = 5;     // root of matching rule subtree
+<i>54</i>&nbsp;    static final int OBJECTCLASS = 6;   // an object class definition
+<i>55</i>&nbsp;    static final int ATTRIBUTE = 7;     // an attribute type definition
+<i>56</i>&nbsp;    static final int SYNTAX = 8;        // a syntax definition
+<i>57</i>&nbsp;    static final int MATCHRULE = 9;     // a matching rule definition
+<i>58</i>&nbsp;
+<b class="nc"><i>59</i>&nbsp;    private SchemaInfo info= null;</b>
+<b class="nc"><i>60</i>&nbsp;    private boolean setupMode = true;</b>
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    private int objectType;
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    static DirContext createSchemaTree(Hashtable&lt;String,Object&gt; env,
+<i>65</i>&nbsp;            String subschemasubentry, LdapCtx schemaEntry,
+<i>66</i>&nbsp;            Attributes schemaAttrs, boolean netscapeBug)
+<i>67</i>&nbsp;        throws NamingException {
+<i>68</i>&nbsp;            try {
+<b class="nc"><i>69</i>&nbsp;                LdapSchemaParser parser = new LdapSchemaParser(netscapeBug);</b>
+<i>70</i>&nbsp;
+<b class="nc"><i>71</i>&nbsp;                SchemaInfo allinfo = new SchemaInfo(subschemasubentry,</b>
+<i>72</i>&nbsp;                    schemaEntry, parser);
+<i>73</i>&nbsp;
+<b class="nc"><i>74</i>&nbsp;                LdapSchemaCtx root = new LdapSchemaCtx(SCHEMA_ROOT, env, allinfo);</b>
+<b class="nc"><i>75</i>&nbsp;                LdapSchemaParser.LDAP2JNDISchema(schemaAttrs, root);</b>
+<b class="nc"><i>76</i>&nbsp;                return root;</b>
+<b class="nc"><i>77</i>&nbsp;            } catch (NamingException e) {</b>
+<b class="nc"><i>78</i>&nbsp;                schemaEntry.close(); // cleanup</b>
+<b class="nc"><i>79</i>&nbsp;                throw e;</b>
+<i>80</i>&nbsp;            }
+<i>81</i>&nbsp;    }
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;    // Called by createNewCtx
+<i>84</i>&nbsp;    private LdapSchemaCtx(int objectType, Hashtable&lt;String,Object&gt; environment,
+<i>85</i>&nbsp;                          SchemaInfo info) {
+<b class="nc"><i>86</i>&nbsp;        super(environment, LdapClient.caseIgnore);</b>
+<i>87</i>&nbsp;
+<b class="nc"><i>88</i>&nbsp;        this.objectType = objectType;</b>
+<b class="nc"><i>89</i>&nbsp;        this.info = info;</b>
+<i>90</i>&nbsp;    }
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    // override HierMemDirCtx.close to prevent premature GC of shared data
+<i>93</i>&nbsp;    public void close() throws NamingException {
+<b class="nc"><i>94</i>&nbsp;        info.close();</b>
+<i>95</i>&nbsp;    }
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    // override to ignore obj and use attrs
+<i>98</i>&nbsp;    // treat same as createSubcontext
+<i>99</i>&nbsp;    final public void bind(Name name, Object obj, Attributes attrs)
+<i>100</i>&nbsp;        throws NamingException {
+<b class="nc"><i>101</i>&nbsp;        if (!setupMode) {</b>
+<b class="nc"><i>102</i>&nbsp;            if (obj != null) {</b>
+<b class="nc"><i>103</i>&nbsp;                throw new IllegalArgumentException(&quot;obj must be null&quot;);</b>
+<i>104</i>&nbsp;            }
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;            // Update server
+<b class="nc"><i>107</i>&nbsp;            addServerSchema(attrs);</b>
+<i>108</i>&nbsp;        }
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;        // Update in-memory copy
+<b class="nc"><i>111</i>&nbsp;        LdapSchemaCtx newEntry =</b>
+<b class="nc"><i>112</i>&nbsp;            (LdapSchemaCtx)super.doCreateSubcontext(name, attrs);</b>
+<i>113</i>&nbsp;    }
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;    final protected void doBind(Name name, Object obj, Attributes attrs,
+<i>116</i>&nbsp;        boolean useFactory) throws NamingException {
+<b class="nc"><i>117</i>&nbsp;        if (!setupMode) {</b>
+<b class="nc"><i>118</i>&nbsp;            throw new SchemaViolationException(</b>
+<i>119</i>&nbsp;                &quot;Cannot bind arbitrary object; use createSubcontext()&quot;);
+<i>120</i>&nbsp;        } else {
+<b class="nc"><i>121</i>&nbsp;            super.doBind(name, obj, attrs, false); // always ignore factories</b>
+<i>122</i>&nbsp;        }
+<i>123</i>&nbsp;    }
+<i>124</i>&nbsp;
+<i>125</i>&nbsp;    // override to use bind() instead
+<i>126</i>&nbsp;    final public void rebind(Name name, Object obj, Attributes attrs)
+<i>127</i>&nbsp;        throws NamingException {
+<i>128</i>&nbsp;        try {
+<b class="nc"><i>129</i>&nbsp;            doLookup(name, false);</b>
+<b class="nc"><i>130</i>&nbsp;            throw new SchemaViolationException(</b>
+<i>131</i>&nbsp;                &quot;Cannot replace existing schema object&quot;);
+<b class="nc"><i>132</i>&nbsp;        } catch (NameNotFoundException e) {</b>
+<b class="nc"><i>133</i>&nbsp;            bind(name, obj, attrs);</b>
+<i>134</i>&nbsp;        }
+<i>135</i>&nbsp;    }
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;    final protected void doRebind(Name name, Object obj, Attributes attrs,
+<i>138</i>&nbsp;        boolean useFactory) throws NamingException {
+<b class="nc"><i>139</i>&nbsp;        if (!setupMode) {</b>
+<b class="nc"><i>140</i>&nbsp;            throw new SchemaViolationException(</b>
+<i>141</i>&nbsp;                &quot;Cannot bind arbitrary object; use createSubcontext()&quot;);
+<i>142</i>&nbsp;        } else {
+<b class="nc"><i>143</i>&nbsp;            super.doRebind(name, obj, attrs, false); // always ignore factories</b>
+<i>144</i>&nbsp;        }
+<i>145</i>&nbsp;    }
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;    final protected void doUnbind(Name name) throws NamingException {
+<b class="nc"><i>148</i>&nbsp;        if (!setupMode) {</b>
+<i>149</i>&nbsp;            // Update server
+<i>150</i>&nbsp;            try {
+<i>151</i>&nbsp;                // Lookup entry from memory
+<b class="nc"><i>152</i>&nbsp;                LdapSchemaCtx target = (LdapSchemaCtx)doLookup(name, false);</b>
+<i>153</i>&nbsp;
+<b class="nc"><i>154</i>&nbsp;                deleteServerSchema(target.attrs);</b>
+<b class="nc"><i>155</i>&nbsp;            } catch (NameNotFoundException e) {</b>
+<i>156</i>&nbsp;                return;
+<b class="nc"><i>157</i>&nbsp;            }</b>
+<i>158</i>&nbsp;        }
+<i>159</i>&nbsp;        // Update in-memory copy
+<b class="nc"><i>160</i>&nbsp;        super.doUnbind(name);</b>
+<i>161</i>&nbsp;    }
+<i>162</i>&nbsp;
+<i>163</i>&nbsp;    final protected void doRename(Name oldname, Name newname)
+<i>164</i>&nbsp;        throws NamingException {
+<b class="nc"><i>165</i>&nbsp;        if (!setupMode) {</b>
+<b class="nc"><i>166</i>&nbsp;            throw new SchemaViolationException(&quot;Cannot rename a schema object&quot;);</b>
+<i>167</i>&nbsp;        } else {
+<b class="nc"><i>168</i>&nbsp;            super.doRename(oldname, newname);</b>
+<i>169</i>&nbsp;        }
+<i>170</i>&nbsp;    }
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;    final protected void doDestroySubcontext(Name name) throws NamingException {
+<b class="nc"><i>173</i>&nbsp;        if (!setupMode) {</b>
+<i>174</i>&nbsp;            // Update server
+<i>175</i>&nbsp;            try {
+<i>176</i>&nbsp;                // Lookup entry from memory
+<b class="nc"><i>177</i>&nbsp;                LdapSchemaCtx target = (LdapSchemaCtx)doLookup(name, false);</b>
+<i>178</i>&nbsp;
+<b class="nc"><i>179</i>&nbsp;                deleteServerSchema(target.attrs);</b>
+<b class="nc"><i>180</i>&nbsp;            } catch (NameNotFoundException e) {</b>
+<i>181</i>&nbsp;                return;
+<b class="nc"><i>182</i>&nbsp;            }</b>
+<i>183</i>&nbsp;        }
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;        // Update in-memory copy
+<b class="nc"><i>186</i>&nbsp;        super.doDestroySubcontext(name);</b>
+<i>187</i>&nbsp;     }
+<i>188</i>&nbsp;
+<i>189</i>&nbsp;    // Called to create oc, attr, syntax or matching rule roots and leaf entries
+<i>190</i>&nbsp;    final LdapSchemaCtx setup(int objectType, String name, Attributes attrs)
+<i>191</i>&nbsp;        throws NamingException{
+<i>192</i>&nbsp;            try {
+<b class="nc"><i>193</i>&nbsp;                setupMode = true;</b>
+<b class="nc"><i>194</i>&nbsp;                LdapSchemaCtx answer =</b>
+<b class="nc"><i>195</i>&nbsp;                    (LdapSchemaCtx) super.doCreateSubcontext(</b>
+<i>196</i>&nbsp;                        new CompositeName(name), attrs);
+<i>197</i>&nbsp;
+<b class="nc"><i>198</i>&nbsp;                answer.objectType = objectType;</b>
+<b class="nc"><i>199</i>&nbsp;                answer.setupMode = false;</b>
+<b class="nc"><i>200</i>&nbsp;                return answer;</b>
+<i>201</i>&nbsp;            } finally {
+<b class="nc"><i>202</i>&nbsp;                setupMode = false;</b>
+<i>203</i>&nbsp;            }
+<i>204</i>&nbsp;    }
+<i>205</i>&nbsp;
+<i>206</i>&nbsp;    final protected DirContext doCreateSubcontext(Name name, Attributes attrs)
+<i>207</i>&nbsp;        throws NamingException {
+<i>208</i>&nbsp;
+<b class="nc"><i>209</i>&nbsp;        if (attrs == null || attrs.size() == 0) {</b>
+<b class="nc"><i>210</i>&nbsp;            throw new SchemaViolationException(</b>
+<i>211</i>&nbsp;                &quot;Must supply attributes describing schema&quot;);
+<i>212</i>&nbsp;        }
+<i>213</i>&nbsp;
+<b class="nc"><i>214</i>&nbsp;        if (!setupMode) {</b>
+<i>215</i>&nbsp;            // Update server
+<b class="nc"><i>216</i>&nbsp;            addServerSchema(attrs);</b>
+<i>217</i>&nbsp;        }
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;        // Update in-memory copy
+<b class="nc"><i>220</i>&nbsp;        LdapSchemaCtx newEntry =</b>
+<b class="nc"><i>221</i>&nbsp;            (LdapSchemaCtx) super.doCreateSubcontext(name, attrs);</b>
+<b class="nc"><i>222</i>&nbsp;        return newEntry;</b>
+<i>223</i>&nbsp;    }
+<i>224</i>&nbsp;
+<i>225</i>&nbsp;    final private static Attributes deepClone(Attributes orig)
+<i>226</i>&nbsp;        throws NamingException {
+<b class="nc"><i>227</i>&nbsp;        BasicAttributes copy = new BasicAttributes(true);</b>
+<b class="nc"><i>228</i>&nbsp;        NamingEnumeration&lt;? extends Attribute&gt; attrs = orig.getAll();</b>
+<b class="nc"><i>229</i>&nbsp;        while (attrs.hasMore()) {</b>
+<b class="nc"><i>230</i>&nbsp;            copy.put((Attribute)attrs.next().clone());</b>
+<i>231</i>&nbsp;        }
+<b class="nc"><i>232</i>&nbsp;        return copy;</b>
+<i>233</i>&nbsp;    }
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;    final protected void doModifyAttributes(ModificationItem[] mods)
+<i>236</i>&nbsp;        throws NamingException {
+<b class="nc"><i>237</i>&nbsp;        if (setupMode) {</b>
+<b class="nc"><i>238</i>&nbsp;            super.doModifyAttributes(mods);</b>
+<i>239</i>&nbsp;        } else {
+<b class="nc"><i>240</i>&nbsp;            Attributes copy = deepClone(attrs);</b>
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;            // Apply modifications to copy
+<b class="nc"><i>243</i>&nbsp;            applyMods(mods, copy);</b>
+<i>244</i>&nbsp;
+<i>245</i>&nbsp;            // Update server copy
+<b class="nc"><i>246</i>&nbsp;            modifyServerSchema(attrs, copy);</b>
+<i>247</i>&nbsp;
+<i>248</i>&nbsp;            // Update in-memory copy
+<b class="nc"><i>249</i>&nbsp;            attrs = copy;</b>
+<i>250</i>&nbsp;        }
+<i>251</i>&nbsp;    }
+<i>252</i>&nbsp;
+<i>253</i>&nbsp;    // we override this so the superclass creates the right kind of contexts
+<i>254</i>&nbsp;    // Default is to create LEAF objects; caller will change after creation
+<i>255</i>&nbsp;    // if necessary
+<i>256</i>&nbsp;    final protected HierMemDirCtx createNewCtx() {
+<b class="nc"><i>257</i>&nbsp;        LdapSchemaCtx ctx = new LdapSchemaCtx(LEAF, myEnv, info);</b>
+<b class="nc"><i>258</i>&nbsp;        return ctx;</b>
+<i>259</i>&nbsp;    }
+<i>260</i>&nbsp;
+<i>261</i>&nbsp;
+<i>262</i>&nbsp;    final private void addServerSchema(Attributes attrs)
+<i>263</i>&nbsp;        throws NamingException {
+<i>264</i>&nbsp;        Attribute schemaAttr;
+<i>265</i>&nbsp;
+<b class="nc"><i>266</i>&nbsp;        switch (objectType) {</b>
+<i>267</i>&nbsp;        case OBJECTCLASS_ROOT:
+<b class="nc"><i>268</i>&nbsp;            schemaAttr = info.parser.stringifyObjDesc(attrs);</b>
+<b class="nc"><i>269</i>&nbsp;            break;</b>
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;        case ATTRIBUTE_ROOT:
+<b class="nc"><i>272</i>&nbsp;            schemaAttr = info.parser.stringifyAttrDesc(attrs);</b>
+<b class="nc"><i>273</i>&nbsp;            break;</b>
+<i>274</i>&nbsp;
+<i>275</i>&nbsp;        case SYNTAX_ROOT:
+<b class="nc"><i>276</i>&nbsp;            schemaAttr = info.parser.stringifySyntaxDesc(attrs);</b>
+<b class="nc"><i>277</i>&nbsp;            break;</b>
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;        case MATCHRULE_ROOT:
+<b class="nc"><i>280</i>&nbsp;            schemaAttr = info.parser.stringifyMatchRuleDesc(attrs);</b>
+<b class="nc"><i>281</i>&nbsp;            break;</b>
+<i>282</i>&nbsp;
+<i>283</i>&nbsp;        case SCHEMA_ROOT:
+<b class="nc"><i>284</i>&nbsp;            throw new SchemaViolationException(</b>
+<i>285</i>&nbsp;                &quot;Cannot create new entry under schema root&quot;);
+<i>286</i>&nbsp;
+<i>287</i>&nbsp;        default:
+<b class="nc"><i>288</i>&nbsp;            throw new SchemaViolationException(</b>
+<i>289</i>&nbsp;                &quot;Cannot create child of schema object&quot;);
+<i>290</i>&nbsp;        }
+<i>291</i>&nbsp;
+<b class="nc"><i>292</i>&nbsp;        Attributes holder = new BasicAttributes(true);</b>
+<b class="nc"><i>293</i>&nbsp;        holder.put(schemaAttr);</b>
+<i>294</i>&nbsp;        //System.err.println((String)schemaAttr.get());
+<i>295</i>&nbsp;
+<b class="nc"><i>296</i>&nbsp;        info.modifyAttributes(myEnv, DirContext.ADD_ATTRIBUTE, holder);</b>
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;    }
+<i>299</i>&nbsp;
+<i>300</i>&nbsp;    /**
+<i>301</i>&nbsp;      * When we delete an entry, we use the original to make sure that
+<i>302</i>&nbsp;      * any formatting inconsistencies are eliminated.
+<i>303</i>&nbsp;      * This is because we&#39;re just deleting a value from an attribute
+<i>304</i>&nbsp;      * on the server and there might not be any checks for extra spaces
+<i>305</i>&nbsp;      * or parens.
+<i>306</i>&nbsp;      */
+<i>307</i>&nbsp;    final private void deleteServerSchema(Attributes origAttrs)
+<i>308</i>&nbsp;        throws NamingException {
+<i>309</i>&nbsp;
+<i>310</i>&nbsp;        Attribute origAttrVal;
+<i>311</i>&nbsp;
+<b class="nc"><i>312</i>&nbsp;        switch (objectType) {</b>
+<i>313</i>&nbsp;        case OBJECTCLASS_ROOT:
+<b class="nc"><i>314</i>&nbsp;            origAttrVal = info.parser.stringifyObjDesc(origAttrs);</b>
+<b class="nc"><i>315</i>&nbsp;            break;</b>
+<i>316</i>&nbsp;
+<i>317</i>&nbsp;        case ATTRIBUTE_ROOT:
+<b class="nc"><i>318</i>&nbsp;            origAttrVal = info.parser.stringifyAttrDesc(origAttrs);</b>
+<b class="nc"><i>319</i>&nbsp;            break;</b>
+<i>320</i>&nbsp;
+<i>321</i>&nbsp;        case SYNTAX_ROOT:
+<b class="nc"><i>322</i>&nbsp;            origAttrVal = info.parser.stringifySyntaxDesc(origAttrs);</b>
+<b class="nc"><i>323</i>&nbsp;            break;</b>
+<i>324</i>&nbsp;
+<i>325</i>&nbsp;        case MATCHRULE_ROOT:
+<b class="nc"><i>326</i>&nbsp;            origAttrVal = info.parser.stringifyMatchRuleDesc(origAttrs);</b>
+<b class="nc"><i>327</i>&nbsp;            break;</b>
+<i>328</i>&nbsp;
+<i>329</i>&nbsp;        case SCHEMA_ROOT:
+<b class="nc"><i>330</i>&nbsp;            throw new SchemaViolationException(</b>
+<i>331</i>&nbsp;                &quot;Cannot delete schema root&quot;);
+<i>332</i>&nbsp;
+<i>333</i>&nbsp;        default:
+<b class="nc"><i>334</i>&nbsp;            throw new SchemaViolationException(</b>
+<i>335</i>&nbsp;                &quot;Cannot delete child of schema object&quot;);
+<i>336</i>&nbsp;        }
+<i>337</i>&nbsp;
+<b class="nc"><i>338</i>&nbsp;        ModificationItem[] mods = new ModificationItem[1];</b>
+<b class="nc"><i>339</i>&nbsp;        mods[0] = new ModificationItem(DirContext.REMOVE_ATTRIBUTE, origAttrVal);</b>
+<i>340</i>&nbsp;
+<b class="nc"><i>341</i>&nbsp;        info.modifyAttributes(myEnv, mods);</b>
+<i>342</i>&nbsp;    }
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;    /**
+<i>345</i>&nbsp;      * When we modify an entry, we use the original attribute value
+<i>346</i>&nbsp;      * in the schema to make sure that any formatting inconsistencies
+<i>347</i>&nbsp;      * are eliminated. A modification is done by deleting the original
+<i>348</i>&nbsp;      * value and adding a new value with the modification.
+<i>349</i>&nbsp;      */
+<i>350</i>&nbsp;    final private void modifyServerSchema(Attributes origAttrs,
+<i>351</i>&nbsp;        Attributes newAttrs) throws NamingException {
+<i>352</i>&nbsp;
+<i>353</i>&nbsp;        Attribute newAttrVal;
+<i>354</i>&nbsp;        Attribute origAttrVal;
+<i>355</i>&nbsp;
+<b class="nc"><i>356</i>&nbsp;        switch (objectType) {</b>
+<i>357</i>&nbsp;        case OBJECTCLASS:
+<b class="nc"><i>358</i>&nbsp;            origAttrVal = info.parser.stringifyObjDesc(origAttrs);</b>
+<b class="nc"><i>359</i>&nbsp;            newAttrVal = info.parser.stringifyObjDesc(newAttrs);</b>
+<b class="nc"><i>360</i>&nbsp;            break;</b>
+<i>361</i>&nbsp;
+<i>362</i>&nbsp;        case ATTRIBUTE:
+<b class="nc"><i>363</i>&nbsp;            origAttrVal = info.parser.stringifyAttrDesc(origAttrs);</b>
+<b class="nc"><i>364</i>&nbsp;            newAttrVal = info.parser.stringifyAttrDesc(newAttrs);</b>
+<b class="nc"><i>365</i>&nbsp;            break;</b>
+<i>366</i>&nbsp;
+<i>367</i>&nbsp;        case SYNTAX:
+<b class="nc"><i>368</i>&nbsp;            origAttrVal = info.parser.stringifySyntaxDesc(origAttrs);</b>
+<b class="nc"><i>369</i>&nbsp;            newAttrVal = info.parser.stringifySyntaxDesc(newAttrs);</b>
+<b class="nc"><i>370</i>&nbsp;            break;</b>
+<i>371</i>&nbsp;
+<i>372</i>&nbsp;        case MATCHRULE:
+<b class="nc"><i>373</i>&nbsp;            origAttrVal = info.parser.stringifyMatchRuleDesc(origAttrs);</b>
+<b class="nc"><i>374</i>&nbsp;            newAttrVal = info.parser.stringifyMatchRuleDesc(newAttrs);</b>
+<b class="nc"><i>375</i>&nbsp;            break;</b>
+<i>376</i>&nbsp;
+<i>377</i>&nbsp;        default:
+<b class="nc"><i>378</i>&nbsp;            throw new SchemaViolationException(</b>
+<i>379</i>&nbsp;                &quot;Cannot modify schema root&quot;);
+<i>380</i>&nbsp;        }
+<i>381</i>&nbsp;
+<b class="nc"><i>382</i>&nbsp;        ModificationItem[] mods = new ModificationItem[2];</b>
+<b class="nc"><i>383</i>&nbsp;        mods[0] = new ModificationItem(DirContext.REMOVE_ATTRIBUTE, origAttrVal);</b>
+<b class="nc"><i>384</i>&nbsp;        mods[1] = new ModificationItem(DirContext.ADD_ATTRIBUTE, newAttrVal);</b>
+<i>385</i>&nbsp;
+<b class="nc"><i>386</i>&nbsp;        info.modifyAttributes(myEnv, mods);</b>
+<i>387</i>&nbsp;    }
+<i>388</i>&nbsp;
+<i>389</i>&nbsp;    final static private class SchemaInfo {
+<i>390</i>&nbsp;        private LdapCtx schemaEntry;
+<i>391</i>&nbsp;        private String schemaEntryName;
+<i>392</i>&nbsp;        LdapSchemaParser parser;
+<i>393</i>&nbsp;        private String host;
+<i>394</i>&nbsp;        private int port;
+<i>395</i>&nbsp;        private boolean hasLdapsScheme;
+<i>396</i>&nbsp;
+<i>397</i>&nbsp;        SchemaInfo(String schemaEntryName, LdapCtx schemaEntry,
+<b class="nc"><i>398</i>&nbsp;            LdapSchemaParser parser) {</b>
+<b class="nc"><i>399</i>&nbsp;            this.schemaEntryName = schemaEntryName;</b>
+<b class="nc"><i>400</i>&nbsp;            this.schemaEntry = schemaEntry;</b>
+<b class="nc"><i>401</i>&nbsp;            this.parser = parser;</b>
+<b class="nc"><i>402</i>&nbsp;            this.port = schemaEntry.port_number;</b>
+<b class="nc"><i>403</i>&nbsp;            this.host = schemaEntry.hostname;</b>
+<b class="nc"><i>404</i>&nbsp;            this.hasLdapsScheme = schemaEntry.hasLdapsScheme;</b>
+<i>405</i>&nbsp;        }
+<i>406</i>&nbsp;
+<i>407</i>&nbsp;        synchronized void close() throws NamingException {
+<b class="nc"><i>408</i>&nbsp;            if (schemaEntry != null) {</b>
+<b class="nc"><i>409</i>&nbsp;                schemaEntry.close();</b>
+<b class="nc"><i>410</i>&nbsp;                schemaEntry = null;</b>
+<i>411</i>&nbsp;            }
+<i>412</i>&nbsp;        }
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;        private LdapCtx reopenEntry(Hashtable&lt;?,?&gt; env) throws NamingException {
+<i>415</i>&nbsp;            // Use subschemasubentry name as DN
+<b class="nc"><i>416</i>&nbsp;            return new LdapCtx(schemaEntryName, host, port,</b>
+<i>417</i>&nbsp;                                env, hasLdapsScheme);
+<i>418</i>&nbsp;        }
+<i>419</i>&nbsp;
+<i>420</i>&nbsp;        synchronized void modifyAttributes(Hashtable&lt;?,?&gt; env,
+<i>421</i>&nbsp;                                           ModificationItem[] mods)
+<i>422</i>&nbsp;            throws NamingException {
+<b class="nc"><i>423</i>&nbsp;            if (schemaEntry == null) {</b>
+<b class="nc"><i>424</i>&nbsp;                schemaEntry = reopenEntry(env);</b>
+<i>425</i>&nbsp;            }
+<b class="nc"><i>426</i>&nbsp;            schemaEntry.modifyAttributes(&quot;&quot;, mods);</b>
+<i>427</i>&nbsp;        }
+<i>428</i>&nbsp;
+<i>429</i>&nbsp;        synchronized void modifyAttributes(Hashtable&lt;?,?&gt; env, int mod,
+<i>430</i>&nbsp;            Attributes attrs) throws NamingException {
+<b class="nc"><i>431</i>&nbsp;            if (schemaEntry == null) {</b>
+<b class="nc"><i>432</i>&nbsp;                schemaEntry = reopenEntry(env);</b>
+<i>433</i>&nbsp;            }
+<b class="nc"><i>434</i>&nbsp;            schemaEntry.modifyAttributes(&quot;&quot;, mod, attrs);</b>
+<i>435</i>&nbsp;        }
+<i>436</i>&nbsp;    }
+<i>437</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

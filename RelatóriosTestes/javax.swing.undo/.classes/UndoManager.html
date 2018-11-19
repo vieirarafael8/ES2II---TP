@@ -1,0 +1,781 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: UndoManager</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">javax.swing.undo</a> ]
+</div>
+
+<h1>Coverage Summary for Class: UndoManager (javax.swing.undo)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">UndoManager</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 23)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 118)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package javax.swing.undo;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import javax.swing.event.*;
+<i>29</i>&nbsp;import javax.swing.UIManager;
+<i>30</i>&nbsp;import java.util.*;
+<i>31</i>&nbsp;import sun.swing.text.UndoableEditLockSupport;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;/**
+<i>34</i>&nbsp; * {@code UndoManager} manages a list of {@code UndoableEdits},
+<i>35</i>&nbsp; * providing a way to undo or redo the appropriate edits.  There are
+<i>36</i>&nbsp; * two ways to add edits to an &lt;code&gt;UndoManager&lt;/code&gt;.  Add the edit
+<i>37</i>&nbsp; * directly using the &lt;code&gt;addEdit&lt;/code&gt; method, or add the
+<i>38</i>&nbsp; * &lt;code&gt;UndoManager&lt;/code&gt; to a bean that supports
+<i>39</i>&nbsp; * &lt;code&gt;UndoableEditListener&lt;/code&gt;.  The following examples creates
+<i>40</i>&nbsp; * an &lt;code&gt;UndoManager&lt;/code&gt; and adds it as an
+<i>41</i>&nbsp; * &lt;code&gt;UndoableEditListener&lt;/code&gt; to a &lt;code&gt;JTextField&lt;/code&gt;:
+<i>42</i>&nbsp; * &lt;pre&gt;
+<i>43</i>&nbsp; *   UndoManager undoManager = new UndoManager();
+<i>44</i>&nbsp; *   JTextField tf = ...;
+<i>45</i>&nbsp; *   tf.getDocument().addUndoableEditListener(undoManager);
+<i>46</i>&nbsp; * &lt;/pre&gt;
+<i>47</i>&nbsp; * &lt;p&gt;
+<i>48</i>&nbsp; * &lt;code&gt;UndoManager&lt;/code&gt; maintains an ordered list of edits and the
+<i>49</i>&nbsp; * index of the next edit in that list. The index of the next edit is
+<i>50</i>&nbsp; * either the size of the current list of edits, or if
+<i>51</i>&nbsp; * &lt;code&gt;undo&lt;/code&gt; has been invoked it corresponds to the index
+<i>52</i>&nbsp; * of the last significant edit that was undone. When
+<i>53</i>&nbsp; * &lt;code&gt;undo&lt;/code&gt; is invoked all edits from the index of the next
+<i>54</i>&nbsp; * edit to the last significant edit are undone, in reverse order.
+<i>55</i>&nbsp; * For example, consider an &lt;code&gt;UndoManager&lt;/code&gt; consisting of the
+<i>56</i>&nbsp; * following edits: &lt;b&gt;A&lt;/b&gt; &lt;i&gt;b&lt;/i&gt; &lt;i&gt;c&lt;/i&gt; &lt;b&gt;D&lt;/b&gt;.  Edits with a
+<i>57</i>&nbsp; * upper-case letter in bold are significant, those in lower-case
+<i>58</i>&nbsp; * and italicized are insignificant.
+<i>59</i>&nbsp; * &lt;p&gt;
+<i>60</i>&nbsp; * &lt;a id=&quot;figure1&quot;&gt;&lt;/a&gt;
+<i>61</i>&nbsp; * &lt;table class=&quot;borderless&quot;&gt;
+<i>62</i>&nbsp; * &lt;caption style=&quot;display:none&quot;&gt;Figure 1&lt;/caption&gt;
+<i>63</i>&nbsp; * &lt;tr&gt;&lt;td&gt;
+<i>64</i>&nbsp; *     &lt;img src=&quot;doc-files/UndoManager-1.gif&quot; alt=&quot;&quot;&gt;
+<i>65</i>&nbsp; * &lt;tr&gt;&lt;td style=&quot;text-align:center&quot;&gt;Figure 1
+<i>66</i>&nbsp; * &lt;/table&gt;
+<i>67</i>&nbsp; * &lt;p&gt;
+<i>68</i>&nbsp; * As shown in &lt;a href=&quot;#figure1&quot;&gt;figure 1&lt;/a&gt;, if &lt;b&gt;D&lt;/b&gt; was just added, the
+<i>69</i>&nbsp; * index of the next edit will be 4. Invoking &lt;code&gt;undo&lt;/code&gt;
+<i>70</i>&nbsp; * results in invoking &lt;code&gt;undo&lt;/code&gt; on &lt;b&gt;D&lt;/b&gt; and setting the
+<i>71</i>&nbsp; * index of the next edit to 3 (edit &lt;i&gt;c&lt;/i&gt;), as shown in the following
+<i>72</i>&nbsp; * figure.
+<i>73</i>&nbsp; * &lt;p&gt;
+<i>74</i>&nbsp; * &lt;a id=&quot;figure2&quot;&gt;&lt;/a&gt;
+<i>75</i>&nbsp; * &lt;table class=&quot;borderless&quot;&gt;
+<i>76</i>&nbsp; * &lt;caption style=&quot;display:none&quot;&gt;Figure 2&lt;/caption&gt;
+<i>77</i>&nbsp; * &lt;tr&gt;&lt;td&gt;
+<i>78</i>&nbsp; *     &lt;img src=&quot;doc-files/UndoManager-2.gif&quot; alt=&quot;&quot;&gt;
+<i>79</i>&nbsp; * &lt;tr&gt;&lt;td style=&quot;text-align:center&quot;&gt;Figure 2
+<i>80</i>&nbsp; * &lt;/table&gt;
+<i>81</i>&nbsp; * &lt;p&gt;
+<i>82</i>&nbsp; * The last significant edit is &lt;b&gt;A&lt;/b&gt;, so that invoking
+<i>83</i>&nbsp; * &lt;code&gt;undo&lt;/code&gt; again invokes &lt;code&gt;undo&lt;/code&gt; on &lt;i&gt;c&lt;/i&gt;,
+<i>84</i>&nbsp; * &lt;i&gt;b&lt;/i&gt;, and &lt;b&gt;A&lt;/b&gt;, in that order, setting the index of the
+<i>85</i>&nbsp; * next edit to 0, as shown in the following figure.
+<i>86</i>&nbsp; * &lt;p&gt;
+<i>87</i>&nbsp; * &lt;a id=&quot;figure3&quot;&gt;&lt;/a&gt;
+<i>88</i>&nbsp; * &lt;table class=&quot;borderless&quot;&gt;
+<i>89</i>&nbsp; * &lt;caption style=&quot;display:none&quot;&gt;Figure 3&lt;/caption&gt;
+<i>90</i>&nbsp; * &lt;tr&gt;&lt;td&gt;
+<i>91</i>&nbsp; *     &lt;img src=&quot;doc-files/UndoManager-3.gif&quot; alt=&quot;&quot;&gt;
+<i>92</i>&nbsp; * &lt;tr&gt;&lt;td style=&quot;text-align:center&quot;&gt;Figure 3
+<i>93</i>&nbsp; * &lt;/table&gt;
+<i>94</i>&nbsp; * &lt;p&gt;
+<i>95</i>&nbsp; * Invoking &lt;code&gt;redo&lt;/code&gt; results in invoking &lt;code&gt;redo&lt;/code&gt; on
+<i>96</i>&nbsp; * all edits between the index of the next edit and the next
+<i>97</i>&nbsp; * significant edit (or the end of the list).  Continuing with the previous
+<i>98</i>&nbsp; * example if &lt;code&gt;redo&lt;/code&gt; were invoked, &lt;code&gt;redo&lt;/code&gt; would in
+<i>99</i>&nbsp; * turn be invoked on &lt;b&gt;A&lt;/b&gt;, &lt;i&gt;b&lt;/i&gt; and &lt;i&gt;c&lt;/i&gt;.  In addition
+<i>100</i>&nbsp; * the index of the next edit is set to 3 (as shown in &lt;a
+<i>101</i>&nbsp; * href=&quot;#figure2&quot;&gt;figure 2&lt;/a&gt;).
+<i>102</i>&nbsp; * &lt;p&gt;
+<i>103</i>&nbsp; * Adding an edit to an &lt;code&gt;UndoManager&lt;/code&gt; results in
+<i>104</i>&nbsp; * removing all edits from the index of the next edit to the end of
+<i>105</i>&nbsp; * the list.  Continuing with the previous example, if a new edit,
+<i>106</i>&nbsp; * &lt;i&gt;e&lt;/i&gt;, is added the edit &lt;b&gt;D&lt;/b&gt; is removed from the list
+<i>107</i>&nbsp; * (after having &lt;code&gt;die&lt;/code&gt; invoked on it).  If &lt;i&gt;c&lt;/i&gt; is not
+<i>108</i>&nbsp; * incorporated by the next edit
+<i>109</i>&nbsp; * (&lt;code&gt;&lt;i&gt;c&lt;/i&gt;.addEdit(&lt;i&gt;e&lt;/i&gt;)&lt;/code&gt; returns true), or replaced
+<i>110</i>&nbsp; * by it (&lt;code&gt;&lt;i&gt;e&lt;/i&gt;.replaceEdit(&lt;i&gt;c&lt;/i&gt;)&lt;/code&gt; returns true),
+<i>111</i>&nbsp; * the new edit is added after &lt;i&gt;c&lt;/i&gt;, as shown in the following
+<i>112</i>&nbsp; * figure.
+<i>113</i>&nbsp; * &lt;p&gt;
+<i>114</i>&nbsp; * &lt;a id=&quot;figure4&quot;&gt;&lt;/a&gt;
+<i>115</i>&nbsp; * &lt;table class=&quot;borderless&quot;&gt;
+<i>116</i>&nbsp; * &lt;caption style=&quot;display:none&quot;&gt;Figure 4&lt;/caption&gt;
+<i>117</i>&nbsp; * &lt;tr&gt;&lt;td&gt;
+<i>118</i>&nbsp; *     &lt;img src=&quot;doc-files/UndoManager-4.gif&quot; alt=&quot;&quot;&gt;
+<i>119</i>&nbsp; * &lt;tr&gt;&lt;td style=&quot;text-align:center&quot;&gt;Figure 4
+<i>120</i>&nbsp; * &lt;/table&gt;
+<i>121</i>&nbsp; * &lt;p&gt;
+<i>122</i>&nbsp; * Once &lt;code&gt;end&lt;/code&gt; has been invoked on an &lt;code&gt;UndoManager&lt;/code&gt;
+<i>123</i>&nbsp; * the superclass behavior is used for all &lt;code&gt;UndoableEdit&lt;/code&gt;
+<i>124</i>&nbsp; * methods.  Refer to &lt;code&gt;CompoundEdit&lt;/code&gt; for more details on its
+<i>125</i>&nbsp; * behavior.
+<i>126</i>&nbsp; * &lt;p&gt;
+<i>127</i>&nbsp; * Unlike the rest of Swing, this class is thread safe.
+<i>128</i>&nbsp; * &lt;p&gt;
+<i>129</i>&nbsp; * &lt;strong&gt;Warning:&lt;/strong&gt;
+<i>130</i>&nbsp; * Serialized objects of this class will not be compatible with
+<i>131</i>&nbsp; * future Swing releases. The current serialization support is
+<i>132</i>&nbsp; * appropriate for short term storage or RMI between applications running
+<i>133</i>&nbsp; * the same version of Swing.  As of 1.4, support for long term storage
+<i>134</i>&nbsp; * of all JavaBeans&amp;trade;
+<i>135</i>&nbsp; * has been added to the &lt;code&gt;java.beans&lt;/code&gt; package.
+<i>136</i>&nbsp; * Please see {@link java.beans.XMLEncoder}.
+<i>137</i>&nbsp; *
+<i>138</i>&nbsp; * @author Ray Ryan
+<i>139</i>&nbsp; */
+<i>140</i>&nbsp;@SuppressWarnings(&quot;serial&quot;) // Same-version serialization only
+<i>141</i>&nbsp;public class UndoManager extends CompoundEdit implements UndoableEditListener {
+<i>142</i>&nbsp;    private enum Action {
+<b class="nc"><i>143</i>&nbsp;        UNDO,</b>
+<b class="nc"><i>144</i>&nbsp;        REDO,</b>
+<b class="nc"><i>145</i>&nbsp;        ANY</b>
+<b class="nc"><i>146</i>&nbsp;    }</b>
+<i>147</i>&nbsp;    int indexOfNextAdd;
+<i>148</i>&nbsp;    int limit;
+<i>149</i>&nbsp;
+<i>150</i>&nbsp;    /**
+<i>151</i>&nbsp;     * Creates a new &lt;code&gt;UndoManager&lt;/code&gt;.
+<i>152</i>&nbsp;     */
+<i>153</i>&nbsp;    public UndoManager() {
+<i>154</i>&nbsp;        super();
+<i>155</i>&nbsp;        indexOfNextAdd = 0;
+<i>156</i>&nbsp;        limit = 100;
+<i>157</i>&nbsp;        edits.ensureCapacity(limit);
+<i>158</i>&nbsp;    }
+<b class="nc"><i>159</i>&nbsp;</b>
+<i>160</i>&nbsp;    /**
+<i>161</i>&nbsp;     * Returns the maximum number of edits this {@code UndoManager}
+<i>162</i>&nbsp;     * holds. A value less than 0 indicates the number of edits is not
+<i>163</i>&nbsp;     * limited.
+<i>164</i>&nbsp;     *
+<i>165</i>&nbsp;     * @return the maximum number of edits this {@code UndoManager} holds
+<i>166</i>&nbsp;     * @see #addEdit
+<i>167</i>&nbsp;     * @see #setLimit
+<i>168</i>&nbsp;     */
+<b class="nc"><i>169</i>&nbsp;    public synchronized int getLimit() {</b>
+<b class="nc"><i>170</i>&nbsp;        return limit;</b>
+<b class="nc"><i>171</i>&nbsp;    }</b>
+<b class="nc"><i>172</i>&nbsp;</b>
+<b class="nc"><i>173</i>&nbsp;    /**</b>
+<i>174</i>&nbsp;     * Empties the undo manager sending each edit a &lt;code&gt;die&lt;/code&gt; message
+<i>175</i>&nbsp;     * in the process.
+<i>176</i>&nbsp;     *
+<i>177</i>&nbsp;     * @see AbstractUndoableEdit#die
+<i>178</i>&nbsp;     */
+<i>179</i>&nbsp;    public synchronized void discardAllEdits() {
+<i>180</i>&nbsp;        for (UndoableEdit e : edits) {
+<i>181</i>&nbsp;            e.die();
+<i>182</i>&nbsp;        }
+<i>183</i>&nbsp;        edits = new Vector&lt;UndoableEdit&gt;();
+<b class="nc"><i>184</i>&nbsp;        indexOfNextAdd = 0;</b>
+<b class="nc"><i>185</i>&nbsp;        // PENDING(rjrjr) when vector grows a removeRange() method</b>
+<i>186</i>&nbsp;        // (expected in JDK 1.2), trimEdits() will be nice and
+<i>187</i>&nbsp;        // efficient, and this method can call that instead.
+<i>188</i>&nbsp;    }
+<i>189</i>&nbsp;
+<i>190</i>&nbsp;    /**
+<b class="nc"><i>191</i>&nbsp;     * Reduces the number of queued edits to a range of size limit,</b>
+<b class="nc"><i>192</i>&nbsp;     * centered on the index of the next edit.</b>
+<b class="nc"><i>193</i>&nbsp;     */</b>
+<b class="nc"><i>194</i>&nbsp;    protected void trimForLimit() {</b>
+<i>195</i>&nbsp;        if (limit &gt;= 0) {
+<i>196</i>&nbsp;            int size = edits.size();
+<i>197</i>&nbsp;//          System.out.print(&quot;limit: &quot; + limit +
+<i>198</i>&nbsp;//                           &quot; size: &quot; + size +
+<i>199</i>&nbsp;//                           &quot; indexOfNextAdd: &quot; + indexOfNextAdd +
+<i>200</i>&nbsp;//                           &quot;\n&quot;);
+<b class="nc"><i>201</i>&nbsp;</b>
+<b class="nc"><i>202</i>&nbsp;            if (size &gt; limit) {</b>
+<i>203</i>&nbsp;                int halfLimit = limit/2;
+<i>204</i>&nbsp;                int keepFrom = indexOfNextAdd - 1 - halfLimit;
+<i>205</i>&nbsp;                int keepTo   = indexOfNextAdd - 1 + halfLimit;
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;                // These are ints we&#39;re playing with, so dividing by two
+<i>208</i>&nbsp;                // rounds down for odd numbers, so make sure the limit was
+<b class="nc"><i>209</i>&nbsp;                // honored properly. Note that the keep range is</b>
+<b class="nc"><i>210</i>&nbsp;                // inclusive.</b>
+<b class="nc"><i>211</i>&nbsp;</b>
+<i>212</i>&nbsp;                if (keepTo - keepFrom + 1 &gt; limit) {
+<b class="nc"><i>213</i>&nbsp;                    keepFrom++;</b>
+<b class="nc"><i>214</i>&nbsp;                }</b>
+<b class="nc"><i>215</i>&nbsp;</b>
+<b class="nc"><i>216</i>&nbsp;                // The keep range is centered on indexOfNextAdd,</b>
+<i>217</i>&nbsp;                // but odds are good that the actual edits Vector
+<i>218</i>&nbsp;                // isn&#39;t. Move the keep range to keep it legal.
+<i>219</i>&nbsp;
+<b class="nc"><i>220</i>&nbsp;                if (keepFrom &lt; 0) {</b>
+<b class="nc"><i>221</i>&nbsp;                    keepTo -= keepFrom;</b>
+<i>222</i>&nbsp;                    keepFrom = 0;
+<i>223</i>&nbsp;                }
+<i>224</i>&nbsp;                if (keepTo &gt;= size) {
+<i>225</i>&nbsp;                    int delta = size - keepTo - 1;
+<i>226</i>&nbsp;                    keepTo += delta;
+<i>227</i>&nbsp;                    keepFrom += delta;
+<i>228</i>&nbsp;                }
+<i>229</i>&nbsp;
+<i>230</i>&nbsp;//              System.out.println(&quot;Keeping &quot; + keepFrom + &quot; &quot; + keepTo);
+<i>231</i>&nbsp;                trimEdits(keepTo+1, size-1);
+<i>232</i>&nbsp;                trimEdits(0, keepFrom-1);
+<i>233</i>&nbsp;            }
+<i>234</i>&nbsp;        }
+<i>235</i>&nbsp;    }
+<i>236</i>&nbsp;
+<b class="nc"><i>237</i>&nbsp;    /**</b>
+<i>238</i>&nbsp;     * Removes edits in the specified range.
+<i>239</i>&nbsp;     * All edits in the given range (inclusive, and in reverse order)
+<b class="nc"><i>240</i>&nbsp;     * will have &lt;code&gt;die&lt;/code&gt; invoked on them and are removed from</b>
+<b class="nc"><i>241</i>&nbsp;     * the list of edits. This has no effect if</b>
+<i>242</i>&nbsp;     * &lt;code&gt;from&lt;/code&gt; &amp;gt; &lt;code&gt;to&lt;/code&gt;.
+<i>243</i>&nbsp;     *
+<b class="nc"><i>244</i>&nbsp;     * @param from the minimum index to remove</b>
+<i>245</i>&nbsp;     * @param to the maximum index to remove
+<i>246</i>&nbsp;     */
+<b class="nc"><i>247</i>&nbsp;    protected void trimEdits(int from, int to) {</b>
+<i>248</i>&nbsp;        if (from &lt;= to) {
+<i>249</i>&nbsp;//          System.out.println(&quot;Trimming &quot; + from + &quot; &quot; + to + &quot; with index &quot; +
+<b class="nc"><i>250</i>&nbsp;//                           indexOfNextAdd);</b>
+<i>251</i>&nbsp;            for (int i = to; from &lt;= i; i--) {
+<b class="nc"><i>252</i>&nbsp;                UndoableEdit e = edits.elementAt(i);</b>
+<b class="nc"><i>253</i>&nbsp;//              System.out.println(&quot;JUM: Discarding &quot; +</b>
+<i>254</i>&nbsp;//                                 e.getUndoPresentationName());
+<b class="nc"><i>255</i>&nbsp;                e.die();</b>
+<i>256</i>&nbsp;                // PENDING(rjrjr) when Vector supports range deletion (JDK
+<i>257</i>&nbsp;                // 1.2) , we can optimize the next line considerably.
+<i>258</i>&nbsp;                edits.removeElementAt(i);
+<i>259</i>&nbsp;            }
+<i>260</i>&nbsp;
+<i>261</i>&nbsp;            if (indexOfNextAdd &gt; to) {
+<i>262</i>&nbsp;//              System.out.print(&quot;...right...&quot;);
+<i>263</i>&nbsp;                indexOfNextAdd -= to-from+1;
+<i>264</i>&nbsp;            } else if (indexOfNextAdd &gt;= from) {
+<i>265</i>&nbsp;//              System.out.println(&quot;...mid...&quot;);
+<i>266</i>&nbsp;                indexOfNextAdd = from;
+<i>267</i>&nbsp;            }
+<i>268</i>&nbsp;
+<i>269</i>&nbsp;//          System.out.println(&quot;new index &quot; + indexOfNextAdd);
+<i>270</i>&nbsp;        }
+<i>271</i>&nbsp;    }
+<i>272</i>&nbsp;
+<i>273</i>&nbsp;    /**
+<i>274</i>&nbsp;     * Sets the maximum number of edits this &lt;code&gt;UndoManager&lt;/code&gt;
+<i>275</i>&nbsp;     * holds. A value less than 0 indicates the number of edits is not
+<i>276</i>&nbsp;     * limited. If edits need to be discarded to shrink the limit,
+<i>277</i>&nbsp;     * &lt;code&gt;die&lt;/code&gt; will be invoked on them in the reverse
+<b class="nc"><i>278</i>&nbsp;     * order they were added.  The default is 100.</b>
+<b class="nc"><i>279</i>&nbsp;     *</b>
+<b class="nc"><i>280</i>&nbsp;     * @param l the new limit</b>
+<i>281</i>&nbsp;     * @throws RuntimeException if this {@code UndoManager} is not in progress
+<i>282</i>&nbsp;     *                          ({@code end} has been invoked)
+<i>283</i>&nbsp;     * @see #isInProgress
+<i>284</i>&nbsp;     * @see #end
+<i>285</i>&nbsp;     * @see #addEdit
+<i>286</i>&nbsp;     * @see #getLimit
+<i>287</i>&nbsp;     */
+<i>288</i>&nbsp;    public synchronized void setLimit(int l) {
+<i>289</i>&nbsp;        if (!inProgress) throw new RuntimeException(&quot;Attempt to call UndoManager.setLimit() after UndoManager.end() has been called&quot;);
+<i>290</i>&nbsp;        limit = l;
+<i>291</i>&nbsp;        trimForLimit();
+<b class="nc"><i>292</i>&nbsp;    }</b>
+<b class="nc"><i>293</i>&nbsp;</b>
+<b class="nc"><i>294</i>&nbsp;</b>
+<b class="nc"><i>295</i>&nbsp;    /**</b>
+<b class="nc"><i>296</i>&nbsp;     * Returns the next significant edit to be undone if &lt;code&gt;undo&lt;/code&gt;</b>
+<i>297</i>&nbsp;     * is invoked. This returns &lt;code&gt;null&lt;/code&gt; if there are no edits
+<b class="nc"><i>298</i>&nbsp;     * to be undone.</b>
+<i>299</i>&nbsp;     *
+<b class="nc"><i>300</i>&nbsp;     * @return the next significant edit to be undone</b>
+<i>301</i>&nbsp;     */
+<i>302</i>&nbsp;    protected UndoableEdit editToBeUndone() {
+<i>303</i>&nbsp;        int i = indexOfNextAdd;
+<i>304</i>&nbsp;        while (i &gt; 0) {
+<i>305</i>&nbsp;            UndoableEdit edit = edits.elementAt(--i);
+<i>306</i>&nbsp;            if (edit.isSignificant()) {
+<i>307</i>&nbsp;                return edit;
+<i>308</i>&nbsp;            }
+<i>309</i>&nbsp;        }
+<i>310</i>&nbsp;
+<b class="nc"><i>311</i>&nbsp;        return null;</b>
+<b class="nc"><i>312</i>&nbsp;    }</b>
+<i>313</i>&nbsp;
+<b class="nc"><i>314</i>&nbsp;    /**</b>
+<b class="nc"><i>315</i>&nbsp;     * Returns the next significant edit to be redone if &lt;code&gt;redo&lt;/code&gt;</b>
+<b class="nc"><i>316</i>&nbsp;     * is invoked. This returns &lt;code&gt;null&lt;/code&gt; if there are no edits</b>
+<b class="nc"><i>317</i>&nbsp;     * to be redone.</b>
+<i>318</i>&nbsp;     *
+<b class="nc"><i>319</i>&nbsp;     * @return the next significant edit to be redone</b>
+<i>320</i>&nbsp;     */
+<b class="nc"><i>321</i>&nbsp;    protected UndoableEdit editToBeRedone() {</b>
+<i>322</i>&nbsp;        int count = edits.size();
+<i>323</i>&nbsp;        int i = indexOfNextAdd;
+<i>324</i>&nbsp;
+<i>325</i>&nbsp;        while (i &lt; count) {
+<i>326</i>&nbsp;            UndoableEdit edit = edits.elementAt(i++);
+<i>327</i>&nbsp;            if (edit.isSignificant()) {
+<i>328</i>&nbsp;                return edit;
+<i>329</i>&nbsp;            }
+<i>330</i>&nbsp;        }
+<i>331</i>&nbsp;
+<b class="nc"><i>332</i>&nbsp;        return null;</b>
+<b class="nc"><i>333</i>&nbsp;    }</b>
+<b class="nc"><i>334</i>&nbsp;</b>
+<b class="nc"><i>335</i>&nbsp;    /**</b>
+<b class="nc"><i>336</i>&nbsp;     * Undoes all changes from the index of the next edit to</b>
+<b class="nc"><i>337</i>&nbsp;     * &lt;code&gt;edit&lt;/code&gt;, updating the index of the next edit appropriately.</b>
+<i>338</i>&nbsp;     *
+<i>339</i>&nbsp;     * @param edit the edit to be undo to
+<i>340</i>&nbsp;     * @throws CannotUndoException if one of the edits throws
+<i>341</i>&nbsp;     *         &lt;code&gt;CannotUndoException&lt;/code&gt;
+<i>342</i>&nbsp;     */
+<i>343</i>&nbsp;    protected void undoTo(UndoableEdit edit) throws CannotUndoException {
+<i>344</i>&nbsp;        boolean done = false;
+<i>345</i>&nbsp;        while (!done) {
+<i>346</i>&nbsp;            UndoableEdit next = edits.elementAt(--indexOfNextAdd);
+<i>347</i>&nbsp;            next.undo();
+<b class="nc"><i>348</i>&nbsp;            done = next == edit;</b>
+<b class="nc"><i>349</i>&nbsp;        }</b>
+<b class="nc"><i>350</i>&nbsp;    }</b>
+<b class="nc"><i>351</i>&nbsp;</b>
+<b class="nc"><i>352</i>&nbsp;    /**</b>
+<b class="nc"><i>353</i>&nbsp;     * Redoes all changes from the index of the next edit to</b>
+<i>354</i>&nbsp;     * &lt;code&gt;edit&lt;/code&gt;, updating the index of the next edit appropriately.
+<i>355</i>&nbsp;     *
+<i>356</i>&nbsp;     * @param edit the edit to be redo to
+<i>357</i>&nbsp;     * @throws CannotRedoException if one of the edits throws
+<i>358</i>&nbsp;     *         &lt;code&gt;CannotRedoException&lt;/code&gt;
+<i>359</i>&nbsp;     */
+<i>360</i>&nbsp;    protected void redoTo(UndoableEdit edit) throws CannotRedoException {
+<i>361</i>&nbsp;        boolean done = false;
+<i>362</i>&nbsp;        while (!done) {
+<i>363</i>&nbsp;            UndoableEdit next = edits.elementAt(indexOfNextAdd++);
+<i>364</i>&nbsp;            next.redo();
+<i>365</i>&nbsp;            done = next == edit;
+<i>366</i>&nbsp;        }
+<i>367</i>&nbsp;    }
+<i>368</i>&nbsp;
+<i>369</i>&nbsp;    /**
+<i>370</i>&nbsp;     * Convenience method that invokes one of &lt;code&gt;undo&lt;/code&gt; or
+<b class="nc"><i>371</i>&nbsp;     * &lt;code&gt;redo&lt;/code&gt;. If any edits have been undone (the index of</b>
+<b class="nc"><i>372</i>&nbsp;     * the next edit is less than the length of the edits list) this</b>
+<i>373</i>&nbsp;     * invokes &lt;code&gt;redo&lt;/code&gt;, otherwise it invokes &lt;code&gt;undo&lt;/code&gt;.
+<b class="nc"><i>374</i>&nbsp;     *</b>
+<i>375</i>&nbsp;     * @see #canUndoOrRedo
+<i>376</i>&nbsp;     * @see #getUndoOrRedoPresentationName
+<i>377</i>&nbsp;     * @throws CannotUndoException if one of the edits throws
+<i>378</i>&nbsp;     *         &lt;code&gt;CannotUndoException&lt;/code&gt;
+<i>379</i>&nbsp;     * @throws CannotRedoException if one of the edits throws
+<i>380</i>&nbsp;     *         &lt;code&gt;CannotRedoException&lt;/code&gt;
+<i>381</i>&nbsp;     */
+<i>382</i>&nbsp;    public void undoOrRedo() throws CannotRedoException, CannotUndoException {
+<i>383</i>&nbsp;        tryUndoOrRedo(Action.ANY);
+<i>384</i>&nbsp;    }
+<i>385</i>&nbsp;
+<b class="nc"><i>386</i>&nbsp;    /**</b>
+<b class="nc"><i>387</i>&nbsp;     * Returns true if it is possible to invoke &lt;code&gt;undo&lt;/code&gt; or</b>
+<i>388</i>&nbsp;     * &lt;code&gt;redo&lt;/code&gt;.
+<b class="nc"><i>389</i>&nbsp;     *</b>
+<i>390</i>&nbsp;     * @return true if invoking &lt;code&gt;canUndoOrRedo&lt;/code&gt; is valid
+<i>391</i>&nbsp;     * @see #undoOrRedo
+<i>392</i>&nbsp;     */
+<i>393</i>&nbsp;    public synchronized boolean canUndoOrRedo() {
+<i>394</i>&nbsp;        if (indexOfNextAdd == edits.size()) {
+<i>395</i>&nbsp;            return canUndo();
+<i>396</i>&nbsp;        } else {
+<i>397</i>&nbsp;            return canRedo();
+<i>398</i>&nbsp;        }
+<i>399</i>&nbsp;    }
+<i>400</i>&nbsp;
+<i>401</i>&nbsp;    /**
+<i>402</i>&nbsp;     * Undoes the appropriate edits.  If &lt;code&gt;end&lt;/code&gt; has been
+<i>403</i>&nbsp;     * invoked this calls through to the superclass, otherwise
+<i>404</i>&nbsp;     * this invokes &lt;code&gt;undo&lt;/code&gt; on all edits between the
+<i>405</i>&nbsp;     * index of the next edit and the last significant edit, updating
+<i>406</i>&nbsp;     * the index of the next edit appropriately.
+<i>407</i>&nbsp;     *
+<b class="nc"><i>408</i>&nbsp;     * @throws CannotUndoException if one of the edits throws</b>
+<b class="nc"><i>409</i>&nbsp;     *         &lt;code&gt;CannotUndoException&lt;/code&gt; or there are no edits</b>
+<b class="nc"><i>410</i>&nbsp;     *         to be undone</b>
+<b class="nc"><i>411</i>&nbsp;     * @see CompoundEdit#end</b>
+<i>412</i>&nbsp;     * @see #canUndo
+<b class="nc"><i>413</i>&nbsp;     * @see #editToBeUndone</b>
+<b class="nc"><i>414</i>&nbsp;     */</b>
+<b class="nc"><i>415</i>&nbsp;    public void undo() throws CannotUndoException {</b>
+<i>416</i>&nbsp;        tryUndoOrRedo(Action.UNDO);
+<i>417</i>&nbsp;    }
+<i>418</i>&nbsp;
+<i>419</i>&nbsp;    /**
+<i>420</i>&nbsp;     * Returns true if edits may be undone.  If &lt;code&gt;end&lt;/code&gt; has
+<i>421</i>&nbsp;     * been invoked, this returns the value from super.  Otherwise
+<i>422</i>&nbsp;     * this returns true if there are any edits to be undone
+<i>423</i>&nbsp;     * (&lt;code&gt;editToBeUndone&lt;/code&gt; returns non-&lt;code&gt;null&lt;/code&gt;).
+<i>424</i>&nbsp;     *
+<i>425</i>&nbsp;     * @return true if there are edits to be undone
+<i>426</i>&nbsp;     * @see CompoundEdit#canUndo
+<i>427</i>&nbsp;     * @see #editToBeUndone
+<i>428</i>&nbsp;     */
+<i>429</i>&nbsp;    public synchronized boolean canUndo() {
+<b class="nc"><i>430</i>&nbsp;        if (inProgress) {</b>
+<b class="nc"><i>431</i>&nbsp;            UndoableEdit edit = editToBeUndone();</b>
+<b class="nc"><i>432</i>&nbsp;            return edit != null &amp;&amp; edit.canUndo();</b>
+<i>433</i>&nbsp;        } else {
+<b class="nc"><i>434</i>&nbsp;            return super.canUndo();</b>
+<i>435</i>&nbsp;        }
+<i>436</i>&nbsp;    }
+<i>437</i>&nbsp;
+<i>438</i>&nbsp;    /**
+<i>439</i>&nbsp;     * Redoes the appropriate edits.  If &lt;code&gt;end&lt;/code&gt; has been
+<i>440</i>&nbsp;     * invoked this calls through to the superclass.  Otherwise
+<i>441</i>&nbsp;     * this invokes &lt;code&gt;redo&lt;/code&gt; on all edits between the
+<i>442</i>&nbsp;     * index of the next edit and the next significant edit, updating
+<i>443</i>&nbsp;     * the index of the next edit appropriately.
+<i>444</i>&nbsp;     *
+<i>445</i>&nbsp;     * @throws CannotRedoException if one of the edits throws
+<i>446</i>&nbsp;     *         &lt;code&gt;CannotRedoException&lt;/code&gt; or there are no edits
+<i>447</i>&nbsp;     *         to be redone
+<i>448</i>&nbsp;     * @see CompoundEdit#end
+<i>449</i>&nbsp;     * @see #canRedo
+<i>450</i>&nbsp;     * @see #editToBeRedone
+<i>451</i>&nbsp;     */
+<i>452</i>&nbsp;    public void redo() throws CannotRedoException {
+<b class="nc"><i>453</i>&nbsp;        tryUndoOrRedo(Action.REDO);</b>
+<b class="nc"><i>454</i>&nbsp;    }</b>
+<b class="nc"><i>455</i>&nbsp;</b>
+<b class="nc"><i>456</i>&nbsp;    private void tryUndoOrRedo(Action action) {</b>
+<i>457</i>&nbsp;        UndoableEditLockSupport lockSupport = null;
+<b class="nc"><i>458</i>&nbsp;        boolean undo;</b>
+<b class="nc"><i>459</i>&nbsp;        synchronized (this) {</b>
+<b class="nc"><i>460</i>&nbsp;            if (action == Action.ANY) {</b>
+<i>461</i>&nbsp;                undo = indexOfNextAdd == edits.size();
+<i>462</i>&nbsp;            } else {
+<i>463</i>&nbsp;                undo = action == Action.UNDO;
+<i>464</i>&nbsp;            }
+<i>465</i>&nbsp;            if (inProgress) {
+<i>466</i>&nbsp;                UndoableEdit edit = undo ? editToBeUndone() : editToBeRedone();
+<i>467</i>&nbsp;                if (edit == null) {
+<i>468</i>&nbsp;                    throw undo ? new CannotUndoException() :
+<i>469</i>&nbsp;                            new CannotRedoException();
+<i>470</i>&nbsp;                }
+<i>471</i>&nbsp;                lockSupport = getEditLockSupport(edit);
+<i>472</i>&nbsp;                if (lockSupport == null) {
+<i>473</i>&nbsp;                    if (undo) {
+<i>474</i>&nbsp;                        undoTo(edit);
+<b class="nc"><i>475</i>&nbsp;                    } else {</b>
+<b class="nc"><i>476</i>&nbsp;                        redoTo(edit);</b>
+<b class="nc"><i>477</i>&nbsp;                    }</b>
+<i>478</i>&nbsp;                    return;
+<b class="nc"><i>479</i>&nbsp;                }</b>
+<i>480</i>&nbsp;            } else {
+<i>481</i>&nbsp;                if (undo) {
+<i>482</i>&nbsp;                    super.undo();
+<i>483</i>&nbsp;                } else {
+<i>484</i>&nbsp;                    super.redo();
+<i>485</i>&nbsp;                }
+<i>486</i>&nbsp;                return;
+<i>487</i>&nbsp;            }
+<i>488</i>&nbsp;        }
+<i>489</i>&nbsp;        // the edit synchronization is required
+<i>490</i>&nbsp;        while (true) {
+<i>491</i>&nbsp;            lockSupport.lockEdit();
+<i>492</i>&nbsp;            UndoableEditLockSupport editLockSupport = null;
+<i>493</i>&nbsp;            try {
+<i>494</i>&nbsp;                synchronized (this) {
+<i>495</i>&nbsp;                    if (action == Action.ANY) {
+<i>496</i>&nbsp;                        undo = indexOfNextAdd == edits.size();
+<i>497</i>&nbsp;                    }
+<i>498</i>&nbsp;                    if (inProgress) {
+<i>499</i>&nbsp;                        UndoableEdit edit = undo ? editToBeUndone() :
+<i>500</i>&nbsp;                                editToBeRedone();
+<i>501</i>&nbsp;                        if (edit == null) {
+<b class="nc"><i>502</i>&nbsp;                            throw undo ? new CannotUndoException() :</b>
+<i>503</i>&nbsp;                                    new CannotRedoException();
+<b class="nc"><i>504</i>&nbsp;                        }</b>
+<b class="nc"><i>505</i>&nbsp;                        editLockSupport = getEditLockSupport(edit);</b>
+<b class="nc"><i>506</i>&nbsp;                        if (editLockSupport == null ||</b>
+<i>507</i>&nbsp;                                editLockSupport == lockSupport) {
+<i>508</i>&nbsp;                            if (undo) {
+<i>509</i>&nbsp;                                undoTo(edit);
+<i>510</i>&nbsp;                            } else {
+<i>511</i>&nbsp;                                redoTo(edit);
+<i>512</i>&nbsp;                            }
+<b class="nc"><i>513</i>&nbsp;                            return;</b>
+<i>514</i>&nbsp;                        }
+<i>515</i>&nbsp;                    } else {
+<b class="nc"><i>516</i>&nbsp;                        if (undo) {</b>
+<i>517</i>&nbsp;                            super.undo();
+<b class="nc"><i>518</i>&nbsp;                        } else {</b>
+<i>519</i>&nbsp;                            super.redo();
+<i>520</i>&nbsp;                        }
+<i>521</i>&nbsp;                        return;
+<i>522</i>&nbsp;                    }
+<i>523</i>&nbsp;                }
+<i>524</i>&nbsp;            } finally {
+<i>525</i>&nbsp;                if (lockSupport != null) {
+<i>526</i>&nbsp;                    lockSupport.unlockEdit();
+<i>527</i>&nbsp;                }
+<i>528</i>&nbsp;                lockSupport = editLockSupport;
+<i>529</i>&nbsp;            }
+<b class="nc"><i>530</i>&nbsp;        }</b>
+<b class="nc"><i>531</i>&nbsp;    }</b>
+<i>532</i>&nbsp;
+<i>533</i>&nbsp;    private UndoableEditLockSupport getEditLockSupport(UndoableEdit anEdit) {
+<i>534</i>&nbsp;        return anEdit instanceof UndoableEditLockSupport ?
+<i>535</i>&nbsp;                (UndoableEditLockSupport)anEdit : null;
+<i>536</i>&nbsp;    }
+<i>537</i>&nbsp;
+<i>538</i>&nbsp;    /**
+<i>539</i>&nbsp;     * Returns true if edits may be redone.  If &lt;code&gt;end&lt;/code&gt; has
+<i>540</i>&nbsp;     * been invoked, this returns the value from super.  Otherwise,
+<i>541</i>&nbsp;     * this returns true if there are any edits to be redone
+<i>542</i>&nbsp;     * (&lt;code&gt;editToBeRedone&lt;/code&gt; returns non-&lt;code&gt;null&lt;/code&gt;).
+<i>543</i>&nbsp;     *
+<i>544</i>&nbsp;     * @return true if there are edits to be redone
+<b class="nc"><i>545</i>&nbsp;     * @see CompoundEdit#canRedo</b>
+<b class="nc"><i>546</i>&nbsp;     * @see #editToBeRedone</b>
+<i>547</i>&nbsp;     */
+<b class="nc"><i>548</i>&nbsp;    public synchronized boolean canRedo() {</b>
+<i>549</i>&nbsp;        if (inProgress) {
+<i>550</i>&nbsp;            UndoableEdit edit = editToBeRedone();
+<i>551</i>&nbsp;            return edit != null &amp;&amp; edit.canRedo();
+<i>552</i>&nbsp;        } else {
+<i>553</i>&nbsp;            return super.canRedo();
+<i>554</i>&nbsp;        }
+<i>555</i>&nbsp;    }
+<i>556</i>&nbsp;
+<i>557</i>&nbsp;    /**
+<i>558</i>&nbsp;     * Adds an &lt;code&gt;UndoableEdit&lt;/code&gt; to this
+<i>559</i>&nbsp;     * &lt;code&gt;UndoManager&lt;/code&gt;, if it&#39;s possible.  This removes all
+<i>560</i>&nbsp;     * edits from the index of the next edit to the end of the edits
+<i>561</i>&nbsp;     * list.  If &lt;code&gt;end&lt;/code&gt; has been invoked the edit is not added
+<i>562</i>&nbsp;     * and &lt;code&gt;false&lt;/code&gt; is returned.  If &lt;code&gt;end&lt;/code&gt; hasn&#39;t
+<i>563</i>&nbsp;     * been invoked this returns &lt;code&gt;true&lt;/code&gt;.
+<i>564</i>&nbsp;     *
+<i>565</i>&nbsp;     * @param anEdit the edit to be added
+<b class="nc"><i>566</i>&nbsp;     * @return true if &lt;code&gt;anEdit&lt;/code&gt; can be incorporated into this</b>
+<b class="nc"><i>567</i>&nbsp;     *              edit</b>
+<b class="nc"><i>568</i>&nbsp;     * @see CompoundEdit#end</b>
+<i>569</i>&nbsp;     * @see CompoundEdit#addEdit
+<b class="nc"><i>570</i>&nbsp;     */</b>
+<i>571</i>&nbsp;    public synchronized boolean addEdit(UndoableEdit anEdit) {
+<i>572</i>&nbsp;        boolean retVal;
+<b class="nc"><i>573</i>&nbsp;</b>
+<i>574</i>&nbsp;        // Trim from the indexOfNextAdd to the end, as we&#39;ll
+<i>575</i>&nbsp;        // never reach these edits once the new one is added.
+<i>576</i>&nbsp;        trimEdits(indexOfNextAdd, edits.size()-1);
+<i>577</i>&nbsp;
+<i>578</i>&nbsp;        retVal = super.addEdit(anEdit);
+<i>579</i>&nbsp;        if (inProgress) {
+<i>580</i>&nbsp;          retVal = true;
+<i>581</i>&nbsp;        }
+<i>582</i>&nbsp;
+<i>583</i>&nbsp;        // Maybe super added this edit, maybe it didn&#39;t (perhaps
+<i>584</i>&nbsp;        // an in progress compound edit took it instead. Or perhaps
+<i>585</i>&nbsp;        // this UndoManager is no longer in progress). So make sure
+<i>586</i>&nbsp;        // the indexOfNextAdd is pointed at the right place.
+<i>587</i>&nbsp;        indexOfNextAdd = edits.size();
+<i>588</i>&nbsp;
+<i>589</i>&nbsp;        // Enforce the limit
+<i>590</i>&nbsp;        trimForLimit();
+<b class="nc"><i>591</i>&nbsp;</b>
+<b class="nc"><i>592</i>&nbsp;        return retVal;</b>
+<b class="nc"><i>593</i>&nbsp;    }</b>
+<i>594</i>&nbsp;
+<b class="nc"><i>595</i>&nbsp;</b>
+<i>596</i>&nbsp;    /**
+<i>597</i>&nbsp;     * Turns this &lt;code&gt;UndoManager&lt;/code&gt; into a normal
+<b class="nc"><i>598</i>&nbsp;     * &lt;code&gt;CompoundEdit&lt;/code&gt;.  This removes all edits that have</b>
+<i>599</i>&nbsp;     * been undone.
+<i>600</i>&nbsp;     *
+<i>601</i>&nbsp;     * @see CompoundEdit#end
+<i>602</i>&nbsp;     */
+<i>603</i>&nbsp;    public synchronized void end() {
+<i>604</i>&nbsp;        super.end();
+<i>605</i>&nbsp;        this.trimEdits(indexOfNextAdd, edits.size()-1);
+<i>606</i>&nbsp;    }
+<i>607</i>&nbsp;
+<i>608</i>&nbsp;    /**
+<i>609</i>&nbsp;     * Convenience method that returns either
+<i>610</i>&nbsp;     * &lt;code&gt;getUndoPresentationName&lt;/code&gt; or
+<b class="nc"><i>611</i>&nbsp;     * &lt;code&gt;getRedoPresentationName&lt;/code&gt;.  If the index of the next</b>
+<i>612</i>&nbsp;     * edit equals the size of the edits list,
+<i>613</i>&nbsp;     * &lt;code&gt;getUndoPresentationName&lt;/code&gt; is returned, otherwise
+<i>614</i>&nbsp;     * &lt;code&gt;getRedoPresentationName&lt;/code&gt; is returned.
+<i>615</i>&nbsp;     *
+<i>616</i>&nbsp;     * @return undo or redo name
+<i>617</i>&nbsp;     */
+<i>618</i>&nbsp;    public synchronized String getUndoOrRedoPresentationName() {
+<i>619</i>&nbsp;        if (indexOfNextAdd == edits.size()) {
+<i>620</i>&nbsp;            return getUndoPresentationName();
+<b class="nc"><i>621</i>&nbsp;        } else {</b>
+<i>622</i>&nbsp;            return getRedoPresentationName();
+<i>623</i>&nbsp;        }
+<i>624</i>&nbsp;    }
+<i>625</i>&nbsp;
+<i>626</i>&nbsp;    /**
+<i>627</i>&nbsp;     * Returns a description of the undoable form of this edit.
+<i>628</i>&nbsp;     * If &lt;code&gt;end&lt;/code&gt; has been invoked this calls into super.
+<i>629</i>&nbsp;     * Otherwise if there are edits to be undone, this returns
+<i>630</i>&nbsp;     * the value from the next significant edit that will be undone.
+<i>631</i>&nbsp;     * If there are no edits to be undone and &lt;code&gt;end&lt;/code&gt; has not
+<i>632</i>&nbsp;     * been invoked this returns the value from the &lt;code&gt;UIManager&lt;/code&gt;
+<i>633</i>&nbsp;     * property &quot;AbstractUndoableEdit.undoText&quot;.
+<i>634</i>&nbsp;     *
+<i>635</i>&nbsp;     * @return a description of the undoable form of this edit
+<i>636</i>&nbsp;     * @see     #undo
+<i>637</i>&nbsp;     * @see     CompoundEdit#getUndoPresentationName
+<i>638</i>&nbsp;     */
+<i>639</i>&nbsp;    public synchronized String getUndoPresentationName() {
+<i>640</i>&nbsp;        if (inProgress) {
+<i>641</i>&nbsp;            if (canUndo()) {
+<i>642</i>&nbsp;                return editToBeUndone().getUndoPresentationName();
+<i>643</i>&nbsp;            } else {
+<i>644</i>&nbsp;                return UIManager.getString(&quot;AbstractUndoableEdit.undoText&quot;);
+<i>645</i>&nbsp;            }
+<i>646</i>&nbsp;        } else {
+<i>647</i>&nbsp;            return super.getUndoPresentationName();
+<i>648</i>&nbsp;        }
+<i>649</i>&nbsp;    }
+<i>650</i>&nbsp;
+<i>651</i>&nbsp;    /**
+<i>652</i>&nbsp;     * Returns a description of the redoable form of this edit.
+<i>653</i>&nbsp;     * If &lt;code&gt;end&lt;/code&gt; has been invoked this calls into super.
+<i>654</i>&nbsp;     * Otherwise if there are edits to be redone, this returns
+<i>655</i>&nbsp;     * the value from the next significant edit that will be redone.
+<i>656</i>&nbsp;     * If there are no edits to be redone and &lt;code&gt;end&lt;/code&gt; has not
+<i>657</i>&nbsp;     * been invoked this returns the value from the &lt;code&gt;UIManager&lt;/code&gt;
+<i>658</i>&nbsp;     * property &quot;AbstractUndoableEdit.redoText&quot;.
+<i>659</i>&nbsp;     *
+<i>660</i>&nbsp;     * @return a description of the redoable form of this edit
+<i>661</i>&nbsp;     * @see     #redo
+<i>662</i>&nbsp;     * @see     CompoundEdit#getRedoPresentationName
+<i>663</i>&nbsp;     */
+<i>664</i>&nbsp;    public synchronized String getRedoPresentationName() {
+<i>665</i>&nbsp;        if (inProgress) {
+<i>666</i>&nbsp;            if (canRedo()) {
+<i>667</i>&nbsp;                return editToBeRedone().getRedoPresentationName();
+<i>668</i>&nbsp;            } else {
+<i>669</i>&nbsp;                return UIManager.getString(&quot;AbstractUndoableEdit.redoText&quot;);
+<i>670</i>&nbsp;            }
+<i>671</i>&nbsp;        } else {
+<i>672</i>&nbsp;            return super.getRedoPresentationName();
+<i>673</i>&nbsp;        }
+<i>674</i>&nbsp;    }
+<i>675</i>&nbsp;
+<i>676</i>&nbsp;    /**
+<i>677</i>&nbsp;     * An &lt;code&gt;UndoableEditListener&lt;/code&gt; method. This invokes
+<i>678</i>&nbsp;     * &lt;code&gt;addEdit&lt;/code&gt; with &lt;code&gt;e.getEdit()&lt;/code&gt;.
+<i>679</i>&nbsp;     *
+<i>680</i>&nbsp;     * @param e the &lt;code&gt;UndoableEditEvent&lt;/code&gt; the
+<i>681</i>&nbsp;     *        &lt;code&gt;UndoableEditEvent&lt;/code&gt; will be added from
+<i>682</i>&nbsp;     * @see #addEdit
+<i>683</i>&nbsp;     */
+<i>684</i>&nbsp;    public void undoableEditHappened(UndoableEditEvent e) {
+<i>685</i>&nbsp;        addEdit(e.getEdit());
+<i>686</i>&nbsp;    }
+<i>687</i>&nbsp;
+<i>688</i>&nbsp;    /**
+<i>689</i>&nbsp;     * Returns a string that displays and identifies this
+<i>690</i>&nbsp;     * object&#39;s properties.
+<i>691</i>&nbsp;     *
+<i>692</i>&nbsp;     * @return a String representation of this object
+<i>693</i>&nbsp;     */
+<i>694</i>&nbsp;    public String toString() {
+<i>695</i>&nbsp;        return super.toString() + &quot; limit: &quot; + limit +
+<i>696</i>&nbsp;            &quot; indexOfNextAdd: &quot; + indexOfNextAdd;
+<i>697</i>&nbsp;    }
+<i>698</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

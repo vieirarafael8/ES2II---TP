@@ -1,0 +1,620 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: D3DScreenUpdateManager</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.java2d.d3d</a> ]
+</div>
+
+<h1>Coverage Summary for Class: D3DScreenUpdateManager (sun.java2d.d3d)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">D3DScreenUpdateManager</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 19)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 153)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2007, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.java2d.d3d;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.awt.Color;
+<i>29</i>&nbsp;import java.awt.Component;
+<i>30</i>&nbsp;import java.awt.Container;
+<i>31</i>&nbsp;import java.awt.Font;
+<i>32</i>&nbsp;import java.awt.Graphics2D;
+<i>33</i>&nbsp;import java.awt.Rectangle;
+<i>34</i>&nbsp;import java.awt.Window;
+<i>35</i>&nbsp;import java.security.AccessController;
+<i>36</i>&nbsp;import java.security.PrivilegedAction;
+<i>37</i>&nbsp;import java.util.ArrayList;
+<i>38</i>&nbsp;import java.util.HashMap;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;import sun.awt.AWTAccessor;
+<i>41</i>&nbsp;import sun.awt.AWTAccessor.ComponentAccessor;
+<i>42</i>&nbsp;import sun.awt.util.ThreadGroupUtils;
+<i>43</i>&nbsp;import sun.awt.Win32GraphicsConfig;
+<i>44</i>&nbsp;import sun.awt.windows.WComponentPeer;
+<i>45</i>&nbsp;import sun.java2d.InvalidPipeException;
+<i>46</i>&nbsp;import sun.java2d.ScreenUpdateManager;
+<i>47</i>&nbsp;import sun.java2d.SunGraphics2D;
+<i>48</i>&nbsp;import sun.java2d.SurfaceData;
+<i>49</i>&nbsp;import sun.java2d.windows.GDIWindowSurfaceData;
+<i>50</i>&nbsp;import sun.java2d.d3d.D3DSurfaceData.D3DWindowSurfaceData;
+<i>51</i>&nbsp;import sun.java2d.windows.WindowsFlags;
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;/**
+<i>54</i>&nbsp; * This class handles rendering to the screen with the D3D pipeline.
+<i>55</i>&nbsp; *
+<i>56</i>&nbsp; * Since it is not possible to render directly to the front buffer
+<i>57</i>&nbsp; * with D3D9, we create a swap chain surface (with COPY effect) in place of the
+<i>58</i>&nbsp; * GDIWindowSurfaceData. A background thread handles the swap chain flips.
+<i>59</i>&nbsp; *
+<i>60</i>&nbsp; * There are some restrictions to which windows we would use this for.
+<i>61</i>&nbsp; * @see #createScreenSurface
+<i>62</i>&nbsp; */
+<i>63</i>&nbsp;public class D3DScreenUpdateManager extends ScreenUpdateManager
+<i>64</i>&nbsp;    implements Runnable
+<i>65</i>&nbsp;{
+<i>66</i>&nbsp;    /**
+<i>67</i>&nbsp;     * A window must be at least MIN_WIN_SIZE in one or both dimensions
+<i>68</i>&nbsp;     * to be considered for the update manager.
+<i>69</i>&nbsp;     */
+<i>70</i>&nbsp;    private static final int MIN_WIN_SIZE = 150;
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    private volatile boolean done;
+<i>73</i>&nbsp;    private volatile Thread screenUpdater;
+<i>74</i>&nbsp;    private boolean needsUpdateNow;
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    /**
+<i>77</i>&nbsp;     * Object used by the screen updater thread for waiting
+<b class="nc"><i>78</i>&nbsp;     */</b>
+<i>79</i>&nbsp;    private Object runLock = new Object();
+<i>80</i>&nbsp;    /**
+<i>81</i>&nbsp;     * List of D3DWindowSurfaceData surfaces. Surfaces are added to the
+<i>82</i>&nbsp;     * list when a graphics object is created, and removed when the surface
+<i>83</i>&nbsp;     * is invalidated.
+<i>84</i>&nbsp;     */
+<i>85</i>&nbsp;    private ArrayList&lt;D3DWindowSurfaceData&gt; d3dwSurfaces;
+<i>86</i>&nbsp;    /**
+<i>87</i>&nbsp;     * Cache of GDIWindowSurfaceData surfaces corresponding to the
+<i>88</i>&nbsp;     * D3DWindowSurfaceData surfaces. Surfaces are added to the list when
+<i>89</i>&nbsp;     * a d3dw surface is lost and could not be restored (due to lack of vram,
+<i>90</i>&nbsp;     * for example), and removed then the d3dw surface is invalidated.
+<i>91</i>&nbsp;     */
+<i>92</i>&nbsp;    private HashMap&lt;D3DWindowSurfaceData, GDIWindowSurfaceData&gt; gdiSurfaces;
+<b class="nc"><i>93</i>&nbsp;</b>
+<b class="nc"><i>94</i>&nbsp;    public D3DScreenUpdateManager() {</b>
+<b class="nc"><i>95</i>&nbsp;        done = false;</b>
+<i>96</i>&nbsp;        AccessController.doPrivileged((PrivilegedAction&lt;Void&gt;) () -&gt; {
+<b class="nc"><i>97</i>&nbsp;            Runnable shutdownRunnable = () -&gt; {</b>
+<b class="nc"><i>98</i>&nbsp;                done = true;</b>
+<b class="nc"><i>99</i>&nbsp;                wakeUpUpdateThread();</b>
+<b class="nc"><i>100</i>&nbsp;            };</b>
+<i>101</i>&nbsp;            Thread shutdown = new Thread(
+<b class="nc"><i>102</i>&nbsp;                    ThreadGroupUtils.getRootThreadGroup(), shutdownRunnable,</b>
+<i>103</i>&nbsp;                    &quot;ScreenUpdater&quot;, 0, false);
+<b class="nc"><i>104</i>&nbsp;            shutdown.setContextClassLoader(null);</b>
+<b class="nc"><i>105</i>&nbsp;            try {</b>
+<b class="nc"><i>106</i>&nbsp;                Runtime.getRuntime().addShutdownHook(shutdown);</b>
+<b class="nc"><i>107</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i>108</i>&nbsp;                done = true;</b>
+<i>109</i>&nbsp;            }
+<i>110</i>&nbsp;            return null;
+<i>111</i>&nbsp;        });
+<i>112</i>&nbsp;    }
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    /**
+<i>115</i>&nbsp;     * If possible, creates a D3DWindowSurfaceData (which is actually
+<i>116</i>&nbsp;     * a back-buffer surface). If the creation fails, returns GDI
+<i>117</i>&nbsp;     * onscreen surface instead.
+<i>118</i>&nbsp;     *
+<i>119</i>&nbsp;     * Note that the created D3D surface does not initialize the native
+<i>120</i>&nbsp;     * resources (and is marked lost) to avoid wasting video memory. It is
+<i>121</i>&nbsp;     * restored when a graphics object is requested from the peer.
+<i>122</i>&nbsp;     *
+<i>123</i>&nbsp;     * Note that this method is called from a synchronized block in
+<i>124</i>&nbsp;     * WComponentPeer, so we don&#39;t need to synchronize
+<i>125</i>&nbsp;     *
+<i>126</i>&nbsp;     * Note that we only create a substibute d3dw surface if certain conditions
+<i>127</i>&nbsp;     * are met
+<i>128</i>&nbsp;     * &lt;ul&gt;
+<i>129</i>&nbsp;     *  &lt;li&gt;the fake d3d rendering on screen is not disabled via flag
+<i>130</i>&nbsp;     *  &lt;li&gt;d3d on the device is enabled
+<i>131</i>&nbsp;     *  &lt;li&gt;surface is larger than MIN_WIN_SIZE (don&#39;t bother for smaller ones)
+<i>132</i>&nbsp;     *  &lt;li&gt;it doesn&#39;t have a backBuffer for a BufferStrategy already
+<i>133</i>&nbsp;     *  &lt;li&gt;the peer is either Canvas, Panel, Window, Frame,
+<i>134</i>&nbsp;     *  Dialog or EmbeddedFrame
+<i>135</i>&nbsp;     * &lt;/ul&gt;
+<i>136</i>&nbsp;     *
+<i>137</i>&nbsp;     * @param gc GraphicsConfiguration on associated with the surface
+<i>138</i>&nbsp;     * @param peer peer for which the surface is to be created
+<i>139</i>&nbsp;     * @param bbNum number of back-buffers requested. if this number is &gt;0,
+<i>140</i>&nbsp;     * method returns GDI surface (we don&#39;t want to have two swap chains)
+<i>141</i>&nbsp;     * @param isResize whether this surface is being created in response to
+<i>142</i>&nbsp;     * a component resize event. This determines whether a repaint event will
+<i>143</i>&nbsp;     * be issued after a surface is created: it will be if {@code isResize}
+<i>144</i>&nbsp;     * is {@code true}.
+<i>145</i>&nbsp;     * @return surface data to be use for onscreen rendering
+<i>146</i>&nbsp;     */
+<i>147</i>&nbsp;    @Override
+<i>148</i>&nbsp;    public SurfaceData createScreenSurface(Win32GraphicsConfig gc,
+<i>149</i>&nbsp;                                           WComponentPeer peer,
+<i>150</i>&nbsp;                                           int bbNum, boolean isResize)
+<b class="nc"><i>151</i>&nbsp;    {</b>
+<b class="nc"><i>152</i>&nbsp;        if (done || !(gc instanceof D3DGraphicsConfig)) {</b>
+<i>153</i>&nbsp;            return super.createScreenSurface(gc, peer, bbNum, isResize);
+<i>154</i>&nbsp;        }
+<b class="nc"><i>155</i>&nbsp;</b>
+<i>156</i>&nbsp;        SurfaceData sd = null;
+<b class="nc"><i>157</i>&nbsp;</b>
+<i>158</i>&nbsp;        if (canUseD3DOnScreen(peer, gc, bbNum)) {
+<i>159</i>&nbsp;            try {
+<i>160</i>&nbsp;                // note that the created surface will be in the &quot;lost&quot;
+<i>161</i>&nbsp;                // state, it will be restored prior to rendering to it
+<i>162</i>&nbsp;                // for the first time. This is done so that vram is not
+<b class="nc"><i>163</i>&nbsp;                // wasted for surfaces never rendered to</b>
+<b class="nc"><i>164</i>&nbsp;                sd = D3DSurfaceData.createData(peer);</b>
+<b class="nc"><i>165</i>&nbsp;            }  catch (InvalidPipeException ipe) {</b>
+<b class="nc"><i>166</i>&nbsp;                sd = null;</b>
+<i>167</i>&nbsp;            }
+<b class="nc"><i>168</i>&nbsp;        }</b>
+<b class="nc"><i>169</i>&nbsp;        if (sd == null) {</b>
+<i>170</i>&nbsp;            sd = GDIWindowSurfaceData.createData(peer);
+<i>171</i>&nbsp;            // note that we do not add this surface to the list of cached gdi
+<i>172</i>&nbsp;            // surfaces as there&#39;s no d3dw surface to associate it with;
+<i>173</i>&nbsp;            // this peer will have a gdi surface until next time a surface
+<i>174</i>&nbsp;            // will need to be replaced
+<i>175</i>&nbsp;        }
+<b class="nc"><i>176</i>&nbsp;</b>
+<i>177</i>&nbsp;        if (isResize) {
+<i>178</i>&nbsp;            // since we&#39;d potentially replaced the back-buffer surface
+<i>179</i>&nbsp;            // (either with another bb, or a gdi one), the
+<i>180</i>&nbsp;            // component will need to be completely repainted;
+<i>181</i>&nbsp;            // this only need to be done when the surface is created in
+<i>182</i>&nbsp;            // response to a resize event since when a component is created it
+<b class="nc"><i>183</i>&nbsp;            // will be repainted anyway</b>
+<i>184</i>&nbsp;            repaintPeerTarget(peer);
+<i>185</i>&nbsp;        }
+<b class="nc"><i>186</i>&nbsp;</b>
+<i>187</i>&nbsp;        return sd;
+<i>188</i>&nbsp;    }
+<i>189</i>&nbsp;
+<i>190</i>&nbsp;    /**
+<i>191</i>&nbsp;     * Determines if we can use a d3d surface for onscreen rendering for this
+<i>192</i>&nbsp;     * peer.
+<i>193</i>&nbsp;     * We only create onscreen d3d surfaces if the following conditions are met:
+<i>194</i>&nbsp;     *  - d3d is enabled on this device and onscreen emulation is enabled
+<i>195</i>&nbsp;     *  - window is big enough to bother (either dimension &gt; MIN_WIN_SIZE)
+<i>196</i>&nbsp;     *  - this heavyweight doesn&#39;t have a BufferStrategy
+<i>197</i>&nbsp;     *  - if we are in full-screen mode then it must be the peer of the
+<i>198</i>&nbsp;     *    full-screen window (since there could be only one SwapChain in fs)
+<i>199</i>&nbsp;     *    and it must not have any heavyweight children
+<i>200</i>&nbsp;     *    (as Present() doesn&#39;t respect component clipping in fullscreen mode)
+<i>201</i>&nbsp;     *  - it&#39;s one of the classes likely to have custom rendering worth
+<i>202</i>&nbsp;     *    accelerating
+<i>203</i>&nbsp;     *
+<i>204</i>&nbsp;     * @return true if we can use a d3d surface for this peer&#39;s onscreen
+<i>205</i>&nbsp;     *         rendering
+<i>206</i>&nbsp;     */
+<i>207</i>&nbsp;    public static boolean canUseD3DOnScreen(final WComponentPeer peer,
+<i>208</i>&nbsp;                                            final Win32GraphicsConfig gc,
+<i>209</i>&nbsp;                                            final int bbNum)
+<b class="nc"><i>210</i>&nbsp;    {</b>
+<b class="nc"><i>211</i>&nbsp;        if (!(gc instanceof D3DGraphicsConfig)) {</b>
+<i>212</i>&nbsp;            return false;
+<b class="nc"><i>213</i>&nbsp;        }</b>
+<b class="nc"><i>214</i>&nbsp;        D3DGraphicsConfig d3dgc = (D3DGraphicsConfig)gc;</b>
+<b class="nc"><i>215</i>&nbsp;        D3DGraphicsDevice d3dgd = d3dgc.getD3DDevice();</b>
+<b class="nc"><i>216</i>&nbsp;        String peerName = peer.getClass().getName();</b>
+<b class="nc"><i>217</i>&nbsp;        Rectangle r = peer.getBounds();</b>
+<b class="nc"><i>218</i>&nbsp;        Component target = (Component)peer.getTarget();</b>
+<i>219</i>&nbsp;        Window fsw = d3dgd.getFullScreenWindow();
+<b class="nc"><i>220</i>&nbsp;</b>
+<b class="nc"><i>221</i>&nbsp;        return</b>
+<b class="nc"><i>222</i>&nbsp;            WindowsFlags.isD3DOnScreenEnabled() &amp;&amp;</b>
+<b class="nc"><i>223</i>&nbsp;            d3dgd.isD3DEnabledOnDevice() &amp;&amp;</b>
+<i>224</i>&nbsp;            peer.isAccelCapable() &amp;&amp;
+<i>225</i>&nbsp;            (r.width &gt; MIN_WIN_SIZE || r.height &gt; MIN_WIN_SIZE) &amp;&amp;
+<b class="nc"><i>226</i>&nbsp;            bbNum == 0 &amp;&amp;</b>
+<b class="nc"><i>227</i>&nbsp;            (fsw == null || (fsw == target &amp;&amp; !hasHWChildren(target))) &amp;&amp;</b>
+<b class="nc"><i>228</i>&nbsp;            (peerName.equals(&quot;sun.awt.windows.WCanvasPeer&quot;) ||</b>
+<b class="nc"><i>229</i>&nbsp;             peerName.equals(&quot;sun.awt.windows.WDialogPeer&quot;) ||</b>
+<b class="nc"><i>230</i>&nbsp;             peerName.equals(&quot;sun.awt.windows.WPanelPeer&quot;)  ||</b>
+<b class="nc"><i>231</i>&nbsp;             peerName.equals(&quot;sun.awt.windows.WWindowPeer&quot;) ||</b>
+<b class="nc"><i>232</i>&nbsp;             peerName.equals(&quot;sun.awt.windows.WFramePeer&quot;)  ||</b>
+<i>233</i>&nbsp;             peerName.equals(&quot;sun.awt.windows.WEmbeddedFramePeer&quot;));
+<i>234</i>&nbsp;    }
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;    /**
+<i>237</i>&nbsp;     * Creates a graphics object for the passed in surface data. If
+<i>238</i>&nbsp;     * the surface is lost, it is restored.
+<i>239</i>&nbsp;     * If the surface wasn&#39;t lost or the restoration was successful
+<i>240</i>&nbsp;     * the surface is added to the list of maintained surfaces
+<i>241</i>&nbsp;     * (if it hasn&#39;t been already).
+<i>242</i>&nbsp;     *
+<i>243</i>&nbsp;     * If the updater thread hasn&#39;t been created yet , it will be created and
+<i>244</i>&nbsp;     * started.
+<i>245</i>&nbsp;     *
+<i>246</i>&nbsp;     * @param sd surface data for which to create SunGraphics2D
+<i>247</i>&nbsp;     * @param peer peer associated with the surface data
+<i>248</i>&nbsp;     * @param fgColor fg color to be used in graphics
+<i>249</i>&nbsp;     * @param bgColor bg color to be used in graphics
+<i>250</i>&nbsp;     * @param font font to be used in graphics
+<i>251</i>&nbsp;     * @return a SunGraphics2D object for the surface (or for temp GDI
+<i>252</i>&nbsp;     * surface data)
+<i>253</i>&nbsp;     */
+<i>254</i>&nbsp;    @Override
+<i>255</i>&nbsp;    public Graphics2D createGraphics(SurfaceData sd,
+<i>256</i>&nbsp;            WComponentPeer peer, Color fgColor, Color bgColor, Font font)
+<b class="nc"><i>257</i>&nbsp;    {</b>
+<b class="nc"><i>258</i>&nbsp;        if (!done &amp;&amp; sd instanceof D3DWindowSurfaceData) {</b>
+<b class="nc"><i>259</i>&nbsp;            D3DWindowSurfaceData d3dw = (D3DWindowSurfaceData)sd;</b>
+<b class="nc"><i>260</i>&nbsp;            if (!d3dw.isSurfaceLost() || validate(d3dw)) {</b>
+<b class="nc"><i>261</i>&nbsp;                trackScreenSurface(d3dw);</b>
+<i>262</i>&nbsp;                return new SunGraphics2D(sd, fgColor, bgColor, font);
+<i>263</i>&nbsp;            }
+<i>264</i>&nbsp;            // could not restore the d3dw surface, use the cached gdi surface
+<i>265</i>&nbsp;            // instead for this graphics object; note that we do not track
+<i>266</i>&nbsp;            // this new gdi surface, it is only used for this graphics
+<b class="nc"><i>267</i>&nbsp;            // object</b>
+<i>268</i>&nbsp;            sd = getGdiSurface(d3dw);
+<b class="nc"><i>269</i>&nbsp;        }</b>
+<i>270</i>&nbsp;        return super.createGraphics(sd, peer, fgColor, bgColor, font);
+<i>271</i>&nbsp;    }
+<i>272</i>&nbsp;
+<i>273</i>&nbsp;    /**
+<i>274</i>&nbsp;     * Posts a repaint event for the peer&#39;s target to the EDT
+<i>275</i>&nbsp;     * @param peer for which target&#39;s the repaint should be issued
+<i>276</i>&nbsp;     */
+<b class="nc"><i>277</i>&nbsp;    private void repaintPeerTarget(WComponentPeer peer) {</b>
+<b class="nc"><i>278</i>&nbsp;        Component target = (Component)peer.getTarget();</b>
+<i>279</i>&nbsp;        Rectangle bounds = AWTAccessor.getComponentAccessor().getBounds(target);
+<i>280</i>&nbsp;        // the system-level painting operations should call the handlePaint()
+<i>281</i>&nbsp;        // method of the WComponentPeer class to repaint the component;
+<b class="nc"><i>282</i>&nbsp;        // calling repaint() forces AWT to make call to update()</b>
+<i>283</i>&nbsp;        peer.handlePaint(0, 0, bounds.width, bounds.height);
+<i>284</i>&nbsp;    }
+<i>285</i>&nbsp;
+<i>286</i>&nbsp;    /**
+<i>287</i>&nbsp;     * Adds a surface to the list of tracked surfaces.
+<i>288</i>&nbsp;     *
+<i>289</i>&nbsp;     * @param sd the surface to be added
+<i>290</i>&nbsp;     */
+<b class="nc"><i>291</i>&nbsp;    private void trackScreenSurface(SurfaceData sd) {</b>
+<b class="nc"><i>292</i>&nbsp;        if (!done &amp;&amp; sd instanceof D3DWindowSurfaceData) {</b>
+<b class="nc"><i>293</i>&nbsp;            synchronized (this) {</b>
+<b class="nc"><i>294</i>&nbsp;                if (d3dwSurfaces == null) {</b>
+<i>295</i>&nbsp;                    d3dwSurfaces = new ArrayList&lt;D3DWindowSurfaceData&gt;();
+<b class="nc"><i>296</i>&nbsp;                }</b>
+<b class="nc"><i>297</i>&nbsp;                D3DWindowSurfaceData d3dw = (D3DWindowSurfaceData)sd;</b>
+<b class="nc"><i>298</i>&nbsp;                if (!d3dwSurfaces.contains(d3dw)) {</b>
+<i>299</i>&nbsp;                    d3dwSurfaces.add(d3dw);
+<b class="nc"><i>300</i>&nbsp;                }</b>
+<b class="nc"><i>301</i>&nbsp;            }</b>
+<i>302</i>&nbsp;            startUpdateThread();
+<i>303</i>&nbsp;        }
+<i>304</i>&nbsp;    }
+<i>305</i>&nbsp;
+<i>306</i>&nbsp;    @Override
+<b class="nc"><i>307</i>&nbsp;    public synchronized void dropScreenSurface(SurfaceData sd) {</b>
+<b class="nc"><i>308</i>&nbsp;        if (d3dwSurfaces != null &amp;&amp; sd instanceof D3DWindowSurfaceData) {</b>
+<b class="nc"><i>309</i>&nbsp;            D3DWindowSurfaceData d3dw = (D3DWindowSurfaceData)sd;</b>
+<b class="nc"><i>310</i>&nbsp;            removeGdiSurface(d3dw);</b>
+<i>311</i>&nbsp;            d3dwSurfaces.remove(d3dw);
+<i>312</i>&nbsp;        }
+<i>313</i>&nbsp;    }
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;    @Override
+<i>316</i>&nbsp;    public SurfaceData getReplacementScreenSurface(WComponentPeer peer,
+<i>317</i>&nbsp;                                                   SurfaceData sd)
+<b class="nc"><i>318</i>&nbsp;    {</b>
+<i>319</i>&nbsp;        SurfaceData newSurface = super.getReplacementScreenSurface(peer, sd);
+<i>320</i>&nbsp;        // if some outstanding graphics context wants to get a replacement we
+<i>321</i>&nbsp;        // need to make sure that the new surface (if it is accelerated) is
+<b class="nc"><i>322</i>&nbsp;        // being tracked</b>
+<b class="nc"><i>323</i>&nbsp;        trackScreenSurface(newSurface);</b>
+<i>324</i>&nbsp;        return newSurface;
+<i>325</i>&nbsp;    }
+<i>326</i>&nbsp;
+<i>327</i>&nbsp;    /**
+<i>328</i>&nbsp;     * Remove the gdi surface corresponding to the passed d3dw surface
+<i>329</i>&nbsp;     * from list of the cached gdi surfaces.
+<i>330</i>&nbsp;     *
+<i>331</i>&nbsp;     * @param d3dw surface for which associated gdi surface is to be removed
+<i>332</i>&nbsp;     */
+<b class="nc"><i>333</i>&nbsp;    private void removeGdiSurface(final D3DWindowSurfaceData d3dw) {</b>
+<b class="nc"><i>334</i>&nbsp;        if (gdiSurfaces != null) {</b>
+<b class="nc"><i>335</i>&nbsp;            GDIWindowSurfaceData gdisd = gdiSurfaces.get(d3dw);</b>
+<b class="nc"><i>336</i>&nbsp;            if (gdisd != null) {</b>
+<b class="nc"><i>337</i>&nbsp;                gdisd.invalidate();</b>
+<i>338</i>&nbsp;                gdiSurfaces.remove(d3dw);
+<i>339</i>&nbsp;            }
+<i>340</i>&nbsp;        }
+<i>341</i>&nbsp;    }
+<i>342</i>&nbsp;
+<i>343</i>&nbsp;    /**
+<i>344</i>&nbsp;     * If the update thread hasn&#39;t yet been created, it will be;
+<i>345</i>&nbsp;     * otherwise it is awaken
+<i>346</i>&nbsp;     */
+<b class="nc"><i>347</i>&nbsp;    private synchronized void startUpdateThread() {</b>
+<b class="nc"><i>348</i>&nbsp;        if (screenUpdater == null) {</b>
+<i>349</i>&nbsp;            screenUpdater = AccessController.doPrivileged((PrivilegedAction&lt;Thread&gt;) () -&gt; {
+<b class="nc"><i>350</i>&nbsp;                String name = &quot;D3D Screen Updater&quot;;</b>
+<b class="nc"><i>351</i>&nbsp;                Thread t = new Thread(</b>
+<i>352</i>&nbsp;                        ThreadGroupUtils.getRootThreadGroup(), this, name,
+<i>353</i>&nbsp;                        0, false);
+<i>354</i>&nbsp;                // REMIND: should it be higher?
+<b class="nc"><i>355</i>&nbsp;                t.setPriority(Thread.NORM_PRIORITY + 2);</b>
+<b class="nc"><i>356</i>&nbsp;                t.setDaemon(true);</b>
+<b class="nc"><i>357</i>&nbsp;                return t;</b>
+<i>358</i>&nbsp;            });
+<b class="nc"><i>359</i>&nbsp;            screenUpdater.start();</b>
+<i>360</i>&nbsp;        } else {
+<b class="nc"><i>361</i>&nbsp;            wakeUpUpdateThread();</b>
+<i>362</i>&nbsp;        }
+<i>363</i>&nbsp;    }
+<i>364</i>&nbsp;
+<i>365</i>&nbsp;    /**
+<i>366</i>&nbsp;     * Wakes up the screen updater thread.
+<i>367</i>&nbsp;     *
+<i>368</i>&nbsp;     * This method is not synchronous, it doesn&#39;t wait
+<i>369</i>&nbsp;     * for the updater thread to complete the updates.
+<i>370</i>&nbsp;     *
+<i>371</i>&nbsp;     * It should be used when it is not necessary to wait for the
+<i>372</i>&nbsp;     * completion, for example, when a new surface had been added
+<i>373</i>&nbsp;     * to the list of tracked surfaces (which means that it&#39;s about
+<i>374</i>&nbsp;     * to be rendered to).
+<i>375</i>&nbsp;     */
+<i>376</i>&nbsp;    public void wakeUpUpdateThread() {
+<b class="nc"><i>377</i>&nbsp;        synchronized (runLock) {</b>
+<b class="nc"><i>378</i>&nbsp;            runLock.notifyAll();</b>
+<b class="nc"><i>379</i>&nbsp;        }</b>
+<i>380</i>&nbsp;    }
+<i>381</i>&nbsp;
+<i>382</i>&nbsp;    /**
+<i>383</i>&nbsp;     * Wakes up the screen updater thread and waits for the completion
+<i>384</i>&nbsp;     * of the update.
+<i>385</i>&nbsp;     *
+<i>386</i>&nbsp;     * This method is called from Toolkit.sync() or
+<i>387</i>&nbsp;     * when there was a copy from a VI to the screen
+<i>388</i>&nbsp;     * so that swing applications would not appear to be
+<i>389</i>&nbsp;     * sluggish.
+<i>390</i>&nbsp;     */
+<i>391</i>&nbsp;    public void runUpdateNow() {
+<b class="nc"><i>392</i>&nbsp;        synchronized (this) {</b>
+<i>393</i>&nbsp;            // nothing to do if the updater thread hadn&#39;t been started or if
+<i>394</i>&nbsp;            // there are no tracked surfaces
+<b class="nc"><i>395</i>&nbsp;            if (done || screenUpdater == null ||</b>
+<b class="nc"><i>396</i>&nbsp;                d3dwSurfaces  == null || d3dwSurfaces.size() == 0)</b>
+<i>397</i>&nbsp;            {
+<b class="nc"><i>398</i>&nbsp;                return;</b>
+<i>399</i>&nbsp;            }
+<b class="nc"><i>400</i>&nbsp;        }</b>
+<b class="nc"><i>401</i>&nbsp;        synchronized (runLock) {</b>
+<b class="nc"><i>402</i>&nbsp;            needsUpdateNow = true;</b>
+<b class="nc"><i>403</i>&nbsp;            runLock.notifyAll();</b>
+<b class="nc"><i>404</i>&nbsp;            while (needsUpdateNow) {</b>
+<i>405</i>&nbsp;                try {
+<b class="nc"><i>406</i>&nbsp;                    runLock.wait();</b>
+<b class="nc"><i>407</i>&nbsp;                } catch (InterruptedException e) {}</b>
+<i>408</i>&nbsp;            }
+<b class="nc"><i>409</i>&nbsp;        }</b>
+<i>410</i>&nbsp;    }
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;    public void run() {
+<b class="nc"><i>413</i>&nbsp;        while (!done) {</b>
+<b class="nc"><i>414</i>&nbsp;            synchronized (runLock) {</b>
+<i>415</i>&nbsp;                // If the list is empty, suspend the thread until a
+<i>416</i>&nbsp;                // new surface is added. Note that we have to check before
+<i>417</i>&nbsp;                // wait() (and inside the runLock), otherwise we could miss a
+<i>418</i>&nbsp;                // notify() when a new surface is added and sleep forever.
+<b class="nc"><i>419</i>&nbsp;                long timeout = d3dwSurfaces.size() &gt; 0 ? 100 : 0;</b>
+<i>420</i>&nbsp;
+<i>421</i>&nbsp;                // don&#39;t go to sleep if there&#39;s a thread waiting for an update
+<b class="nc"><i>422</i>&nbsp;                if (!needsUpdateNow) {</b>
+<b class="nc"><i>423</i>&nbsp;                    try { runLock.wait(timeout); }</b>
+<b class="nc"><i>424</i>&nbsp;                        catch (InterruptedException e) {}</b>
+<i>425</i>&nbsp;                }
+<i>426</i>&nbsp;                // if we were woken up, there are probably surfaces in the list,
+<i>427</i>&nbsp;                // no need to check if the list is empty
+<b class="nc"><i>428</i>&nbsp;            }</b>
+<i>429</i>&nbsp;
+<i>430</i>&nbsp;            // make a copy to avoid synchronization during the loop
+<b class="nc"><i>431</i>&nbsp;            D3DWindowSurfaceData surfaces[] = new D3DWindowSurfaceData[] {};</b>
+<b class="nc"><i>432</i>&nbsp;            synchronized (this) {</b>
+<b class="nc"><i>433</i>&nbsp;                surfaces = d3dwSurfaces.toArray(surfaces);</b>
+<b class="nc"><i>434</i>&nbsp;            }</b>
+<b class="nc"><i>435</i>&nbsp;            for (D3DWindowSurfaceData sd : surfaces) {</b>
+<i>436</i>&nbsp;                // skip invalid surfaces (they could have become invalid
+<i>437</i>&nbsp;                // after we made a copy of the list) - just a precaution
+<b class="nc"><i>438</i>&nbsp;                if (sd.isValid() &amp;&amp; (sd.isDirty() || sd.isSurfaceLost())) {</b>
+<b class="nc"><i>439</i>&nbsp;                    if (!sd.isSurfaceLost()) {</b>
+<i>440</i>&nbsp;                        // the flip and the clearing of the dirty state
+<i>441</i>&nbsp;                        // must be done under the lock, otherwise it&#39;s
+<i>442</i>&nbsp;                        // possible to miss an update to the surface
+<b class="nc"><i>443</i>&nbsp;                        D3DRenderQueue rq = D3DRenderQueue.getInstance();</b>
+<b class="nc"><i>444</i>&nbsp;                        rq.lock();</b>
+<i>445</i>&nbsp;                        try {
+<b class="nc"><i>446</i>&nbsp;                            Rectangle r = sd.getBounds();</b>
+<b class="nc"><i>447</i>&nbsp;                            D3DSurfaceData.swapBuffers(sd, 0, 0,</b>
+<i>448</i>&nbsp;                                                       r.width, r.height);
+<b class="nc"><i>449</i>&nbsp;                            sd.markClean();</b>
+<i>450</i>&nbsp;                        } finally {
+<b class="nc"><i>451</i>&nbsp;                            rq.unlock();</b>
+<b class="nc"><i>452</i>&nbsp;                        }</b>
+<b class="nc"><i>453</i>&nbsp;                    } else if (!validate(sd)) {</b>
+<i>454</i>&nbsp;                        // it is possible that the validation may never
+<i>455</i>&nbsp;                        // succeed, we need to detect this and replace
+<i>456</i>&nbsp;                        // the d3dw surface with gdi; the replacement of
+<i>457</i>&nbsp;                        // the surface will also trigger a repaint
+<b class="nc"><i>458</i>&nbsp;                        sd.getPeer().replaceSurfaceDataLater();</b>
+<i>459</i>&nbsp;                    }
+<i>460</i>&nbsp;                }
+<i>461</i>&nbsp;            }
+<b class="nc"><i>462</i>&nbsp;            synchronized (runLock) {</b>
+<b class="nc"><i>463</i>&nbsp;                needsUpdateNow = false;</b>
+<b class="nc"><i>464</i>&nbsp;                runLock.notifyAll();</b>
+<b class="nc"><i>465</i>&nbsp;            }</b>
+<b class="nc"><i>466</i>&nbsp;        }</b>
+<i>467</i>&nbsp;    }
+<i>468</i>&nbsp;
+<i>469</i>&nbsp;    /**
+<i>470</i>&nbsp;     * Restores the passed surface if it was lost, resets the lost status.
+<i>471</i>&nbsp;     * @param sd surface to be validated
+<i>472</i>&nbsp;     * @return true if surface wasn&#39;t lost or if restoration was successful,
+<i>473</i>&nbsp;     * false otherwise
+<i>474</i>&nbsp;     */
+<i>475</i>&nbsp;    private boolean validate(D3DWindowSurfaceData sd) {
+<b class="nc"><i>476</i>&nbsp;        if (sd.isSurfaceLost()) {</b>
+<i>477</i>&nbsp;            try {
+<b class="nc"><i>478</i>&nbsp;                sd.restoreSurface();</b>
+<i>479</i>&nbsp;                // if succeeded, first fill the surface with bg color
+<i>480</i>&nbsp;                // note: use the non-synch method to avoid incorrect lock order
+<b class="nc"><i>481</i>&nbsp;                Color bg = sd.getPeer().getBackgroundNoSync();</b>
+<b class="nc"><i>482</i>&nbsp;                SunGraphics2D sg2d = new SunGraphics2D(sd, bg, bg, null);</b>
+<b class="nc"><i>483</i>&nbsp;                sg2d.fillRect(0, 0, sd.getBounds().width, sd.getBounds().height);</b>
+<b class="nc"><i>484</i>&nbsp;                sg2d.dispose();</b>
+<i>485</i>&nbsp;                // now clean the dirty status so that we don&#39;t flip it
+<i>486</i>&nbsp;                // next time before it gets repainted; it is safe
+<i>487</i>&nbsp;                // to do without the lock because we will issue a
+<i>488</i>&nbsp;                // repaint anyway so we will not lose any rendering
+<b class="nc"><i>489</i>&nbsp;                sd.markClean();</b>
+<i>490</i>&nbsp;                // since the surface was successfully restored we need to
+<i>491</i>&nbsp;                // repaint whole window to repopulate the back-buffer
+<b class="nc"><i>492</i>&nbsp;                repaintPeerTarget(sd.getPeer());</b>
+<b class="nc"><i>493</i>&nbsp;            } catch (InvalidPipeException ipe) {</b>
+<b class="nc"><i>494</i>&nbsp;                return false;</b>
+<b class="nc"><i>495</i>&nbsp;            }</b>
+<i>496</i>&nbsp;        }
+<b class="nc"><i>497</i>&nbsp;        return true;</b>
+<i>498</i>&nbsp;    }
+<i>499</i>&nbsp;
+<i>500</i>&nbsp;    /**
+<i>501</i>&nbsp;     * Creates (or returns a cached one) gdi surface for the same peer as
+<i>502</i>&nbsp;     * the passed d3dw surface has.
+<i>503</i>&nbsp;     *
+<i>504</i>&nbsp;     * @param d3dw surface used as key into the cache
+<i>505</i>&nbsp;     * @return gdi window surface associated with the d3d window surfaces&#39; peer
+<i>506</i>&nbsp;     */
+<i>507</i>&nbsp;    private synchronized SurfaceData getGdiSurface(D3DWindowSurfaceData d3dw) {
+<b class="nc"><i>508</i>&nbsp;        if (gdiSurfaces == null) {</b>
+<b class="nc"><i>509</i>&nbsp;            gdiSurfaces =</b>
+<i>510</i>&nbsp;                new HashMap&lt;D3DWindowSurfaceData, GDIWindowSurfaceData&gt;();
+<i>511</i>&nbsp;        }
+<b class="nc"><i>512</i>&nbsp;        GDIWindowSurfaceData gdisd = gdiSurfaces.get(d3dw);</b>
+<b class="nc"><i>513</i>&nbsp;        if (gdisd == null) {</b>
+<b class="nc"><i>514</i>&nbsp;            gdisd = GDIWindowSurfaceData.createData(d3dw.getPeer());</b>
+<b class="nc"><i>515</i>&nbsp;            gdiSurfaces.put(d3dw, gdisd);</b>
+<i>516</i>&nbsp;        }
+<b class="nc"><i>517</i>&nbsp;        return gdisd;</b>
+<i>518</i>&nbsp;    }
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;    /**
+<i>521</i>&nbsp;     * Returns true if the component has heavyweight children.
+<i>522</i>&nbsp;     *
+<i>523</i>&nbsp;     * @param comp component to check for hw children
+<i>524</i>&nbsp;     * @return true if Component has heavyweight children
+<i>525</i>&nbsp;     */
+<i>526</i>&nbsp;    private static boolean hasHWChildren(Component comp) {
+<b class="nc"><i>527</i>&nbsp;        final ComponentAccessor acc = AWTAccessor.getComponentAccessor();</b>
+<b class="nc"><i>528</i>&nbsp;        if (comp instanceof Container) {</b>
+<b class="nc"><i>529</i>&nbsp;            for (Component c : ((Container)comp).getComponents()) {</b>
+<b class="nc"><i>530</i>&nbsp;                if (acc.getPeer(c) instanceof WComponentPeer || hasHWChildren(c)) {</b>
+<i>531</i>&nbsp;                    return true;
+<i>532</i>&nbsp;                }
+<i>533</i>&nbsp;            }
+<b class="nc"><i>534</i>&nbsp;        }</b>
+<i>535</i>&nbsp;        return false;
+<i>536</i>&nbsp;    }
+<i>537</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

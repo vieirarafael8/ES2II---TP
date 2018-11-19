@@ -1,0 +1,664 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: SunCertPathBuilder</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.provider.certpath</a> ]
+</div>
+
+<h1>Coverage Summary for Class: SunCertPathBuilder (sun.security.provider.certpath)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SunCertPathBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 203)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.provider.certpath;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.security.GeneralSecurityException;
+<i>30</i>&nbsp;import java.security.InvalidAlgorithmParameterException;
+<i>31</i>&nbsp;import java.security.PublicKey;
+<i>32</i>&nbsp;import java.security.cert.*;
+<i>33</i>&nbsp;import java.security.cert.CertPathValidatorException.BasicReason;
+<i>34</i>&nbsp;import java.security.cert.PKIXReason;
+<i>35</i>&nbsp;import java.util.ArrayList;
+<i>36</i>&nbsp;import java.util.Collection;
+<i>37</i>&nbsp;import java.util.Collections;
+<i>38</i>&nbsp;import java.util.List;
+<i>39</i>&nbsp;import java.util.LinkedList;
+<i>40</i>&nbsp;import java.util.Set;
+<i>41</i>&nbsp;import javax.security.auth.x500.X500Principal;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;import sun.security.provider.certpath.PKIX.BuilderParams;
+<i>44</i>&nbsp;import static sun.security.x509.PKIXExtensions.*;
+<i>45</i>&nbsp;import sun.security.util.Debug;
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;/**
+<i>48</i>&nbsp; * This class builds certification paths in the forward direction.
+<i>49</i>&nbsp; *
+<i>50</i>&nbsp; * &lt;p&gt; If successful, it returns a certification path which has successfully
+<i>51</i>&nbsp; * satisfied all the constraints and requirements specified in the
+<i>52</i>&nbsp; * PKIXBuilderParameters object and has been validated according to the PKIX
+<i>53</i>&nbsp; * path validation algorithm defined in RFC 5280.
+<i>54</i>&nbsp; *
+<i>55</i>&nbsp; * &lt;p&gt; This implementation uses a depth-first search approach to finding
+<i>56</i>&nbsp; * certification paths. If it comes to a point in which it cannot find
+<i>57</i>&nbsp; * any more certificates leading to the target OR the path length is too long
+<i>58</i>&nbsp; * it backtracks to previous paths until the target has been found or
+<i>59</i>&nbsp; * all possible paths have been exhausted.
+<i>60</i>&nbsp; *
+<i>61</i>&nbsp; * &lt;p&gt; This implementation is not thread-safe.
+<i>62</i>&nbsp; *
+<i>63</i>&nbsp; * @since       1.4
+<i>64</i>&nbsp; * @author      Sean Mullan
+<i>65</i>&nbsp; * @author      Yassir Elley
+<i>66</i>&nbsp; */
+<i>67</i>&nbsp;public final class SunCertPathBuilder extends CertPathBuilderSpi {
+<i>68</i>&nbsp;
+<b class="nc"><i>69</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;certpath&quot;);</b>
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;    /*
+<i>72</i>&nbsp;     * private objects shared by methods
+<i>73</i>&nbsp;     */
+<i>74</i>&nbsp;    private BuilderParams buildParams;
+<i>75</i>&nbsp;    private CertificateFactory cf;
+<b class="nc"><i>76</i>&nbsp;    private boolean pathCompleted = false;</b>
+<i>77</i>&nbsp;    private PolicyNode policyTreeResult;
+<i>78</i>&nbsp;    private TrustAnchor trustAnchor;
+<i>79</i>&nbsp;    private PublicKey finalPublicKey;
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    /**
+<i>82</i>&nbsp;     * Create an instance of &lt;code&gt;SunCertPathBuilder&lt;/code&gt;.
+<i>83</i>&nbsp;     *
+<i>84</i>&nbsp;     * @throws CertPathBuilderException if an error occurs
+<i>85</i>&nbsp;     */
+<b class="nc"><i>86</i>&nbsp;    public SunCertPathBuilder() throws CertPathBuilderException {</b>
+<i>87</i>&nbsp;        try {
+<b class="nc"><i>88</i>&nbsp;            cf = CertificateFactory.getInstance(&quot;X.509&quot;);</b>
+<b class="nc"><i>89</i>&nbsp;        } catch (CertificateException e) {</b>
+<b class="nc"><i>90</i>&nbsp;            throw new CertPathBuilderException(e);</b>
+<b class="nc"><i>91</i>&nbsp;        }</b>
+<i>92</i>&nbsp;    }
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;    @Override
+<i>95</i>&nbsp;    public CertPathChecker engineGetRevocationChecker() {
+<b class="nc"><i>96</i>&nbsp;        return new RevocationChecker();</b>
+<i>97</i>&nbsp;    }
+<i>98</i>&nbsp;
+<i>99</i>&nbsp;    /**
+<i>100</i>&nbsp;     * Attempts to build a certification path using the Sun build
+<i>101</i>&nbsp;     * algorithm from a trusted anchor(s) to a target subject, which must both
+<i>102</i>&nbsp;     * be specified in the input parameter set. This method will
+<i>103</i>&nbsp;     * attempt to build in the forward direction: from the target to the CA.
+<i>104</i>&nbsp;     *
+<i>105</i>&nbsp;     * &lt;p&gt;The certification path that is constructed is validated
+<i>106</i>&nbsp;     * according to the PKIX specification.
+<i>107</i>&nbsp;     *
+<i>108</i>&nbsp;     * @param params the parameter set for building a path. Must be an instance
+<i>109</i>&nbsp;     *  of &lt;code&gt;PKIXBuilderParameters&lt;/code&gt;.
+<i>110</i>&nbsp;     * @return a certification path builder result.
+<i>111</i>&nbsp;     * @exception CertPathBuilderException Exception thrown if builder is
+<i>112</i>&nbsp;     *  unable to build a complete certification path from the trusted anchor(s)
+<i>113</i>&nbsp;     *  to the target subject.
+<i>114</i>&nbsp;     * @throws InvalidAlgorithmParameterException if the given parameters are
+<i>115</i>&nbsp;     *  inappropriate for this certification path builder.
+<i>116</i>&nbsp;     */
+<i>117</i>&nbsp;    @Override
+<i>118</i>&nbsp;    public CertPathBuilderResult engineBuild(CertPathParameters params)
+<i>119</i>&nbsp;        throws CertPathBuilderException, InvalidAlgorithmParameterException {
+<i>120</i>&nbsp;
+<b class="nc"><i>121</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>122</i>&nbsp;            debug.println(&quot;SunCertPathBuilder.engineBuild(&quot; + params + &quot;)&quot;);</b>
+<i>123</i>&nbsp;        }
+<i>124</i>&nbsp;
+<b class="nc"><i>125</i>&nbsp;        buildParams = PKIX.checkBuilderParams(params);</b>
+<b class="nc"><i>126</i>&nbsp;        return build();</b>
+<i>127</i>&nbsp;    }
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    private PKIXCertPathBuilderResult build() throws CertPathBuilderException {
+<b class="nc"><i>130</i>&nbsp;        List&lt;List&lt;Vertex&gt;&gt; adjList = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>131</i>&nbsp;        PKIXCertPathBuilderResult result = buildCertPath(false, adjList);</b>
+<b class="nc"><i>132</i>&nbsp;        if (result == null) {</b>
+<b class="nc"><i>133</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>134</i>&nbsp;                debug.println(&quot;SunCertPathBuilder.engineBuild: 2nd pass; &quot; +</b>
+<i>135</i>&nbsp;                              &quot;try building again searching all certstores&quot;);
+<i>136</i>&nbsp;            }
+<i>137</i>&nbsp;            // try again
+<b class="nc"><i>138</i>&nbsp;            adjList.clear();</b>
+<b class="nc"><i>139</i>&nbsp;            result = buildCertPath(true, adjList);</b>
+<b class="nc"><i>140</i>&nbsp;            if (result == null) {</b>
+<b class="nc"><i>141</i>&nbsp;                throw new SunCertPathBuilderException(&quot;unable to find valid &quot;</b>
+<i>142</i>&nbsp;                    + &quot;certification path to requested target&quot;,
+<i>143</i>&nbsp;                    new AdjacencyList(adjList));
+<i>144</i>&nbsp;            }
+<i>145</i>&nbsp;        }
+<b class="nc"><i>146</i>&nbsp;        return result;</b>
+<i>147</i>&nbsp;    }
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;    private PKIXCertPathBuilderResult buildCertPath(boolean searchAllCertStores,
+<i>150</i>&nbsp;                                                    List&lt;List&lt;Vertex&gt;&gt; adjList)
+<i>151</i>&nbsp;        throws CertPathBuilderException
+<i>152</i>&nbsp;    {
+<i>153</i>&nbsp;        // Init shared variables and build certification path
+<b class="nc"><i>154</i>&nbsp;        pathCompleted = false;</b>
+<b class="nc"><i>155</i>&nbsp;        trustAnchor = null;</b>
+<b class="nc"><i>156</i>&nbsp;        finalPublicKey = null;</b>
+<b class="nc"><i>157</i>&nbsp;        policyTreeResult = null;</b>
+<b class="nc"><i>158</i>&nbsp;        LinkedList&lt;X509Certificate&gt; certPathList = new LinkedList&lt;&gt;();</b>
+<i>159</i>&nbsp;        try {
+<b class="nc"><i>160</i>&nbsp;            buildForward(adjList, certPathList, searchAllCertStores);</b>
+<b class="nc"><i>161</i>&nbsp;        } catch (GeneralSecurityException | IOException e) {</b>
+<b class="nc"><i>162</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>163</i>&nbsp;                debug.println(&quot;SunCertPathBuilder.engineBuild() exception in &quot;</b>
+<i>164</i>&nbsp;                    + &quot;build&quot;);
+<b class="nc"><i>165</i>&nbsp;                e.printStackTrace();</b>
+<i>166</i>&nbsp;            }
+<b class="nc"><i>167</i>&nbsp;            throw new SunCertPathBuilderException(&quot;unable to find valid &quot;</b>
+<i>168</i>&nbsp;                + &quot;certification path to requested target&quot;, e,
+<i>169</i>&nbsp;                new AdjacencyList(adjList));
+<b class="nc"><i>170</i>&nbsp;        }</b>
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;        // construct SunCertPathBuilderResult
+<i>173</i>&nbsp;        try {
+<b class="nc"><i>174</i>&nbsp;            if (pathCompleted) {</b>
+<b class="nc"><i>175</i>&nbsp;                if (debug != null)</b>
+<b class="nc"><i>176</i>&nbsp;                    debug.println(&quot;SunCertPathBuilder.engineBuild() &quot;</b>
+<i>177</i>&nbsp;                                  + &quot;pathCompleted&quot;);
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;                // we must return a certpath which has the target
+<i>180</i>&nbsp;                // as the first cert in the certpath - i.e. reverse
+<i>181</i>&nbsp;                // the certPathList
+<b class="nc"><i>182</i>&nbsp;                Collections.reverse(certPathList);</b>
+<i>183</i>&nbsp;
+<b class="nc"><i>184</i>&nbsp;                return new SunCertPathBuilderResult(</b>
+<b class="nc"><i>185</i>&nbsp;                    cf.generateCertPath(certPathList), trustAnchor,</b>
+<i>186</i>&nbsp;                    policyTreeResult, finalPublicKey,
+<i>187</i>&nbsp;                    new AdjacencyList(adjList));
+<i>188</i>&nbsp;            }
+<b class="nc"><i>189</i>&nbsp;        } catch (CertificateException e) {</b>
+<b class="nc"><i>190</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>191</i>&nbsp;                debug.println(&quot;SunCertPathBuilder.engineBuild() exception &quot;</b>
+<i>192</i>&nbsp;                              + &quot;in wrap-up&quot;);
+<b class="nc"><i>193</i>&nbsp;                e.printStackTrace();</b>
+<i>194</i>&nbsp;            }
+<b class="nc"><i>195</i>&nbsp;            throw new SunCertPathBuilderException(&quot;unable to find valid &quot;</b>
+<i>196</i>&nbsp;                + &quot;certification path to requested target&quot;, e,
+<i>197</i>&nbsp;                new AdjacencyList(adjList));
+<b class="nc"><i>198</i>&nbsp;        }</b>
+<i>199</i>&nbsp;
+<b class="nc"><i>200</i>&nbsp;        return null;</b>
+<i>201</i>&nbsp;    }
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;    /*
+<i>204</i>&nbsp;     * Private build forward method.
+<i>205</i>&nbsp;     */
+<i>206</i>&nbsp;    private void buildForward(List&lt;List&lt;Vertex&gt;&gt; adjacencyList,
+<i>207</i>&nbsp;                              LinkedList&lt;X509Certificate&gt; certPathList,
+<i>208</i>&nbsp;                              boolean searchAllCertStores)
+<i>209</i>&nbsp;        throws GeneralSecurityException, IOException
+<i>210</i>&nbsp;    {
+<b class="nc"><i>211</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>212</i>&nbsp;            debug.println(&quot;SunCertPathBuilder.buildForward()...&quot;);</b>
+<i>213</i>&nbsp;        }
+<i>214</i>&nbsp;
+<i>215</i>&nbsp;        /* Initialize current state */
+<b class="nc"><i>216</i>&nbsp;        ForwardState currentState = new ForwardState();</b>
+<b class="nc"><i>217</i>&nbsp;        currentState.initState(buildParams.certPathCheckers());</b>
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;        /* Initialize adjacency list */
+<b class="nc"><i>220</i>&nbsp;        adjacencyList.clear();</b>
+<b class="nc"><i>221</i>&nbsp;        adjacencyList.add(new LinkedList&lt;Vertex&gt;());</b>
+<i>222</i>&nbsp;
+<b class="nc"><i>223</i>&nbsp;        currentState.untrustedChecker = new UntrustedChecker();</b>
+<i>224</i>&nbsp;
+<b class="nc"><i>225</i>&nbsp;        depthFirstSearchForward(buildParams.targetSubject(), currentState,</b>
+<i>226</i>&nbsp;                                new ForwardBuilder(buildParams,
+<i>227</i>&nbsp;                                                   searchAllCertStores),
+<i>228</i>&nbsp;                                adjacencyList, certPathList);
+<i>229</i>&nbsp;    }
+<i>230</i>&nbsp;
+<i>231</i>&nbsp;    /*
+<i>232</i>&nbsp;     * This method performs a depth first search for a certification
+<i>233</i>&nbsp;     * path while building forward which meets the requirements set in
+<i>234</i>&nbsp;     * the parameters object.
+<i>235</i>&nbsp;     * It uses an adjacency list to store all certificates which were
+<i>236</i>&nbsp;     * tried (i.e. at one time added to the path - they may not end up in
+<i>237</i>&nbsp;     * the final path if backtracking occurs). This information can
+<i>238</i>&nbsp;     * be used later to debug or demo the build.
+<i>239</i>&nbsp;     *
+<i>240</i>&nbsp;     * See &quot;Data Structure and Algorithms, by Aho, Hopcroft, and Ullman&quot;
+<i>241</i>&nbsp;     * for an explanation of the DFS algorithm.
+<i>242</i>&nbsp;     *
+<i>243</i>&nbsp;     * @param dN the distinguished name being currently searched for certs
+<i>244</i>&nbsp;     * @param currentState the current PKIX validation state
+<i>245</i>&nbsp;     */
+<i>246</i>&nbsp;    private void depthFirstSearchForward(X500Principal dN,
+<i>247</i>&nbsp;                                         ForwardState currentState,
+<i>248</i>&nbsp;                                         ForwardBuilder builder,
+<i>249</i>&nbsp;                                         List&lt;List&lt;Vertex&gt;&gt; adjList,
+<i>250</i>&nbsp;                                         LinkedList&lt;X509Certificate&gt; cpList)
+<i>251</i>&nbsp;        throws GeneralSecurityException, IOException
+<i>252</i>&nbsp;    {
+<b class="nc"><i>253</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>254</i>&nbsp;            debug.println(&quot;SunCertPathBuilder.depthFirstSearchForward(&quot; + dN</b>
+<b class="nc"><i>255</i>&nbsp;                          + &quot;, &quot; + currentState.toString() + &quot;)&quot;);</b>
+<i>256</i>&nbsp;        }
+<i>257</i>&nbsp;
+<i>258</i>&nbsp;        /*
+<i>259</i>&nbsp;         * Find all the certificates issued to dN which
+<i>260</i>&nbsp;         * satisfy the PKIX certification path constraints.
+<i>261</i>&nbsp;         */
+<b class="nc"><i>262</i>&nbsp;        Collection&lt;X509Certificate&gt; certs =</b>
+<b class="nc"><i>263</i>&nbsp;            builder.getMatchingCerts(currentState, buildParams.certStores());</b>
+<b class="nc"><i>264</i>&nbsp;        List&lt;Vertex&gt; vertices = addVertices(certs, adjList);</b>
+<b class="nc"><i>265</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>266</i>&nbsp;            debug.println(&quot;SunCertPathBuilder.depthFirstSearchForward(): &quot;</b>
+<b class="nc"><i>267</i>&nbsp;                          + &quot;certs.size=&quot; + vertices.size());</b>
+<i>268</i>&nbsp;        }
+<i>269</i>&nbsp;
+<i>270</i>&nbsp;        /*
+<i>271</i>&nbsp;         * For each cert in the collection, verify anything
+<i>272</i>&nbsp;         * that hasn&#39;t been checked yet (signature, revocation, etc)
+<i>273</i>&nbsp;         * and check for loops. Call depthFirstSearchForward()
+<i>274</i>&nbsp;         * recursively for each good cert.
+<i>275</i>&nbsp;         */
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;               vertices:
+<b class="nc"><i>278</i>&nbsp;        for (Vertex vertex : vertices) {</b>
+<i>279</i>&nbsp;            /**
+<i>280</i>&nbsp;             * Restore state to currentState each time through the loop.
+<i>281</i>&nbsp;             * This is important because some of the user-defined
+<i>282</i>&nbsp;             * checkers modify the state, which MUST be restored if
+<i>283</i>&nbsp;             * the cert eventually fails to lead to the target and
+<i>284</i>&nbsp;             * the next matching cert is tried.
+<i>285</i>&nbsp;             */
+<b class="nc"><i>286</i>&nbsp;            ForwardState nextState = (ForwardState) currentState.clone();</b>
+<b class="nc"><i>287</i>&nbsp;            X509Certificate cert = vertex.getCertificate();</b>
+<i>288</i>&nbsp;
+<i>289</i>&nbsp;            try {
+<b class="nc"><i>290</i>&nbsp;                builder.verifyCert(cert, nextState, cpList);</b>
+<b class="nc"><i>291</i>&nbsp;            } catch (GeneralSecurityException gse) {</b>
+<b class="nc"><i>292</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>293</i>&nbsp;                    debug.println(&quot;SunCertPathBuilder.depthFirstSearchForward()&quot;</b>
+<i>294</i>&nbsp;                                  + &quot;: validation failed: &quot; + gse);
+<b class="nc"><i>295</i>&nbsp;                    gse.printStackTrace();</b>
+<i>296</i>&nbsp;                }
+<b class="nc"><i>297</i>&nbsp;                vertex.setThrowable(gse);</b>
+<b class="nc"><i>298</i>&nbsp;                continue;</b>
+<b class="nc"><i>299</i>&nbsp;            }</b>
+<i>300</i>&nbsp;
+<i>301</i>&nbsp;            /*
+<i>302</i>&nbsp;             * Certificate is good.
+<i>303</i>&nbsp;             * If cert completes the path,
+<i>304</i>&nbsp;             *    process userCheckers that don&#39;t support forward checking
+<i>305</i>&nbsp;             *    and process policies over whole path
+<i>306</i>&nbsp;             *    and backtrack appropriately if there is a failure
+<i>307</i>&nbsp;             * else if cert does not complete the path,
+<i>308</i>&nbsp;             *    add it to the path
+<i>309</i>&nbsp;             */
+<b class="nc"><i>310</i>&nbsp;            if (builder.isPathCompleted(cert)) {</b>
+<i>311</i>&nbsp;
+<b class="nc"><i>312</i>&nbsp;                if (debug != null)</b>
+<b class="nc"><i>313</i>&nbsp;                    debug.println(&quot;SunCertPathBuilder.depthFirstSearchForward()&quot;</b>
+<i>314</i>&nbsp;                                  + &quot;: commencing final verification&quot;);
+<i>315</i>&nbsp;
+<b class="nc"><i>316</i>&nbsp;                List&lt;X509Certificate&gt; appendedCerts = new ArrayList&lt;&gt;(cpList);</b>
+<i>317</i>&nbsp;
+<i>318</i>&nbsp;                /*
+<i>319</i>&nbsp;                 * if the trust anchor selected is specified as a trusted
+<i>320</i>&nbsp;                 * public key rather than a trusted cert, then verify this
+<i>321</i>&nbsp;                 * cert (which is signed by the trusted public key), but
+<i>322</i>&nbsp;                 * don&#39;t add it yet to the cpList
+<i>323</i>&nbsp;                 */
+<b class="nc"><i>324</i>&nbsp;                if (builder.trustAnchor.getTrustedCert() == null) {</b>
+<b class="nc"><i>325</i>&nbsp;                    appendedCerts.add(0, cert);</b>
+<i>326</i>&nbsp;                }
+<i>327</i>&nbsp;
+<b class="nc"><i>328</i>&nbsp;                Set&lt;String&gt; initExpPolSet =</b>
+<b class="nc"><i>329</i>&nbsp;                    Collections.singleton(PolicyChecker.ANY_POLICY);</b>
+<i>330</i>&nbsp;
+<b class="nc"><i>331</i>&nbsp;                PolicyNodeImpl rootNode = new PolicyNodeImpl(null,</b>
+<i>332</i>&nbsp;                    PolicyChecker.ANY_POLICY, null, false, initExpPolSet, false);
+<i>333</i>&nbsp;
+<b class="nc"><i>334</i>&nbsp;                List&lt;PKIXCertPathChecker&gt; checkers = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>335</i>&nbsp;                PolicyChecker policyChecker</b>
+<b class="nc"><i>336</i>&nbsp;                    = new PolicyChecker(buildParams.initialPolicies(),</b>
+<b class="nc"><i>337</i>&nbsp;                                        appendedCerts.size(),</b>
+<b class="nc"><i>338</i>&nbsp;                                        buildParams.explicitPolicyRequired(),</b>
+<b class="nc"><i>339</i>&nbsp;                                        buildParams.policyMappingInhibited(),</b>
+<b class="nc"><i>340</i>&nbsp;                                        buildParams.anyPolicyInhibited(),</b>
+<b class="nc"><i>341</i>&nbsp;                                        buildParams.policyQualifiersRejected(),</b>
+<i>342</i>&nbsp;                                        rootNode);
+<b class="nc"><i>343</i>&nbsp;                checkers.add(policyChecker);</b>
+<i>344</i>&nbsp;
+<i>345</i>&nbsp;                // add the algorithm checker
+<b class="nc"><i>346</i>&nbsp;                checkers.add(new AlgorithmChecker(builder.trustAnchor,</b>
+<b class="nc"><i>347</i>&nbsp;                        buildParams.date(), buildParams.variant()));</b>
+<i>348</i>&nbsp;
+<b class="nc"><i>349</i>&nbsp;                BasicChecker basicChecker = null;</b>
+<b class="nc"><i>350</i>&nbsp;                if (nextState.keyParamsNeeded()) {</b>
+<b class="nc"><i>351</i>&nbsp;                    PublicKey rootKey = cert.getPublicKey();</b>
+<b class="nc"><i>352</i>&nbsp;                    if (builder.trustAnchor.getTrustedCert() == null) {</b>
+<b class="nc"><i>353</i>&nbsp;                        rootKey = builder.trustAnchor.getCAPublicKey();</b>
+<b class="nc"><i>354</i>&nbsp;                        if (debug != null)</b>
+<b class="nc"><i>355</i>&nbsp;                            debug.println(</b>
+<i>356</i>&nbsp;                                &quot;SunCertPathBuilder.depthFirstSearchForward &quot; +
+<i>357</i>&nbsp;                                &quot;using buildParams public key: &quot; +
+<b class="nc"><i>358</i>&nbsp;                                rootKey.toString());</b>
+<i>359</i>&nbsp;                    }
+<b class="nc"><i>360</i>&nbsp;                    TrustAnchor anchor = new TrustAnchor</b>
+<b class="nc"><i>361</i>&nbsp;                        (cert.getSubjectX500Principal(), rootKey, null);</b>
+<i>362</i>&nbsp;
+<i>363</i>&nbsp;                    // add the basic checker
+<b class="nc"><i>364</i>&nbsp;                    basicChecker = new BasicChecker(anchor, buildParams.date(),</b>
+<b class="nc"><i>365</i>&nbsp;                                                    buildParams.sigProvider(),</b>
+<i>366</i>&nbsp;                                                    true);
+<b class="nc"><i>367</i>&nbsp;                    checkers.add(basicChecker);</b>
+<i>368</i>&nbsp;                }
+<i>369</i>&nbsp;
+<b class="nc"><i>370</i>&nbsp;                buildParams.setCertPath(cf.generateCertPath(appendedCerts));</b>
+<i>371</i>&nbsp;
+<b class="nc"><i>372</i>&nbsp;                boolean revCheckerAdded = false;</b>
+<b class="nc"><i>373</i>&nbsp;                List&lt;PKIXCertPathChecker&gt; ckrs = buildParams.certPathCheckers();</b>
+<b class="nc"><i>374</i>&nbsp;                for (PKIXCertPathChecker ckr : ckrs) {</b>
+<b class="nc"><i>375</i>&nbsp;                    if (ckr instanceof PKIXRevocationChecker) {</b>
+<b class="nc"><i>376</i>&nbsp;                        if (revCheckerAdded) {</b>
+<b class="nc"><i>377</i>&nbsp;                            throw new CertPathValidatorException(</b>
+<i>378</i>&nbsp;                                &quot;Only one PKIXRevocationChecker can be specified&quot;);
+<i>379</i>&nbsp;                        }
+<b class="nc"><i>380</i>&nbsp;                        revCheckerAdded = true;</b>
+<i>381</i>&nbsp;                        // if it&#39;s our own, initialize it
+<b class="nc"><i>382</i>&nbsp;                        if (ckr instanceof RevocationChecker) {</b>
+<b class="nc"><i>383</i>&nbsp;                            ((RevocationChecker)ckr).init(builder.trustAnchor,</b>
+<i>384</i>&nbsp;                                                          buildParams);
+<i>385</i>&nbsp;                        }
+<i>386</i>&nbsp;                    }
+<b class="nc"><i>387</i>&nbsp;                }</b>
+<i>388</i>&nbsp;                // only add a RevocationChecker if revocation is enabled and
+<i>389</i>&nbsp;                // a PKIXRevocationChecker has not already been added
+<b class="nc"><i>390</i>&nbsp;                if (buildParams.revocationEnabled() &amp;&amp; !revCheckerAdded) {</b>
+<b class="nc"><i>391</i>&nbsp;                    checkers.add(new RevocationChecker(builder.trustAnchor,</b>
+<i>392</i>&nbsp;                                                       buildParams));
+<i>393</i>&nbsp;                }
+<i>394</i>&nbsp;
+<b class="nc"><i>395</i>&nbsp;                checkers.addAll(ckrs);</b>
+<i>396</i>&nbsp;
+<i>397</i>&nbsp;                // Why we don&#39;t need BasicChecker and RevocationChecker
+<i>398</i>&nbsp;                // if nextState.keyParamsNeeded() is false?
+<i>399</i>&nbsp;
+<b class="nc"><i>400</i>&nbsp;                for (int i = 0; i &lt; appendedCerts.size(); i++) {</b>
+<b class="nc"><i>401</i>&nbsp;                    X509Certificate currCert = appendedCerts.get(i);</b>
+<b class="nc"><i>402</i>&nbsp;                    if (debug != null)</b>
+<b class="nc"><i>403</i>&nbsp;                        debug.println(&quot;current subject = &quot;</b>
+<b class="nc"><i>404</i>&nbsp;                                      + currCert.getSubjectX500Principal());</b>
+<b class="nc"><i>405</i>&nbsp;                    Set&lt;String&gt; unresCritExts =</b>
+<b class="nc"><i>406</i>&nbsp;                        currCert.getCriticalExtensionOIDs();</b>
+<b class="nc"><i>407</i>&nbsp;                    if (unresCritExts == null) {</b>
+<b class="nc"><i>408</i>&nbsp;                        unresCritExts = Collections.&lt;String&gt;emptySet();</b>
+<i>409</i>&nbsp;                    }
+<i>410</i>&nbsp;
+<b class="nc"><i>411</i>&nbsp;                    for (PKIXCertPathChecker currChecker : checkers) {</b>
+<b class="nc"><i>412</i>&nbsp;                        if (!currChecker.isForwardCheckingSupported()) {</b>
+<b class="nc"><i>413</i>&nbsp;                            if (i == 0) {</b>
+<b class="nc"><i>414</i>&nbsp;                                currChecker.init(false);</b>
+<i>415</i>&nbsp;
+<i>416</i>&nbsp;                                // The user specified
+<i>417</i>&nbsp;                                // AlgorithmChecker may not be
+<i>418</i>&nbsp;                                // able to set the trust anchor until now.
+<b class="nc"><i>419</i>&nbsp;                                if (currChecker instanceof AlgorithmChecker) {</b>
+<b class="nc"><i>420</i>&nbsp;                                    ((AlgorithmChecker)currChecker).</b>
+<b class="nc"><i>421</i>&nbsp;                                        trySetTrustAnchor(builder.trustAnchor);</b>
+<i>422</i>&nbsp;                                }
+<i>423</i>&nbsp;                            }
+<i>424</i>&nbsp;
+<i>425</i>&nbsp;                            try {
+<b class="nc"><i>426</i>&nbsp;                                currChecker.check(currCert, unresCritExts);</b>
+<b class="nc"><i>427</i>&nbsp;                            } catch (CertPathValidatorException cpve) {</b>
+<b class="nc"><i>428</i>&nbsp;                                if (debug != null)</b>
+<b class="nc"><i>429</i>&nbsp;                                    debug.println</b>
+<b class="nc"><i>430</i>&nbsp;                                    (&quot;SunCertPathBuilder.depthFirstSearchForward(): &quot; +</b>
+<i>431</i>&nbsp;                                    &quot;final verification failed: &quot; + cpve);
+<i>432</i>&nbsp;                                // If the target cert itself is revoked, we
+<i>433</i>&nbsp;                                // cannot trust it. We can bail out here.
+<b class="nc"><i>434</i>&nbsp;                                if (buildParams.targetCertConstraints().match(currCert)</b>
+<b class="nc"><i>435</i>&nbsp;                                        &amp;&amp; cpve.getReason() == BasicReason.REVOKED) {</b>
+<b class="nc"><i>436</i>&nbsp;                                    throw cpve;</b>
+<i>437</i>&nbsp;                                }
+<b class="nc"><i>438</i>&nbsp;                                vertex.setThrowable(cpve);</b>
+<b class="nc"><i>439</i>&nbsp;                                continue vertices;</b>
+<b class="nc"><i>440</i>&nbsp;                            }</b>
+<i>441</i>&nbsp;                        }
+<b class="nc"><i>442</i>&nbsp;                    }</b>
+<i>443</i>&nbsp;
+<i>444</i>&nbsp;                    /*
+<i>445</i>&nbsp;                     * Remove extensions from user checkers that support
+<i>446</i>&nbsp;                     * forward checking. After this step, we will have
+<i>447</i>&nbsp;                     * removed all extensions that all user checkers
+<i>448</i>&nbsp;                     * are capable of processing.
+<i>449</i>&nbsp;                     */
+<i>450</i>&nbsp;                    for (PKIXCertPathChecker checker :
+<b class="nc"><i>451</i>&nbsp;                         buildParams.certPathCheckers())</b>
+<i>452</i>&nbsp;                    {
+<b class="nc"><i>453</i>&nbsp;                        if (checker.isForwardCheckingSupported()) {</b>
+<b class="nc"><i>454</i>&nbsp;                            Set&lt;String&gt; suppExts =</b>
+<b class="nc"><i>455</i>&nbsp;                                checker.getSupportedExtensions();</b>
+<b class="nc"><i>456</i>&nbsp;                            if (suppExts != null) {</b>
+<b class="nc"><i>457</i>&nbsp;                                unresCritExts.removeAll(suppExts);</b>
+<i>458</i>&nbsp;                            }
+<i>459</i>&nbsp;                        }
+<b class="nc"><i>460</i>&nbsp;                    }</b>
+<i>461</i>&nbsp;
+<b class="nc"><i>462</i>&nbsp;                    if (!unresCritExts.isEmpty()) {</b>
+<b class="nc"><i>463</i>&nbsp;                        unresCritExts.remove(BasicConstraints_Id.toString());</b>
+<b class="nc"><i>464</i>&nbsp;                        unresCritExts.remove(NameConstraints_Id.toString());</b>
+<b class="nc"><i>465</i>&nbsp;                        unresCritExts.remove(CertificatePolicies_Id.toString());</b>
+<b class="nc"><i>466</i>&nbsp;                        unresCritExts.remove(PolicyMappings_Id.toString());</b>
+<b class="nc"><i>467</i>&nbsp;                        unresCritExts.remove(PolicyConstraints_Id.toString());</b>
+<b class="nc"><i>468</i>&nbsp;                        unresCritExts.remove(InhibitAnyPolicy_Id.toString());</b>
+<b class="nc"><i>469</i>&nbsp;                        unresCritExts.remove(</b>
+<b class="nc"><i>470</i>&nbsp;                            SubjectAlternativeName_Id.toString());</b>
+<b class="nc"><i>471</i>&nbsp;                        unresCritExts.remove(KeyUsage_Id.toString());</b>
+<b class="nc"><i>472</i>&nbsp;                        unresCritExts.remove(ExtendedKeyUsage_Id.toString());</b>
+<i>473</i>&nbsp;
+<b class="nc"><i>474</i>&nbsp;                        if (!unresCritExts.isEmpty()) {</b>
+<b class="nc"><i>475</i>&nbsp;                            throw new CertPathValidatorException</b>
+<i>476</i>&nbsp;                                (&quot;unrecognized critical extension(s)&quot;, null,
+<i>477</i>&nbsp;                                 null, -1, PKIXReason.UNRECOGNIZED_CRIT_EXT);
+<i>478</i>&nbsp;                        }
+<i>479</i>&nbsp;                    }
+<i>480</i>&nbsp;                }
+<b class="nc"><i>481</i>&nbsp;                if (debug != null)</b>
+<b class="nc"><i>482</i>&nbsp;                    debug.println(&quot;SunCertPathBuilder.depthFirstSearchForward()&quot;</b>
+<i>483</i>&nbsp;                        + &quot;: final verification succeeded - path completed!&quot;);
+<b class="nc"><i>484</i>&nbsp;                pathCompleted = true;</b>
+<i>485</i>&nbsp;
+<i>486</i>&nbsp;                /*
+<i>487</i>&nbsp;                 * if the user specified a trusted public key rather than
+<i>488</i>&nbsp;                 * trusted certs, then add this cert (which is signed by
+<i>489</i>&nbsp;                 * the trusted public key) to the cpList
+<i>490</i>&nbsp;                 */
+<b class="nc"><i>491</i>&nbsp;                if (builder.trustAnchor.getTrustedCert() == null)</b>
+<b class="nc"><i>492</i>&nbsp;                    builder.addCertToPath(cert, cpList);</b>
+<i>493</i>&nbsp;                // Save the trust anchor
+<b class="nc"><i>494</i>&nbsp;                this.trustAnchor = builder.trustAnchor;</b>
+<i>495</i>&nbsp;
+<i>496</i>&nbsp;                /*
+<i>497</i>&nbsp;                 * Extract and save the final target public key
+<i>498</i>&nbsp;                 */
+<b class="nc"><i>499</i>&nbsp;                if (basicChecker != null) {</b>
+<b class="nc"><i>500</i>&nbsp;                    finalPublicKey = basicChecker.getPublicKey();</b>
+<i>501</i>&nbsp;                } else {
+<i>502</i>&nbsp;                    Certificate finalCert;
+<b class="nc"><i>503</i>&nbsp;                    if (cpList.isEmpty()) {</b>
+<b class="nc"><i>504</i>&nbsp;                        finalCert = builder.trustAnchor.getTrustedCert();</b>
+<i>505</i>&nbsp;                    } else {
+<b class="nc"><i>506</i>&nbsp;                        finalCert = cpList.getLast();</b>
+<i>507</i>&nbsp;                    }
+<b class="nc"><i>508</i>&nbsp;                    finalPublicKey = finalCert.getPublicKey();</b>
+<i>509</i>&nbsp;                }
+<i>510</i>&nbsp;
+<b class="nc"><i>511</i>&nbsp;                policyTreeResult = policyChecker.getPolicyTree();</b>
+<i>512</i>&nbsp;                return;
+<i>513</i>&nbsp;            } else {
+<b class="nc"><i>514</i>&nbsp;                builder.addCertToPath(cert, cpList);</b>
+<i>515</i>&nbsp;            }
+<i>516</i>&nbsp;
+<i>517</i>&nbsp;            /* Update the PKIX state */
+<b class="nc"><i>518</i>&nbsp;            nextState.updateState(cert);</b>
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;            /*
+<i>521</i>&nbsp;             * Append an entry for cert in adjacency list and
+<i>522</i>&nbsp;             * set index for current vertex.
+<i>523</i>&nbsp;             */
+<b class="nc"><i>524</i>&nbsp;            adjList.add(new LinkedList&lt;Vertex&gt;());</b>
+<b class="nc"><i>525</i>&nbsp;            vertex.setIndex(adjList.size() - 1);</b>
+<i>526</i>&nbsp;
+<i>527</i>&nbsp;            /* recursively search for matching certs at next dN */
+<b class="nc"><i>528</i>&nbsp;            depthFirstSearchForward(cert.getIssuerX500Principal(), nextState,</b>
+<i>529</i>&nbsp;                                    builder, adjList, cpList);
+<i>530</i>&nbsp;
+<i>531</i>&nbsp;            /*
+<i>532</i>&nbsp;             * If path has been completed, return ASAP!
+<i>533</i>&nbsp;             */
+<b class="nc"><i>534</i>&nbsp;            if (pathCompleted) {</b>
+<i>535</i>&nbsp;                return;
+<i>536</i>&nbsp;            } else {
+<i>537</i>&nbsp;                /*
+<i>538</i>&nbsp;                 * If we get here, it means we have searched all possible
+<i>539</i>&nbsp;                 * certs issued by the dN w/o finding any matching certs.
+<i>540</i>&nbsp;                 * This means we have to backtrack to the previous cert in
+<i>541</i>&nbsp;                 * the path and try some other paths.
+<i>542</i>&nbsp;                 */
+<b class="nc"><i>543</i>&nbsp;                if (debug != null)</b>
+<b class="nc"><i>544</i>&nbsp;                    debug.println(&quot;SunCertPathBuilder.depthFirstSearchForward()&quot;</b>
+<i>545</i>&nbsp;                                  + &quot;: backtracking&quot;);
+<b class="nc"><i>546</i>&nbsp;                builder.removeFinalCertFromPath(cpList);</b>
+<i>547</i>&nbsp;            }
+<b class="nc"><i>548</i>&nbsp;        }</b>
+<i>549</i>&nbsp;    }
+<i>550</i>&nbsp;
+<i>551</i>&nbsp;    /*
+<i>552</i>&nbsp;     * Adds a collection of matching certificates to the
+<i>553</i>&nbsp;     * adjacency list.
+<i>554</i>&nbsp;     */
+<i>555</i>&nbsp;    private static List&lt;Vertex&gt; addVertices(Collection&lt;X509Certificate&gt; certs,
+<i>556</i>&nbsp;                                            List&lt;List&lt;Vertex&gt;&gt; adjList)
+<i>557</i>&nbsp;    {
+<b class="nc"><i>558</i>&nbsp;        List&lt;Vertex&gt; l = adjList.get(adjList.size() - 1);</b>
+<i>559</i>&nbsp;
+<b class="nc"><i>560</i>&nbsp;        for (X509Certificate cert : certs) {</b>
+<b class="nc"><i>561</i>&nbsp;            Vertex v = new Vertex(cert);</b>
+<b class="nc"><i>562</i>&nbsp;            l.add(v);</b>
+<b class="nc"><i>563</i>&nbsp;        }</b>
+<i>564</i>&nbsp;
+<b class="nc"><i>565</i>&nbsp;        return l;</b>
+<i>566</i>&nbsp;    }
+<i>567</i>&nbsp;
+<i>568</i>&nbsp;    /**
+<i>569</i>&nbsp;     * Returns true if trust anchor certificate matches specified
+<i>570</i>&nbsp;     * certificate constraints.
+<i>571</i>&nbsp;     */
+<i>572</i>&nbsp;    private static boolean anchorIsTarget(TrustAnchor anchor,
+<i>573</i>&nbsp;                                          CertSelector sel)
+<i>574</i>&nbsp;    {
+<b class="nc"><i>575</i>&nbsp;        X509Certificate anchorCert = anchor.getTrustedCert();</b>
+<b class="nc"><i>576</i>&nbsp;        if (anchorCert != null) {</b>
+<b class="nc"><i>577</i>&nbsp;            return sel.match(anchorCert);</b>
+<i>578</i>&nbsp;        }
+<b class="nc"><i>579</i>&nbsp;        return false;</b>
+<i>580</i>&nbsp;    }
+<i>581</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,591 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: GSSNameImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.jgss</a> ]
+</div>
+
+<h1>Coverage Summary for Class: GSSNameImpl (sun.security.jgss)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">GSSNameImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 19)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 164)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.jgss;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import org.ietf.jgss.*;
+<i>29</i>&nbsp;import sun.security.jgss.spi.*;
+<i>30</i>&nbsp;import java.util.Set;
+<i>31</i>&nbsp;import java.util.HashMap;
+<i>32</i>&nbsp;import java.util.HashSet;
+<i>33</i>&nbsp;import java.util.Arrays;
+<i>34</i>&nbsp;import java.io.IOException;
+<i>35</i>&nbsp;import java.io.UnsupportedEncodingException;
+<i>36</i>&nbsp;import sun.security.util.ObjectIdentifier;
+<i>37</i>&nbsp;import sun.security.util.DerInputStream;
+<i>38</i>&nbsp;import sun.security.util.DerOutputStream;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;/**
+<i>41</i>&nbsp; * This is the implementation class for GSSName. Conceptually the
+<i>42</i>&nbsp; * GSSName is a container with mechanism specific name elements. Each
+<i>43</i>&nbsp; * name element is a representation of how that particular mechanism
+<i>44</i>&nbsp; * would canonicalize this principal.
+<i>45</i>&nbsp; *
+<i>46</i>&nbsp; * Generally a GSSName is created by an application when it supplies
+<i>47</i>&nbsp; * a sequence of bytes and a nametype that helps each mechanism
+<i>48</i>&nbsp; * decide how to interpret those bytes.
+<i>49</i>&nbsp; *
+<i>50</i>&nbsp; * It is not necessary to create name elements for each available
+<i>51</i>&nbsp; * mechanism at the time the application creates the GSSName. This
+<i>52</i>&nbsp; * implementation does this lazily, as and when name elements for
+<i>53</i>&nbsp; * mechanisms are required to be handed out. (Generally, other GSS
+<i>54</i>&nbsp; * classes like GSSContext and GSSCredential request specific
+<i>55</i>&nbsp; * elements depending on the mechanisms that they are dealing with.)
+<i>56</i>&nbsp; * Assume that getting a mechanism to parse the applciation specified
+<i>57</i>&nbsp; * bytes is an expensive call.
+<i>58</i>&nbsp; *
+<i>59</i>&nbsp; * When a GSSName is canonicalized wrt some mechanism, it is supposed
+<i>60</i>&nbsp; * to discard all elements of other mechanisms and retain only the
+<i>61</i>&nbsp; * element for this mechanism. In GSS terminology this is called a
+<i>62</i>&nbsp; * Mechanism Name or MN. This implementation tries to retain the
+<i>63</i>&nbsp; * application provided bytes and name type just in case the MN is
+<i>64</i>&nbsp; * asked to produce an element for a mechanism that is different.
+<i>65</i>&nbsp; *
+<i>66</i>&nbsp; * When a GSSName is to be exported, the name element for the desired
+<i>67</i>&nbsp; * mechanism is converted to a byte representation and written
+<i>68</i>&nbsp; * out. It might happen that a name element for that mechanism cannot
+<i>69</i>&nbsp; * be obtained. This happens when the mechanism is just not supported
+<i>70</i>&nbsp; * in this GSS-API or when the mechanism is supported but bytes
+<i>71</i>&nbsp; * corresponding to the nametypes that it understands are not
+<i>72</i>&nbsp; * available in this GSSName.
+<i>73</i>&nbsp; *
+<i>74</i>&nbsp; * This class is safe for sharing. Each retrieval of a name element
+<i>75</i>&nbsp; * from getElement() might potentially add a new element to the
+<i>76</i>&nbsp; * hashmap of elements, but getElement() is synchronized.
+<i>77</i>&nbsp; *
+<i>78</i>&nbsp; * @author Mayank Upadhyay
+<i>79</i>&nbsp; * @since 1.4
+<i>80</i>&nbsp; */
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;public class GSSNameImpl implements GSSName {
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    /**
+<i>85</i>&nbsp;     * The old Oid used in RFC 2853. Now supported as
+<i>86</i>&nbsp;     * input parameters in:
+<i>87</i>&nbsp;     *
+<i>88</i>&nbsp;     * 1. The four overloaded GSSManager.createName(*) methods
+<i>89</i>&nbsp;     * 2. GSSManager.getMechsForName(Oid)
+<i>90</i>&nbsp;     *
+<i>91</i>&nbsp;     * Note that even if a GSSName is created with this old Oid,
+<i>92</i>&nbsp;     * its internal name type and getStringNameType() output are
+<i>93</i>&nbsp;     * always the new value.
+<i>94</i>&nbsp;     */
+<i>95</i>&nbsp;    final static Oid oldHostbasedServiceName;
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    static {
+<b class="nc"><i>98</i>&nbsp;        Oid tmp = null;</b>
+<i>99</i>&nbsp;        try {
+<b class="nc"><i>100</i>&nbsp;            tmp = new Oid(&quot;1.3.6.1.5.6.2&quot;);</b>
+<b class="nc"><i>101</i>&nbsp;        } catch (Exception e) {</b>
+<i>102</i>&nbsp;            // should never happen
+<b class="nc"><i>103</i>&nbsp;        }</b>
+<b class="nc"><i>104</i>&nbsp;        oldHostbasedServiceName = tmp;</b>
+<i>105</i>&nbsp;    }
+<i>106</i>&nbsp;
+<b class="nc"><i>107</i>&nbsp;    private GSSManagerImpl gssManager = null;</b>
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    /*
+<i>110</i>&nbsp;     * Store whatever the application passed in. We will use this to
+<i>111</i>&nbsp;     * get individual mechanisms to create name elements as and when
+<i>112</i>&nbsp;     * needed.
+<i>113</i>&nbsp;     * Store both the String and the byte[]. Leave I18N to the
+<i>114</i>&nbsp;     * mechanism by allowing it to extract bytes from the String!
+<i>115</i>&nbsp;     */
+<i>116</i>&nbsp;
+<b class="nc"><i>117</i>&nbsp;    private String appNameStr = null;</b>
+<b class="nc"><i>118</i>&nbsp;    private byte[] appNameBytes = null;</b>
+<b class="nc"><i>119</i>&nbsp;    private Oid appNameType = null;</b>
+<i>120</i>&nbsp;
+<i>121</i>&nbsp;    /*
+<i>122</i>&nbsp;     * When we figure out what the printable name would be, we store
+<i>123</i>&nbsp;     * both the name and its type.
+<i>124</i>&nbsp;     */
+<i>125</i>&nbsp;
+<b class="nc"><i>126</i>&nbsp;    private String printableName = null;</b>
+<b class="nc"><i>127</i>&nbsp;    private Oid printableNameType = null;</b>
+<i>128</i>&nbsp;
+<b class="nc"><i>129</i>&nbsp;    private HashMap&lt;Oid, GSSNameSpi&gt; elements = null;</b>
+<b class="nc"><i>130</i>&nbsp;    private GSSNameSpi mechElement = null;</b>
+<i>131</i>&nbsp;
+<i>132</i>&nbsp;    static GSSNameImpl wrapElement(GSSManagerImpl gssManager,
+<i>133</i>&nbsp;        GSSNameSpi mechElement) throws GSSException {
+<b class="nc"><i>134</i>&nbsp;        return (mechElement == null ?</b>
+<i>135</i>&nbsp;            null : new GSSNameImpl(gssManager, mechElement));
+<i>136</i>&nbsp;    }
+<i>137</i>&nbsp;
+<b class="nc"><i>138</i>&nbsp;    GSSNameImpl(GSSManagerImpl gssManager, GSSNameSpi mechElement) {</b>
+<b class="nc"><i>139</i>&nbsp;        this.gssManager = gssManager;</b>
+<b class="nc"><i>140</i>&nbsp;        appNameStr = printableName = mechElement.toString();</b>
+<b class="nc"><i>141</i>&nbsp;        appNameType = printableNameType = mechElement.getStringNameType();</b>
+<b class="nc"><i>142</i>&nbsp;        this.mechElement = mechElement;</b>
+<b class="nc"><i>143</i>&nbsp;        elements = new HashMap&lt;Oid, GSSNameSpi&gt;(1);</b>
+<b class="nc"><i>144</i>&nbsp;        elements.put(mechElement.getMechanism(), this.mechElement);</b>
+<i>145</i>&nbsp;    }
+<i>146</i>&nbsp;
+<i>147</i>&nbsp;    GSSNameImpl(GSSManagerImpl gssManager,
+<i>148</i>&nbsp;                       Object appName,
+<i>149</i>&nbsp;                       Oid appNameType)
+<i>150</i>&nbsp;        throws GSSException {
+<b class="nc"><i>151</i>&nbsp;        this(gssManager, appName, appNameType, null);</b>
+<i>152</i>&nbsp;    }
+<i>153</i>&nbsp;
+<i>154</i>&nbsp;    GSSNameImpl(GSSManagerImpl gssManager,
+<i>155</i>&nbsp;                        Object appName,
+<i>156</i>&nbsp;                        Oid appNameType,
+<i>157</i>&nbsp;                        Oid mech)
+<b class="nc"><i>158</i>&nbsp;        throws GSSException {</b>
+<i>159</i>&nbsp;
+<b class="nc"><i>160</i>&nbsp;        if (oldHostbasedServiceName.equals(appNameType)) {</b>
+<b class="nc"><i>161</i>&nbsp;            appNameType = GSSName.NT_HOSTBASED_SERVICE;</b>
+<i>162</i>&nbsp;        }
+<b class="nc"><i>163</i>&nbsp;        if (appName == null)</b>
+<b class="nc"><i>164</i>&nbsp;            throw new GSSExceptionImpl(GSSException.BAD_NAME,</b>
+<i>165</i>&nbsp;                                   &quot;Cannot import null name&quot;);
+<b class="nc"><i>166</i>&nbsp;        if (mech == null) mech = ProviderList.DEFAULT_MECH_OID;</b>
+<b class="nc"><i>167</i>&nbsp;        if (NT_EXPORT_NAME.equals(appNameType)) {</b>
+<b class="nc"><i>168</i>&nbsp;            importName(gssManager, appName);</b>
+<i>169</i>&nbsp;        } else {
+<b class="nc"><i>170</i>&nbsp;            init(gssManager, appName, appNameType, mech);</b>
+<i>171</i>&nbsp;        }
+<i>172</i>&nbsp;    }
+<i>173</i>&nbsp;
+<i>174</i>&nbsp;    private void init(GSSManagerImpl gssManager,
+<i>175</i>&nbsp;                      Object appName, Oid appNameType,
+<i>176</i>&nbsp;                      Oid mech)
+<i>177</i>&nbsp;        throws GSSException {
+<i>178</i>&nbsp;
+<b class="nc"><i>179</i>&nbsp;        this.gssManager = gssManager;</b>
+<b class="nc"><i>180</i>&nbsp;        this.elements =</b>
+<b class="nc"><i>181</i>&nbsp;                new HashMap&lt;Oid, GSSNameSpi&gt;(gssManager.getMechs().length);</b>
+<i>182</i>&nbsp;
+<b class="nc"><i>183</i>&nbsp;        if (appName instanceof String) {</b>
+<b class="nc"><i>184</i>&nbsp;            this.appNameStr = (String) appName;</b>
+<i>185</i>&nbsp;            /*
+<i>186</i>&nbsp;             * If appNameType is null, then the nametype for this printable
+<i>187</i>&nbsp;             * string is determined only by interrogating the
+<i>188</i>&nbsp;             * mechanism. Thus, defer the setting of printableName and
+<i>189</i>&nbsp;             * printableNameType till later.
+<i>190</i>&nbsp;             */
+<b class="nc"><i>191</i>&nbsp;            if (appNameType != null) {</b>
+<b class="nc"><i>192</i>&nbsp;                printableName = appNameStr;</b>
+<b class="nc"><i>193</i>&nbsp;                printableNameType = appNameType;</b>
+<i>194</i>&nbsp;            }
+<i>195</i>&nbsp;        } else {
+<b class="nc"><i>196</i>&nbsp;            this.appNameBytes = (byte[]) appName;</b>
+<i>197</i>&nbsp;        }
+<i>198</i>&nbsp;
+<b class="nc"><i>199</i>&nbsp;        this.appNameType = appNameType;</b>
+<i>200</i>&nbsp;
+<b class="nc"><i>201</i>&nbsp;        mechElement = getElement(mech);</b>
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;        /*
+<i>204</i>&nbsp;         * printableName will be null if appName was in a byte[] or if
+<i>205</i>&nbsp;         * appName was in a String but appNameType was null.
+<i>206</i>&nbsp;         */
+<b class="nc"><i>207</i>&nbsp;        if (printableName == null) {</b>
+<b class="nc"><i>208</i>&nbsp;            printableName = mechElement.toString();</b>
+<b class="nc"><i>209</i>&nbsp;            printableNameType = mechElement.getStringNameType();</b>
+<i>210</i>&nbsp;        }
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;        /*
+<i>213</i>&nbsp;         *  At this point the GSSNameImpl has the following set:
+<i>214</i>&nbsp;         *   appNameStr or appNameBytes
+<i>215</i>&nbsp;         *   appNameType (could be null)
+<i>216</i>&nbsp;         *   printableName
+<i>217</i>&nbsp;         *   printableNameType
+<i>218</i>&nbsp;         *   mechElement (which also exists in the hashmap of elements)
+<i>219</i>&nbsp;         */
+<i>220</i>&nbsp;    }
+<i>221</i>&nbsp;
+<i>222</i>&nbsp;    private void importName(GSSManagerImpl gssManager,
+<i>223</i>&nbsp;                            Object appName)
+<i>224</i>&nbsp;        throws GSSException {
+<i>225</i>&nbsp;
+<b class="nc"><i>226</i>&nbsp;        int pos = 0;</b>
+<b class="nc"><i>227</i>&nbsp;        byte[] bytes = null;</b>
+<i>228</i>&nbsp;
+<b class="nc"><i>229</i>&nbsp;        if (appName instanceof String) {</b>
+<i>230</i>&nbsp;            try {
+<b class="nc"><i>231</i>&nbsp;                bytes = ((String) appName).getBytes(&quot;UTF-8&quot;);</b>
+<b class="nc"><i>232</i>&nbsp;            } catch (UnsupportedEncodingException e) {</b>
+<i>233</i>&nbsp;                // Won&#39;t happen
+<b class="nc"><i>234</i>&nbsp;            }</b>
+<i>235</i>&nbsp;        } else
+<b class="nc"><i>236</i>&nbsp;            bytes = (byte[]) appName;</b>
+<i>237</i>&nbsp;
+<b class="nc"><i>238</i>&nbsp;        if ((bytes[pos++] != 0x04) ||</b>
+<i>239</i>&nbsp;            (bytes[pos++] != 0x01))
+<b class="nc"><i>240</i>&nbsp;            throw new GSSExceptionImpl(GSSException.BAD_NAME,</b>
+<i>241</i>&nbsp;                                   &quot;Exported name token id is corrupted!&quot;);
+<i>242</i>&nbsp;
+<b class="nc"><i>243</i>&nbsp;        int oidLen  = (((0xFF &amp; bytes[pos++]) &lt;&lt; 8) |</b>
+<i>244</i>&nbsp;                       (0xFF &amp; bytes[pos++]));
+<b class="nc"><i>245</i>&nbsp;        ObjectIdentifier temp = null;</b>
+<i>246</i>&nbsp;        try {
+<b class="nc"><i>247</i>&nbsp;            DerInputStream din = new DerInputStream(bytes, pos,</b>
+<i>248</i>&nbsp;                                                    oidLen);
+<b class="nc"><i>249</i>&nbsp;            temp = new ObjectIdentifier(din);</b>
+<b class="nc"><i>250</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>251</i>&nbsp;            throw new GSSExceptionImpl(GSSException.BAD_NAME,</b>
+<i>252</i>&nbsp;                       &quot;Exported name Object identifier is corrupted!&quot;);
+<b class="nc"><i>253</i>&nbsp;        }</b>
+<b class="nc"><i>254</i>&nbsp;        Oid oid = new Oid(temp.toString());</b>
+<b class="nc"><i>255</i>&nbsp;        pos += oidLen;</b>
+<b class="nc"><i>256</i>&nbsp;        int mechPortionLen = (((0xFF &amp; bytes[pos++]) &lt;&lt; 24) |</b>
+<i>257</i>&nbsp;                              ((0xFF &amp; bytes[pos++]) &lt;&lt; 16) |
+<i>258</i>&nbsp;                              ((0xFF &amp; bytes[pos++]) &lt;&lt; 8) |
+<i>259</i>&nbsp;                              (0xFF &amp; bytes[pos++]));
+<b class="nc"><i>260</i>&nbsp;</b>
+<b class="nc"><i>261</i>&nbsp;        if (mechPortionLen &lt; 0 || pos &gt; bytes.length - mechPortionLen) {</b>
+<i>262</i>&nbsp;            throw new GSSExceptionImpl(GSSException.BAD_NAME,
+<i>263</i>&nbsp;                    &quot;Exported name mech name is corrupted!&quot;);
+<b class="nc"><i>264</i>&nbsp;        }</b>
+<b class="nc"><i>265</i>&nbsp;        byte[] mechPortion = new byte[mechPortionLen];</b>
+<i>266</i>&nbsp;        System.arraycopy(bytes, pos, mechPortion, 0, mechPortionLen);
+<b class="nc"><i>267</i>&nbsp;</b>
+<i>268</i>&nbsp;        init(gssManager, mechPortion, NT_EXPORT_NAME, oid);
+<i>269</i>&nbsp;    }
+<i>270</i>&nbsp;
+<b class="nc"><i>271</i>&nbsp;    public GSSName canonicalize(Oid mech) throws GSSException {</b>
+<i>272</i>&nbsp;        if (mech == null) mech = ProviderList.DEFAULT_MECH_OID;
+<b class="nc"><i>273</i>&nbsp;</b>
+<i>274</i>&nbsp;        return wrapElement(gssManager, getElement(mech));
+<i>275</i>&nbsp;    }
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;    /**
+<i>278</i>&nbsp;     * This method may return false negatives. But if it says two
+<i>279</i>&nbsp;     * names are equals, then there is some mechanism that
+<i>280</i>&nbsp;     * authenticates them as the same principal.
+<i>281</i>&nbsp;     */
+<i>282</i>&nbsp;    public boolean equals(GSSName other) throws GSSException {
+<b class="nc"><i>283</i>&nbsp;</b>
+<b class="nc"><i>284</i>&nbsp;        if (this.isAnonymous() || other.isAnonymous())</b>
+<i>285</i>&nbsp;            return false;
+<b class="nc"><i>286</i>&nbsp;</b>
+<b class="nc"><i>287</i>&nbsp;        if (other == this)</b>
+<i>288</i>&nbsp;            return true;
+<b class="nc"><i>289</i>&nbsp;</b>
+<b class="nc"><i>290</i>&nbsp;        if (! (other instanceof GSSNameImpl))</b>
+<b class="nc"><i>291</i>&nbsp;            return equals(gssManager.createName(other.toString(),</b>
+<i>292</i>&nbsp;                                                other.getStringNameType()));
+<i>293</i>&nbsp;
+<i>294</i>&nbsp;        /*
+<i>295</i>&nbsp;         * XXX Do a comparison of the appNameStr/appNameBytes if
+<i>296</i>&nbsp;         * available. If that fails, then proceed with this test.
+<i>297</i>&nbsp;         */
+<b class="nc"><i>298</i>&nbsp;</b>
+<i>299</i>&nbsp;        GSSNameImpl that = (GSSNameImpl) other;
+<b class="nc"><i>300</i>&nbsp;</b>
+<b class="nc"><i>301</i>&nbsp;        GSSNameSpi myElement = this.mechElement;</b>
+<i>302</i>&nbsp;        GSSNameSpi element = that.mechElement;
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;        /*
+<i>305</i>&nbsp;         * XXX If they are not of the same mechanism type, convert both to
+<i>306</i>&nbsp;         * Kerberos since it is guaranteed to be present.
+<b class="nc"><i>307</i>&nbsp;         */</b>
+<b class="nc"><i>308</i>&nbsp;        if ((myElement == null) &amp;&amp; (element != null)) {</b>
+<b class="nc"><i>309</i>&nbsp;            myElement = this.getElement(element.getMechanism());</b>
+<b class="nc"><i>310</i>&nbsp;        } else if ((myElement != null) &amp;&amp; (element == null)) {</b>
+<i>311</i>&nbsp;            element = that.getElement(myElement.getMechanism());
+<i>312</i>&nbsp;        }
+<b class="nc"><i>313</i>&nbsp;</b>
+<b class="nc"><i>314</i>&nbsp;        if (myElement != null &amp;&amp; element != null) {</b>
+<i>315</i>&nbsp;            return myElement.equals(element);
+<i>316</i>&nbsp;        }
+<b class="nc"><i>317</i>&nbsp;</b>
+<i>318</i>&nbsp;        if ((this.appNameType != null) &amp;&amp;
+<b class="nc"><i>319</i>&nbsp;            (that.appNameType != null)) {</b>
+<b class="nc"><i>320</i>&nbsp;            if (!this.appNameType.equals(that.appNameType)) {</b>
+<i>321</i>&nbsp;                return false;
+<b class="nc"><i>322</i>&nbsp;            }</b>
+<b class="nc"><i>323</i>&nbsp;            byte[] myBytes = null;</b>
+<i>324</i>&nbsp;            byte[] bytes = null;
+<b class="nc"><i>325</i>&nbsp;            try {</b>
+<i>326</i>&nbsp;                myBytes =
+<b class="nc"><i>327</i>&nbsp;                    (this.appNameStr != null ?</b>
+<i>328</i>&nbsp;                     this.appNameStr.getBytes(&quot;UTF-8&quot;) :
+<b class="nc"><i>329</i>&nbsp;                     this.appNameBytes);</b>
+<i>330</i>&nbsp;                bytes =
+<b class="nc"><i>331</i>&nbsp;                    (that.appNameStr != null ?</b>
+<i>332</i>&nbsp;                     that.appNameStr.getBytes(&quot;UTF-8&quot;) :
+<b class="nc"><i>333</i>&nbsp;                     that.appNameBytes);</b>
+<i>334</i>&nbsp;            } catch (UnsupportedEncodingException e) {
+<b class="nc"><i>335</i>&nbsp;                // Won&#39;t happen</b>
+<i>336</i>&nbsp;            }
+<b class="nc"><i>337</i>&nbsp;</b>
+<i>338</i>&nbsp;            return Arrays.equals(myBytes, bytes);
+<i>339</i>&nbsp;        }
+<b class="nc"><i>340</i>&nbsp;</b>
+<i>341</i>&nbsp;        return false;
+<i>342</i>&nbsp;
+<i>343</i>&nbsp;    }
+<i>344</i>&nbsp;
+<i>345</i>&nbsp;    /**
+<i>346</i>&nbsp;     * Returns a hashcode value for this GSSName.
+<i>347</i>&nbsp;     *
+<i>348</i>&nbsp;     * @return a hashCode value
+<i>349</i>&nbsp;     */
+<i>350</i>&nbsp;    public int hashCode() {
+<i>351</i>&nbsp;        /*
+<i>352</i>&nbsp;         * XXX
+<i>353</i>&nbsp;         * In order to get this to work reliably and properly(!), obtain a
+<i>354</i>&nbsp;         * Kerberos name element for the name and then call hashCode on its
+<i>355</i>&nbsp;         * string representation. But this cannot be done if the nametype
+<i>356</i>&nbsp;         * is not one of those supported by the Kerberos provider and hence
+<i>357</i>&nbsp;         * this name cannot be imported by Kerberos. In that case return a
+<i>358</i>&nbsp;         * constant value!
+<i>359</i>&nbsp;         */
+<b class="nc"><i>360</i>&nbsp;</b>
+<i>361</i>&nbsp;        return 1;
+<i>362</i>&nbsp;    }
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;    public boolean equals(Object another) {
+<i>365</i>&nbsp;
+<i>366</i>&nbsp;        try {
+<i>367</i>&nbsp;            // XXX This can lead to an infinite loop. Extract info
+<i>368</i>&nbsp;            // and create a GSSNameImpl with it.
+<b class="nc"><i>369</i>&nbsp;</b>
+<b class="nc"><i>370</i>&nbsp;            if (another instanceof GSSName)</b>
+<b class="nc"><i>371</i>&nbsp;                return equals((GSSName) another);</b>
+<i>372</i>&nbsp;        } catch (GSSException e) {
+<b class="nc"><i>373</i>&nbsp;            // Squelch it and return false</b>
+<i>374</i>&nbsp;        }
+<b class="nc"><i>375</i>&nbsp;</b>
+<i>376</i>&nbsp;            return false;
+<i>377</i>&nbsp;    }
+<i>378</i>&nbsp;
+<i>379</i>&nbsp;    /**
+<i>380</i>&nbsp;     * Returns a flat name representation for this object. The name
+<i>381</i>&nbsp;     * format is defined in RFC 2743:
+<i>382</i>&nbsp;     *&lt;pre&gt;
+<i>383</i>&nbsp;     * Length           Name          Description
+<i>384</i>&nbsp;     * 2               TOK_ID          Token Identifier
+<i>385</i>&nbsp;     *                                 For exported name objects, this
+<i>386</i>&nbsp;     *                                 must be hex 04 01.
+<i>387</i>&nbsp;     * 2               MECH_OID_LEN    Length of the Mechanism OID
+<i>388</i>&nbsp;     * MECH_OID_LEN    MECH_OID        Mechanism OID, in DER
+<i>389</i>&nbsp;     * 4               NAME_LEN        Length of name
+<i>390</i>&nbsp;     * NAME_LEN        NAME            Exported name; format defined in
+<i>391</i>&nbsp;     *                                 applicable mechanism draft.
+<i>392</i>&nbsp;     *&lt;/pre&gt;
+<i>393</i>&nbsp;     *
+<i>394</i>&nbsp;     * Note that it is not required to canonicalize a name before
+<i>395</i>&nbsp;     * calling export(). i.e., the name need not be an MN. If it is
+<i>396</i>&nbsp;     * not an MN, an implementation defined algorithm can be used for
+<i>397</i>&nbsp;     * choosing the mechanism which should export this name.
+<i>398</i>&nbsp;     *
+<i>399</i>&nbsp;     * @return the flat name representation for this object
+<i>400</i>&nbsp;     * @exception GSSException with major codes NAME_NOT_MN, BAD_NAME,
+<i>401</i>&nbsp;     *  BAD_NAME, FAILURE.
+<i>402</i>&nbsp;     */
+<i>403</i>&nbsp;    public byte[] export() throws GSSException {
+<b class="nc"><i>404</i>&nbsp;</b>
+<i>405</i>&nbsp;        if (mechElement == null) {
+<b class="nc"><i>406</i>&nbsp;            /* Use default mech */</b>
+<i>407</i>&nbsp;            mechElement = getElement(ProviderList.DEFAULT_MECH_OID);
+<i>408</i>&nbsp;        }
+<b class="nc"><i>409</i>&nbsp;</b>
+<b class="nc"><i>410</i>&nbsp;        byte[] mechPortion = mechElement.export();</b>
+<b class="nc"><i>411</i>&nbsp;        byte[] oidBytes = null;</b>
+<i>412</i>&nbsp;        ObjectIdentifier oid = null;
+<i>413</i>&nbsp;
+<b class="nc"><i>414</i>&nbsp;        try {</b>
+<b class="nc"><i>415</i>&nbsp;            oid = new ObjectIdentifier</b>
+<b class="nc"><i>416</i>&nbsp;                (mechElement.getMechanism().toString());</b>
+<b class="nc"><i>417</i>&nbsp;        } catch (IOException e) {</b>
+<i>418</i>&nbsp;            throw new GSSExceptionImpl(GSSException.FAILURE,
+<b class="nc"><i>419</i>&nbsp;                                       &quot;Invalid OID String &quot;);</b>
+<b class="nc"><i>420</i>&nbsp;        }</b>
+<i>421</i>&nbsp;        DerOutputStream dout = new DerOutputStream();
+<b class="nc"><i>422</i>&nbsp;        try {</b>
+<b class="nc"><i>423</i>&nbsp;            dout.putOID(oid);</b>
+<b class="nc"><i>424</i>&nbsp;        } catch (IOException e) {</b>
+<i>425</i>&nbsp;            throw new GSSExceptionImpl(GSSException.FAILURE,
+<b class="nc"><i>426</i>&nbsp;                                   &quot;Could not ASN.1 Encode &quot;</b>
+<b class="nc"><i>427</i>&nbsp;                                   + oid.toString());</b>
+<b class="nc"><i>428</i>&nbsp;        }</b>
+<i>429</i>&nbsp;        oidBytes = dout.toByteArray();
+<b class="nc"><i>430</i>&nbsp;</b>
+<i>431</i>&nbsp;        byte[] retVal = new byte[2
+<i>432</i>&nbsp;                                + 2 + oidBytes.length
+<b class="nc"><i>433</i>&nbsp;                                + 4 + mechPortion.length];</b>
+<b class="nc"><i>434</i>&nbsp;        int pos = 0;</b>
+<b class="nc"><i>435</i>&nbsp;        retVal[pos++] = 0x04;</b>
+<b class="nc"><i>436</i>&nbsp;        retVal[pos++] = 0x01;</b>
+<b class="nc"><i>437</i>&nbsp;        retVal[pos++] = (byte) (oidBytes.length&gt;&gt;&gt;8);</b>
+<b class="nc"><i>438</i>&nbsp;        retVal[pos++] = (byte) oidBytes.length;</b>
+<b class="nc"><i>439</i>&nbsp;        System.arraycopy(oidBytes, 0, retVal, pos, oidBytes.length);</b>
+<b class="nc"><i>440</i>&nbsp;        pos += oidBytes.length;</b>
+<b class="nc"><i>441</i>&nbsp;        retVal[pos++] = (byte) (mechPortion.length&gt;&gt;&gt;24);</b>
+<b class="nc"><i>442</i>&nbsp;        retVal[pos++] = (byte) (mechPortion.length&gt;&gt;&gt;16);</b>
+<b class="nc"><i>443</i>&nbsp;        retVal[pos++] = (byte) (mechPortion.length&gt;&gt;&gt;8);</b>
+<b class="nc"><i>444</i>&nbsp;        retVal[pos++] = (byte)  mechPortion.length;</b>
+<b class="nc"><i>445</i>&nbsp;        System.arraycopy(mechPortion, 0, retVal, pos, mechPortion.length);</b>
+<i>446</i>&nbsp;        return retVal;
+<i>447</i>&nbsp;    }
+<i>448</i>&nbsp;
+<b class="nc"><i>449</i>&nbsp;    public String toString() {</b>
+<i>450</i>&nbsp;         return printableName;
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;    }
+<i>453</i>&nbsp;
+<b class="nc"><i>454</i>&nbsp;    public Oid getStringNameType() throws GSSException {</b>
+<i>455</i>&nbsp;        return printableNameType;
+<i>456</i>&nbsp;    }
+<i>457</i>&nbsp;
+<b class="nc"><i>458</i>&nbsp;    public boolean isAnonymous() {</b>
+<b class="nc"><i>459</i>&nbsp;        if (printableNameType == null) {</b>
+<i>460</i>&nbsp;            return false;
+<b class="nc"><i>461</i>&nbsp;        } else {</b>
+<i>462</i>&nbsp;            return GSSName.NT_ANONYMOUS.equals(printableNameType);
+<i>463</i>&nbsp;        }
+<i>464</i>&nbsp;    }
+<i>465</i>&nbsp;
+<b class="nc"><i>466</i>&nbsp;    public boolean isMN() {</b>
+<i>467</i>&nbsp;        return true; // Since always canonicalized for some mech
+<i>468</i>&nbsp;    }
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;    public synchronized GSSNameSpi getElement(Oid mechOid)
+<i>471</i>&nbsp;        throws GSSException {
+<b class="nc"><i>472</i>&nbsp;</b>
+<i>473</i>&nbsp;        GSSNameSpi retVal = elements.get(mechOid);
+<b class="nc"><i>474</i>&nbsp;</b>
+<b class="nc"><i>475</i>&nbsp;        if (retVal == null) {</b>
+<b class="nc"><i>476</i>&nbsp;            if (appNameStr != null) {</b>
+<b class="nc"><i>477</i>&nbsp;                retVal = gssManager.getNameElement</b>
+<i>478</i>&nbsp;                    (appNameStr, appNameType, mechOid);
+<b class="nc"><i>479</i>&nbsp;            } else {</b>
+<b class="nc"><i>480</i>&nbsp;                retVal = gssManager.getNameElement</b>
+<i>481</i>&nbsp;                    (appNameBytes, appNameType, mechOid);
+<b class="nc"><i>482</i>&nbsp;            }</b>
+<i>483</i>&nbsp;            elements.put(mechOid, retVal);
+<b class="nc"><i>484</i>&nbsp;        }</b>
+<i>485</i>&nbsp;        return retVal;
+<i>486</i>&nbsp;    }
+<i>487</i>&nbsp;
+<b class="nc"><i>488</i>&nbsp;    Set&lt;GSSNameSpi&gt; getElements() {</b>
+<i>489</i>&nbsp;        return new HashSet&lt;GSSNameSpi&gt;(elements.values());
+<i>490</i>&nbsp;    }
+<i>491</i>&nbsp;
+<i>492</i>&nbsp;    private static String getNameTypeStr(Oid nameTypeOid) {
+<b class="nc"><i>493</i>&nbsp;</b>
+<b class="nc"><i>494</i>&nbsp;        if (nameTypeOid == null)</b>
+<i>495</i>&nbsp;            return &quot;(NT is null)&quot;;
+<b class="nc"><i>496</i>&nbsp;</b>
+<b class="nc"><i>497</i>&nbsp;        if (nameTypeOid.equals(NT_USER_NAME))</b>
+<b class="nc"><i>498</i>&nbsp;            return &quot;NT_USER_NAME&quot;;</b>
+<b class="nc"><i>499</i>&nbsp;        if (nameTypeOid.equals(NT_HOSTBASED_SERVICE))</b>
+<b class="nc"><i>500</i>&nbsp;            return &quot;NT_HOSTBASED_SERVICE&quot;;</b>
+<b class="nc"><i>501</i>&nbsp;        if (nameTypeOid.equals(NT_EXPORT_NAME))</b>
+<b class="nc"><i>502</i>&nbsp;            return &quot;NT_EXPORT_NAME&quot;;</b>
+<b class="nc"><i>503</i>&nbsp;        if (nameTypeOid.equals(GSSUtil.NT_GSS_KRB5_PRINCIPAL))</b>
+<i>504</i>&nbsp;            return &quot;NT_GSS_KRB5_PRINCIPAL&quot;;
+<b class="nc"><i>505</i>&nbsp;        else</b>
+<i>506</i>&nbsp;            return &quot;Unknown&quot;;
+<i>507</i>&nbsp;    }
+<i>508</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

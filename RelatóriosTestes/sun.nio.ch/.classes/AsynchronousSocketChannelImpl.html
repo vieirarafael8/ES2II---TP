@@ -1,0 +1,716 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AsynchronousSocketChannelImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.ch</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AsynchronousSocketChannelImpl (sun.nio.ch)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AsynchronousSocketChannelImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 32)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 232)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">AsynchronousSocketChannelImpl$DefaultOptionsHolder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 11)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 35)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 243)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2008, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.ch;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.ByteBuffer;
+<i>29</i>&nbsp;import java.nio.channels.*;
+<i>30</i>&nbsp;import java.net.SocketOption;
+<i>31</i>&nbsp;import java.net.StandardSocketOptions;
+<i>32</i>&nbsp;import java.net.SocketAddress;
+<i>33</i>&nbsp;import java.net.InetSocketAddress;
+<i>34</i>&nbsp;import java.io.IOException;
+<i>35</i>&nbsp;import java.io.FileDescriptor;
+<i>36</i>&nbsp;import java.util.Set;
+<i>37</i>&nbsp;import java.util.HashSet;
+<i>38</i>&nbsp;import java.util.Collections;
+<i>39</i>&nbsp;import java.util.concurrent.*;
+<i>40</i>&nbsp;import java.util.concurrent.locks.*;
+<i>41</i>&nbsp;import sun.net.NetHooks;
+<i>42</i>&nbsp;import sun.net.ext.ExtendedSocketOptions;
+<i>43</i>&nbsp;import static sun.net.ext.ExtendedSocketOptions.SOCK_STREAM;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;/**
+<i>46</i>&nbsp; * Base implementation of AsynchronousSocketChannel
+<i>47</i>&nbsp; */
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;abstract class AsynchronousSocketChannelImpl
+<i>50</i>&nbsp;    extends AsynchronousSocketChannel
+<i>51</i>&nbsp;    implements Cancellable, Groupable
+<i>52</i>&nbsp;{
+<i>53</i>&nbsp;    protected final FileDescriptor fd;
+<i>54</i>&nbsp;
+<b class="nc"><i>55</i>&nbsp;    // protects state, localAddress, and remoteAddress</b>
+<i>56</i>&nbsp;    protected final Object stateLock = new Object();
+<b class="nc"><i>57</i>&nbsp;</b>
+<b class="nc"><i>58</i>&nbsp;    protected volatile InetSocketAddress localAddress;</b>
+<i>59</i>&nbsp;    protected volatile InetSocketAddress remoteAddress;
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;    // State, increases monotonically
+<i>62</i>&nbsp;    static final int ST_UNINITIALIZED = -1;
+<i>63</i>&nbsp;    static final int ST_UNCONNECTED = 0;
+<i>64</i>&nbsp;    static final int ST_PENDING = 1;
+<b class="nc"><i>65</i>&nbsp;    static final int ST_CONNECTED = 2;</b>
+<i>66</i>&nbsp;    protected volatile int state = ST_UNINITIALIZED;
+<i>67</i>&nbsp;
+<b class="nc"><i>68</i>&nbsp;    // reading state</b>
+<i>69</i>&nbsp;    private final Object readLock = new Object();
+<i>70</i>&nbsp;    private boolean reading;
+<i>71</i>&nbsp;    private boolean readShutdown;
+<i>72</i>&nbsp;    private boolean readKilled;     // further reading disallowed due to timeout
+<i>73</i>&nbsp;
+<b class="nc"><i>74</i>&nbsp;    // writing state</b>
+<i>75</i>&nbsp;    private final Object writeLock = new Object();
+<i>76</i>&nbsp;    private boolean writing;
+<i>77</i>&nbsp;    private boolean writeShutdown;
+<i>78</i>&nbsp;    private boolean writeKilled;    // further writing disallowed due to timeout
+<i>79</i>&nbsp;
+<b class="nc"><i>80</i>&nbsp;    // close support</b>
+<b class="nc"><i>81</i>&nbsp;    private final ReadWriteLock closeLock = new ReentrantReadWriteLock();</b>
+<i>82</i>&nbsp;    private volatile boolean closed;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    // set true when exclusive binding is on and SO_REUSEADDR is emulated
+<i>85</i>&nbsp;    private boolean isReuseAddress;
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    AsynchronousSocketChannelImpl(AsynchronousChannelGroupImpl group)
+<i>88</i>&nbsp;        throws IOException
+<b class="nc"><i>89</i>&nbsp;    {</b>
+<b class="nc"><i>90</i>&nbsp;        super(group.provider());</b>
+<b class="nc"><i>91</i>&nbsp;        this.fd = Net.socket(true);</b>
+<i>92</i>&nbsp;        this.state = ST_UNCONNECTED;
+<i>93</i>&nbsp;    }
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;    // Constructor for sockets obtained from AsynchronousServerSocketChannelImpl
+<i>96</i>&nbsp;    AsynchronousSocketChannelImpl(AsynchronousChannelGroupImpl group,
+<i>97</i>&nbsp;                                  FileDescriptor fd,
+<i>98</i>&nbsp;                                  InetSocketAddress remote)
+<i>99</i>&nbsp;        throws IOException
+<b class="nc"><i>100</i>&nbsp;    {</b>
+<b class="nc"><i>101</i>&nbsp;        super(group.provider());</b>
+<b class="nc"><i>102</i>&nbsp;        this.fd = fd;</b>
+<b class="nc"><i>103</i>&nbsp;        this.state = ST_CONNECTED;</b>
+<b class="nc"><i>104</i>&nbsp;        this.localAddress = Net.localAddress(fd);</b>
+<i>105</i>&nbsp;        this.remoteAddress = remote;
+<i>106</i>&nbsp;    }
+<i>107</i>&nbsp;
+<i>108</i>&nbsp;    @Override
+<b class="nc"><i>109</i>&nbsp;    public final boolean isOpen() {</b>
+<i>110</i>&nbsp;        return !closed;
+<i>111</i>&nbsp;    }
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;    /**
+<i>114</i>&nbsp;     * Marks beginning of access to file descriptor/handle
+<i>115</i>&nbsp;     */
+<b class="nc"><i>116</i>&nbsp;    final void begin() throws IOException {</b>
+<b class="nc"><i>117</i>&nbsp;        closeLock.readLock().lock();</b>
+<b class="nc"><i>118</i>&nbsp;        if (!isOpen())</b>
+<i>119</i>&nbsp;            throw new ClosedChannelException();
+<i>120</i>&nbsp;    }
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;    /**
+<i>123</i>&nbsp;     * Marks end of access to file descriptor/handle
+<i>124</i>&nbsp;     */
+<b class="nc"><i>125</i>&nbsp;    final void end() {</b>
+<i>126</i>&nbsp;        closeLock.readLock().unlock();
+<i>127</i>&nbsp;    }
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    /**
+<i>130</i>&nbsp;     * Invoked to close socket and release other resources.
+<i>131</i>&nbsp;     */
+<i>132</i>&nbsp;    abstract void implClose() throws IOException;
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;    @Override
+<i>135</i>&nbsp;    public final void close() throws IOException {
+<b class="nc"><i>136</i>&nbsp;        // synchronize with any threads initiating asynchronous operations</b>
+<i>137</i>&nbsp;        closeLock.writeLock().lock();
+<b class="nc"><i>138</i>&nbsp;        try {</b>
+<i>139</i>&nbsp;            if (closed)
+<b class="nc"><i>140</i>&nbsp;                return;     // already closed</b>
+<i>141</i>&nbsp;            closed = true;
+<b class="nc"><i>142</i>&nbsp;        } finally {</b>
+<b class="nc"><i>143</i>&nbsp;            closeLock.writeLock().unlock();</b>
+<b class="nc"><i>144</i>&nbsp;        }</b>
+<i>145</i>&nbsp;        implClose();
+<i>146</i>&nbsp;    }
+<i>147</i>&nbsp;
+<b class="nc"><i>148</i>&nbsp;    final void enableReading(boolean killed) {</b>
+<b class="nc"><i>149</i>&nbsp;        synchronized (readLock) {</b>
+<b class="nc"><i>150</i>&nbsp;            reading = false;</b>
+<b class="nc"><i>151</i>&nbsp;            if (killed)</b>
+<b class="nc"><i>152</i>&nbsp;                readKilled = true;</b>
+<i>153</i>&nbsp;        }
+<i>154</i>&nbsp;    }
+<i>155</i>&nbsp;
+<b class="nc"><i>156</i>&nbsp;    final void enableReading() {</b>
+<i>157</i>&nbsp;        enableReading(false);
+<i>158</i>&nbsp;    }
+<i>159</i>&nbsp;
+<b class="nc"><i>160</i>&nbsp;    final void enableWriting(boolean killed) {</b>
+<b class="nc"><i>161</i>&nbsp;        synchronized (writeLock) {</b>
+<b class="nc"><i>162</i>&nbsp;            writing = false;</b>
+<b class="nc"><i>163</i>&nbsp;            if (killed)</b>
+<b class="nc"><i>164</i>&nbsp;                writeKilled = true;</b>
+<i>165</i>&nbsp;        }
+<i>166</i>&nbsp;    }
+<i>167</i>&nbsp;
+<b class="nc"><i>168</i>&nbsp;    final void enableWriting() {</b>
+<i>169</i>&nbsp;        enableWriting(false);
+<i>170</i>&nbsp;    }
+<i>171</i>&nbsp;
+<b class="nc"><i>172</i>&nbsp;    final void killReading() {</b>
+<b class="nc"><i>173</i>&nbsp;        synchronized (readLock) {</b>
+<b class="nc"><i>174</i>&nbsp;            readKilled = true;</b>
+<i>175</i>&nbsp;        }
+<i>176</i>&nbsp;    }
+<i>177</i>&nbsp;
+<b class="nc"><i>178</i>&nbsp;    final void killWriting() {</b>
+<b class="nc"><i>179</i>&nbsp;        synchronized (writeLock) {</b>
+<b class="nc"><i>180</i>&nbsp;            writeKilled = true;</b>
+<i>181</i>&nbsp;        }
+<i>182</i>&nbsp;    }
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;    final void killConnect() {
+<i>185</i>&nbsp;        // when a connect is cancelled then the connection may have been
+<b class="nc"><i>186</i>&nbsp;        // established so prevent reading or writing.</b>
+<b class="nc"><i>187</i>&nbsp;        killReading();</b>
+<i>188</i>&nbsp;        killWriting();
+<i>189</i>&nbsp;    }
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;    /**
+<i>192</i>&nbsp;     * Invoked by connect to initiate the connect operation.
+<i>193</i>&nbsp;     */
+<i>194</i>&nbsp;    abstract &lt;A&gt; Future&lt;Void&gt; implConnect(SocketAddress remote,
+<i>195</i>&nbsp;                                          A attachment,
+<i>196</i>&nbsp;                                          CompletionHandler&lt;Void,? super A&gt; handler);
+<i>197</i>&nbsp;
+<i>198</i>&nbsp;    @Override
+<b class="nc"><i>199</i>&nbsp;    public final Future&lt;Void&gt; connect(SocketAddress remote) {</b>
+<i>200</i>&nbsp;        return implConnect(remote, null, null);
+<i>201</i>&nbsp;    }
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;    @Override
+<i>204</i>&nbsp;    public final &lt;A&gt; void connect(SocketAddress remote,
+<i>205</i>&nbsp;                                  A attachment,
+<i>206</i>&nbsp;                                  CompletionHandler&lt;Void,? super A&gt; handler)
+<b class="nc"><i>207</i>&nbsp;    {</b>
+<b class="nc"><i>208</i>&nbsp;        if (handler == null)</b>
+<b class="nc"><i>209</i>&nbsp;            throw new NullPointerException(&quot;&#39;handler&#39; is null&quot;);</b>
+<i>210</i>&nbsp;        implConnect(remote, attachment, handler);
+<i>211</i>&nbsp;    }
+<i>212</i>&nbsp;
+<i>213</i>&nbsp;    /**
+<i>214</i>&nbsp;     * Invoked by read to initiate the I/O operation.
+<i>215</i>&nbsp;     */
+<i>216</i>&nbsp;    abstract &lt;V extends Number,A&gt; Future&lt;V&gt; implRead(boolean isScatteringRead,
+<i>217</i>&nbsp;                                                     ByteBuffer dst,
+<i>218</i>&nbsp;                                                     ByteBuffer[] dsts,
+<i>219</i>&nbsp;                                                     long timeout,
+<i>220</i>&nbsp;                                                     TimeUnit unit,
+<i>221</i>&nbsp;                                                     A attachment,
+<i>222</i>&nbsp;                                                     CompletionHandler&lt;V,? super A&gt; handler);
+<i>223</i>&nbsp;
+<i>224</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>225</i>&nbsp;    private &lt;V extends Number,A&gt; Future&lt;V&gt; read(boolean isScatteringRead,
+<i>226</i>&nbsp;                                                ByteBuffer dst,
+<i>227</i>&nbsp;                                                ByteBuffer[] dsts,
+<i>228</i>&nbsp;                                                long timeout,
+<i>229</i>&nbsp;                                                TimeUnit unit,
+<i>230</i>&nbsp;                                                A att,
+<i>231</i>&nbsp;                                                CompletionHandler&lt;V,? super A&gt; handler)
+<b class="nc"><i>232</i>&nbsp;    {</b>
+<b class="nc"><i>233</i>&nbsp;        if (!isOpen()) {</b>
+<b class="nc"><i>234</i>&nbsp;            Throwable e = new ClosedChannelException();</b>
+<b class="nc"><i>235</i>&nbsp;            if (handler == null)</b>
+<b class="nc"><i>236</i>&nbsp;                return CompletedFuture.withFailure(e);</b>
+<b class="nc"><i>237</i>&nbsp;            Invoker.invoke(this, handler, att, null, e);</b>
+<i>238</i>&nbsp;            return null;
+<i>239</i>&nbsp;        }
+<b class="nc"><i>240</i>&nbsp;</b>
+<b class="nc"><i>241</i>&nbsp;        if (remoteAddress == null)</b>
+<i>242</i>&nbsp;            throw new NotYetConnectedException();
+<b class="nc"><i>243</i>&nbsp;</b>
+<b class="nc"><i>244</i>&nbsp;        boolean hasSpaceToRead = isScatteringRead || dst.hasRemaining();</b>
+<i>245</i>&nbsp;        boolean shutdown = false;
+<i>246</i>&nbsp;
+<b class="nc"><i>247</i>&nbsp;        // check and update state</b>
+<b class="nc"><i>248</i>&nbsp;        synchronized (readLock) {</b>
+<b class="nc"><i>249</i>&nbsp;            if (readKilled)</b>
+<b class="nc"><i>250</i>&nbsp;                throw new IllegalStateException(&quot;Reading not allowed due to timeout or cancellation&quot;);</b>
+<b class="nc"><i>251</i>&nbsp;            if (reading)</b>
+<b class="nc"><i>252</i>&nbsp;                throw new ReadPendingException();</b>
+<b class="nc"><i>253</i>&nbsp;            if (readShutdown) {</b>
+<i>254</i>&nbsp;                shutdown = true;
+<b class="nc"><i>255</i>&nbsp;            } else {</b>
+<b class="nc"><i>256</i>&nbsp;                if (hasSpaceToRead) {</b>
+<i>257</i>&nbsp;                    reading = true;
+<i>258</i>&nbsp;                }
+<b class="nc"><i>259</i>&nbsp;            }</b>
+<i>260</i>&nbsp;        }
+<i>261</i>&nbsp;
+<i>262</i>&nbsp;        // immediately complete with -1 if shutdown for read
+<b class="nc"><i>263</i>&nbsp;        // immediately complete with 0 if no space remaining</b>
+<i>264</i>&nbsp;        if (shutdown || !hasSpaceToRead) {
+<b class="nc"><i>265</i>&nbsp;            Number result;</b>
+<b class="nc"><i>266</i>&nbsp;            if (isScatteringRead) {</b>
+<i>267</i>&nbsp;                result = (shutdown) ? Long.valueOf(-1L) : Long.valueOf(0L);
+<b class="nc"><i>268</i>&nbsp;            } else {</b>
+<i>269</i>&nbsp;                result = (shutdown) ? -1 : 0;
+<b class="nc"><i>270</i>&nbsp;            }</b>
+<b class="nc"><i>271</i>&nbsp;            if (handler == null)</b>
+<b class="nc"><i>272</i>&nbsp;                return CompletedFuture.withResult((V)result);</b>
+<b class="nc"><i>273</i>&nbsp;            Invoker.invoke(this, handler, att, (V)result, null);</b>
+<i>274</i>&nbsp;            return null;
+<i>275</i>&nbsp;        }
+<b class="nc"><i>276</i>&nbsp;</b>
+<i>277</i>&nbsp;        return implRead(isScatteringRead, dst, dsts, timeout, unit, att, handler);
+<i>278</i>&nbsp;    }
+<i>279</i>&nbsp;
+<i>280</i>&nbsp;    @Override
+<b class="nc"><i>281</i>&nbsp;    public final Future&lt;Integer&gt; read(ByteBuffer dst) {</b>
+<b class="nc"><i>282</i>&nbsp;        if (dst.isReadOnly())</b>
+<b class="nc"><i>283</i>&nbsp;            throw new IllegalArgumentException(&quot;Read-only buffer&quot;);</b>
+<i>284</i>&nbsp;        return read(false, dst, null, 0L, TimeUnit.MILLISECONDS, null, null);
+<i>285</i>&nbsp;    }
+<i>286</i>&nbsp;
+<i>287</i>&nbsp;    @Override
+<i>288</i>&nbsp;    public final &lt;A&gt; void read(ByteBuffer dst,
+<i>289</i>&nbsp;                               long timeout,
+<i>290</i>&nbsp;                               TimeUnit unit,
+<i>291</i>&nbsp;                               A attachment,
+<i>292</i>&nbsp;                               CompletionHandler&lt;Integer,? super A&gt; handler)
+<b class="nc"><i>293</i>&nbsp;    {</b>
+<b class="nc"><i>294</i>&nbsp;        if (handler == null)</b>
+<b class="nc"><i>295</i>&nbsp;            throw new NullPointerException(&quot;&#39;handler&#39; is null&quot;);</b>
+<b class="nc"><i>296</i>&nbsp;        if (dst.isReadOnly())</b>
+<b class="nc"><i>297</i>&nbsp;            throw new IllegalArgumentException(&quot;Read-only buffer&quot;);</b>
+<i>298</i>&nbsp;        read(false, dst, null, timeout, unit, attachment, handler);
+<i>299</i>&nbsp;    }
+<i>300</i>&nbsp;
+<i>301</i>&nbsp;    @Override
+<i>302</i>&nbsp;    public final &lt;A&gt; void read(ByteBuffer[] dsts,
+<i>303</i>&nbsp;                               int offset,
+<i>304</i>&nbsp;                               int length,
+<i>305</i>&nbsp;                               long timeout,
+<i>306</i>&nbsp;                               TimeUnit unit,
+<i>307</i>&nbsp;                               A attachment,
+<i>308</i>&nbsp;                               CompletionHandler&lt;Long,? super A&gt; handler)
+<b class="nc"><i>309</i>&nbsp;    {</b>
+<b class="nc"><i>310</i>&nbsp;        if (handler == null)</b>
+<b class="nc"><i>311</i>&nbsp;            throw new NullPointerException(&quot;&#39;handler&#39; is null&quot;);</b>
+<b class="nc"><i>312</i>&nbsp;        if ((offset &lt; 0) || (length &lt; 0) || (offset &gt; dsts.length - length))</b>
+<b class="nc"><i>313</i>&nbsp;            throw new IndexOutOfBoundsException();</b>
+<b class="nc"><i>314</i>&nbsp;        ByteBuffer[] bufs = Util.subsequence(dsts, offset, length);</b>
+<b class="nc"><i>315</i>&nbsp;        for (int i=0; i&lt;bufs.length; i++) {</b>
+<b class="nc"><i>316</i>&nbsp;            if (bufs[i].isReadOnly())</b>
+<i>317</i>&nbsp;                throw new IllegalArgumentException(&quot;Read-only buffer&quot;);
+<b class="nc"><i>318</i>&nbsp;        }</b>
+<i>319</i>&nbsp;        read(true, null, bufs, timeout, unit, attachment, handler);
+<i>320</i>&nbsp;    }
+<i>321</i>&nbsp;
+<i>322</i>&nbsp;    /**
+<i>323</i>&nbsp;     * Invoked by write to initiate the I/O operation.
+<i>324</i>&nbsp;     */
+<i>325</i>&nbsp;    abstract &lt;V extends Number,A&gt; Future&lt;V&gt; implWrite(boolean isGatheringWrite,
+<i>326</i>&nbsp;                                                      ByteBuffer src,
+<i>327</i>&nbsp;                                                      ByteBuffer[] srcs,
+<i>328</i>&nbsp;                                                      long timeout,
+<i>329</i>&nbsp;                                                      TimeUnit unit,
+<i>330</i>&nbsp;                                                      A attachment,
+<i>331</i>&nbsp;                                                      CompletionHandler&lt;V,? super A&gt; handler);
+<i>332</i>&nbsp;
+<i>333</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>334</i>&nbsp;    private &lt;V extends Number,A&gt; Future&lt;V&gt; write(boolean isGatheringWrite,
+<i>335</i>&nbsp;                                                 ByteBuffer src,
+<i>336</i>&nbsp;                                                 ByteBuffer[] srcs,
+<i>337</i>&nbsp;                                                 long timeout,
+<i>338</i>&nbsp;                                                 TimeUnit unit,
+<i>339</i>&nbsp;                                                 A att,
+<i>340</i>&nbsp;                                                 CompletionHandler&lt;V,? super A&gt; handler)
+<b class="nc"><i>341</i>&nbsp;    {</b>
+<i>342</i>&nbsp;        boolean hasDataToWrite = isGatheringWrite || src.hasRemaining();
+<b class="nc"><i>343</i>&nbsp;</b>
+<b class="nc"><i>344</i>&nbsp;        boolean closed = false;</b>
+<b class="nc"><i>345</i>&nbsp;        if (isOpen()) {</b>
+<b class="nc"><i>346</i>&nbsp;            if (remoteAddress == null)</b>
+<i>347</i>&nbsp;                throw new NotYetConnectedException();
+<b class="nc"><i>348</i>&nbsp;            // check and update state</b>
+<b class="nc"><i>349</i>&nbsp;            synchronized (writeLock) {</b>
+<b class="nc"><i>350</i>&nbsp;                if (writeKilled)</b>
+<b class="nc"><i>351</i>&nbsp;                    throw new IllegalStateException(&quot;Writing not allowed due to timeout or cancellation&quot;);</b>
+<b class="nc"><i>352</i>&nbsp;                if (writing)</b>
+<b class="nc"><i>353</i>&nbsp;                    throw new WritePendingException();</b>
+<b class="nc"><i>354</i>&nbsp;                if (writeShutdown) {</b>
+<i>355</i>&nbsp;                    closed = true;
+<b class="nc"><i>356</i>&nbsp;                } else {</b>
+<b class="nc"><i>357</i>&nbsp;                    if (hasDataToWrite)</b>
+<i>358</i>&nbsp;                        writing = true;
+<b class="nc"><i>359</i>&nbsp;                }</b>
+<i>360</i>&nbsp;            }
+<b class="nc"><i>361</i>&nbsp;        } else {</b>
+<i>362</i>&nbsp;            closed = true;
+<i>363</i>&nbsp;        }
+<i>364</i>&nbsp;
+<b class="nc"><i>365</i>&nbsp;        // channel is closed or shutdown for write</b>
+<b class="nc"><i>366</i>&nbsp;        if (closed) {</b>
+<b class="nc"><i>367</i>&nbsp;            Throwable e = new ClosedChannelException();</b>
+<b class="nc"><i>368</i>&nbsp;            if (handler == null)</b>
+<b class="nc"><i>369</i>&nbsp;                return CompletedFuture.withFailure(e);</b>
+<b class="nc"><i>370</i>&nbsp;            Invoker.invoke(this, handler, att, null, e);</b>
+<i>371</i>&nbsp;            return null;
+<i>372</i>&nbsp;        }
+<i>373</i>&nbsp;
+<b class="nc"><i>374</i>&nbsp;        // nothing to write so complete immediately</b>
+<b class="nc"><i>375</i>&nbsp;        if (!hasDataToWrite) {</b>
+<b class="nc"><i>376</i>&nbsp;            Number result = (isGatheringWrite) ? (Number)0L : (Number)0;</b>
+<b class="nc"><i>377</i>&nbsp;            if (handler == null)</b>
+<b class="nc"><i>378</i>&nbsp;                return CompletedFuture.withResult((V)result);</b>
+<b class="nc"><i>379</i>&nbsp;            Invoker.invoke(this, handler, att, (V)result, null);</b>
+<i>380</i>&nbsp;            return null;
+<i>381</i>&nbsp;        }
+<b class="nc"><i>382</i>&nbsp;</b>
+<i>383</i>&nbsp;        return implWrite(isGatheringWrite, src, srcs, timeout, unit, att, handler);
+<i>384</i>&nbsp;    }
+<i>385</i>&nbsp;
+<i>386</i>&nbsp;    @Override
+<b class="nc"><i>387</i>&nbsp;    public final Future&lt;Integer&gt; write(ByteBuffer src) {</b>
+<i>388</i>&nbsp;        return write(false, src, null, 0L, TimeUnit.MILLISECONDS, null, null);
+<i>389</i>&nbsp;    }
+<i>390</i>&nbsp;
+<i>391</i>&nbsp;    @Override
+<i>392</i>&nbsp;    public final &lt;A&gt; void write(ByteBuffer src,
+<i>393</i>&nbsp;                                long timeout,
+<i>394</i>&nbsp;                                TimeUnit unit,
+<i>395</i>&nbsp;                                A attachment,
+<i>396</i>&nbsp;                                CompletionHandler&lt;Integer,? super A&gt; handler)
+<b class="nc"><i>397</i>&nbsp;    {</b>
+<b class="nc"><i>398</i>&nbsp;        if (handler == null)</b>
+<b class="nc"><i>399</i>&nbsp;            throw new NullPointerException(&quot;&#39;handler&#39; is null&quot;);</b>
+<i>400</i>&nbsp;        write(false, src, null, timeout, unit, attachment, handler);
+<i>401</i>&nbsp;    }
+<i>402</i>&nbsp;
+<i>403</i>&nbsp;    @Override
+<i>404</i>&nbsp;    public final &lt;A&gt; void  write(ByteBuffer[] srcs,
+<i>405</i>&nbsp;                                 int offset,
+<i>406</i>&nbsp;                                 int length,
+<i>407</i>&nbsp;                                 long timeout,
+<i>408</i>&nbsp;                                 TimeUnit unit,
+<i>409</i>&nbsp;                                 A attachment,
+<i>410</i>&nbsp;                                 CompletionHandler&lt;Long,? super A&gt; handler)
+<b class="nc"><i>411</i>&nbsp;    {</b>
+<b class="nc"><i>412</i>&nbsp;        if (handler == null)</b>
+<b class="nc"><i>413</i>&nbsp;            throw new NullPointerException(&quot;&#39;handler&#39; is null&quot;);</b>
+<b class="nc"><i>414</i>&nbsp;        if ((offset &lt; 0) || (length &lt; 0) || (offset &gt; srcs.length - length))</b>
+<b class="nc"><i>415</i>&nbsp;            throw new IndexOutOfBoundsException();</b>
+<b class="nc"><i>416</i>&nbsp;        srcs = Util.subsequence(srcs, offset, length);</b>
+<i>417</i>&nbsp;        write(true, null, srcs, timeout, unit, attachment, handler);
+<i>418</i>&nbsp;    }
+<i>419</i>&nbsp;
+<i>420</i>&nbsp;    @Override
+<i>421</i>&nbsp;    public final AsynchronousSocketChannel bind(SocketAddress local)
+<i>422</i>&nbsp;        throws IOException
+<i>423</i>&nbsp;    {
+<b class="nc"><i>424</i>&nbsp;        try {</b>
+<b class="nc"><i>425</i>&nbsp;            begin();</b>
+<b class="nc"><i>426</i>&nbsp;            synchronized (stateLock) {</b>
+<b class="nc"><i>427</i>&nbsp;                if (state == ST_PENDING)</b>
+<b class="nc"><i>428</i>&nbsp;                    throw new ConnectionPendingException();</b>
+<b class="nc"><i>429</i>&nbsp;                if (localAddress != null)</b>
+<b class="nc"><i>430</i>&nbsp;                    throw new AlreadyBoundException();</b>
+<b class="nc"><i>431</i>&nbsp;                InetSocketAddress isa = (local == null) ?</b>
+<b class="nc"><i>432</i>&nbsp;                    new InetSocketAddress(0) : Net.checkAddress(local);</b>
+<b class="nc"><i>433</i>&nbsp;                SecurityManager sm = System.getSecurityManager();</b>
+<b class="nc"><i>434</i>&nbsp;                if (sm != null) {</b>
+<i>435</i>&nbsp;                    sm.checkListen(isa.getPort());
+<b class="nc"><i>436</i>&nbsp;                }</b>
+<b class="nc"><i>437</i>&nbsp;                NetHooks.beforeTcpBind(fd, isa.getAddress(), isa.getPort());</b>
+<b class="nc"><i>438</i>&nbsp;                Net.bind(fd, isa.getAddress(), isa.getPort());</b>
+<b class="nc"><i>439</i>&nbsp;                localAddress = Net.localAddress(fd);</b>
+<i>440</i>&nbsp;            }
+<b class="nc"><i>441</i>&nbsp;        } finally {</b>
+<b class="nc"><i>442</i>&nbsp;            end();</b>
+<b class="nc"><i>443</i>&nbsp;        }</b>
+<i>444</i>&nbsp;        return this;
+<i>445</i>&nbsp;    }
+<i>446</i>&nbsp;
+<i>447</i>&nbsp;    @Override
+<b class="nc"><i>448</i>&nbsp;    public final SocketAddress getLocalAddress() throws IOException {</b>
+<b class="nc"><i>449</i>&nbsp;        if (!isOpen())</b>
+<b class="nc"><i>450</i>&nbsp;            throw new ClosedChannelException();</b>
+<i>451</i>&nbsp;         return Net.getRevealedLocalAddress(localAddress);
+<i>452</i>&nbsp;    }
+<i>453</i>&nbsp;
+<i>454</i>&nbsp;    @Override
+<i>455</i>&nbsp;    public final &lt;T&gt; AsynchronousSocketChannel setOption(SocketOption&lt;T&gt; name, T value)
+<i>456</i>&nbsp;        throws IOException
+<b class="nc"><i>457</i>&nbsp;    {</b>
+<b class="nc"><i>458</i>&nbsp;        if (name == null)</b>
+<b class="nc"><i>459</i>&nbsp;            throw new NullPointerException();</b>
+<b class="nc"><i>460</i>&nbsp;        if (!supportedOptions().contains(name))</b>
+<i>461</i>&nbsp;            throw new UnsupportedOperationException(&quot;&#39;&quot; + name + &quot;&#39; not supported&quot;);
+<i>462</i>&nbsp;
+<b class="nc"><i>463</i>&nbsp;        try {</b>
+<b class="nc"><i>464</i>&nbsp;            begin();</b>
+<b class="nc"><i>465</i>&nbsp;            if (writeShutdown)</b>
+<b class="nc"><i>466</i>&nbsp;                throw new IOException(&quot;Connection has been shutdown for writing&quot;);</b>
+<b class="nc"><i>467</i>&nbsp;            if (name == StandardSocketOptions.SO_REUSEADDR &amp;&amp;</b>
+<i>468</i>&nbsp;                    Net.useExclusiveBind())
+<i>469</i>&nbsp;            {
+<b class="nc"><i>470</i>&nbsp;                // SO_REUSEADDR emulated when using exclusive bind</b>
+<i>471</i>&nbsp;                isReuseAddress = (Boolean)value;
+<b class="nc"><i>472</i>&nbsp;            } else {</b>
+<i>473</i>&nbsp;                Net.setSocketOption(fd, Net.UNSPEC, name, value);
+<b class="nc"><i>474</i>&nbsp;            }</b>
+<i>475</i>&nbsp;            return this;
+<b class="nc"><i>476</i>&nbsp;        } finally {</b>
+<i>477</i>&nbsp;            end();
+<i>478</i>&nbsp;        }
+<i>479</i>&nbsp;    }
+<i>480</i>&nbsp;
+<i>481</i>&nbsp;    @Override
+<i>482</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<b class="nc"><i>483</i>&nbsp;    public final &lt;T&gt; T getOption(SocketOption&lt;T&gt; name) throws IOException {</b>
+<b class="nc"><i>484</i>&nbsp;        if (name == null)</b>
+<b class="nc"><i>485</i>&nbsp;            throw new NullPointerException();</b>
+<b class="nc"><i>486</i>&nbsp;        if (!supportedOptions().contains(name))</b>
+<i>487</i>&nbsp;            throw new UnsupportedOperationException(&quot;&#39;&quot; + name + &quot;&#39; not supported&quot;);
+<i>488</i>&nbsp;
+<b class="nc"><i>489</i>&nbsp;        try {</b>
+<b class="nc"><i>490</i>&nbsp;            begin();</b>
+<b class="nc"><i>491</i>&nbsp;            if (name == StandardSocketOptions.SO_REUSEADDR &amp;&amp;</b>
+<i>492</i>&nbsp;                    Net.useExclusiveBind())
+<i>493</i>&nbsp;            {
+<b class="nc"><i>494</i>&nbsp;                // SO_REUSEADDR emulated when using exclusive bind</b>
+<i>495</i>&nbsp;                return (T)Boolean.valueOf(isReuseAddress);
+<b class="nc"><i>496</i>&nbsp;            }</b>
+<i>497</i>&nbsp;            return (T) Net.getSocketOption(fd, Net.UNSPEC, name);
+<b class="nc"><i>498</i>&nbsp;        } finally {</b>
+<i>499</i>&nbsp;            end();
+<i>500</i>&nbsp;        }
+<i>501</i>&nbsp;    }
+<b class="nc"><i>502</i>&nbsp;</b>
+<b class="nc"><i>503</i>&nbsp;    private static class DefaultOptionsHolder {</b>
+<i>504</i>&nbsp;        static final Set&lt;SocketOption&lt;?&gt;&gt; defaultOptions = defaultOptions();
+<i>505</i>&nbsp;
+<b class="nc"><i>506</i>&nbsp;        private static Set&lt;SocketOption&lt;?&gt;&gt; defaultOptions() {</b>
+<b class="nc"><i>507</i>&nbsp;            HashSet&lt;SocketOption&lt;?&gt;&gt; set = new HashSet&lt;&gt;(5);</b>
+<b class="nc"><i>508</i>&nbsp;            set.add(StandardSocketOptions.SO_SNDBUF);</b>
+<b class="nc"><i>509</i>&nbsp;            set.add(StandardSocketOptions.SO_RCVBUF);</b>
+<b class="nc"><i>510</i>&nbsp;            set.add(StandardSocketOptions.SO_KEEPALIVE);</b>
+<b class="nc"><i>511</i>&nbsp;            set.add(StandardSocketOptions.SO_REUSEADDR);</b>
+<b class="nc"><i>512</i>&nbsp;            if (Net.isReusePortAvailable()) {</b>
+<b class="nc"><i>513</i>&nbsp;                set.add(StandardSocketOptions.SO_REUSEPORT);</b>
+<i>514</i>&nbsp;            }
+<b class="nc"><i>515</i>&nbsp;            set.add(StandardSocketOptions.TCP_NODELAY);</b>
+<i>516</i>&nbsp;            set.addAll(ExtendedSocketOptions.options(SOCK_STREAM));
+<i>517</i>&nbsp;            return Collections.unmodifiableSet(set);
+<i>518</i>&nbsp;        }
+<i>519</i>&nbsp;    }
+<i>520</i>&nbsp;
+<b class="nc"><i>521</i>&nbsp;    @Override</b>
+<i>522</i>&nbsp;    public final Set&lt;SocketOption&lt;?&gt;&gt; supportedOptions() {
+<i>523</i>&nbsp;        return DefaultOptionsHolder.defaultOptions;
+<i>524</i>&nbsp;    }
+<i>525</i>&nbsp;
+<b class="nc"><i>526</i>&nbsp;    @Override</b>
+<b class="nc"><i>527</i>&nbsp;    public final SocketAddress getRemoteAddress() throws IOException {</b>
+<b class="nc"><i>528</i>&nbsp;        if (!isOpen())</b>
+<i>529</i>&nbsp;            throw new ClosedChannelException();
+<i>530</i>&nbsp;        return remoteAddress;
+<i>531</i>&nbsp;    }
+<i>532</i>&nbsp;
+<i>533</i>&nbsp;    @Override
+<b class="nc"><i>534</i>&nbsp;    public final AsynchronousSocketChannel shutdownInput() throws IOException {</b>
+<b class="nc"><i>535</i>&nbsp;        try {</b>
+<b class="nc"><i>536</i>&nbsp;            begin();</b>
+<b class="nc"><i>537</i>&nbsp;            if (remoteAddress == null)</b>
+<b class="nc"><i>538</i>&nbsp;                throw new NotYetConnectedException();</b>
+<b class="nc"><i>539</i>&nbsp;            synchronized (readLock) {</b>
+<b class="nc"><i>540</i>&nbsp;                if (!readShutdown) {</b>
+<i>541</i>&nbsp;                    Net.shutdown(fd, Net.SHUT_RD);
+<b class="nc"><i>542</i>&nbsp;                    readShutdown = true;</b>
+<i>543</i>&nbsp;                }
+<b class="nc"><i>544</i>&nbsp;            }</b>
+<b class="nc"><i>545</i>&nbsp;        } finally {</b>
+<b class="nc"><i>546</i>&nbsp;            end();</b>
+<i>547</i>&nbsp;        }
+<i>548</i>&nbsp;        return this;
+<i>549</i>&nbsp;    }
+<i>550</i>&nbsp;
+<i>551</i>&nbsp;    @Override
+<b class="nc"><i>552</i>&nbsp;    public final AsynchronousSocketChannel shutdownOutput() throws IOException {</b>
+<b class="nc"><i>553</i>&nbsp;        try {</b>
+<b class="nc"><i>554</i>&nbsp;            begin();</b>
+<b class="nc"><i>555</i>&nbsp;            if (remoteAddress == null)</b>
+<b class="nc"><i>556</i>&nbsp;                throw new NotYetConnectedException();</b>
+<b class="nc"><i>557</i>&nbsp;            synchronized (writeLock) {</b>
+<b class="nc"><i>558</i>&nbsp;                if (!writeShutdown) {</b>
+<i>559</i>&nbsp;                    Net.shutdown(fd, Net.SHUT_WR);
+<b class="nc"><i>560</i>&nbsp;                    writeShutdown = true;</b>
+<i>561</i>&nbsp;                }
+<b class="nc"><i>562</i>&nbsp;            }</b>
+<b class="nc"><i>563</i>&nbsp;        } finally {</b>
+<b class="nc"><i>564</i>&nbsp;            end();</b>
+<i>565</i>&nbsp;        }
+<i>566</i>&nbsp;        return this;
+<i>567</i>&nbsp;    }
+<i>568</i>&nbsp;
+<b class="nc"><i>569</i>&nbsp;    @Override</b>
+<b class="nc"><i>570</i>&nbsp;    public final String toString() {</b>
+<b class="nc"><i>571</i>&nbsp;        StringBuilder sb = new StringBuilder();</b>
+<b class="nc"><i>572</i>&nbsp;        sb.append(this.getClass().getName());</b>
+<b class="nc"><i>573</i>&nbsp;        sb.append(&#39;[&#39;);</b>
+<b class="nc"><i>574</i>&nbsp;        synchronized (stateLock) {</b>
+<i>575</i>&nbsp;            if (!isOpen()) {
+<b class="nc"><i>576</i>&nbsp;                sb.append(&quot;closed&quot;);</b>
+<i>577</i>&nbsp;            } else {
+<b class="nc"><i>578</i>&nbsp;                switch (state) {</b>
+<b class="nc"><i>579</i>&nbsp;                case ST_UNCONNECTED:</b>
+<i>580</i>&nbsp;                    sb.append(&quot;unconnected&quot;);
+<b class="nc"><i>581</i>&nbsp;                    break;</b>
+<b class="nc"><i>582</i>&nbsp;                case ST_PENDING:</b>
+<i>583</i>&nbsp;                    sb.append(&quot;connection-pending&quot;);
+<b class="nc"><i>584</i>&nbsp;                    break;</b>
+<b class="nc"><i>585</i>&nbsp;                case ST_CONNECTED:</b>
+<b class="nc"><i>586</i>&nbsp;                    sb.append(&quot;connected&quot;);</b>
+<b class="nc"><i>587</i>&nbsp;                    if (readShutdown)</b>
+<b class="nc"><i>588</i>&nbsp;                        sb.append(&quot; ishut&quot;);</b>
+<i>589</i>&nbsp;                    if (writeShutdown)
+<i>590</i>&nbsp;                        sb.append(&quot; oshut&quot;);
+<b class="nc"><i>591</i>&nbsp;                    break;</b>
+<b class="nc"><i>592</i>&nbsp;                }</b>
+<b class="nc"><i>593</i>&nbsp;                if (localAddress != null) {</b>
+<b class="nc"><i>594</i>&nbsp;                    sb.append(&quot; local=&quot;);</b>
+<i>595</i>&nbsp;                    sb.append(
+<b class="nc"><i>596</i>&nbsp;                            Net.getRevealedLocalAddressAsString(localAddress));</b>
+<b class="nc"><i>597</i>&nbsp;                }</b>
+<b class="nc"><i>598</i>&nbsp;                if (remoteAddress != null) {</b>
+<i>599</i>&nbsp;                    sb.append(&quot; remote=&quot;);
+<i>600</i>&nbsp;                    sb.append(remoteAddress.toString());
+<b class="nc"><i>601</i>&nbsp;                }</b>
+<b class="nc"><i>602</i>&nbsp;            }</b>
+<b class="nc"><i>603</i>&nbsp;        }</b>
+<i>604</i>&nbsp;        sb.append(&#39;]&#39;);
+<i>605</i>&nbsp;        return sb.toString();
+<i>606</i>&nbsp;    }
+<i>607</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

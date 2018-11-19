@@ -1,0 +1,584 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: RSACore</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.rsa</a> ]
+</div>
+
+<h1>Coverage Summary for Class: RSACore (sun.security.rsa)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">RSACore</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 82)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">RSACore$BlindingParameters</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 35)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">RSACore$BlindingRandomPair</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 18)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 120)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2003, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.rsa;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.math.BigInteger;
+<i>29</i>&nbsp;import java.util.*;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;import java.security.SecureRandom;
+<i>32</i>&nbsp;import java.security.interfaces.*;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import javax.crypto.BadPaddingException;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import sun.security.jca.JCAUtil;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * Core of the RSA implementation. Has code to perform public and private key
+<i>40</i>&nbsp; * RSA operations (with and without CRT for private key ops). Private CRT ops
+<i>41</i>&nbsp; * also support blinding to twart timing attacks.
+<i>42</i>&nbsp; *
+<i>43</i>&nbsp; * The code in this class only does the core RSA operation. Padding and
+<i>44</i>&nbsp; * unpadding must be done externally.
+<i>45</i>&nbsp; *
+<i>46</i>&nbsp; * Note: RSA keys should be at least 512 bits long
+<i>47</i>&nbsp; *
+<i>48</i>&nbsp; * @since   1.5
+<i>49</i>&nbsp; * @author  Andreas Sterbenz
+<i>50</i>&nbsp; */
+<b class="nc"><i>51</i>&nbsp;public final class RSACore {</b>
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;    // globally enable/disable use of blinding
+<i>54</i>&nbsp;    private static final boolean ENABLE_BLINDING = true;
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;    // cache for blinding parameters. Map&lt;BigInteger, BlindingParameters&gt;
+<i>57</i>&nbsp;    // use a weak hashmap so that cached values are automatically cleared
+<i>58</i>&nbsp;    // when the modulus is GC&#39;ed
+<i>59</i>&nbsp;    private static final Map&lt;BigInteger, BlindingParameters&gt;
+<b class="nc"><i>60</i>&nbsp;                blindingCache = new WeakHashMap&lt;&gt;();</b>
+<i>61</i>&nbsp;
+<b class="nc"><i>62</i>&nbsp;    private RSACore() {</b>
+<i>63</i>&nbsp;        // empty
+<i>64</i>&nbsp;    }
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    /**
+<i>67</i>&nbsp;     * Return the number of bytes required to store the magnitude byte[] of
+<i>68</i>&nbsp;     * this BigInteger. Do not count a 0x00 byte toByteArray() would
+<i>69</i>&nbsp;     * prefix for 2&#39;s complement form.
+<i>70</i>&nbsp;     */
+<i>71</i>&nbsp;    public static int getByteLength(BigInteger b) {
+<b class="nc"><i>72</i>&nbsp;        int n = b.bitLength();</b>
+<b class="nc"><i>73</i>&nbsp;        return (n + 7) &gt;&gt; 3;</b>
+<i>74</i>&nbsp;    }
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    /**
+<i>77</i>&nbsp;     * Return the number of bytes required to store the modulus of this
+<i>78</i>&nbsp;     * RSA key.
+<i>79</i>&nbsp;     */
+<i>80</i>&nbsp;    public static int getByteLength(RSAKey key) {
+<b class="nc"><i>81</i>&nbsp;        return getByteLength(key.getModulus());</b>
+<i>82</i>&nbsp;    }
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    // temporary, used by RSACipher and RSAPadding. Move this somewhere else
+<i>85</i>&nbsp;    public static byte[] convert(byte[] b, int ofs, int len) {
+<b class="nc"><i>86</i>&nbsp;        if ((ofs == 0) &amp;&amp; (len == b.length)) {</b>
+<b class="nc"><i>87</i>&nbsp;            return b;</b>
+<i>88</i>&nbsp;        } else {
+<b class="nc"><i>89</i>&nbsp;            byte[] t = new byte[len];</b>
+<b class="nc"><i>90</i>&nbsp;            System.arraycopy(b, ofs, t, 0, len);</b>
+<b class="nc"><i>91</i>&nbsp;            return t;</b>
+<i>92</i>&nbsp;        }
+<i>93</i>&nbsp;    }
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;    /**
+<i>96</i>&nbsp;     * Perform an RSA public key operation.
+<i>97</i>&nbsp;     */
+<i>98</i>&nbsp;    public static byte[] rsa(byte[] msg, RSAPublicKey key)
+<i>99</i>&nbsp;            throws BadPaddingException {
+<b class="nc"><i>100</i>&nbsp;        return crypt(msg, key.getModulus(), key.getPublicExponent());</b>
+<i>101</i>&nbsp;    }
+<i>102</i>&nbsp;
+<i>103</i>&nbsp;    /**
+<i>104</i>&nbsp;     * Perform an RSA private key operation. Uses CRT if the key is a
+<i>105</i>&nbsp;     * CRT key with additional verification check after the signature
+<i>106</i>&nbsp;     * is computed.
+<i>107</i>&nbsp;     */
+<i>108</i>&nbsp;    @Deprecated
+<i>109</i>&nbsp;    public static byte[] rsa(byte[] msg, RSAPrivateKey key)
+<i>110</i>&nbsp;            throws BadPaddingException {
+<b class="nc"><i>111</i>&nbsp;        return rsa(msg, key, true);</b>
+<i>112</i>&nbsp;    }
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    /**
+<i>115</i>&nbsp;     * Perform an RSA private key operation. Uses CRT if the key is a
+<i>116</i>&nbsp;     * CRT key. Set &#39;verify&#39; to true if this function is used for
+<i>117</i>&nbsp;     * generating a signature.
+<i>118</i>&nbsp;     */
+<i>119</i>&nbsp;    public static byte[] rsa(byte[] msg, RSAPrivateKey key, boolean verify)
+<i>120</i>&nbsp;            throws BadPaddingException {
+<b class="nc"><i>121</i>&nbsp;        if (key instanceof RSAPrivateCrtKey) {</b>
+<b class="nc"><i>122</i>&nbsp;            return crtCrypt(msg, (RSAPrivateCrtKey)key, verify);</b>
+<i>123</i>&nbsp;        } else {
+<b class="nc"><i>124</i>&nbsp;            return priCrypt(msg, key.getModulus(), key.getPrivateExponent());</b>
+<i>125</i>&nbsp;        }
+<i>126</i>&nbsp;    }
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;    /**
+<i>129</i>&nbsp;     * RSA public key ops. Simple modPow().
+<i>130</i>&nbsp;     */
+<i>131</i>&nbsp;    private static byte[] crypt(byte[] msg, BigInteger n, BigInteger exp)
+<i>132</i>&nbsp;            throws BadPaddingException {
+<b class="nc"><i>133</i>&nbsp;        BigInteger m = parseMsg(msg, n);</b>
+<b class="nc"><i>134</i>&nbsp;        BigInteger c = m.modPow(exp, n);</b>
+<b class="nc"><i>135</i>&nbsp;        return toByteArray(c, getByteLength(n));</b>
+<i>136</i>&nbsp;    }
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    /**
+<i>139</i>&nbsp;     * RSA non-CRT private key operations.
+<i>140</i>&nbsp;     */
+<i>141</i>&nbsp;    private static byte[] priCrypt(byte[] msg, BigInteger n, BigInteger exp)
+<i>142</i>&nbsp;            throws BadPaddingException {
+<i>143</i>&nbsp;
+<b class="nc"><i>144</i>&nbsp;        BigInteger c = parseMsg(msg, n);</b>
+<b class="nc"><i>145</i>&nbsp;        BlindingRandomPair brp = null;</b>
+<i>146</i>&nbsp;        BigInteger m;
+<i>147</i>&nbsp;        if (ENABLE_BLINDING) {
+<b class="nc"><i>148</i>&nbsp;            brp = getBlindingRandomPair(null, exp, n);</b>
+<b class="nc"><i>149</i>&nbsp;            c = c.multiply(brp.u).mod(n);</b>
+<b class="nc"><i>150</i>&nbsp;            m = c.modPow(exp, n);</b>
+<b class="nc"><i>151</i>&nbsp;            m = m.multiply(brp.v).mod(n);</b>
+<i>152</i>&nbsp;        } else {
+<i>153</i>&nbsp;            m = c.modPow(exp, n);
+<i>154</i>&nbsp;        }
+<i>155</i>&nbsp;
+<b class="nc"><i>156</i>&nbsp;        return toByteArray(m, getByteLength(n));</b>
+<i>157</i>&nbsp;    }
+<i>158</i>&nbsp;
+<i>159</i>&nbsp;    /**
+<i>160</i>&nbsp;     * RSA private key operations with CRT. Algorithm and variable naming
+<i>161</i>&nbsp;     * are taken from PKCS#1 v2.1, section 5.1.2.
+<i>162</i>&nbsp;     */
+<i>163</i>&nbsp;    private static byte[] crtCrypt(byte[] msg, RSAPrivateCrtKey key,
+<i>164</i>&nbsp;            boolean verify) throws BadPaddingException {
+<b class="nc"><i>165</i>&nbsp;        BigInteger n = key.getModulus();</b>
+<b class="nc"><i>166</i>&nbsp;        BigInteger c0 = parseMsg(msg, n);</b>
+<b class="nc"><i>167</i>&nbsp;        BigInteger c = c0;</b>
+<b class="nc"><i>168</i>&nbsp;        BigInteger p = key.getPrimeP();</b>
+<b class="nc"><i>169</i>&nbsp;        BigInteger q = key.getPrimeQ();</b>
+<b class="nc"><i>170</i>&nbsp;        BigInteger dP = key.getPrimeExponentP();</b>
+<b class="nc"><i>171</i>&nbsp;        BigInteger dQ = key.getPrimeExponentQ();</b>
+<b class="nc"><i>172</i>&nbsp;        BigInteger qInv = key.getCrtCoefficient();</b>
+<b class="nc"><i>173</i>&nbsp;        BigInteger e = key.getPublicExponent();</b>
+<b class="nc"><i>174</i>&nbsp;        BigInteger d = key.getPrivateExponent();</b>
+<i>175</i>&nbsp;
+<i>176</i>&nbsp;        BlindingRandomPair brp;
+<i>177</i>&nbsp;        if (ENABLE_BLINDING) {
+<b class="nc"><i>178</i>&nbsp;            brp = getBlindingRandomPair(e, d, n);</b>
+<b class="nc"><i>179</i>&nbsp;            c = c.multiply(brp.u).mod(n);</b>
+<i>180</i>&nbsp;        }
+<i>181</i>&nbsp;
+<i>182</i>&nbsp;        // m1 = c ^ dP mod p
+<b class="nc"><i>183</i>&nbsp;        BigInteger m1 = c.modPow(dP, p);</b>
+<i>184</i>&nbsp;        // m2 = c ^ dQ mod q
+<b class="nc"><i>185</i>&nbsp;        BigInteger m2 = c.modPow(dQ, q);</b>
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;        // h = (m1 - m2) * qInv mod p
+<b class="nc"><i>188</i>&nbsp;        BigInteger mtmp = m1.subtract(m2);</b>
+<b class="nc"><i>189</i>&nbsp;        if (mtmp.signum() &lt; 0) {</b>
+<b class="nc"><i>190</i>&nbsp;            mtmp = mtmp.add(p);</b>
+<i>191</i>&nbsp;        }
+<b class="nc"><i>192</i>&nbsp;        BigInteger h = mtmp.multiply(qInv).mod(p);</b>
+<i>193</i>&nbsp;
+<i>194</i>&nbsp;        // m = m2 + q * h
+<b class="nc"><i>195</i>&nbsp;        BigInteger m = h.multiply(q).add(m2);</b>
+<i>196</i>&nbsp;
+<i>197</i>&nbsp;        if (ENABLE_BLINDING) {
+<b class="nc"><i>198</i>&nbsp;            m = m.multiply(brp.v).mod(n);</b>
+<i>199</i>&nbsp;        }
+<b class="nc"><i>200</i>&nbsp;        if (verify &amp;&amp; !c0.equals(m.modPow(e, n))) {</b>
+<b class="nc"><i>201</i>&nbsp;            throw new BadPaddingException(&quot;RSA private key operation failed&quot;);</b>
+<i>202</i>&nbsp;        }
+<i>203</i>&nbsp;
+<b class="nc"><i>204</i>&nbsp;        return toByteArray(m, getByteLength(n));</b>
+<i>205</i>&nbsp;    }
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;    /**
+<i>208</i>&nbsp;     * Parse the msg into a BigInteger and check against the modulus n.
+<i>209</i>&nbsp;     */
+<i>210</i>&nbsp;    private static BigInteger parseMsg(byte[] msg, BigInteger n)
+<i>211</i>&nbsp;            throws BadPaddingException {
+<b class="nc"><i>212</i>&nbsp;        BigInteger m = new BigInteger(1, msg);</b>
+<b class="nc"><i>213</i>&nbsp;        if (m.compareTo(n) &gt;= 0) {</b>
+<b class="nc"><i>214</i>&nbsp;            throw new BadPaddingException(&quot;Message is larger than modulus&quot;);</b>
+<i>215</i>&nbsp;        }
+<b class="nc"><i>216</i>&nbsp;        return m;</b>
+<i>217</i>&nbsp;    }
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;    /**
+<i>220</i>&nbsp;     * Return the encoding of this BigInteger that is exactly len bytes long.
+<i>221</i>&nbsp;     * Prefix/strip off leading 0x00 bytes if necessary.
+<i>222</i>&nbsp;     * Precondition: bi must fit into len bytes
+<i>223</i>&nbsp;     */
+<i>224</i>&nbsp;    private static byte[] toByteArray(BigInteger bi, int len) {
+<b class="nc"><i>225</i>&nbsp;        byte[] b = bi.toByteArray();</b>
+<b class="nc"><i>226</i>&nbsp;        int n = b.length;</b>
+<b class="nc"><i>227</i>&nbsp;        if (n == len) {</b>
+<b class="nc"><i>228</i>&nbsp;            return b;</b>
+<i>229</i>&nbsp;        }
+<i>230</i>&nbsp;        // BigInteger prefixed a 0x00 byte for 2&#39;s complement form, remove it
+<b class="nc"><i>231</i>&nbsp;        if ((n == len + 1) &amp;&amp; (b[0] == 0)) {</b>
+<b class="nc"><i>232</i>&nbsp;            byte[] t = new byte[len];</b>
+<b class="nc"><i>233</i>&nbsp;            System.arraycopy(b, 1, t, 0, len);</b>
+<b class="nc"><i>234</i>&nbsp;            return t;</b>
+<i>235</i>&nbsp;        }
+<i>236</i>&nbsp;        // must be smaller
+<b class="nc"><i>237</i>&nbsp;        assert (n &lt; len);</b>
+<b class="nc"><i>238</i>&nbsp;        byte[] t = new byte[len];</b>
+<b class="nc"><i>239</i>&nbsp;        System.arraycopy(b, 0, t, (len - n), n);</b>
+<b class="nc"><i>240</i>&nbsp;        return t;</b>
+<i>241</i>&nbsp;    }
+<i>242</i>&nbsp;
+<i>243</i>&nbsp;    /**
+<i>244</i>&nbsp;     * Parameters (u,v) for RSA Blinding.  This is described in the RSA
+<i>245</i>&nbsp;     * Bulletin#2 (Jan 96) and other places:
+<i>246</i>&nbsp;     *
+<i>247</i>&nbsp;     *     ftp://ftp.rsa.com/pub/pdfs/bull-2.pdf
+<i>248</i>&nbsp;     *
+<i>249</i>&nbsp;     * The standard RSA Blinding decryption requires the public key exponent
+<i>250</i>&nbsp;     * (e) and modulus (n), and converts ciphertext (c) to plaintext (p).
+<i>251</i>&nbsp;     *
+<i>252</i>&nbsp;     * Before the modular exponentiation operation, the input message should
+<i>253</i>&nbsp;     * be multiplied by (u (mod n)), and afterward the result is corrected
+<i>254</i>&nbsp;     * by multiplying with (v (mod n)).  The system should reject messages
+<i>255</i>&nbsp;     * equal to (0 (mod n)).  That is:
+<i>256</i>&nbsp;     *
+<i>257</i>&nbsp;     *     1.  Generate r between 0 and n-1, relatively prime to n.
+<i>258</i>&nbsp;     *     2.  Compute x = (c*u) mod n
+<i>259</i>&nbsp;     *     3.  Compute y = (x^d) mod n
+<i>260</i>&nbsp;     *     4.  Compute p = (y*v) mod n
+<i>261</i>&nbsp;     *
+<i>262</i>&nbsp;     * The Java APIs allows for either standard RSAPrivateKey or
+<i>263</i>&nbsp;     * RSAPrivateCrtKey RSA keys.
+<i>264</i>&nbsp;     *
+<i>265</i>&nbsp;     * If the public exponent is available to us (e.g. RSAPrivateCrtKey),
+<i>266</i>&nbsp;     * choose a random r, then let (u, v):
+<i>267</i>&nbsp;     *
+<i>268</i>&nbsp;     *     u = r ^ e mod n
+<i>269</i>&nbsp;     *     v = r ^ (-1) mod n
+<i>270</i>&nbsp;     *
+<i>271</i>&nbsp;     * The proof follows:
+<i>272</i>&nbsp;     *
+<i>273</i>&nbsp;     *     p = (((c * u) ^ d mod n) * v) mod n
+<i>274</i>&nbsp;     *       = ((c ^ d) * (u ^ d) * v) mod n
+<i>275</i>&nbsp;     *       = ((c ^ d) * (r ^ e) ^ d) * (r ^ (-1))) mod n
+<i>276</i>&nbsp;     *       = ((c ^ d) * (r ^ (e * d)) * (r ^ (-1))) mod n
+<i>277</i>&nbsp;     *       = ((c ^ d) * (r ^ 1) * (r ^ (-1))) mod n  (see below)
+<i>278</i>&nbsp;     *       = (c ^ d) mod n
+<i>279</i>&nbsp;     *
+<i>280</i>&nbsp;     * because in RSA cryptosystem, d is the multiplicative inverse of e:
+<i>281</i>&nbsp;     *
+<i>282</i>&nbsp;     *    (r^(e * d)) mod n
+<i>283</i>&nbsp;     *       = (r ^ 1) mod n
+<i>284</i>&nbsp;     *       = r mod n
+<i>285</i>&nbsp;     *
+<i>286</i>&nbsp;     * However, if the public exponent is not available (e.g. RSAPrivateKey),
+<i>287</i>&nbsp;     * we mitigate the timing issue by using a similar random number blinding
+<i>288</i>&nbsp;     * approach using the private key:
+<i>289</i>&nbsp;     *
+<i>290</i>&nbsp;     *     u = r
+<i>291</i>&nbsp;     *     v = ((r ^ (-1)) ^ d) mod n
+<i>292</i>&nbsp;     *
+<i>293</i>&nbsp;     * This returns the same plaintext because:
+<i>294</i>&nbsp;     *
+<i>295</i>&nbsp;     *     p = (((c * u) ^ d mod n) * v) mod n
+<i>296</i>&nbsp;     *       = ((c ^ d) * (u ^ d) * v) mod n
+<i>297</i>&nbsp;     *       = ((c ^ d) * (u ^ d) * ((u ^ (-1)) ^d)) mod n
+<i>298</i>&nbsp;     *       = (c ^ d) mod n
+<i>299</i>&nbsp;     *
+<i>300</i>&nbsp;     * Computing inverses mod n and random number generation is slow, so
+<i>301</i>&nbsp;     * it is often not practical to generate a new random (u, v) pair for
+<i>302</i>&nbsp;     * each new exponentiation.  The calculation of parameters might even be
+<i>303</i>&nbsp;     * subject to timing attacks.  However, (u, v) pairs should not be
+<i>304</i>&nbsp;     * reused since they themselves might be compromised by timing attacks,
+<i>305</i>&nbsp;     * leaving the private exponent vulnerable.  An efficient solution to
+<i>306</i>&nbsp;     * this problem is update u and v before each modular exponentiation
+<i>307</i>&nbsp;     * step by computing:
+<i>308</i>&nbsp;     *
+<i>309</i>&nbsp;     *     u = u ^ 2
+<i>310</i>&nbsp;     *     v = v ^ 2
+<i>311</i>&nbsp;     *
+<i>312</i>&nbsp;     * The total performance cost is small.
+<i>313</i>&nbsp;     */
+<i>314</i>&nbsp;    private static final class BlindingRandomPair {
+<i>315</i>&nbsp;        final BigInteger u;
+<i>316</i>&nbsp;        final BigInteger v;
+<i>317</i>&nbsp;
+<b class="nc"><i>318</i>&nbsp;        BlindingRandomPair(BigInteger u, BigInteger v) {</b>
+<b class="nc"><i>319</i>&nbsp;            this.u = u;</b>
+<b class="nc"><i>320</i>&nbsp;            this.v = v;</b>
+<i>321</i>&nbsp;        }
+<i>322</i>&nbsp;    }
+<i>323</i>&nbsp;
+<i>324</i>&nbsp;    /**
+<i>325</i>&nbsp;     * Set of blinding parameters for a given RSA key.
+<i>326</i>&nbsp;     *
+<i>327</i>&nbsp;     * The RSA modulus is usually unique, so we index by modulus in
+<i>328</i>&nbsp;     * {@code blindingCache}.  However, to protect against the unlikely
+<i>329</i>&nbsp;     * case of two keys sharing the same modulus, we also store the public
+<i>330</i>&nbsp;     * or the private exponent.  This means we cannot cache blinding
+<i>331</i>&nbsp;     * parameters for multiple keys that share the same modulus, but
+<i>332</i>&nbsp;     * since sharing moduli is fundamentally broken and insecure, this
+<i>333</i>&nbsp;     * does not matter.
+<i>334</i>&nbsp;     */
+<i>335</i>&nbsp;    private static final class BlindingParameters {
+<b class="nc"><i>336</i>&nbsp;        private static final BigInteger BIG_TWO = BigInteger.valueOf(2L);</b>
+<i>337</i>&nbsp;
+<i>338</i>&nbsp;        // RSA public exponent
+<i>339</i>&nbsp;        private final BigInteger e;
+<i>340</i>&nbsp;
+<i>341</i>&nbsp;        // hash code of RSA private exponent
+<i>342</i>&nbsp;        private final BigInteger d;
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;        // r ^ e mod n (CRT), or r mod n (Non-CRT)
+<i>345</i>&nbsp;        private BigInteger u;
+<i>346</i>&nbsp;
+<i>347</i>&nbsp;        // r ^ (-1) mod n (CRT) , or ((r ^ (-1)) ^ d) mod n (Non-CRT)
+<i>348</i>&nbsp;        private BigInteger v;
+<i>349</i>&nbsp;
+<i>350</i>&nbsp;        // e: the public exponent
+<i>351</i>&nbsp;        // d: the private exponent
+<i>352</i>&nbsp;        // n: the modulus
+<b class="nc"><i>353</i>&nbsp;        BlindingParameters(BigInteger e, BigInteger d, BigInteger n) {</b>
+<b class="nc"><i>354</i>&nbsp;            this.u = null;</b>
+<b class="nc"><i>355</i>&nbsp;            this.v = null;</b>
+<b class="nc"><i>356</i>&nbsp;            this.e = e;</b>
+<b class="nc"><i>357</i>&nbsp;            this.d = d;</b>
+<i>358</i>&nbsp;
+<b class="nc"><i>359</i>&nbsp;            int len = n.bitLength();</b>
+<b class="nc"><i>360</i>&nbsp;            SecureRandom random = JCAUtil.getSecureRandom();</b>
+<b class="nc"><i>361</i>&nbsp;            u = new BigInteger(len, random).mod(n);</b>
+<i>362</i>&nbsp;            // Although the possibility is very much limited that u is zero
+<i>363</i>&nbsp;            // or is not relatively prime to n, we still want to be careful
+<i>364</i>&nbsp;            // about the special value.
+<i>365</i>&nbsp;            //
+<i>366</i>&nbsp;            // Secure random generation is expensive, try to use BigInteger.ONE
+<i>367</i>&nbsp;            // this time if this new generated random number is zero or is not
+<i>368</i>&nbsp;            // relatively prime to n.  Next time, new generated secure random
+<i>369</i>&nbsp;            // number will be used instead.
+<b class="nc"><i>370</i>&nbsp;            if (u.equals(BigInteger.ZERO)) {</b>
+<b class="nc"><i>371</i>&nbsp;                u = BigInteger.ONE;     // use 1 this time</b>
+<i>372</i>&nbsp;            }
+<i>373</i>&nbsp;
+<i>374</i>&nbsp;            try {
+<i>375</i>&nbsp;                // The call to BigInteger.modInverse() checks that u is
+<i>376</i>&nbsp;                // relatively prime to n.  Otherwise, ArithmeticException is
+<i>377</i>&nbsp;                // thrown.
+<b class="nc"><i>378</i>&nbsp;                v = u.modInverse(n);</b>
+<b class="nc"><i>379</i>&nbsp;            } catch (ArithmeticException ae) {</b>
+<i>380</i>&nbsp;                // if u is not relatively prime to n, use 1 this time
+<b class="nc"><i>381</i>&nbsp;                u = BigInteger.ONE;</b>
+<b class="nc"><i>382</i>&nbsp;                v = BigInteger.ONE;</b>
+<b class="nc"><i>383</i>&nbsp;            }</b>
+<i>384</i>&nbsp;
+<b class="nc"><i>385</i>&nbsp;            if (e != null) {</b>
+<b class="nc"><i>386</i>&nbsp;                u = u.modPow(e, n);   // e: the public exponent</b>
+<i>387</i>&nbsp;                                      // u: random ^ e
+<i>388</i>&nbsp;                                      // v: random ^ (-1)
+<i>389</i>&nbsp;            } else {
+<b class="nc"><i>390</i>&nbsp;                v = v.modPow(d, n);   // d: the private exponent</b>
+<i>391</i>&nbsp;                                      // u: random
+<i>392</i>&nbsp;                                      // v: random ^ (-d)
+<i>393</i>&nbsp;            }
+<i>394</i>&nbsp;        }
+<i>395</i>&nbsp;
+<i>396</i>&nbsp;        // return null if need to reset the parameters
+<i>397</i>&nbsp;        BlindingRandomPair getBlindingRandomPair(
+<i>398</i>&nbsp;                BigInteger e, BigInteger d, BigInteger n) {
+<i>399</i>&nbsp;
+<b class="nc"><i>400</i>&nbsp;            if ((this.e != null &amp;&amp; this.e.equals(e)) ||</b>
+<b class="nc"><i>401</i>&nbsp;                (this.d != null &amp;&amp; this.d.equals(d))) {</b>
+<i>402</i>&nbsp;
+<b class="nc"><i>403</i>&nbsp;                BlindingRandomPair brp = null;</b>
+<b class="nc"><i>404</i>&nbsp;                synchronized (this) {</b>
+<b class="nc"><i>405</i>&nbsp;                    if (!u.equals(BigInteger.ZERO) &amp;&amp;</b>
+<b class="nc"><i>406</i>&nbsp;                        !v.equals(BigInteger.ZERO)) {</b>
+<i>407</i>&nbsp;
+<b class="nc"><i>408</i>&nbsp;                        brp = new BlindingRandomPair(u, v);</b>
+<b class="nc"><i>409</i>&nbsp;                        if (u.compareTo(BigInteger.ONE) &lt;= 0 ||</b>
+<b class="nc"><i>410</i>&nbsp;                            v.compareTo(BigInteger.ONE) &lt;= 0) {</b>
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;                            // need to reset the random pair next time
+<b class="nc"><i>413</i>&nbsp;                            u = BigInteger.ZERO;</b>
+<b class="nc"><i>414</i>&nbsp;                            v = BigInteger.ZERO;</b>
+<i>415</i>&nbsp;                        } else {
+<b class="nc"><i>416</i>&nbsp;                            u = u.modPow(BIG_TWO, n);</b>
+<b class="nc"><i>417</i>&nbsp;                            v = v.modPow(BIG_TWO, n);</b>
+<i>418</i>&nbsp;                        }
+<i>419</i>&nbsp;                    } // Otherwise, need to reset the random pair.
+<b class="nc"><i>420</i>&nbsp;                }</b>
+<b class="nc"><i>421</i>&nbsp;                return brp;</b>
+<i>422</i>&nbsp;            }
+<i>423</i>&nbsp;
+<b class="nc"><i>424</i>&nbsp;            return null;</b>
+<i>425</i>&nbsp;        }
+<i>426</i>&nbsp;    }
+<i>427</i>&nbsp;
+<i>428</i>&nbsp;    private static BlindingRandomPair getBlindingRandomPair(
+<i>429</i>&nbsp;            BigInteger e, BigInteger d, BigInteger n) {
+<i>430</i>&nbsp;
+<b class="nc"><i>431</i>&nbsp;        BlindingParameters bps = null;</b>
+<b class="nc"><i>432</i>&nbsp;        synchronized (blindingCache) {</b>
+<b class="nc"><i>433</i>&nbsp;            bps = blindingCache.get(n);</b>
+<b class="nc"><i>434</i>&nbsp;        }</b>
+<i>435</i>&nbsp;
+<b class="nc"><i>436</i>&nbsp;        if (bps == null) {</b>
+<b class="nc"><i>437</i>&nbsp;            bps = new BlindingParameters(e, d, n);</b>
+<b class="nc"><i>438</i>&nbsp;            synchronized (blindingCache) {</b>
+<b class="nc"><i>439</i>&nbsp;                blindingCache.putIfAbsent(n, bps);</b>
+<b class="nc"><i>440</i>&nbsp;            }</b>
+<i>441</i>&nbsp;        }
+<i>442</i>&nbsp;
+<b class="nc"><i>443</i>&nbsp;        BlindingRandomPair brp = bps.getBlindingRandomPair(e, d, n);</b>
+<b class="nc"><i>444</i>&nbsp;        if (brp == null) {</b>
+<i>445</i>&nbsp;            // need to reset the blinding parameters
+<b class="nc"><i>446</i>&nbsp;            bps = new BlindingParameters(e, d, n);</b>
+<b class="nc"><i>447</i>&nbsp;            synchronized (blindingCache) {</b>
+<b class="nc"><i>448</i>&nbsp;                blindingCache.replace(n, bps);</b>
+<b class="nc"><i>449</i>&nbsp;            }</b>
+<b class="nc"><i>450</i>&nbsp;            brp = bps.getBlindingRandomPair(e, d, n);</b>
+<i>451</i>&nbsp;        }
+<i>452</i>&nbsp;
+<b class="nc"><i>453</i>&nbsp;        return brp;</b>
+<i>454</i>&nbsp;    }
+<i>455</i>&nbsp;
+<i>456</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

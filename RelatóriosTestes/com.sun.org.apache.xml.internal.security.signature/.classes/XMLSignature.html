@@ -1,0 +1,985 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: XMLSignature</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.org.apache.xml.internal.security.signature</a> ]
+</div>
+
+<h1>Coverage Summary for Class: XMLSignature (com.sun.org.apache.xml.internal.security.signature)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">XMLSignature</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 31)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 189)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; */
+<i>5</i>&nbsp;/**
+<i>6</i>&nbsp; * Licensed to the Apache Software Foundation (ASF) under one
+<i>7</i>&nbsp; * or more contributor license agreements. See the NOTICE file
+<i>8</i>&nbsp; * distributed with this work for additional information
+<i>9</i>&nbsp; * regarding copyright ownership. The ASF licenses this file
+<i>10</i>&nbsp; * to you under the Apache License, Version 2.0 (the
+<i>11</i>&nbsp; * &quot;License&quot;); you may not use this file except in compliance
+<i>12</i>&nbsp; * with the License. You may obtain a copy of the License at
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; * http://www.apache.org/licenses/LICENSE-2.0
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; * Unless required by applicable law or agreed to in writing,
+<i>17</i>&nbsp; * software distributed under the License is distributed on an
+<i>18</i>&nbsp; * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+<i>19</i>&nbsp; * KIND, either express or implied. See the License for the
+<i>20</i>&nbsp; * specific language governing permissions and limitations
+<i>21</i>&nbsp; * under the License.
+<i>22</i>&nbsp; */
+<i>23</i>&nbsp;package com.sun.org.apache.xml.internal.security.signature;
+<i>24</i>&nbsp;
+<i>25</i>&nbsp;import java.io.IOException;
+<i>26</i>&nbsp;import java.io.OutputStream;
+<i>27</i>&nbsp;import java.security.Key;
+<i>28</i>&nbsp;import java.security.PublicKey;
+<i>29</i>&nbsp;import java.security.cert.X509Certificate;
+<i>30</i>&nbsp;import java.util.Base64;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;import javax.crypto.SecretKey;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import com.sun.org.apache.xml.internal.security.algorithms.SignatureAlgorithm;
+<i>35</i>&nbsp;import com.sun.org.apache.xml.internal.security.c14n.CanonicalizationException;
+<i>36</i>&nbsp;import com.sun.org.apache.xml.internal.security.c14n.Canonicalizer;
+<i>37</i>&nbsp;import com.sun.org.apache.xml.internal.security.c14n.InvalidCanonicalizerException;
+<i>38</i>&nbsp;import com.sun.org.apache.xml.internal.security.exceptions.XMLSecurityException;
+<i>39</i>&nbsp;import com.sun.org.apache.xml.internal.security.keys.KeyInfo;
+<i>40</i>&nbsp;import com.sun.org.apache.xml.internal.security.keys.content.X509Data;
+<i>41</i>&nbsp;import com.sun.org.apache.xml.internal.security.transforms.Transforms;
+<i>42</i>&nbsp;import com.sun.org.apache.xml.internal.security.utils.Constants;
+<i>43</i>&nbsp;import com.sun.org.apache.xml.internal.security.utils.I18n;
+<i>44</i>&nbsp;import com.sun.org.apache.xml.internal.security.utils.SignatureElementProxy;
+<i>45</i>&nbsp;import com.sun.org.apache.xml.internal.security.utils.SignerOutputStream;
+<i>46</i>&nbsp;import com.sun.org.apache.xml.internal.security.utils.UnsyncBufferedOutputStream;
+<i>47</i>&nbsp;import com.sun.org.apache.xml.internal.security.utils.XMLUtils;
+<i>48</i>&nbsp;import com.sun.org.apache.xml.internal.security.utils.resolver.ResourceResolver;
+<i>49</i>&nbsp;import com.sun.org.apache.xml.internal.security.utils.resolver.ResourceResolverSpi;
+<i>50</i>&nbsp;import org.w3c.dom.Attr;
+<i>51</i>&nbsp;import org.w3c.dom.Document;
+<i>52</i>&nbsp;import org.w3c.dom.Element;
+<i>53</i>&nbsp;import org.w3c.dom.Node;
+<i>54</i>&nbsp;import org.w3c.dom.Text;
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;/**
+<i>57</i>&nbsp; * Handles {@code &amp;lt;ds:Signature&amp;gt;} elements.
+<i>58</i>&nbsp; * This is the main class that deals with creating and verifying signatures.
+<i>59</i>&nbsp; *
+<i>60</i>&nbsp; * &lt;p&gt;There are 2 types of constructors for this class. The ones that take a
+<i>61</i>&nbsp; * document, baseURI and 1 or more Java Objects. This is mostly used for
+<i>62</i>&nbsp; * signing purposes.
+<i>63</i>&nbsp; * The other constructor is the one that takes a DOM Element and a baseURI.
+<i>64</i>&nbsp; * This is used mostly with for verifying, when you have a SignatureElement.
+<i>65</i>&nbsp; *
+<i>66</i>&nbsp; * There are a few different types of methods:
+<i>67</i>&nbsp; * &lt;ul&gt;&lt;li&gt;The addDocument* methods are used to add References with optional
+<i>68</i>&nbsp; * transforms during signing. &lt;/li&gt;
+<i>69</i>&nbsp; * &lt;li&gt;addKeyInfo* methods are to add Certificates and Keys to the
+<i>70</i>&nbsp; * KeyInfo tags during signing. &lt;/li&gt;
+<i>71</i>&nbsp; * &lt;li&gt;appendObject allows a user to add any XML Structure as an
+<i>72</i>&nbsp; * ObjectContainer during signing.&lt;/li&gt;
+<i>73</i>&nbsp; * &lt;li&gt;sign and checkSignatureValue methods are used to sign and validate the
+<i>74</i>&nbsp; * signature. &lt;/li&gt;&lt;/ul&gt;
+<i>75</i>&nbsp; */
+<i>76</i>&nbsp;public final class XMLSignature extends SignatureElementProxy {
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    /** MAC - Required HMAC-SHA1 */
+<i>79</i>&nbsp;    public static final String ALGO_ID_MAC_HMAC_SHA1 =
+<i>80</i>&nbsp;        Constants.SignatureSpecNS + &quot;hmac-sha1&quot;;
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;    /** Signature - Required DSAwithSHA1 (DSS) */
+<i>83</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_DSA =
+<i>84</i>&nbsp;        Constants.SignatureSpecNS + &quot;dsa-sha1&quot;;
+<i>85</i>&nbsp;
+<i>86</i>&nbsp;    /** Signature - Optional DSAwithSHA256 */
+<i>87</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_DSA_SHA256 =
+<i>88</i>&nbsp;        Constants.SignatureSpec11NS + &quot;dsa-sha256&quot;;
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    /** Signature - Recommended RSAwithSHA1 */
+<i>91</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA =
+<i>92</i>&nbsp;        Constants.SignatureSpecNS + &quot;rsa-sha1&quot;;
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;    /** Signature - Recommended RSAwithSHA1 */
+<i>95</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA1 =
+<i>96</i>&nbsp;        Constants.SignatureSpecNS + &quot;rsa-sha1&quot;;
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    /** Signature - NOT Recommended RSAwithMD5 */
+<i>99</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_NOT_RECOMMENDED_RSA_MD5 =
+<i>100</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;rsa-md5&quot;;
+<i>101</i>&nbsp;
+<i>102</i>&nbsp;    /** Signature - Optional RSAwithRIPEMD160 */
+<i>103</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_RIPEMD160 =
+<i>104</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;rsa-ripemd160&quot;;
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;    /** Signature - Optional RSAwithSHA224 */
+<i>107</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA224 =
+<i>108</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;rsa-sha224&quot;;
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;    /** Signature - Optional RSAwithSHA256 */
+<i>111</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA256 =
+<i>112</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;rsa-sha256&quot;;
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    /** Signature - Optional RSAwithSHA384 */
+<i>115</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA384 =
+<i>116</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;rsa-sha384&quot;;
+<i>117</i>&nbsp;
+<i>118</i>&nbsp;    /** Signature - Optional RSAwithSHA512 */
+<i>119</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA512 =
+<i>120</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;rsa-sha512&quot;;
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;    /** Signature - Optional RSAwithSHA1andMGF1 */
+<i>123</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA1_MGF1 =
+<i>124</i>&nbsp;        Constants.XML_DSIG_NS_MORE_07_05 + &quot;sha1-rsa-MGF1&quot;;
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;    /** Signature - Optional RSAwithSHA224andMGF1 */
+<i>127</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA224_MGF1 =
+<i>128</i>&nbsp;        Constants.XML_DSIG_NS_MORE_07_05 + &quot;sha224-rsa-MGF1&quot;;
+<i>129</i>&nbsp;
+<i>130</i>&nbsp;    /** Signature - Optional RSAwithSHA256andMGF1 */
+<i>131</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA256_MGF1 =
+<i>132</i>&nbsp;        Constants.XML_DSIG_NS_MORE_07_05 + &quot;sha256-rsa-MGF1&quot;;
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;    /** Signature - Optional RSAwithSHA384andMGF1 */
+<i>135</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA384_MGF1 =
+<i>136</i>&nbsp;        Constants.XML_DSIG_NS_MORE_07_05 + &quot;sha384-rsa-MGF1&quot;;
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    /** Signature - Optional RSAwithSHA512andMGF1 */
+<i>139</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA512_MGF1 =
+<i>140</i>&nbsp;        Constants.XML_DSIG_NS_MORE_07_05 + &quot;sha512-rsa-MGF1&quot;;
+<i>141</i>&nbsp;
+<i>142</i>&nbsp;    /** Signature - Optional RSAwithSHA3_224andMGF1 */
+<i>143</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA3_224_MGF1 =
+<i>144</i>&nbsp;        Constants.XML_DSIG_NS_MORE_07_05 + &quot;sha3-224-rsa-MGF1&quot;;
+<i>145</i>&nbsp;
+<i>146</i>&nbsp;    /** Signature - Optional RSAwithSHA3_256andMGF1 */
+<i>147</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA3_256_MGF1 =
+<i>148</i>&nbsp;        Constants.XML_DSIG_NS_MORE_07_05 + &quot;sha3-256-rsa-MGF1&quot;;
+<i>149</i>&nbsp;
+<i>150</i>&nbsp;    /** Signature - Optional RSAwithSHA3_384andMGF1 */
+<i>151</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA3_384_MGF1 =
+<i>152</i>&nbsp;        Constants.XML_DSIG_NS_MORE_07_05 + &quot;sha3-384-rsa-MGF1&quot;;
+<i>153</i>&nbsp;
+<i>154</i>&nbsp;    /** Signature - Optional RSAwithSHA3_512andMGF1 */
+<i>155</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_RSA_SHA3_512_MGF1 =
+<i>156</i>&nbsp;        Constants.XML_DSIG_NS_MORE_07_05 + &quot;sha3-512-rsa-MGF1&quot;;
+<i>157</i>&nbsp;
+<b class="nc"><i>158</i>&nbsp;    /** HMAC - NOT Recommended HMAC-MD5 */</b>
+<i>159</i>&nbsp;    public static final String ALGO_ID_MAC_HMAC_NOT_RECOMMENDED_MD5 =
+<i>160</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;hmac-md5&quot;;
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;    /** HMAC - Optional HMAC-RIPEMD160 */
+<i>163</i>&nbsp;    public static final String ALGO_ID_MAC_HMAC_RIPEMD160 =
+<i>164</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;hmac-ripemd160&quot;;
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;    /** HMAC - Optional HMAC-SHA2224 */
+<i>167</i>&nbsp;    public static final String ALGO_ID_MAC_HMAC_SHA224 =
+<i>168</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;hmac-sha224&quot;;
+<i>169</i>&nbsp;
+<i>170</i>&nbsp;    /** HMAC - Optional HMAC-SHA256 */
+<b class="nc"><i>171</i>&nbsp;    public static final String ALGO_ID_MAC_HMAC_SHA256 =</b>
+<i>172</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;hmac-sha256&quot;;
+<i>173</i>&nbsp;
+<i>174</i>&nbsp;    /** HMAC - Optional HMAC-SHA284 */
+<i>175</i>&nbsp;    public static final String ALGO_ID_MAC_HMAC_SHA384 =
+<i>176</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;hmac-sha384&quot;;
+<b class="nc"><i>177</i>&nbsp;</b>
+<i>178</i>&nbsp;    /** HMAC - Optional HMAC-SHA512 */
+<i>179</i>&nbsp;    public static final String ALGO_ID_MAC_HMAC_SHA512 =
+<i>180</i>&nbsp;        Constants.MoreAlgorithmsSpecNS + &quot;hmac-sha512&quot;;
+<i>181</i>&nbsp;
+<i>182</i>&nbsp;    /**Signature - Optional ECDSAwithSHA1 */
+<i>183</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_ECDSA_SHA1 =
+<i>184</i>&nbsp;        &quot;http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha1&quot;;
+<i>185</i>&nbsp;
+<i>186</i>&nbsp;    /**Signature - Optional ECDSAwithSHA224 */
+<i>187</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_ECDSA_SHA224 =
+<i>188</i>&nbsp;        &quot;http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha224&quot;;
+<i>189</i>&nbsp;
+<i>190</i>&nbsp;    /**Signature - Optional ECDSAwithSHA256 */
+<i>191</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_ECDSA_SHA256 =
+<i>192</i>&nbsp;        &quot;http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256&quot;;
+<b class="nc"><i>193</i>&nbsp;</b>
+<i>194</i>&nbsp;    /**Signature - Optional ECDSAwithSHA384 */
+<i>195</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_ECDSA_SHA384 =
+<i>196</i>&nbsp;        &quot;http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha384&quot;;
+<i>197</i>&nbsp;
+<i>198</i>&nbsp;    /**Signature - Optional ECDSAwithSHA512 */
+<i>199</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_ECDSA_SHA512 =
+<i>200</i>&nbsp;        &quot;http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha512&quot;;
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;    /**Signature - Optional ECDSAwithRIPEMD160 */
+<i>203</i>&nbsp;    public static final String ALGO_ID_SIGNATURE_ECDSA_RIPEMD160 =
+<i>204</i>&nbsp;        &quot;http://www.w3.org/2007/05/xmldsig-more#ecdsa-ripemd160&quot;;
+<i>205</i>&nbsp;
+<i>206</i>&nbsp;    private static final com.sun.org.slf4j.internal.Logger LOG =
+<b class="nc"><i>207</i>&nbsp;        com.sun.org.slf4j.internal.LoggerFactory.getLogger(XMLSignature.class);</b>
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    /** ds:Signature.ds:SignedInfo element */
+<i>210</i>&nbsp;    private SignedInfo signedInfo;
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;    /** ds:Signature.ds:KeyInfo */
+<i>213</i>&nbsp;    private KeyInfo keyInfo;
+<i>214</i>&nbsp;
+<i>215</i>&nbsp;    /**
+<i>216</i>&nbsp;     * Checking the digests in References in a Signature are mandatory, but for
+<i>217</i>&nbsp;     * References inside a Manifest it is application specific. This boolean is
+<i>218</i>&nbsp;     * to indicate that the References inside Manifests should be validated.
+<i>219</i>&nbsp;     */
+<i>220</i>&nbsp;    private boolean followManifestsDuringValidation = false;
+<i>221</i>&nbsp;
+<i>222</i>&nbsp;    private Element signatureValueElement;
+<i>223</i>&nbsp;
+<i>224</i>&nbsp;    private static final int MODE_SIGN = 0;
+<i>225</i>&nbsp;    private static final int MODE_VERIFY = 1;
+<i>226</i>&nbsp;    private int state = MODE_SIGN;
+<i>227</i>&nbsp;
+<i>228</i>&nbsp;    /**
+<b class="nc"><i>229</i>&nbsp;     * This creates a new {@code ds:Signature} Element and adds an empty</b>
+<i>230</i>&nbsp;     * {@code ds:SignedInfo}.
+<i>231</i>&nbsp;     * The {@code ds:SignedInfo} is initialized with the specified Signature
+<i>232</i>&nbsp;     * algorithm and Canonicalizer.ALGO_ID_C14N_OMIT_COMMENTS which is REQUIRED
+<i>233</i>&nbsp;     * by the spec. This method&#39;s main use is for creating a new signature.
+<i>234</i>&nbsp;     *
+<i>235</i>&nbsp;     * @param doc Document in which the signature will be appended after creation.
+<i>236</i>&nbsp;     * @param baseURI URI to be used as context for all relative URIs.
+<i>237</i>&nbsp;     * @param signatureMethodURI signature algorithm to use.
+<i>238</i>&nbsp;     * @throws XMLSecurityException
+<i>239</i>&nbsp;     */
+<i>240</i>&nbsp;    public XMLSignature(Document doc, String baseURI, String signatureMethodURI)
+<i>241</i>&nbsp;        throws XMLSecurityException {
+<i>242</i>&nbsp;        this(doc, baseURI, signatureMethodURI, 0, Canonicalizer.ALGO_ID_C14N_OMIT_COMMENTS);
+<i>243</i>&nbsp;    }
+<i>244</i>&nbsp;
+<i>245</i>&nbsp;    /**
+<i>246</i>&nbsp;     * Constructor XMLSignature
+<i>247</i>&nbsp;     *
+<i>248</i>&nbsp;     * @param doc
+<b class="nc"><i>249</i>&nbsp;     * @param baseURI</b>
+<i>250</i>&nbsp;     * @param signatureMethodURI the Signature method to be used.
+<b class="nc"><i>251</i>&nbsp;     * @param hmacOutputLength</b>
+<b class="nc"><i>252</i>&nbsp;     * @throws XMLSecurityException</b>
+<b class="nc"><i>253</i>&nbsp;     */</b>
+<i>254</i>&nbsp;    public XMLSignature(Document doc, String baseURI, String signatureMethodURI,
+<i>255</i>&nbsp;                        int hmacOutputLength) throws XMLSecurityException {
+<i>256</i>&nbsp;        this(
+<b class="nc"><i>257</i>&nbsp;            doc, baseURI, signatureMethodURI, hmacOutputLength,</b>
+<i>258</i>&nbsp;            Canonicalizer.ALGO_ID_C14N_OMIT_COMMENTS
+<i>259</i>&nbsp;        );
+<i>260</i>&nbsp;    }
+<b class="nc"><i>261</i>&nbsp;</b>
+<i>262</i>&nbsp;    /**
+<b class="nc"><i>263</i>&nbsp;     * Constructor XMLSignature</b>
+<b class="nc"><i>264</i>&nbsp;     *</b>
+<i>265</i>&nbsp;     * @param doc
+<i>266</i>&nbsp;     * @param baseURI
+<i>267</i>&nbsp;     * @param signatureMethodURI the Signature method to be used.
+<i>268</i>&nbsp;     * @param canonicalizationMethodURI the canonicalization algorithm to be
+<b class="nc"><i>269</i>&nbsp;     * used to c14nize the SignedInfo element.</b>
+<b class="nc"><i>270</i>&nbsp;     * @throws XMLSecurityException</b>
+<i>271</i>&nbsp;     */
+<i>272</i>&nbsp;    public XMLSignature(
+<b class="nc"><i>273</i>&nbsp;        Document doc,</b>
+<b class="nc"><i>274</i>&nbsp;        String baseURI,</b>
+<i>275</i>&nbsp;        String signatureMethodURI,
+<b class="nc"><i>276</i>&nbsp;        String canonicalizationMethodURI</b>
+<b class="nc"><i>277</i>&nbsp;    ) throws XMLSecurityException {</b>
+<i>278</i>&nbsp;        this(doc, baseURI, signatureMethodURI, 0, canonicalizationMethodURI);
+<i>279</i>&nbsp;    }
+<i>280</i>&nbsp;
+<i>281</i>&nbsp;    /**
+<i>282</i>&nbsp;     * Constructor XMLSignature
+<i>283</i>&nbsp;     *
+<i>284</i>&nbsp;     * @param doc
+<i>285</i>&nbsp;     * @param baseURI
+<i>286</i>&nbsp;     * @param signatureMethodURI
+<i>287</i>&nbsp;     * @param hmacOutputLength
+<i>288</i>&nbsp;     * @param canonicalizationMethodURI
+<i>289</i>&nbsp;     * @throws XMLSecurityException
+<i>290</i>&nbsp;     */
+<i>291</i>&nbsp;    public XMLSignature(
+<i>292</i>&nbsp;        Document doc,
+<i>293</i>&nbsp;        String baseURI,
+<b class="nc"><i>294</i>&nbsp;        String signatureMethodURI,</b>
+<i>295</i>&nbsp;        int hmacOutputLength,
+<b class="nc"><i>296</i>&nbsp;        String canonicalizationMethodURI</b>
+<b class="nc"><i>297</i>&nbsp;    ) throws XMLSecurityException {</b>
+<b class="nc"><i>298</i>&nbsp;        super(doc);</b>
+<i>299</i>&nbsp;
+<i>300</i>&nbsp;        String xmlnsDsPrefix = getDefaultPrefix(Constants.SignatureSpecNS);
+<i>301</i>&nbsp;        if (xmlnsDsPrefix == null || xmlnsDsPrefix.length() == 0) {
+<b class="nc"><i>302</i>&nbsp;            getElement().setAttributeNS(</b>
+<i>303</i>&nbsp;                Constants.NamespaceSpecNS, &quot;xmlns&quot;, Constants.SignatureSpecNS
+<i>304</i>&nbsp;            );
+<i>305</i>&nbsp;        } else {
+<b class="nc"><i>306</i>&nbsp;            getElement().setAttributeNS(</b>
+<i>307</i>&nbsp;                Constants.NamespaceSpecNS, &quot;xmlns:&quot; + xmlnsDsPrefix, Constants.SignatureSpecNS
+<b class="nc"><i>308</i>&nbsp;            );</b>
+<b class="nc"><i>309</i>&nbsp;        }</b>
+<i>310</i>&nbsp;        addReturnToSelf();
+<i>311</i>&nbsp;
+<b class="nc"><i>312</i>&nbsp;        this.baseURI = baseURI;</b>
+<b class="nc"><i>313</i>&nbsp;        this.signedInfo =</b>
+<i>314</i>&nbsp;            new SignedInfo(
+<i>315</i>&nbsp;                getDocument(), signatureMethodURI, hmacOutputLength, canonicalizationMethodURI
+<b class="nc"><i>316</i>&nbsp;            );</b>
+<b class="nc"><i>317</i>&nbsp;</b>
+<i>318</i>&nbsp;        appendSelf(this.signedInfo);
+<b class="nc"><i>319</i>&nbsp;        addReturnToSelf();</b>
+<b class="nc"><i>320</i>&nbsp;</b>
+<i>321</i>&nbsp;        // create an empty SignatureValue; this is filled by setSignatureValueElement
+<i>322</i>&nbsp;        signatureValueElement =
+<i>323</i>&nbsp;            XMLUtils.createElementInSignatureSpace(getDocument(), Constants._TAG_SIGNATUREVALUE);
+<i>324</i>&nbsp;
+<i>325</i>&nbsp;        appendSelf(signatureValueElement);
+<i>326</i>&nbsp;        addReturnToSelf();
+<i>327</i>&nbsp;    }
+<i>328</i>&nbsp;
+<i>329</i>&nbsp;    /**
+<i>330</i>&nbsp;     *  Creates a XMLSignature in a Document
+<i>331</i>&nbsp;     * @param doc
+<i>332</i>&nbsp;     * @param baseURI
+<i>333</i>&nbsp;     * @param SignatureMethodElem
+<b class="nc"><i>334</i>&nbsp;     * @param CanonicalizationMethodElem</b>
+<i>335</i>&nbsp;     * @throws XMLSecurityException
+<i>336</i>&nbsp;     */
+<i>337</i>&nbsp;    public XMLSignature(
+<i>338</i>&nbsp;        Document doc,
+<i>339</i>&nbsp;        String baseURI,
+<i>340</i>&nbsp;        Element SignatureMethodElem,
+<i>341</i>&nbsp;        Element CanonicalizationMethodElem
+<i>342</i>&nbsp;    ) throws XMLSecurityException {
+<i>343</i>&nbsp;        super(doc);
+<i>344</i>&nbsp;
+<i>345</i>&nbsp;        String xmlnsDsPrefix = getDefaultPrefix(Constants.SignatureSpecNS);
+<i>346</i>&nbsp;        if (xmlnsDsPrefix == null || xmlnsDsPrefix.length() == 0) {
+<i>347</i>&nbsp;            getElement().setAttributeNS(
+<i>348</i>&nbsp;                Constants.NamespaceSpecNS, &quot;xmlns&quot;, Constants.SignatureSpecNS
+<b class="nc"><i>349</i>&nbsp;            );</b>
+<i>350</i>&nbsp;        } else {
+<i>351</i>&nbsp;            getElement().setAttributeNS(
+<b class="nc"><i>352</i>&nbsp;                Constants.NamespaceSpecNS, &quot;xmlns:&quot; + xmlnsDsPrefix, Constants.SignatureSpecNS</b>
+<i>353</i>&nbsp;            );
+<i>354</i>&nbsp;        }
+<b class="nc"><i>355</i>&nbsp;        addReturnToSelf();</b>
+<b class="nc"><i>356</i>&nbsp;</b>
+<b class="nc"><i>357</i>&nbsp;        this.baseURI = baseURI;</b>
+<i>358</i>&nbsp;        this.signedInfo =
+<i>359</i>&nbsp;            new SignedInfo(getDocument(), SignatureMethodElem, CanonicalizationMethodElem);
+<i>360</i>&nbsp;
+<b class="nc"><i>361</i>&nbsp;        appendSelf(this.signedInfo);</b>
+<i>362</i>&nbsp;        addReturnToSelf();
+<b class="nc"><i>363</i>&nbsp;</b>
+<i>364</i>&nbsp;        // create an empty SignatureValue; this is filled by setSignatureValueElement
+<i>365</i>&nbsp;        signatureValueElement =
+<b class="nc"><i>366</i>&nbsp;            XMLUtils.createElementInSignatureSpace(getDocument(), Constants._TAG_SIGNATUREVALUE);</b>
+<b class="nc"><i>367</i>&nbsp;</b>
+<i>368</i>&nbsp;        appendSelf(signatureValueElement);
+<i>369</i>&nbsp;        addReturnToSelf();
+<b class="nc"><i>370</i>&nbsp;    }</b>
+<b class="nc"><i>371</i>&nbsp;</b>
+<b class="nc"><i>372</i>&nbsp;    /**</b>
+<i>373</i>&nbsp;     * This will parse the element and construct the Java Objects.
+<b class="nc"><i>374</i>&nbsp;     * That will allow a user to validate the signature.</b>
+<b class="nc"><i>375</i>&nbsp;     *</b>
+<b class="nc"><i>376</i>&nbsp;     * @param element ds:Signature element that contains the whole signature</b>
+<i>377</i>&nbsp;     * @param baseURI URI to be prepended to all relative URIs
+<i>378</i>&nbsp;     * @throws XMLSecurityException
+<i>379</i>&nbsp;     * @throws XMLSignatureException if the signature is badly formatted
+<b class="nc"><i>380</i>&nbsp;     */</b>
+<b class="nc"><i>381</i>&nbsp;    public XMLSignature(Element element, String baseURI)</b>
+<i>382</i>&nbsp;        throws XMLSignatureException, XMLSecurityException {
+<i>383</i>&nbsp;        this(element, baseURI, true);
+<b class="nc"><i>384</i>&nbsp;    }</b>
+<b class="nc"><i>385</i>&nbsp;</b>
+<b class="nc"><i>386</i>&nbsp;    /**</b>
+<b class="nc"><i>387</i>&nbsp;     * This will parse the element and construct the Java Objects.</b>
+<b class="nc"><i>388</i>&nbsp;     * That will allow a user to validate the signature.</b>
+<i>389</i>&nbsp;     *
+<i>390</i>&nbsp;     * @param element ds:Signature element that contains the whole signature
+<i>391</i>&nbsp;     * @param baseURI URI to be prepended to all relative URIs
+<b class="nc"><i>392</i>&nbsp;     * @param secureValidation whether secure secureValidation is enabled or not</b>
+<b class="nc"><i>393</i>&nbsp;     * @throws XMLSecurityException</b>
+<b class="nc"><i>394</i>&nbsp;     * @throws XMLSignatureException if the signature is badly formatted</b>
+<b class="nc"><i>395</i>&nbsp;     */</b>
+<b class="nc"><i>396</i>&nbsp;    public XMLSignature(Element element, String baseURI, boolean secureValidation)</b>
+<b class="nc"><i>397</i>&nbsp;        throws XMLSignatureException, XMLSecurityException {</b>
+<i>398</i>&nbsp;        super(element, baseURI);
+<i>399</i>&nbsp;
+<b class="nc"><i>400</i>&nbsp;        // check out SignedInfo child</b>
+<b class="nc"><i>401</i>&nbsp;        Element signedInfoElem = XMLUtils.getNextElement(element.getFirstChild());</b>
+<i>402</i>&nbsp;
+<b class="nc"><i>403</i>&nbsp;        // check to see if it is there</b>
+<b class="nc"><i>404</i>&nbsp;        if (signedInfoElem == null) {</b>
+<b class="nc"><i>405</i>&nbsp;            Object exArgs[] = { Constants._TAG_SIGNEDINFO, Constants._TAG_SIGNATURE };</b>
+<b class="nc"><i>406</i>&nbsp;            throw new XMLSignatureException(&quot;xml.WrongContent&quot;, exArgs);</b>
+<b class="nc"><i>407</i>&nbsp;        }</b>
+<b class="nc"><i>408</i>&nbsp;</b>
+<b class="nc"><i>409</i>&nbsp;        // create a SignedInfo object from that element</b>
+<b class="nc"><i>410</i>&nbsp;        this.signedInfo = new SignedInfo(signedInfoElem, baseURI, secureValidation);</b>
+<b class="nc"><i>411</i>&nbsp;        // get signedInfoElem again in case it has changed</b>
+<i>412</i>&nbsp;        signedInfoElem = XMLUtils.getNextElement(element.getFirstChild());
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;        // check out SignatureValue child
+<i>415</i>&nbsp;        this.signatureValueElement =
+<b class="nc"><i>416</i>&nbsp;            XMLUtils.getNextElement(signedInfoElem.getNextSibling());</b>
+<b class="nc"><i>417</i>&nbsp;</b>
+<i>418</i>&nbsp;        // check to see if it exists
+<b class="nc"><i>419</i>&nbsp;        if (signatureValueElement == null) {</b>
+<i>420</i>&nbsp;            Object exArgs[] = { Constants._TAG_SIGNATUREVALUE, Constants._TAG_SIGNATURE };
+<i>421</i>&nbsp;            throw new XMLSignatureException(&quot;xml.WrongContent&quot;, exArgs);
+<i>422</i>&nbsp;        }
+<i>423</i>&nbsp;        Attr signatureValueAttr = signatureValueElement.getAttributeNodeNS(null, &quot;Id&quot;);
+<i>424</i>&nbsp;        if (signatureValueAttr != null) {
+<i>425</i>&nbsp;            signatureValueElement.setIdAttributeNode(signatureValueAttr, true);
+<i>426</i>&nbsp;        }
+<i>427</i>&nbsp;
+<b class="nc"><i>428</i>&nbsp;        // &lt;element ref=&quot;ds:KeyInfo&quot; minOccurs=&quot;0&quot;/&gt;</b>
+<b class="nc"><i>429</i>&nbsp;        Element keyInfoElem =</b>
+<b class="nc"><i>430</i>&nbsp;            XMLUtils.getNextElement(signatureValueElement.getNextSibling());</b>
+<i>431</i>&nbsp;
+<i>432</i>&nbsp;        // If it exists use it, but it&#39;s not mandatory
+<i>433</i>&nbsp;        if (keyInfoElem != null
+<i>434</i>&nbsp;            &amp;&amp; Constants.SignatureSpecNS.equals(keyInfoElem.getNamespaceURI())
+<i>435</i>&nbsp;            &amp;&amp; Constants._TAG_KEYINFO.equals(keyInfoElem.getLocalName())) {
+<i>436</i>&nbsp;            this.keyInfo = new KeyInfo(keyInfoElem, baseURI);
+<i>437</i>&nbsp;            this.keyInfo.setSecureValidation(secureValidation);
+<i>438</i>&nbsp;        }
+<i>439</i>&nbsp;
+<b class="nc"><i>440</i>&nbsp;        // &lt;element ref=&quot;ds:Object&quot; minOccurs=&quot;0&quot; maxOccurs=&quot;unbounded&quot;/&gt;</b>
+<i>441</i>&nbsp;        Element objectElem =
+<i>442</i>&nbsp;            XMLUtils.getNextElement(signatureValueElement.getNextSibling());
+<i>443</i>&nbsp;        while (objectElem != null) {
+<i>444</i>&nbsp;            Attr objectAttr = objectElem.getAttributeNodeNS(null, &quot;Id&quot;);
+<i>445</i>&nbsp;            if (objectAttr != null) {
+<i>446</i>&nbsp;                objectElem.setIdAttributeNode(objectAttr, true);
+<i>447</i>&nbsp;            }
+<i>448</i>&nbsp;
+<b class="nc"><i>449</i>&nbsp;            Node firstChild = objectElem.getFirstChild();</b>
+<i>450</i>&nbsp;            // Register Ids of the Object child elements
+<i>451</i>&nbsp;            while (firstChild != null) {
+<i>452</i>&nbsp;                if (firstChild.getNodeType() == Node.ELEMENT_NODE) {
+<i>453</i>&nbsp;                    Element childElem = (Element)firstChild;
+<i>454</i>&nbsp;                    String tag = childElem.getLocalName();
+<i>455</i>&nbsp;                    if (&quot;Manifest&quot;.equals(tag)) {
+<i>456</i>&nbsp;                        new Manifest(childElem, baseURI);
+<i>457</i>&nbsp;                    } else if (&quot;SignatureProperties&quot;.equals(tag)) {
+<i>458</i>&nbsp;                        new SignatureProperties(childElem, baseURI);
+<i>459</i>&nbsp;                    }
+<i>460</i>&nbsp;                }
+<b class="nc"><i>461</i>&nbsp;                firstChild = firstChild.getNextSibling();</b>
+<b class="nc"><i>462</i>&nbsp;            }</b>
+<b class="nc"><i>463</i>&nbsp;</b>
+<i>464</i>&nbsp;            objectElem = XMLUtils.getNextElement(objectElem.getNextSibling());
+<i>465</i>&nbsp;        }
+<i>466</i>&nbsp;
+<i>467</i>&nbsp;        this.state = MODE_VERIFY;
+<i>468</i>&nbsp;    }
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;    /**
+<i>471</i>&nbsp;     * Sets the {@code Id} attribute
+<i>472</i>&nbsp;     *
+<i>473</i>&nbsp;     * @param id Id value for the id attribute on the Signature Element
+<i>474</i>&nbsp;     */
+<b class="nc"><i>475</i>&nbsp;    public void setId(String id) {</b>
+<b class="nc"><i>476</i>&nbsp;        if (id != null) {</b>
+<i>477</i>&nbsp;            setLocalIdAttribute(Constants._ATT_ID, id);
+<i>478</i>&nbsp;        }
+<b class="nc"><i>479</i>&nbsp;    }</b>
+<i>480</i>&nbsp;
+<b class="nc"><i>481</i>&nbsp;    /**</b>
+<b class="nc"><i>482</i>&nbsp;     * Returns the {@code Id} attribute</b>
+<i>483</i>&nbsp;     *
+<i>484</i>&nbsp;     * @return the {@code Id} attribute
+<b class="nc"><i>485</i>&nbsp;     */</b>
+<b class="nc"><i>486</i>&nbsp;    public String getId() {</b>
+<i>487</i>&nbsp;        return getLocalAttribute(Constants._ATT_ID);
+<i>488</i>&nbsp;    }
+<i>489</i>&nbsp;
+<i>490</i>&nbsp;    /**
+<i>491</i>&nbsp;     * Returns the completely parsed {@code SignedInfo} object.
+<i>492</i>&nbsp;     *
+<i>493</i>&nbsp;     * @return the completely parsed {@code SignedInfo} object.
+<i>494</i>&nbsp;     */
+<i>495</i>&nbsp;    public SignedInfo getSignedInfo() {
+<i>496</i>&nbsp;        return this.signedInfo;
+<i>497</i>&nbsp;    }
+<i>498</i>&nbsp;
+<b class="nc"><i>499</i>&nbsp;    /**</b>
+<i>500</i>&nbsp;     * Returns the octet value of the SignatureValue element.
+<i>501</i>&nbsp;     * Throws an XMLSignatureException if it has no or wrong content.
+<b class="nc"><i>502</i>&nbsp;     *</b>
+<i>503</i>&nbsp;     * @return the value of the SignatureValue element.
+<i>504</i>&nbsp;     * @throws XMLSignatureException If there is no content
+<b class="nc"><i>505</i>&nbsp;     */</b>
+<b class="nc"><i>506</i>&nbsp;    public byte[] getSignatureValue() throws XMLSignatureException {</b>
+<b class="nc"><i>507</i>&nbsp;        String content = XMLUtils.getFullTextChildrenFromElement(signatureValueElement);</b>
+<b class="nc"><i>508</i>&nbsp;        return Base64.getMimeDecoder().decode(content);</b>
+<i>509</i>&nbsp;    }
+<i>510</i>&nbsp;
+<b class="nc"><i>511</i>&nbsp;    /**</b>
+<i>512</i>&nbsp;     * Base64 encodes and sets the bytes as the content of the SignatureValue
+<b class="nc"><i>513</i>&nbsp;     * Node.</b>
+<b class="nc"><i>514</i>&nbsp;     *</b>
+<i>515</i>&nbsp;     * @param bytes bytes to be used by SignatureValue before Base64 encoding
+<i>516</i>&nbsp;     */
+<b class="nc"><i>517</i>&nbsp;    private void setSignatureValueElement(byte[] bytes) {</b>
+<b class="nc"><i>518</i>&nbsp;</b>
+<i>519</i>&nbsp;        while (signatureValueElement.hasChildNodes()) {
+<i>520</i>&nbsp;            signatureValueElement.removeChild(signatureValueElement.getFirstChild());
+<i>521</i>&nbsp;        }
+<b class="nc"><i>522</i>&nbsp;</b>
+<i>523</i>&nbsp;        String base64codedValue = Base64.getMimeEncoder().encodeToString(bytes);
+<i>524</i>&nbsp;
+<i>525</i>&nbsp;        if (base64codedValue.length() &gt; 76 &amp;&amp; !XMLUtils.ignoreLineBreaks()) {
+<i>526</i>&nbsp;            base64codedValue = &quot;\n&quot; + base64codedValue + &quot;\n&quot;;
+<i>527</i>&nbsp;        }
+<i>528</i>&nbsp;
+<i>529</i>&nbsp;        Text t = createText(base64codedValue);
+<i>530</i>&nbsp;        signatureValueElement.appendChild(t);
+<i>531</i>&nbsp;    }
+<i>532</i>&nbsp;
+<i>533</i>&nbsp;    /**
+<i>534</i>&nbsp;     * Returns the KeyInfo child. If we are in signing mode and the KeyInfo
+<i>535</i>&nbsp;     * does not exist yet, it is created on demand and added to the Signature.
+<i>536</i>&nbsp;     * &lt;br&gt;
+<i>537</i>&nbsp;     * This allows to add arbitrary content to the KeyInfo during signing.
+<i>538</i>&nbsp;     *
+<i>539</i>&nbsp;     * @return the KeyInfo object
+<b class="nc"><i>540</i>&nbsp;     */</b>
+<b class="nc"><i>541</i>&nbsp;    public KeyInfo getKeyInfo() {</b>
+<i>542</i>&nbsp;        // check to see if we are signing and if we have to create a keyinfo
+<i>543</i>&nbsp;        if (this.state == MODE_SIGN &amp;&amp; this.keyInfo == null) {
+<i>544</i>&nbsp;
+<i>545</i>&nbsp;            // create the KeyInfo
+<i>546</i>&nbsp;            this.keyInfo = new KeyInfo(getDocument());
+<i>547</i>&nbsp;
+<i>548</i>&nbsp;            // get the Element from KeyInfo
+<i>549</i>&nbsp;            Element keyInfoElement = this.keyInfo.getElement();
+<i>550</i>&nbsp;            Element firstObject =
+<i>551</i>&nbsp;                XMLUtils.selectDsNode(
+<i>552</i>&nbsp;                    getElement().getFirstChild(), Constants._TAG_OBJECT, 0
+<i>553</i>&nbsp;                );
+<i>554</i>&nbsp;
+<i>555</i>&nbsp;            if (firstObject != null) {
+<b class="nc"><i>556</i>&nbsp;                // add it before the object</b>
+<b class="nc"><i>557</i>&nbsp;                getElement().insertBefore(keyInfoElement, firstObject);</b>
+<b class="nc"><i>558</i>&nbsp;                XMLUtils.addReturnBeforeChild(getElement(), firstObject);</b>
+<i>559</i>&nbsp;            } else {
+<i>560</i>&nbsp;                // add it as the last element to the signature
+<i>561</i>&nbsp;                appendSelf(keyInfoElement);
+<b class="nc"><i>562</i>&nbsp;                addReturnToSelf();</b>
+<b class="nc"><i>563</i>&nbsp;            }</b>
+<b class="nc"><i>564</i>&nbsp;        }</b>
+<i>565</i>&nbsp;
+<i>566</i>&nbsp;        return this.keyInfo;
+<i>567</i>&nbsp;    }
+<i>568</i>&nbsp;
+<i>569</i>&nbsp;    /**
+<i>570</i>&nbsp;     * Appends an Object (not a {@code java.lang.Object} but an Object
+<i>571</i>&nbsp;     * element) to the Signature. Please note that this is only possible
+<i>572</i>&nbsp;     * when signing.
+<i>573</i>&nbsp;     *
+<b class="nc"><i>574</i>&nbsp;     * @param object ds:Object to be appended.</b>
+<i>575</i>&nbsp;     * @throws XMLSignatureException When this object is used to verify.
+<i>576</i>&nbsp;     */
+<i>577</i>&nbsp;    public void appendObject(ObjectContainer object) throws XMLSignatureException {
+<i>578</i>&nbsp;        //try {
+<i>579</i>&nbsp;        //if (this.state != MODE_SIGN) {
+<i>580</i>&nbsp;        // throw new XMLSignatureException(
+<i>581</i>&nbsp;        //  &quot;signature.operationOnlyBeforeSign&quot;);
+<i>582</i>&nbsp;        //}
+<i>583</i>&nbsp;
+<i>584</i>&nbsp;        appendSelf(object);
+<i>585</i>&nbsp;        addReturnToSelf();
+<i>586</i>&nbsp;        //} catch (XMLSecurityException ex) {
+<b class="nc"><i>587</i>&nbsp;        // throw new XMLSignatureException(ex);</b>
+<b class="nc"><i>588</i>&nbsp;        //}</b>
+<b class="nc"><i>589</i>&nbsp;    }</b>
+<i>590</i>&nbsp;
+<i>591</i>&nbsp;    /**
+<i>592</i>&nbsp;     * Returns the {@code i}th {@code ds:Object} child of the signature
+<i>593</i>&nbsp;     * or null if no such {@code ds:Object} element exists.
+<i>594</i>&nbsp;     *
+<b class="nc"><i>595</i>&nbsp;     * @param i</b>
+<b class="nc"><i>596</i>&nbsp;     * @return the {@code i}th {@code ds:Object} child of the signature</b>
+<b class="nc"><i>597</i>&nbsp;     * or null if no such {@code ds:Object} element exists.</b>
+<i>598</i>&nbsp;     */
+<i>599</i>&nbsp;    public ObjectContainer getObjectItem(int i) {
+<b class="nc"><i>600</i>&nbsp;        Element objElem =</b>
+<i>601</i>&nbsp;            XMLUtils.selectDsNode(
+<i>602</i>&nbsp;                getFirstChild(), Constants._TAG_OBJECT, i
+<b class="nc"><i>603</i>&nbsp;            );</b>
+<b class="nc"><i>604</i>&nbsp;</b>
+<i>605</i>&nbsp;        try {
+<b class="nc"><i>606</i>&nbsp;            return new ObjectContainer(objElem, this.baseURI);</b>
+<b class="nc"><i>607</i>&nbsp;        } catch (XMLSecurityException ex) {</b>
+<b class="nc"><i>608</i>&nbsp;            return null;</b>
+<i>609</i>&nbsp;        }
+<b class="nc"><i>610</i>&nbsp;    }</b>
+<i>611</i>&nbsp;
+<b class="nc"><i>612</i>&nbsp;    /**</b>
+<b class="nc"><i>613</i>&nbsp;     * Returns the number of all {@code ds:Object} elements.</b>
+<b class="nc"><i>614</i>&nbsp;     *</b>
+<b class="nc"><i>615</i>&nbsp;     * @return the number of all {@code ds:Object} elements.</b>
+<i>616</i>&nbsp;     */
+<b class="nc"><i>617</i>&nbsp;    public int getObjectLength() {</b>
+<i>618</i>&nbsp;        return this.length(Constants.SignatureSpecNS, Constants._TAG_OBJECT);
+<i>619</i>&nbsp;    }
+<i>620</i>&nbsp;
+<i>621</i>&nbsp;    /**
+<b class="nc"><i>622</i>&nbsp;     * Digests all References in the SignedInfo, calculates the signature value</b>
+<b class="nc"><i>623</i>&nbsp;     * and sets it in the SignatureValue Element.</b>
+<b class="nc"><i>624</i>&nbsp;     *</b>
+<b class="nc"><i>625</i>&nbsp;     * @param signingKey the {@link java.security.PrivateKey} or</b>
+<b class="nc"><i>626</i>&nbsp;     * {@link javax.crypto.SecretKey} that is used to sign.</b>
+<b class="nc"><i>627</i>&nbsp;     * @throws XMLSignatureException</b>
+<b class="nc"><i>628</i>&nbsp;     */</b>
+<b class="nc"><i>629</i>&nbsp;    public void sign(Key signingKey) throws XMLSignatureException {</b>
+<b class="nc"><i>630</i>&nbsp;</b>
+<b class="nc"><i>631</i>&nbsp;        if (signingKey instanceof PublicKey) {</b>
+<i>632</i>&nbsp;            throw new IllegalArgumentException(
+<i>633</i>&nbsp;                I18n.translate(&quot;algorithms.operationOnlyVerification&quot;)
+<i>634</i>&nbsp;            );
+<i>635</i>&nbsp;        }
+<i>636</i>&nbsp;
+<i>637</i>&nbsp;        //Create a SignatureAlgorithm object
+<i>638</i>&nbsp;        SignedInfo si = this.getSignedInfo();
+<i>639</i>&nbsp;        SignatureAlgorithm sa = si.getSignatureAlgorithm();
+<b class="nc"><i>640</i>&nbsp;        try (SignerOutputStream output = new SignerOutputStream(sa);</b>
+<i>641</i>&nbsp;            OutputStream so = new UnsyncBufferedOutputStream(output)) {
+<i>642</i>&nbsp;
+<i>643</i>&nbsp;            // generate digest values for all References in this SignedInfo
+<i>644</i>&nbsp;            si.generateDigestValues();
+<i>645</i>&nbsp;
+<i>646</i>&nbsp;            // initialize SignatureAlgorithm for signing
+<i>647</i>&nbsp;            sa.initSign(signingKey);
+<i>648</i>&nbsp;
+<b class="nc"><i>649</i>&nbsp;            // get the canonicalized bytes from SignedInfo</b>
+<i>650</i>&nbsp;            si.signInOctetStream(so);
+<i>651</i>&nbsp;
+<i>652</i>&nbsp;            // set them on the SignatureValue element
+<i>653</i>&nbsp;            this.setSignatureValueElement(sa.sign());
+<i>654</i>&nbsp;        } catch (XMLSignatureException ex) {
+<i>655</i>&nbsp;            throw ex;
+<i>656</i>&nbsp;        } catch (CanonicalizationException ex) {
+<i>657</i>&nbsp;            throw new XMLSignatureException(ex);
+<i>658</i>&nbsp;        } catch (InvalidCanonicalizerException ex) {
+<i>659</i>&nbsp;            throw new XMLSignatureException(ex);
+<i>660</i>&nbsp;        } catch (XMLSecurityException ex) {
+<i>661</i>&nbsp;            throw new XMLSignatureException(ex);
+<i>662</i>&nbsp;        } catch (IOException ex) {
+<i>663</i>&nbsp;            throw new XMLSignatureException(ex);
+<i>664</i>&nbsp;        }
+<i>665</i>&nbsp;    }
+<b class="nc"><i>666</i>&nbsp;</b>
+<i>667</i>&nbsp;    /**
+<b class="nc"><i>668</i>&nbsp;     * Adds a {@link ResourceResolver} to enable the retrieval of resources.</b>
+<i>669</i>&nbsp;     *
+<i>670</i>&nbsp;     * @param resolver
+<b class="nc"><i>671</i>&nbsp;     */</b>
+<b class="nc"><i>672</i>&nbsp;    public void addResourceResolver(ResourceResolver resolver) {</b>
+<i>673</i>&nbsp;        this.getSignedInfo().addResourceResolver(resolver);
+<i>674</i>&nbsp;    }
+<i>675</i>&nbsp;
+<i>676</i>&nbsp;    /**
+<i>677</i>&nbsp;     * Adds a {@link ResourceResolverSpi} to enable the retrieval of resources.
+<i>678</i>&nbsp;     *
+<i>679</i>&nbsp;     * @param resolver
+<i>680</i>&nbsp;     */
+<i>681</i>&nbsp;    public void addResourceResolver(ResourceResolverSpi resolver) {
+<i>682</i>&nbsp;        this.getSignedInfo().addResourceResolver(resolver);
+<i>683</i>&nbsp;    }
+<i>684</i>&nbsp;
+<i>685</i>&nbsp;    /**
+<i>686</i>&nbsp;     * Extracts the public key from the certificate and verifies if the signature
+<i>687</i>&nbsp;     * is valid by re-digesting all References, comparing those against the
+<b class="nc"><i>688</i>&nbsp;     * stored DigestValues and then checking to see if the Signatures match on</b>
+<b class="nc"><i>689</i>&nbsp;     * the SignedInfo.</b>
+<b class="nc"><i>690</i>&nbsp;     *</b>
+<i>691</i>&nbsp;     * @param cert Certificate that contains the public key part of the keypair
+<i>692</i>&nbsp;     * that was used to sign.
+<i>693</i>&nbsp;     * @return true if the signature is valid, false otherwise
+<i>694</i>&nbsp;     * @throws XMLSignatureException
+<i>695</i>&nbsp;     */
+<i>696</i>&nbsp;    public boolean checkSignatureValue(X509Certificate cert)
+<i>697</i>&nbsp;        throws XMLSignatureException {
+<b class="nc"><i>698</i>&nbsp;        // see if cert is null</b>
+<i>699</i>&nbsp;        if (cert != null) {
+<i>700</i>&nbsp;            // check the values with the public key from the cert
+<b class="nc"><i>701</i>&nbsp;            return this.checkSignatureValue(cert.getPublicKey());</b>
+<b class="nc"><i>702</i>&nbsp;        }</b>
+<b class="nc"><i>703</i>&nbsp;</b>
+<b class="nc"><i>704</i>&nbsp;        Object exArgs[] = { &quot;Didn&#39;t get a certificate&quot; };</b>
+<b class="nc"><i>705</i>&nbsp;        throw new XMLSignatureException(&quot;empty&quot;, exArgs);</b>
+<b class="nc"><i>706</i>&nbsp;    }</b>
+<i>707</i>&nbsp;
+<b class="nc"><i>708</i>&nbsp;    /**</b>
+<i>709</i>&nbsp;     * Verifies if the signature is valid by redigesting all References,
+<b class="nc"><i>710</i>&nbsp;     * comparing those against the stored DigestValues and then checking to see</b>
+<i>711</i>&nbsp;     * if the Signatures match on the SignedInfo.
+<i>712</i>&nbsp;     *
+<b class="nc"><i>713</i>&nbsp;     * @param pk {@link java.security.PublicKey} part of the keypair or</b>
+<b class="nc"><i>714</i>&nbsp;     * {@link javax.crypto.SecretKey} that was used to sign</b>
+<i>715</i>&nbsp;     * @return true if the signature is valid, false otherwise
+<b class="nc"><i>716</i>&nbsp;     * @throws XMLSignatureException</b>
+<b class="nc"><i>717</i>&nbsp;     */</b>
+<i>718</i>&nbsp;    public boolean checkSignatureValue(Key pk) throws XMLSignatureException {
+<b class="nc"><i>719</i>&nbsp;        //COMMENT: pk suggests it can only be a public key?</b>
+<b class="nc"><i>720</i>&nbsp;        //check to see if the key is not null</b>
+<b class="nc"><i>721</i>&nbsp;        if (pk == null) {</b>
+<b class="nc"><i>722</i>&nbsp;            Object exArgs[] = { &quot;Didn&#39;t get a key&quot; };</b>
+<i>723</i>&nbsp;            throw new XMLSignatureException(&quot;empty&quot;, exArgs);
+<i>724</i>&nbsp;        }
+<b class="nc"><i>725</i>&nbsp;        // all references inside the signedinfo need to be dereferenced and</b>
+<b class="nc"><i>726</i>&nbsp;        // digested again to see if the outcome matches the stored value in the</b>
+<b class="nc"><i>727</i>&nbsp;        // SignedInfo.</b>
+<i>728</i>&nbsp;        // If followManifestsDuringValidation is true it will do the same for
+<i>729</i>&nbsp;        // References inside a Manifest.
+<i>730</i>&nbsp;        try {
+<b class="nc"><i>731</i>&nbsp;            SignedInfo si = this.getSignedInfo();</b>
+<b class="nc"><i>732</i>&nbsp;            //create a SignatureAlgorithms from the SignatureMethod inside</b>
+<b class="nc"><i>733</i>&nbsp;            //SignedInfo. This is used to validate the signature.</b>
+<i>734</i>&nbsp;            SignatureAlgorithm sa = si.getSignatureAlgorithm();
+<i>735</i>&nbsp;            LOG.debug(&quot;signatureMethodURI = {}&quot;, sa.getAlgorithmURI());
+<b class="nc"><i>736</i>&nbsp;            LOG.debug(&quot;jceSigAlgorithm = {}&quot;, sa.getJCEAlgorithmString());</b>
+<b class="nc"><i>737</i>&nbsp;            LOG.debug(&quot;jceSigProvider = {}&quot;, sa.getJCEProviderName());</b>
+<b class="nc"><i>738</i>&nbsp;            LOG.debug(&quot;PublicKey = {}&quot;, pk);</b>
+<b class="nc"><i>739</i>&nbsp;</b>
+<b class="nc"><i>740</i>&nbsp;            byte sigBytes[] = null;</b>
+<i>741</i>&nbsp;            try (SignerOutputStream so = new SignerOutputStream(sa);
+<i>742</i>&nbsp;                OutputStream bos = new UnsyncBufferedOutputStream(so)) {
+<i>743</i>&nbsp;
+<i>744</i>&nbsp;                sa.initVerify(pk);
+<i>745</i>&nbsp;
+<i>746</i>&nbsp;                // Get the canonicalized (normalized) SignedInfo
+<i>747</i>&nbsp;                si.signInOctetStream(bos);
+<i>748</i>&nbsp;                // retrieve the byte[] from the stored signature
+<i>749</i>&nbsp;                sigBytes = this.getSignatureValue();
+<i>750</i>&nbsp;            } catch (IOException ex) {
+<i>751</i>&nbsp;                LOG.debug(ex.getMessage(), ex);
+<i>752</i>&nbsp;                // Impossible...
+<i>753</i>&nbsp;            } catch (XMLSecurityException ex) {
+<i>754</i>&nbsp;                throw ex;
+<i>755</i>&nbsp;            }
+<i>756</i>&nbsp;
+<i>757</i>&nbsp;            // have SignatureAlgorithm sign the input bytes and compare them to
+<i>758</i>&nbsp;            // the bytes that were stored in the signature.
+<i>759</i>&nbsp;            if (!sa.verify(sigBytes)) {
+<i>760</i>&nbsp;                LOG.warn(&quot;Signature verification failed.&quot;);
+<i>761</i>&nbsp;                return false;
+<i>762</i>&nbsp;            }
+<i>763</i>&nbsp;
+<b class="nc"><i>764</i>&nbsp;            return si.verify(this.followManifestsDuringValidation);</b>
+<i>765</i>&nbsp;        } catch (XMLSignatureException ex) {
+<i>766</i>&nbsp;            throw ex;
+<i>767</i>&nbsp;        } catch (XMLSecurityException ex) {
+<i>768</i>&nbsp;            throw new XMLSignatureException(ex);
+<i>769</i>&nbsp;        }
+<i>770</i>&nbsp;    }
+<i>771</i>&nbsp;
+<i>772</i>&nbsp;    /**
+<i>773</i>&nbsp;     * Add a Reference with full parameters to this Signature
+<i>774</i>&nbsp;     *
+<i>775</i>&nbsp;     * @param referenceURI URI of the resource to be signed. Can be null in
+<i>776</i>&nbsp;     * which case the dereferencing is application specific. Can be &quot;&quot; in which
+<i>777</i>&nbsp;     * it&#39;s the parent node (or parent document?). There can only be one &quot;&quot; in
+<i>778</i>&nbsp;     * each signature.
+<i>779</i>&nbsp;     * @param trans Optional list of transformations to be done before digesting
+<i>780</i>&nbsp;     * @param digestURI Mandatory URI of the digesting algorithm to use.
+<i>781</i>&nbsp;     * @param referenceId Optional id attribute for this Reference
+<i>782</i>&nbsp;     * @param referenceType Optional mimetype for the URI
+<b class="nc"><i>783</i>&nbsp;     * @throws XMLSignatureException</b>
+<i>784</i>&nbsp;     */
+<i>785</i>&nbsp;    public void addDocument(
+<i>786</i>&nbsp;        String referenceURI,
+<i>787</i>&nbsp;        Transforms trans,
+<i>788</i>&nbsp;        String digestURI,
+<i>789</i>&nbsp;        String referenceId,
+<i>790</i>&nbsp;        String referenceType
+<i>791</i>&nbsp;    ) throws XMLSignatureException {
+<i>792</i>&nbsp;        this.signedInfo.addDocument(
+<i>793</i>&nbsp;            this.baseURI, referenceURI, trans, digestURI, referenceId, referenceType
+<i>794</i>&nbsp;        );
+<i>795</i>&nbsp;    }
+<b class="nc"><i>796</i>&nbsp;</b>
+<i>797</i>&nbsp;    /**
+<i>798</i>&nbsp;     * This method is a proxy method for the {@link Manifest#addDocument} method.
+<i>799</i>&nbsp;     *
+<i>800</i>&nbsp;     * @param referenceURI URI according to the XML Signature specification.
+<i>801</i>&nbsp;     * @param trans List of transformations to be applied.
+<i>802</i>&nbsp;     * @param digestURI URI of the digest algorithm to be used.
+<i>803</i>&nbsp;     * @see Manifest#addDocument
+<i>804</i>&nbsp;     * @throws XMLSignatureException
+<i>805</i>&nbsp;     */
+<i>806</i>&nbsp;    public void addDocument(
+<i>807</i>&nbsp;        String referenceURI,
+<i>808</i>&nbsp;        Transforms trans,
+<b class="nc"><i>809</i>&nbsp;        String digestURI</b>
+<i>810</i>&nbsp;    ) throws XMLSignatureException {
+<i>811</i>&nbsp;        this.signedInfo.addDocument(this.baseURI, referenceURI, trans, digestURI, null, null);
+<i>812</i>&nbsp;    }
+<i>813</i>&nbsp;
+<i>814</i>&nbsp;    /**
+<i>815</i>&nbsp;     * Adds a Reference with just the URI and the transforms. This used the
+<i>816</i>&nbsp;     * SHA1 algorithm as a default digest algorithm.
+<i>817</i>&nbsp;     *
+<i>818</i>&nbsp;     * @param referenceURI URI according to the XML Signature specification.
+<i>819</i>&nbsp;     * @param trans List of transformations to be applied.
+<i>820</i>&nbsp;     * @throws XMLSignatureException
+<i>821</i>&nbsp;     */
+<i>822</i>&nbsp;    public void addDocument(String referenceURI, Transforms trans)
+<b class="nc"><i>823</i>&nbsp;        throws XMLSignatureException {</b>
+<i>824</i>&nbsp;        this.signedInfo.addDocument(
+<b class="nc"><i>825</i>&nbsp;            this.baseURI, referenceURI, trans, Constants.ALGO_ID_DIGEST_SHA1, null, null</b>
+<b class="nc"><i>826</i>&nbsp;        );</b>
+<i>827</i>&nbsp;    }
+<i>828</i>&nbsp;
+<i>829</i>&nbsp;    /**
+<i>830</i>&nbsp;     * Add a Reference with just this URI. It uses SHA1 by default as the digest
+<i>831</i>&nbsp;     * algorithm
+<i>832</i>&nbsp;     *
+<i>833</i>&nbsp;     * @param referenceURI URI according to the XML Signature specification.
+<i>834</i>&nbsp;     * @throws XMLSignatureException
+<i>835</i>&nbsp;     */
+<b class="nc"><i>836</i>&nbsp;    public void addDocument(String referenceURI) throws XMLSignatureException {</b>
+<i>837</i>&nbsp;        this.signedInfo.addDocument(
+<i>838</i>&nbsp;            this.baseURI, referenceURI, null, Constants.ALGO_ID_DIGEST_SHA1, null, null
+<i>839</i>&nbsp;        );
+<i>840</i>&nbsp;    }
+<i>841</i>&nbsp;
+<i>842</i>&nbsp;    /**
+<i>843</i>&nbsp;     * Add an X509 Certificate to the KeyInfo. This will include the whole cert
+<i>844</i>&nbsp;     * inside X509Data/X509Certificate tags.
+<i>845</i>&nbsp;     *
+<i>846</i>&nbsp;     * @param cert Certificate to be included. This should be the certificate of
+<i>847</i>&nbsp;     * the key that was used to sign.
+<i>848</i>&nbsp;     * @throws XMLSecurityException
+<b class="nc"><i>849</i>&nbsp;     */</b>
+<i>850</i>&nbsp;    public void addKeyInfo(X509Certificate cert) throws XMLSecurityException {
+<i>851</i>&nbsp;        X509Data x509data = new X509Data(getDocument());
+<i>852</i>&nbsp;
+<i>853</i>&nbsp;        x509data.addCertificate(cert);
+<i>854</i>&nbsp;        this.getKeyInfo().add(x509data);
+<i>855</i>&nbsp;    }
+<i>856</i>&nbsp;
+<i>857</i>&nbsp;    /**
+<i>858</i>&nbsp;     * Add this public key to the KeyInfo. This will include the complete key in
+<i>859</i>&nbsp;     * the KeyInfo structure.
+<i>860</i>&nbsp;     *
+<i>861</i>&nbsp;     * @param pk
+<i>862</i>&nbsp;     */
+<b class="nc"><i>863</i>&nbsp;    public void addKeyInfo(PublicKey pk) {</b>
+<i>864</i>&nbsp;        this.getKeyInfo().add(pk);
+<i>865</i>&nbsp;    }
+<i>866</i>&nbsp;
+<i>867</i>&nbsp;    /**
+<i>868</i>&nbsp;     * Proxy method for {@link SignedInfo#createSecretKey(byte[])}. If you want
+<i>869</i>&nbsp;     * to create a MAC, this method helps you to obtain the
+<i>870</i>&nbsp;     * {@link javax.crypto.SecretKey} from octets.
+<i>871</i>&nbsp;     *
+<b class="nc"><i>872</i>&nbsp;     * @param secretKeyBytes</b>
+<i>873</i>&nbsp;     * @return the secret key created.
+<i>874</i>&nbsp;     * @see SignedInfo#createSecretKey(byte[])
+<i>875</i>&nbsp;     */
+<i>876</i>&nbsp;    public SecretKey createSecretKey(byte[] secretKeyBytes) {
+<i>877</i>&nbsp;        return this.getSignedInfo().createSecretKey(secretKeyBytes);
+<i>878</i>&nbsp;    }
+<i>879</i>&nbsp;
+<i>880</i>&nbsp;    /**
+<i>881</i>&nbsp;     * Signal whether Manifest should be automatically validated.
+<i>882</i>&nbsp;     * Checking the digests in References in a Signature are mandatory, but for
+<i>883</i>&nbsp;     * References inside a Manifest it is application specific. This boolean is
+<i>884</i>&nbsp;     * to indicate that the References inside Manifests should be validated.
+<i>885</i>&nbsp;     *
+<i>886</i>&nbsp;     * @param followManifests
+<i>887</i>&nbsp;     * @see &lt;a href=&quot;http://www.w3.org/TR/xmldsig-core/#sec-CoreValidation&quot;&gt;
+<i>888</i>&nbsp;     * Core validation section in the XML Signature Rec.&lt;/a&gt;
+<i>889</i>&nbsp;     */
+<i>890</i>&nbsp;    public void setFollowNestedManifests(boolean followManifests) {
+<i>891</i>&nbsp;        this.followManifestsDuringValidation = followManifests;
+<i>892</i>&nbsp;    }
+<i>893</i>&nbsp;
+<i>894</i>&nbsp;    /**
+<i>895</i>&nbsp;     * Get the local name of this element
+<i>896</i>&nbsp;     *
+<i>897</i>&nbsp;     * @return Constants._TAG_SIGNATURE
+<i>898</i>&nbsp;     */
+<i>899</i>&nbsp;    public String getBaseLocalName() {
+<i>900</i>&nbsp;        return Constants._TAG_SIGNATURE;
+<i>901</i>&nbsp;    }
+<i>902</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

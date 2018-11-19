@@ -1,0 +1,532 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: RadialGradientPaintContext</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.awt</a> ]
+</div>
+
+<h1>Coverage Summary for Class: RadialGradientPaintContext (java.awt)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">RadialGradientPaintContext</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 104)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2006, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.awt;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.awt.MultipleGradientPaint.CycleMethod;
+<i>29</i>&nbsp;import java.awt.MultipleGradientPaint.ColorSpaceType;
+<i>30</i>&nbsp;import java.awt.geom.AffineTransform;
+<i>31</i>&nbsp;import java.awt.geom.Rectangle2D;
+<i>32</i>&nbsp;import java.awt.image.ColorModel;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;/**
+<i>35</i>&nbsp; * Provides the actual implementation for the RadialGradientPaint.
+<i>36</i>&nbsp; * This is where the pixel processing is done.  A RadialGradientPaint
+<i>37</i>&nbsp; * only supports circular gradients, but it should be possible to scale
+<i>38</i>&nbsp; * the circle to look approximately elliptical, by means of a
+<i>39</i>&nbsp; * gradient transform passed into the RadialGradientPaint constructor.
+<i>40</i>&nbsp; *
+<i>41</i>&nbsp; * @author Nicholas Talian, Vincent Hardy, Jim Graham, Jerry Evans
+<i>42</i>&nbsp; */
+<i>43</i>&nbsp;final class RadialGradientPaintContext extends MultipleGradientPaintContext {
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;    /** True when (focus == center).  */
+<b class="nc"><i>46</i>&nbsp;    private boolean isSimpleFocus = false;</b>
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;    /** True when (cycleMethod == NO_CYCLE). */
+<b class="nc"><i>49</i>&nbsp;    private boolean isNonCyclic = false;</b>
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;    /** Radius of the outermost circle defining the 100% gradient stop. */
+<i>52</i>&nbsp;    private float radius;
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;    /** Variables representing center and focus points. */
+<i>55</i>&nbsp;    private float centerX, centerY, focusX, focusY;
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;    /** Radius of the gradient circle squared. */
+<i>58</i>&nbsp;    private float radiusSq;
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    /** Constant part of X, Y user space coordinates. */
+<i>61</i>&nbsp;    private float constA, constB;
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    /** Constant second order delta for simple loop. */
+<i>64</i>&nbsp;    private float gDeltaDelta;
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    /**
+<i>67</i>&nbsp;     * This value represents the solution when focusX == X.  It is called
+<i>68</i>&nbsp;     * trivial because it is easier to calculate than the general case.
+<i>69</i>&nbsp;     */
+<i>70</i>&nbsp;    private float trivial;
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    /** Amount for offset when clamping focus. */
+<i>73</i>&nbsp;    private static final float SCALEBACK = .99f;
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    /**
+<i>76</i>&nbsp;     * Constructor for RadialGradientPaintContext.
+<i>77</i>&nbsp;     *
+<i>78</i>&nbsp;     * @param paint the {@code RadialGradientPaint} from which this context
+<i>79</i>&nbsp;     *              is created
+<i>80</i>&nbsp;     * @param cm the {@code ColorModel} that receives
+<i>81</i>&nbsp;     *           the {@code Paint} data (this is used only as a hint)
+<i>82</i>&nbsp;     * @param deviceBounds the device space bounding box of the
+<i>83</i>&nbsp;     *                     graphics primitive being rendered
+<i>84</i>&nbsp;     * @param userBounds the user space bounding box of the
+<i>85</i>&nbsp;     *                   graphics primitive being rendered
+<i>86</i>&nbsp;     * @param t the {@code AffineTransform} from user
+<i>87</i>&nbsp;     *          space into device space (gradientTransform should be
+<i>88</i>&nbsp;     *          concatenated with this)
+<i>89</i>&nbsp;     * @param hints the hints that the context object uses to choose
+<i>90</i>&nbsp;     *              between rendering alternatives
+<i>91</i>&nbsp;     * @param cx the center X coordinate in user space of the circle defining
+<i>92</i>&nbsp;     *           the gradient.  The last color of the gradient is mapped to
+<i>93</i>&nbsp;     *           the perimeter of this circle.
+<i>94</i>&nbsp;     * @param cy the center Y coordinate in user space of the circle defining
+<i>95</i>&nbsp;     *           the gradient.  The last color of the gradient is mapped to
+<i>96</i>&nbsp;     *           the perimeter of this circle.
+<i>97</i>&nbsp;     * @param r the radius of the circle defining the extents of the
+<i>98</i>&nbsp;     *          color gradient
+<i>99</i>&nbsp;     * @param fx the X coordinate in user space to which the first color
+<i>100</i>&nbsp;     *           is mapped
+<i>101</i>&nbsp;     * @param fy the Y coordinate in user space to which the first color
+<i>102</i>&nbsp;     *           is mapped
+<i>103</i>&nbsp;     * @param fractions the fractions specifying the gradient distribution
+<i>104</i>&nbsp;     * @param colors the gradient colors
+<i>105</i>&nbsp;     * @param cycleMethod either NO_CYCLE, REFLECT, or REPEAT
+<i>106</i>&nbsp;     * @param colorSpace which colorspace to use for interpolation,
+<i>107</i>&nbsp;     *                   either SRGB or LINEAR_RGB
+<i>108</i>&nbsp;     */
+<i>109</i>&nbsp;    RadialGradientPaintContext(RadialGradientPaint paint,
+<i>110</i>&nbsp;                               ColorModel cm,
+<i>111</i>&nbsp;                               Rectangle deviceBounds,
+<i>112</i>&nbsp;                               Rectangle2D userBounds,
+<i>113</i>&nbsp;                               AffineTransform t,
+<i>114</i>&nbsp;                               RenderingHints hints,
+<i>115</i>&nbsp;                               float cx, float cy,
+<i>116</i>&nbsp;                               float r,
+<i>117</i>&nbsp;                               float fx, float fy,
+<i>118</i>&nbsp;                               float[] fractions,
+<i>119</i>&nbsp;                               Color[] colors,
+<i>120</i>&nbsp;                               CycleMethod cycleMethod,
+<i>121</i>&nbsp;                               ColorSpaceType colorSpace)
+<i>122</i>&nbsp;    {
+<b class="nc"><i>123</i>&nbsp;        super(paint, cm, deviceBounds, userBounds, t, hints,</b>
+<i>124</i>&nbsp;              fractions, colors, cycleMethod, colorSpace);
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;        // copy some parameters
+<b class="nc"><i>127</i>&nbsp;        centerX = cx;</b>
+<b class="nc"><i>128</i>&nbsp;        centerY = cy;</b>
+<b class="nc"><i>129</i>&nbsp;        focusX = fx;</b>
+<b class="nc"><i>130</i>&nbsp;        focusY = fy;</b>
+<b class="nc"><i>131</i>&nbsp;        radius = r;</b>
+<i>132</i>&nbsp;
+<b class="nc"><i>133</i>&nbsp;        this.isSimpleFocus = (focusX == centerX) &amp;&amp; (focusY == centerY);</b>
+<b class="nc"><i>134</i>&nbsp;        this.isNonCyclic = (cycleMethod == CycleMethod.NO_CYCLE);</b>
+<i>135</i>&nbsp;
+<i>136</i>&nbsp;        // for use in the quadratic equation
+<b class="nc"><i>137</i>&nbsp;        radiusSq = radius * radius;</b>
+<i>138</i>&nbsp;
+<b class="nc"><i>139</i>&nbsp;        float dX = focusX - centerX;</b>
+<b class="nc"><i>140</i>&nbsp;        float dY = focusY - centerY;</b>
+<i>141</i>&nbsp;
+<b class="nc"><i>142</i>&nbsp;        double distSq = (dX * dX) + (dY * dY);</b>
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;        // test if distance from focus to center is greater than the radius
+<b class="nc"><i>145</i>&nbsp;        if (distSq &gt; radiusSq * SCALEBACK) {</b>
+<i>146</i>&nbsp;            // clamp focus to radius
+<b class="nc"><i>147</i>&nbsp;            float scalefactor = (float)Math.sqrt(radiusSq * SCALEBACK / distSq);</b>
+<b class="nc"><i>148</i>&nbsp;            dX = dX * scalefactor;</b>
+<b class="nc"><i>149</i>&nbsp;            dY = dY * scalefactor;</b>
+<b class="nc"><i>150</i>&nbsp;            focusX = centerX + dX;</b>
+<b class="nc"><i>151</i>&nbsp;            focusY = centerY + dY;</b>
+<i>152</i>&nbsp;        }
+<i>153</i>&nbsp;
+<i>154</i>&nbsp;        // calculate the solution to be used in the case where X == focusX
+<i>155</i>&nbsp;        // in cyclicCircularGradientFillRaster()
+<b class="nc"><i>156</i>&nbsp;        trivial = (float)Math.sqrt(radiusSq - (dX * dX));</b>
+<i>157</i>&nbsp;
+<i>158</i>&nbsp;        // constant parts of X, Y user space coordinates
+<b class="nc"><i>159</i>&nbsp;        constA = a02 - centerX;</b>
+<b class="nc"><i>160</i>&nbsp;        constB = a12 - centerY;</b>
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;        // constant second order delta for simple loop
+<b class="nc"><i>163</i>&nbsp;        gDeltaDelta = 2 * ( a00 *  a00 +  a10 *  a10) / radiusSq;</b>
+<i>164</i>&nbsp;    }
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;    /**
+<i>167</i>&nbsp;     * Return a Raster containing the colors generated for the graphics
+<i>168</i>&nbsp;     * operation.
+<i>169</i>&nbsp;     *
+<i>170</i>&nbsp;     * @param x,y,w,h the area in device space for which colors are
+<i>171</i>&nbsp;     * generated.
+<i>172</i>&nbsp;     */
+<i>173</i>&nbsp;    protected void fillRaster(int pixels[], int off, int adjust,
+<i>174</i>&nbsp;                              int x, int y, int w, int h)
+<i>175</i>&nbsp;    {
+<b class="nc"><i>176</i>&nbsp;        if (isSimpleFocus &amp;&amp; isNonCyclic &amp;&amp; isSimpleLookup) {</b>
+<b class="nc"><i>177</i>&nbsp;            simpleNonCyclicFillRaster(pixels, off, adjust, x, y, w, h);</b>
+<i>178</i>&nbsp;        } else {
+<b class="nc"><i>179</i>&nbsp;            cyclicCircularGradientFillRaster(pixels, off, adjust, x, y, w, h);</b>
+<i>180</i>&nbsp;        }
+<i>181</i>&nbsp;    }
+<i>182</i>&nbsp;
+<i>183</i>&nbsp;    /**
+<i>184</i>&nbsp;     * This code works in the simplest of cases, where the focus == center
+<i>185</i>&nbsp;     * point, the gradient is noncyclic, and the gradient lookup method is
+<i>186</i>&nbsp;     * fast (single array index, no conversion necessary).
+<i>187</i>&nbsp;     */
+<i>188</i>&nbsp;    private void simpleNonCyclicFillRaster(int pixels[], int off, int adjust,
+<i>189</i>&nbsp;                                           int x, int y, int w, int h)
+<i>190</i>&nbsp;    {
+<i>191</i>&nbsp;        /* We calculate sqrt(X^2 + Y^2) relative to the radius
+<i>192</i>&nbsp;         * size to get the fraction for the color to use.
+<i>193</i>&nbsp;         *
+<i>194</i>&nbsp;         * Each step along the scanline adds (a00, a10) to (X, Y).
+<i>195</i>&nbsp;         * If we precalculate:
+<i>196</i>&nbsp;         *   gRel = X^2+Y^2
+<i>197</i>&nbsp;         * for the start of the row, then for each step we need to
+<i>198</i>&nbsp;         * calculate:
+<i>199</i>&nbsp;         *   gRel&#39; = (X+a00)^2 + (Y+a10)^2
+<i>200</i>&nbsp;         *         = X^2 + 2*X*a00 + a00^2 + Y^2 + 2*Y*a10 + a10^2
+<i>201</i>&nbsp;         *         = (X^2+Y^2) + 2*(X*a00+Y*a10) + (a00^2+a10^2)
+<i>202</i>&nbsp;         *         = gRel + 2*(X*a00+Y*a10) + (a00^2+a10^2)
+<i>203</i>&nbsp;         *         = gRel + 2*DP + SD
+<i>204</i>&nbsp;         * (where DP = dot product between X,Y and a00,a10
+<i>205</i>&nbsp;         *  and   SD = dot product square of the delta vector)
+<i>206</i>&nbsp;         * For the step after that we get:
+<i>207</i>&nbsp;         *   gRel&#39;&#39; = (X+2*a00)^2 + (Y+2*a10)^2
+<i>208</i>&nbsp;         *          = X^2 + 4*X*a00 + 4*a00^2 + Y^2 + 4*Y*a10 + 4*a10^2
+<i>209</i>&nbsp;         *          = (X^2+Y^2) + 4*(X*a00+Y*a10) + 4*(a00^2+a10^2)
+<i>210</i>&nbsp;         *          = gRel  + 4*DP + 4*SD
+<i>211</i>&nbsp;         *          = gRel&#39; + 2*DP + 3*SD
+<i>212</i>&nbsp;         * The increment changed by:
+<i>213</i>&nbsp;         *     (gRel&#39;&#39; - gRel&#39;) - (gRel&#39; - gRel)
+<i>214</i>&nbsp;         *   = (2*DP + 3*SD) - (2*DP + SD)
+<i>215</i>&nbsp;         *   = 2*SD
+<i>216</i>&nbsp;         * Note that this value depends only on the (inverse of the)
+<i>217</i>&nbsp;         * transformation matrix and so is a constant for the loop.
+<i>218</i>&nbsp;         * To make this all relative to the unit circle, we need to
+<i>219</i>&nbsp;         * divide all values as follows:
+<i>220</i>&nbsp;         *   [XY] /= radius
+<i>221</i>&nbsp;         *   gRel /= radiusSq
+<i>222</i>&nbsp;         *   DP   /= radiusSq
+<i>223</i>&nbsp;         *   SD   /= radiusSq
+<i>224</i>&nbsp;         */
+<i>225</i>&nbsp;        // coordinates of UL corner in &quot;user space&quot; relative to center
+<b class="nc"><i>226</i>&nbsp;        float rowX = (a00*x) + (a01*y) + constA;</b>
+<b class="nc"><i>227</i>&nbsp;        float rowY = (a10*x) + (a11*y) + constB;</b>
+<i>228</i>&nbsp;
+<i>229</i>&nbsp;        // second order delta calculated in constructor
+<b class="nc"><i>230</i>&nbsp;        float gDeltaDelta = this.gDeltaDelta;</b>
+<i>231</i>&nbsp;
+<i>232</i>&nbsp;        // adjust is (scan-w) of pixels array, we need (scan)
+<b class="nc"><i>233</i>&nbsp;        adjust += w;</b>
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;        // rgb of the 1.0 color used when the distance exceeds gradient radius
+<b class="nc"><i>236</i>&nbsp;        int rgbclip = gradient[fastGradientArraySize];</b>
+<i>237</i>&nbsp;
+<b class="nc"><i>238</i>&nbsp;        for (int j = 0; j &lt; h; j++) {</b>
+<i>239</i>&nbsp;            // these values depend on the coordinates of the start of the row
+<b class="nc"><i>240</i>&nbsp;            float gRel   =      (rowX * rowX + rowY * rowY) / radiusSq;</b>
+<b class="nc"><i>241</i>&nbsp;            float gDelta = (2 * ( a00 * rowX +  a10 * rowY) / radiusSq +</b>
+<i>242</i>&nbsp;                            gDeltaDelta/2);
+<i>243</i>&nbsp;
+<i>244</i>&nbsp;            /* Use optimized loops for any cases where gRel &gt;= 1.
+<i>245</i>&nbsp;             * We do not need to calculate sqrt(gRel) for these
+<i>246</i>&nbsp;             * values since sqrt(N&gt;=1) == (M&gt;=1).
+<i>247</i>&nbsp;             * Note that gRel follows a parabola which can only be &lt; 1
+<i>248</i>&nbsp;             * for a small region around the center on each scanline. In
+<i>249</i>&nbsp;             * particular:
+<i>250</i>&nbsp;             *   gDeltaDelta is always positive
+<i>251</i>&nbsp;             *   gDelta is &lt;0 until it crosses the midpoint, then &gt;0
+<i>252</i>&nbsp;             * To the left and right of that region, it will always be
+<i>253</i>&nbsp;             * &gt;=1 out to infinity, so we can process the line in 3
+<i>254</i>&nbsp;             * regions:
+<i>255</i>&nbsp;             *   out to the left  - quick fill until gRel &lt; 1, updating gRel
+<i>256</i>&nbsp;             *   in the heart     - slow fraction=sqrt fill while gRel &lt; 1
+<i>257</i>&nbsp;             *   out to the right - quick fill rest of scanline, ignore gRel
+<i>258</i>&nbsp;             */
+<b class="nc"><i>259</i>&nbsp;            int i = 0;</b>
+<i>260</i>&nbsp;            // Quick fill for &quot;out to the left&quot;
+<b class="nc"><i>261</i>&nbsp;            while (i &lt; w &amp;&amp; gRel &gt;= 1.0f) {</b>
+<b class="nc"><i>262</i>&nbsp;                pixels[off + i] = rgbclip;</b>
+<b class="nc"><i>263</i>&nbsp;                gRel += gDelta;</b>
+<b class="nc"><i>264</i>&nbsp;                gDelta += gDeltaDelta;</b>
+<b class="nc"><i>265</i>&nbsp;                i++;</b>
+<i>266</i>&nbsp;            }
+<i>267</i>&nbsp;            // Slow fill for &quot;in the heart&quot;
+<b class="nc"><i>268</i>&nbsp;            while (i &lt; w &amp;&amp; gRel &lt; 1.0f) {</b>
+<i>269</i>&nbsp;                int gIndex;
+<i>270</i>&nbsp;
+<b class="nc"><i>271</i>&nbsp;                if (gRel &lt;= 0) {</b>
+<b class="nc"><i>272</i>&nbsp;                    gIndex = 0;</b>
+<i>273</i>&nbsp;                } else {
+<b class="nc"><i>274</i>&nbsp;                    float fIndex = gRel * SQRT_LUT_SIZE;</b>
+<b class="nc"><i>275</i>&nbsp;                    int iIndex = (int) (fIndex);</b>
+<b class="nc"><i>276</i>&nbsp;                    float s0 = sqrtLut[iIndex];</b>
+<b class="nc"><i>277</i>&nbsp;                    float s1 = sqrtLut[iIndex+1] - s0;</b>
+<b class="nc"><i>278</i>&nbsp;                    fIndex = s0 + (fIndex - iIndex) * s1;</b>
+<b class="nc"><i>279</i>&nbsp;                    gIndex = (int) (fIndex * fastGradientArraySize);</b>
+<i>280</i>&nbsp;                }
+<i>281</i>&nbsp;
+<i>282</i>&nbsp;                // store the color at this point
+<b class="nc"><i>283</i>&nbsp;                pixels[off + i] = gradient[gIndex];</b>
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;                // incremental calculation
+<b class="nc"><i>286</i>&nbsp;                gRel += gDelta;</b>
+<b class="nc"><i>287</i>&nbsp;                gDelta += gDeltaDelta;</b>
+<b class="nc"><i>288</i>&nbsp;                i++;</b>
+<b class="nc"><i>289</i>&nbsp;            }</b>
+<i>290</i>&nbsp;            // Quick fill to end of line for &quot;out to the right&quot;
+<b class="nc"><i>291</i>&nbsp;            while (i &lt; w) {</b>
+<b class="nc"><i>292</i>&nbsp;                pixels[off + i] = rgbclip;</b>
+<b class="nc"><i>293</i>&nbsp;                i++;</b>
+<i>294</i>&nbsp;            }
+<i>295</i>&nbsp;
+<b class="nc"><i>296</i>&nbsp;            off += adjust;</b>
+<b class="nc"><i>297</i>&nbsp;            rowX += a01;</b>
+<b class="nc"><i>298</i>&nbsp;            rowY += a11;</b>
+<i>299</i>&nbsp;        }
+<i>300</i>&nbsp;    }
+<i>301</i>&nbsp;
+<i>302</i>&nbsp;    // SQRT_LUT_SIZE must be a power of 2 for the test above to work.
+<i>303</i>&nbsp;    private static final int SQRT_LUT_SIZE = (1 &lt;&lt; 11);
+<b class="nc"><i>304</i>&nbsp;    private static float sqrtLut[] = new float[SQRT_LUT_SIZE+1];</b>
+<i>305</i>&nbsp;    static {
+<b class="nc"><i>306</i>&nbsp;        for (int i = 0; i &lt; sqrtLut.length; i++) {</b>
+<b class="nc"><i>307</i>&nbsp;            sqrtLut[i] = (float) Math.sqrt(i / ((float) SQRT_LUT_SIZE));</b>
+<i>308</i>&nbsp;        }
+<i>309</i>&nbsp;    }
+<i>310</i>&nbsp;
+<i>311</i>&nbsp;    /**
+<i>312</i>&nbsp;     * Fill the raster, cycling the gradient colors when a point falls outside
+<i>313</i>&nbsp;     * of the perimeter of the 100% stop circle.
+<i>314</i>&nbsp;     *
+<i>315</i>&nbsp;     * This calculation first computes the intersection point of the line
+<i>316</i>&nbsp;     * from the focus through the current point in the raster, and the
+<i>317</i>&nbsp;     * perimeter of the gradient circle.
+<i>318</i>&nbsp;     *
+<i>319</i>&nbsp;     * Then it determines the percentage distance of the current point along
+<i>320</i>&nbsp;     * that line (focus is 0%, perimeter is 100%).
+<i>321</i>&nbsp;     *
+<i>322</i>&nbsp;     * Equation of a circle centered at (a,b) with radius r:
+<i>323</i>&nbsp;     *     (x-a)^2 + (y-b)^2 = r^2
+<i>324</i>&nbsp;     * Equation of a line with slope m and y-intercept b:
+<i>325</i>&nbsp;     *     y = mx + b
+<i>326</i>&nbsp;     * Replacing y in the circle equation and solving using the quadratic
+<i>327</i>&nbsp;     * formula produces the following set of equations.  Constant factors have
+<i>328</i>&nbsp;     * been extracted out of the inner loop.
+<i>329</i>&nbsp;     */
+<i>330</i>&nbsp;    private void cyclicCircularGradientFillRaster(int pixels[], int off,
+<i>331</i>&nbsp;                                                  int adjust,
+<i>332</i>&nbsp;                                                  int x, int y,
+<i>333</i>&nbsp;                                                  int w, int h)
+<i>334</i>&nbsp;    {
+<i>335</i>&nbsp;        // constant part of the C factor of the quadratic equation
+<b class="nc"><i>336</i>&nbsp;        final double constC =</b>
+<i>337</i>&nbsp;            -radiusSq + (centerX * centerX) + (centerY * centerY);
+<i>338</i>&nbsp;
+<i>339</i>&nbsp;        // coefficients of the quadratic equation (Ax^2 + Bx + C = 0)
+<i>340</i>&nbsp;        double A, B, C;
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;        // slope and y-intercept of the focus-perimeter line
+<i>343</i>&nbsp;        double slope, yintcpt;
+<i>344</i>&nbsp;
+<i>345</i>&nbsp;        // intersection with circle X,Y coordinate
+<i>346</i>&nbsp;        double solutionX, solutionY;
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;        // constant parts of X, Y coordinates
+<b class="nc"><i>349</i>&nbsp;        final float constX = (a00*x) + (a01*y) + a02;</b>
+<b class="nc"><i>350</i>&nbsp;        final float constY = (a10*x) + (a11*y) + a12;</b>
+<i>351</i>&nbsp;
+<i>352</i>&nbsp;        // constants in inner loop quadratic formula
+<b class="nc"><i>353</i>&nbsp;        final float precalc2 =  2 * centerY;</b>
+<b class="nc"><i>354</i>&nbsp;        final float precalc3 = -2 * centerX;</b>
+<i>355</i>&nbsp;
+<i>356</i>&nbsp;        // value between 0 and 1 specifying position in the gradient
+<i>357</i>&nbsp;        float g;
+<i>358</i>&nbsp;
+<i>359</i>&nbsp;        // determinant of quadratic formula (should always be &gt; 0)
+<i>360</i>&nbsp;        float det;
+<i>361</i>&nbsp;
+<i>362</i>&nbsp;        // sq distance from the current point to focus
+<i>363</i>&nbsp;        float currentToFocusSq;
+<i>364</i>&nbsp;
+<i>365</i>&nbsp;        // sq distance from the intersect point to focus
+<i>366</i>&nbsp;        float intersectToFocusSq;
+<i>367</i>&nbsp;
+<i>368</i>&nbsp;        // temp variables for change in X,Y squared
+<i>369</i>&nbsp;        float deltaXSq, deltaYSq;
+<i>370</i>&nbsp;
+<i>371</i>&nbsp;        // used to index pixels array
+<b class="nc"><i>372</i>&nbsp;        int indexer = off;</b>
+<i>373</i>&nbsp;
+<i>374</i>&nbsp;        // incremental index change for pixels array
+<b class="nc"><i>375</i>&nbsp;        int pixInc = w+adjust;</b>
+<i>376</i>&nbsp;
+<i>377</i>&nbsp;        // for every row
+<b class="nc"><i>378</i>&nbsp;        for (int j = 0; j &lt; h; j++) {</b>
+<i>379</i>&nbsp;
+<i>380</i>&nbsp;            // user space point; these are constant from column to column
+<b class="nc"><i>381</i>&nbsp;            float X = (a01*j) + constX;</b>
+<b class="nc"><i>382</i>&nbsp;            float Y = (a11*j) + constY;</b>
+<i>383</i>&nbsp;
+<i>384</i>&nbsp;            // for every column (inner loop begins here)
+<b class="nc"><i>385</i>&nbsp;            for (int i = 0; i &lt; w; i++) {</b>
+<i>386</i>&nbsp;
+<b class="nc"><i>387</i>&nbsp;                if (X == focusX) {</b>
+<i>388</i>&nbsp;                    // special case to avoid divide by zero
+<b class="nc"><i>389</i>&nbsp;                    solutionX = focusX;</b>
+<b class="nc"><i>390</i>&nbsp;                    solutionY = centerY;</b>
+<b class="nc"><i>391</i>&nbsp;                    solutionY += (Y &gt; focusY) ? trivial : -trivial;</b>
+<i>392</i>&nbsp;                } else {
+<i>393</i>&nbsp;                    // slope and y-intercept of the focus-perimeter line
+<b class="nc"><i>394</i>&nbsp;                    slope = (Y - focusY) / (X - focusX);</b>
+<b class="nc"><i>395</i>&nbsp;                    yintcpt = Y - (slope * X);</b>
+<i>396</i>&nbsp;
+<i>397</i>&nbsp;                    // use the quadratic formula to calculate the
+<i>398</i>&nbsp;                    // intersection point
+<b class="nc"><i>399</i>&nbsp;                    A = (slope * slope) + 1;</b>
+<b class="nc"><i>400</i>&nbsp;                    B = precalc3 + (-2 * slope * (centerY - yintcpt));</b>
+<b class="nc"><i>401</i>&nbsp;                    C = constC + (yintcpt* (yintcpt - precalc2));</b>
+<i>402</i>&nbsp;
+<b class="nc"><i>403</i>&nbsp;                    det = (float)Math.sqrt((B * B) - (4 * A * C));</b>
+<b class="nc"><i>404</i>&nbsp;                    solutionX = -B;</b>
+<i>405</i>&nbsp;
+<i>406</i>&nbsp;                    // choose the positive or negative root depending
+<i>407</i>&nbsp;                    // on where the X coord lies with respect to the focus
+<b class="nc"><i>408</i>&nbsp;                    solutionX += (X &lt; focusX)? -det : det;</b>
+<b class="nc"><i>409</i>&nbsp;                    solutionX = solutionX / (2 * A); // divisor</b>
+<b class="nc"><i>410</i>&nbsp;                    solutionY = (slope * solutionX) + yintcpt;</b>
+<i>411</i>&nbsp;                }
+<i>412</i>&nbsp;
+<i>413</i>&nbsp;                // Calculate the square of the distance from the current point
+<i>414</i>&nbsp;                // to the focus and the square of the distance from the
+<i>415</i>&nbsp;                // intersection point to the focus. Want the squares so we can
+<i>416</i>&nbsp;                // do 1 square root after division instead of 2 before.
+<i>417</i>&nbsp;
+<b class="nc"><i>418</i>&nbsp;                deltaXSq = X - focusX;</b>
+<b class="nc"><i>419</i>&nbsp;                deltaXSq = deltaXSq * deltaXSq;</b>
+<i>420</i>&nbsp;
+<b class="nc"><i>421</i>&nbsp;                deltaYSq = Y - focusY;</b>
+<b class="nc"><i>422</i>&nbsp;                deltaYSq = deltaYSq * deltaYSq;</b>
+<i>423</i>&nbsp;
+<b class="nc"><i>424</i>&nbsp;                currentToFocusSq = deltaXSq + deltaYSq;</b>
+<i>425</i>&nbsp;
+<b class="nc"><i>426</i>&nbsp;                deltaXSq = (float)solutionX - focusX;</b>
+<b class="nc"><i>427</i>&nbsp;                deltaXSq = deltaXSq * deltaXSq;</b>
+<i>428</i>&nbsp;
+<b class="nc"><i>429</i>&nbsp;                deltaYSq = (float)solutionY - focusY;</b>
+<b class="nc"><i>430</i>&nbsp;                deltaYSq = deltaYSq * deltaYSq;</b>
+<i>431</i>&nbsp;
+<b class="nc"><i>432</i>&nbsp;                intersectToFocusSq = deltaXSq + deltaYSq;</b>
+<i>433</i>&nbsp;
+<i>434</i>&nbsp;                // get the percentage (0-1) of the current point along the
+<i>435</i>&nbsp;                // focus-circumference line
+<b class="nc"><i>436</i>&nbsp;                g = (float)Math.sqrt(currentToFocusSq / intersectToFocusSq);</b>
+<i>437</i>&nbsp;
+<i>438</i>&nbsp;                // store the color at this point
+<b class="nc"><i>439</i>&nbsp;                pixels[indexer + i] = indexIntoGradientsArrays(g);</b>
+<i>440</i>&nbsp;
+<i>441</i>&nbsp;                // incremental change in X, Y
+<b class="nc"><i>442</i>&nbsp;                X += a00;</b>
+<b class="nc"><i>443</i>&nbsp;                Y += a10;</b>
+<i>444</i>&nbsp;            } //end inner loop
+<i>445</i>&nbsp;
+<b class="nc"><i>446</i>&nbsp;            indexer += pixInc;</b>
+<i>447</i>&nbsp;        } //end outer loop
+<i>448</i>&nbsp;    }
+<i>449</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

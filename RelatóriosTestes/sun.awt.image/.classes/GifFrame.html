@@ -1,0 +1,829 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: GifFrame</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.awt.image</a> ]
+</div>
+
+<h1>Coverage Summary for Class: GifFrame (sun.awt.image)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">GifFrame</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 58)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1995, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;/*-
+<i>27</i>&nbsp; *      Reads GIF images from an InputStream and reports the
+<i>28</i>&nbsp; *      image data to an InputStreamImageSource object.
+<i>29</i>&nbsp; *
+<i>30</i>&nbsp; * The algorithm is copyright of CompuServe.
+<i>31</i>&nbsp; */
+<i>32</i>&nbsp;package sun.awt.image;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import java.util.Hashtable;
+<i>35</i>&nbsp;import java.io.InputStream;
+<i>36</i>&nbsp;import java.io.IOException;
+<i>37</i>&nbsp;import java.awt.image.*;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp; * Gif Image converter
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * @author Arthur van Hoff
+<i>43</i>&nbsp; * @author Jim Graham
+<i>44</i>&nbsp; */
+<i>45</i>&nbsp;public class GifImageDecoder extends ImageDecoder {
+<i>46</i>&nbsp;    private static final boolean verbose = false;
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;    private static final int IMAGESEP           = 0x2c;
+<i>49</i>&nbsp;    private static final int EXBLOCK            = 0x21;
+<i>50</i>&nbsp;    private static final int EX_GRAPHICS_CONTROL= 0xf9;
+<i>51</i>&nbsp;    private static final int EX_COMMENT         = 0xfe;
+<i>52</i>&nbsp;    private static final int EX_APPLICATION     = 0xff;
+<i>53</i>&nbsp;    private static final int TERMINATOR         = 0x3b;
+<i>54</i>&nbsp;    private static final int TRANSPARENCYMASK   = 0x01;
+<i>55</i>&nbsp;    private static final int INTERLACEMASK      = 0x40;
+<i>56</i>&nbsp;    private static final int COLORMAPMASK       = 0x80;
+<i>57</i>&nbsp;
+<i>58</i>&nbsp;    int num_global_colors;
+<i>59</i>&nbsp;    byte[] global_colormap;
+<i>60</i>&nbsp;    int trans_pixel = -1;
+<i>61</i>&nbsp;    IndexColorModel global_model;
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    Hashtable&lt;String, Object&gt; props = new Hashtable&lt;&gt;();
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    byte[] saved_image;
+<i>66</i>&nbsp;    IndexColorModel saved_model;
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    int global_width;
+<i>69</i>&nbsp;    int global_height;
+<i>70</i>&nbsp;    int global_bgpixel;
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    GifFrame curframe;
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    public GifImageDecoder(InputStreamImageSource src, InputStream is) {
+<i>75</i>&nbsp;        super(src, is);
+<i>76</i>&nbsp;    }
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    /**
+<i>79</i>&nbsp;     * An error has occurred. Throw an exception.
+<i>80</i>&nbsp;     */
+<i>81</i>&nbsp;    private static void error(String s1) throws ImageFormatException {
+<i>82</i>&nbsp;        throw new ImageFormatException(s1);
+<i>83</i>&nbsp;    }
+<i>84</i>&nbsp;
+<i>85</i>&nbsp;    /**
+<i>86</i>&nbsp;     * Read a number of bytes into a buffer.
+<i>87</i>&nbsp;     * @return number of bytes that were not read due to EOF or error
+<i>88</i>&nbsp;     */
+<i>89</i>&nbsp;    private int readBytes(byte buf[], int off, int len) {
+<i>90</i>&nbsp;        while (len &gt; 0) {
+<i>91</i>&nbsp;            try {
+<i>92</i>&nbsp;                int n = input.read(buf, off, len);
+<i>93</i>&nbsp;                if (n &lt; 0) {
+<i>94</i>&nbsp;                    break;
+<i>95</i>&nbsp;                }
+<i>96</i>&nbsp;                off += n;
+<i>97</i>&nbsp;                len -= n;
+<i>98</i>&nbsp;            } catch (IOException e) {
+<i>99</i>&nbsp;                break;
+<i>100</i>&nbsp;            }
+<i>101</i>&nbsp;        }
+<i>102</i>&nbsp;        return len;
+<i>103</i>&nbsp;    }
+<i>104</i>&nbsp;
+<i>105</i>&nbsp;    private static final int ExtractByte(byte buf[], int off) {
+<i>106</i>&nbsp;        return (buf[off] &amp; 0xFF);
+<i>107</i>&nbsp;    }
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    private static final int ExtractWord(byte buf[], int off) {
+<i>110</i>&nbsp;        return (buf[off] &amp; 0xFF) | ((buf[off + 1] &amp; 0xFF) &lt;&lt; 8);
+<i>111</i>&nbsp;    }
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;    /**
+<i>114</i>&nbsp;     * produce an image from the stream.
+<i>115</i>&nbsp;     */
+<i>116</i>&nbsp;    @SuppressWarnings({&quot;fallthrough&quot;, &quot;deprecation&quot;})
+<i>117</i>&nbsp;    public void produceImage() throws IOException, ImageFormatException {
+<i>118</i>&nbsp;        try {
+<i>119</i>&nbsp;            readHeader();
+<i>120</i>&nbsp;
+<i>121</i>&nbsp;            int totalframes = 0;
+<i>122</i>&nbsp;            int frameno = 0;
+<i>123</i>&nbsp;            int nloops = -1;
+<i>124</i>&nbsp;            int disposal_method = 0;
+<i>125</i>&nbsp;            int delay = -1;
+<i>126</i>&nbsp;            boolean loopsRead = false;
+<i>127</i>&nbsp;            boolean isAnimation = false;
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;            while (!aborted) {
+<i>130</i>&nbsp;                int code;
+<i>131</i>&nbsp;
+<i>132</i>&nbsp;                switch (code = input.read()) {
+<i>133</i>&nbsp;                  case EXBLOCK:
+<i>134</i>&nbsp;                    switch (code = input.read()) {
+<i>135</i>&nbsp;                      case EX_GRAPHICS_CONTROL: {
+<i>136</i>&nbsp;                        byte buf[] = new byte[6];
+<i>137</i>&nbsp;                        if (readBytes(buf, 0, 6) != 0) {
+<i>138</i>&nbsp;                            return;//error(&quot;corrupt GIF file&quot;);
+<i>139</i>&nbsp;                        }
+<i>140</i>&nbsp;                        if ((buf[0] != 4) || (buf[5] != 0)) {
+<i>141</i>&nbsp;                            return;//error(&quot;corrupt GIF file (GCE size)&quot;);
+<i>142</i>&nbsp;                        }
+<i>143</i>&nbsp;                        // Get the index of the transparent color
+<i>144</i>&nbsp;                        delay = ExtractWord(buf, 2) * 10;
+<i>145</i>&nbsp;                        if (delay &gt; 0 &amp;&amp; !isAnimation) {
+<i>146</i>&nbsp;                            isAnimation = true;
+<i>147</i>&nbsp;                            ImageFetcher.startingAnimation();
+<i>148</i>&nbsp;                        }
+<i>149</i>&nbsp;                        disposal_method = (buf[1] &gt;&gt; 2) &amp; 7;
+<i>150</i>&nbsp;                        if ((buf[1] &amp; TRANSPARENCYMASK) != 0) {
+<i>151</i>&nbsp;                            trans_pixel = ExtractByte(buf, 4);
+<i>152</i>&nbsp;                        } else {
+<i>153</i>&nbsp;                            trans_pixel = -1;
+<i>154</i>&nbsp;                        }
+<i>155</i>&nbsp;                        break;
+<i>156</i>&nbsp;                      }
+<i>157</i>&nbsp;
+<i>158</i>&nbsp;                      case EX_COMMENT:
+<i>159</i>&nbsp;                      case EX_APPLICATION:
+<i>160</i>&nbsp;                      default:
+<i>161</i>&nbsp;                        boolean loop_tag = false;
+<i>162</i>&nbsp;                        String comment = &quot;&quot;;
+<i>163</i>&nbsp;                        while (true) {
+<i>164</i>&nbsp;                            int n = input.read();
+<i>165</i>&nbsp;                            if (n &lt;= 0) {
+<i>166</i>&nbsp;                                break;
+<i>167</i>&nbsp;                            }
+<i>168</i>&nbsp;                            byte buf[] = new byte[n];
+<i>169</i>&nbsp;                            if (readBytes(buf, 0, n) != 0) {
+<i>170</i>&nbsp;                                return;//error(&quot;corrupt GIF file&quot;);
+<i>171</i>&nbsp;                            }
+<i>172</i>&nbsp;                            if (code == EX_COMMENT) {
+<i>173</i>&nbsp;                                comment += new String(buf, 0);
+<i>174</i>&nbsp;                            } else if (code == EX_APPLICATION) {
+<i>175</i>&nbsp;                                if (loop_tag) {
+<i>176</i>&nbsp;                                    if (n == 3 &amp;&amp; buf[0] == 1) {
+<i>177</i>&nbsp;                                        if (loopsRead) {
+<i>178</i>&nbsp;                                            ExtractWord(buf, 1);
+<i>179</i>&nbsp;                                        }
+<i>180</i>&nbsp;                                        else {
+<i>181</i>&nbsp;                                            nloops = ExtractWord(buf, 1);
+<i>182</i>&nbsp;                                            loopsRead = true;
+<i>183</i>&nbsp;                                        }
+<i>184</i>&nbsp;                                    } else {
+<i>185</i>&nbsp;                                        loop_tag = false;
+<i>186</i>&nbsp;                                    }
+<i>187</i>&nbsp;                                }
+<i>188</i>&nbsp;                                if (&quot;NETSCAPE2.0&quot;.equals(new String(buf, 0))) {
+<i>189</i>&nbsp;                                    loop_tag = true;
+<i>190</i>&nbsp;                                }
+<i>191</i>&nbsp;                            }
+<i>192</i>&nbsp;                        }
+<i>193</i>&nbsp;                        if (code == EX_COMMENT) {
+<i>194</i>&nbsp;                            props.put(&quot;comment&quot;, comment);
+<i>195</i>&nbsp;                        }
+<i>196</i>&nbsp;                        if (loop_tag &amp;&amp; !isAnimation) {
+<i>197</i>&nbsp;                            isAnimation = true;
+<i>198</i>&nbsp;                            ImageFetcher.startingAnimation();
+<i>199</i>&nbsp;                        }
+<i>200</i>&nbsp;                        break;
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;                      case -1:
+<i>203</i>&nbsp;                        return; //error(&quot;corrupt GIF file&quot;);
+<i>204</i>&nbsp;                    }
+<i>205</i>&nbsp;                    break;
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;                  case IMAGESEP:
+<i>208</i>&nbsp;                    if (!isAnimation) {
+<i>209</i>&nbsp;                        input.mark(0); // we don&#39;t need the mark buffer
+<i>210</i>&nbsp;                    }
+<i>211</i>&nbsp;                    try {
+<i>212</i>&nbsp;                        if (!readImage(totalframes == 0,
+<i>213</i>&nbsp;                                       disposal_method,
+<i>214</i>&nbsp;                                       delay)) {
+<i>215</i>&nbsp;                            return;
+<i>216</i>&nbsp;                        }
+<i>217</i>&nbsp;                    } catch (Exception e) {
+<i>218</i>&nbsp;                        if (verbose) {
+<i>219</i>&nbsp;                            e.printStackTrace();
+<i>220</i>&nbsp;                        }
+<i>221</i>&nbsp;                        return;
+<i>222</i>&nbsp;                    }
+<i>223</i>&nbsp;                    frameno++;
+<i>224</i>&nbsp;                    totalframes++;
+<i>225</i>&nbsp;                    break;
+<i>226</i>&nbsp;
+<i>227</i>&nbsp;                  default:
+<i>228</i>&nbsp;                  case -1:
+<i>229</i>&nbsp;                    if (verbose) {
+<i>230</i>&nbsp;                        if (code == -1) {
+<i>231</i>&nbsp;                            System.err.println(&quot;Premature EOF in GIF file,&quot; +
+<i>232</i>&nbsp;                                               &quot; frame &quot; + frameno);
+<i>233</i>&nbsp;                        } else {
+<i>234</i>&nbsp;                            System.err.println(&quot;corrupt GIF file (parse) [&quot;
+<i>235</i>&nbsp;                                               + code + &quot;].&quot;);
+<i>236</i>&nbsp;                        }
+<i>237</i>&nbsp;                    }
+<i>238</i>&nbsp;                    if (frameno == 0) {
+<i>239</i>&nbsp;                        return;
+<i>240</i>&nbsp;                    }
+<i>241</i>&nbsp;                    // Fall through
+<i>242</i>&nbsp;
+<i>243</i>&nbsp;                  case TERMINATOR:
+<i>244</i>&nbsp;                    if (nloops == 0 || nloops-- &gt;= 0) {
+<i>245</i>&nbsp;                        try {
+<i>246</i>&nbsp;                            if (curframe != null) {
+<i>247</i>&nbsp;                                curframe.dispose();
+<i>248</i>&nbsp;                                curframe = null;
+<i>249</i>&nbsp;                            }
+<i>250</i>&nbsp;                            input.reset();
+<i>251</i>&nbsp;                            saved_image = null;
+<i>252</i>&nbsp;                            saved_model = null;
+<i>253</i>&nbsp;                            frameno = 0;
+<i>254</i>&nbsp;                            break;
+<i>255</i>&nbsp;                        } catch (IOException e) {
+<i>256</i>&nbsp;                            return; // Unable to reset input buffer
+<i>257</i>&nbsp;                        }
+<i>258</i>&nbsp;                    }
+<i>259</i>&nbsp;                    if (verbose &amp;&amp; frameno != 1) {
+<i>260</i>&nbsp;                        System.out.println(&quot;processing GIF terminator,&quot;
+<i>261</i>&nbsp;                                           + &quot; frames: &quot; + frameno
+<i>262</i>&nbsp;                                           + &quot; total: &quot; + totalframes);
+<i>263</i>&nbsp;                    }
+<i>264</i>&nbsp;                    imageComplete(ImageConsumer.STATICIMAGEDONE, true);
+<i>265</i>&nbsp;                    return;
+<i>266</i>&nbsp;                }
+<i>267</i>&nbsp;            }
+<i>268</i>&nbsp;        } finally {
+<i>269</i>&nbsp;            close();
+<i>270</i>&nbsp;        }
+<i>271</i>&nbsp;    }
+<i>272</i>&nbsp;
+<i>273</i>&nbsp;    /**
+<i>274</i>&nbsp;     * Read Image header
+<i>275</i>&nbsp;     */
+<i>276</i>&nbsp;    private void readHeader() throws IOException, ImageFormatException {
+<i>277</i>&nbsp;        // Create a buffer
+<i>278</i>&nbsp;        byte buf[] = new byte[13];
+<i>279</i>&nbsp;
+<i>280</i>&nbsp;        // Read the header
+<i>281</i>&nbsp;        if (readBytes(buf, 0, 13) != 0) {
+<i>282</i>&nbsp;            throw new IOException();
+<i>283</i>&nbsp;        }
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;        // Check header
+<i>286</i>&nbsp;        if ((buf[0] != &#39;G&#39;) || (buf[1] != &#39;I&#39;) || (buf[2] != &#39;F&#39;)) {
+<i>287</i>&nbsp;            error(&quot;not a GIF file.&quot;);
+<i>288</i>&nbsp;        }
+<i>289</i>&nbsp;
+<i>290</i>&nbsp;        // Global width&amp;height
+<i>291</i>&nbsp;        global_width = ExtractWord(buf, 6);
+<i>292</i>&nbsp;        global_height = ExtractWord(buf, 8);
+<i>293</i>&nbsp;
+<i>294</i>&nbsp;        // colormap info
+<i>295</i>&nbsp;        int ch = ExtractByte(buf, 10);
+<i>296</i>&nbsp;        if ((ch &amp; COLORMAPMASK) == 0) {
+<i>297</i>&nbsp;            // no global colormap so make up our own
+<i>298</i>&nbsp;            // If there is a local colormap, it will override what we
+<i>299</i>&nbsp;            // have here.  If there is not a local colormap, the rules
+<i>300</i>&nbsp;            // for GIF89 say that we can use whatever colormap we want.
+<i>301</i>&nbsp;            // This means that we should probably put in a full 256 colormap
+<i>302</i>&nbsp;            // at some point.  REMIND!
+<i>303</i>&nbsp;            num_global_colors = 2;
+<i>304</i>&nbsp;            global_bgpixel = 0;
+<i>305</i>&nbsp;            global_colormap = new byte[2*3];
+<i>306</i>&nbsp;            global_colormap[0] = global_colormap[1] = global_colormap[2] = (byte)0;
+<i>307</i>&nbsp;            global_colormap[3] = global_colormap[4] = global_colormap[5] = (byte)255;
+<i>308</i>&nbsp;
+<i>309</i>&nbsp;        }
+<i>310</i>&nbsp;        else {
+<i>311</i>&nbsp;            num_global_colors = 1 &lt;&lt; ((ch &amp; 0x7) + 1);
+<i>312</i>&nbsp;
+<i>313</i>&nbsp;            global_bgpixel = ExtractByte(buf, 11);
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;            if (buf[12] != 0) {
+<i>316</i>&nbsp;                props.put(&quot;aspectratio&quot;, &quot;&quot;+((ExtractByte(buf, 12) + 15) / 64.0));
+<i>317</i>&nbsp;            }
+<i>318</i>&nbsp;
+<i>319</i>&nbsp;            // Read colors
+<i>320</i>&nbsp;            global_colormap = new byte[num_global_colors * 3];
+<i>321</i>&nbsp;            if (readBytes(global_colormap, 0, num_global_colors * 3) != 0) {
+<i>322</i>&nbsp;                throw new IOException();
+<i>323</i>&nbsp;            }
+<i>324</i>&nbsp;        }
+<i>325</i>&nbsp;        input.mark(Integer.MAX_VALUE); // set this mark in case this is an animated GIF
+<i>326</i>&nbsp;    }
+<i>327</i>&nbsp;
+<i>328</i>&nbsp;    /**
+<i>329</i>&nbsp;     * The ImageConsumer hints flag for a non-interlaced GIF image.
+<i>330</i>&nbsp;     */
+<i>331</i>&nbsp;    private static final int normalflags =
+<i>332</i>&nbsp;        ImageConsumer.TOPDOWNLEFTRIGHT | ImageConsumer.COMPLETESCANLINES |
+<i>333</i>&nbsp;        ImageConsumer.SINGLEPASS | ImageConsumer.SINGLEFRAME;
+<i>334</i>&nbsp;
+<i>335</i>&nbsp;    /**
+<i>336</i>&nbsp;     * The ImageConsumer hints flag for an interlaced GIF image.
+<i>337</i>&nbsp;     */
+<i>338</i>&nbsp;    private static final int interlaceflags =
+<i>339</i>&nbsp;        ImageConsumer.RANDOMPIXELORDER | ImageConsumer.COMPLETESCANLINES |
+<i>340</i>&nbsp;        ImageConsumer.SINGLEPASS | ImageConsumer.SINGLEFRAME;
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;    private short prefix[]  = new short[4096];
+<i>343</i>&nbsp;    private byte  suffix[]  = new byte[4096];
+<i>344</i>&nbsp;    private byte  outCode[] = new byte[4097];
+<i>345</i>&nbsp;
+<i>346</i>&nbsp;    private static native void initIDs();
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;    static {
+<i>349</i>&nbsp;        /* ensure that the necessary native libraries are loaded */
+<i>350</i>&nbsp;        NativeLibLoader.loadLibraries();
+<i>351</i>&nbsp;        initIDs();
+<i>352</i>&nbsp;    }
+<i>353</i>&nbsp;
+<i>354</i>&nbsp;    private native boolean parseImage(int x, int y, int width, int height,
+<i>355</i>&nbsp;                                      boolean interlace, int initCodeSize,
+<i>356</i>&nbsp;                                      byte block[], byte rasline[],
+<i>357</i>&nbsp;                                      IndexColorModel model);
+<i>358</i>&nbsp;
+<i>359</i>&nbsp;    private int sendPixels(int x, int y, int width, int height,
+<i>360</i>&nbsp;                           byte rasline[], ColorModel model) {
+<i>361</i>&nbsp;        int rasbeg, rasend, x2;
+<i>362</i>&nbsp;        if (y &lt; 0) {
+<i>363</i>&nbsp;            height += y;
+<i>364</i>&nbsp;            y = 0;
+<i>365</i>&nbsp;        }
+<i>366</i>&nbsp;        if (y + height &gt; global_height) {
+<i>367</i>&nbsp;            height = global_height - y;
+<i>368</i>&nbsp;        }
+<i>369</i>&nbsp;        if (height &lt;= 0) {
+<i>370</i>&nbsp;            return 1;
+<i>371</i>&nbsp;        }
+<i>372</i>&nbsp;        // rasline[0]     == pixel at coordinate (x,y)
+<i>373</i>&nbsp;        // rasline[width] == pixel at coordinate (x+width, y)
+<i>374</i>&nbsp;        if (x &lt; 0) {
+<i>375</i>&nbsp;            rasbeg = -x;
+<i>376</i>&nbsp;            width += x;         // same as (width -= rasbeg)
+<i>377</i>&nbsp;            x2 = 0;             // same as (x2     = x + rasbeg)
+<i>378</i>&nbsp;        } else {
+<i>379</i>&nbsp;            rasbeg = 0;
+<i>380</i>&nbsp;            // width -= 0;      // same as (width -= rasbeg)
+<i>381</i>&nbsp;            x2 = x;             // same as (x2     = x + rasbeg)
+<i>382</i>&nbsp;        }
+<i>383</i>&nbsp;        // rasline[rasbeg]          == pixel at coordinate (x2,y)
+<i>384</i>&nbsp;        // rasline[width]           == pixel at coordinate (x+width, y)
+<i>385</i>&nbsp;        // rasline[rasbeg + width]  == pixel at coordinate (x2+width, y)
+<i>386</i>&nbsp;        if (x2 + width &gt; global_width) {
+<i>387</i>&nbsp;            width = global_width - x2;
+<i>388</i>&nbsp;        }
+<i>389</i>&nbsp;        if (width &lt;= 0) {
+<i>390</i>&nbsp;            return 1;
+<i>391</i>&nbsp;        }
+<i>392</i>&nbsp;        rasend = rasbeg + width;
+<i>393</i>&nbsp;        // rasline[rasbeg] == pixel at coordinate (x2,y)
+<i>394</i>&nbsp;        // rasline[rasend] == pixel at coordinate (x2+width, y)
+<i>395</i>&nbsp;        int off = y * global_width + x2;
+<i>396</i>&nbsp;        boolean save = (curframe.disposal_method == GifFrame.DISPOSAL_SAVE);
+<i>397</i>&nbsp;        if (trans_pixel &gt;= 0 &amp;&amp; !curframe.initialframe) {
+<i>398</i>&nbsp;            if (saved_image != null &amp;&amp; model.equals(saved_model)) {
+<i>399</i>&nbsp;                for (int i = rasbeg; i &lt; rasend; i++, off++) {
+<i>400</i>&nbsp;                    byte pixel = rasline[i];
+<i>401</i>&nbsp;                    if ((pixel &amp; 0xff) == trans_pixel) {
+<i>402</i>&nbsp;                        rasline[i] = saved_image[off];
+<i>403</i>&nbsp;                    } else if (save) {
+<i>404</i>&nbsp;                        saved_image[off] = pixel;
+<i>405</i>&nbsp;                    }
+<i>406</i>&nbsp;                }
+<i>407</i>&nbsp;            } else {
+<i>408</i>&nbsp;                // We have to do this the hard way - only transmit
+<i>409</i>&nbsp;                // the non-transparent sections of the line...
+<i>410</i>&nbsp;                // Fix for 6301050: the interlacing is ignored in this case
+<i>411</i>&nbsp;                // in order to avoid artefacts in case of animated images.
+<i>412</i>&nbsp;                int runstart = -1;
+<i>413</i>&nbsp;                int count = 1;
+<i>414</i>&nbsp;                for (int i = rasbeg; i &lt; rasend; i++, off++) {
+<i>415</i>&nbsp;                    byte pixel = rasline[i];
+<i>416</i>&nbsp;                    if ((pixel &amp; 0xff) == trans_pixel) {
+<i>417</i>&nbsp;                        if (runstart &gt;= 0) {
+<i>418</i>&nbsp;                            count = setPixels(x + runstart, y,
+<i>419</i>&nbsp;                                              i - runstart, 1,
+<i>420</i>&nbsp;                                              model, rasline,
+<i>421</i>&nbsp;                                              runstart, 0);
+<i>422</i>&nbsp;                            if (count == 0) {
+<i>423</i>&nbsp;                                break;
+<i>424</i>&nbsp;                            }
+<i>425</i>&nbsp;                        }
+<i>426</i>&nbsp;                        runstart = -1;
+<i>427</i>&nbsp;                    } else {
+<i>428</i>&nbsp;                        if (runstart &lt; 0) {
+<i>429</i>&nbsp;                            runstart = i;
+<i>430</i>&nbsp;                        }
+<i>431</i>&nbsp;                        if (save) {
+<i>432</i>&nbsp;                            saved_image[off] = pixel;
+<i>433</i>&nbsp;                        }
+<i>434</i>&nbsp;                    }
+<i>435</i>&nbsp;                }
+<i>436</i>&nbsp;                if (runstart &gt;= 0) {
+<i>437</i>&nbsp;                    count = setPixels(x + runstart, y,
+<i>438</i>&nbsp;                                      rasend - runstart, 1,
+<i>439</i>&nbsp;                                      model, rasline,
+<i>440</i>&nbsp;                                      runstart, 0);
+<i>441</i>&nbsp;                }
+<i>442</i>&nbsp;                return count;
+<i>443</i>&nbsp;            }
+<i>444</i>&nbsp;        } else if (save) {
+<i>445</i>&nbsp;            System.arraycopy(rasline, rasbeg, saved_image, off, width);
+<i>446</i>&nbsp;        }
+<i>447</i>&nbsp;        int count = setPixels(x2, y, width, height, model,
+<i>448</i>&nbsp;                              rasline, rasbeg, 0);
+<i>449</i>&nbsp;        return count;
+<i>450</i>&nbsp;    }
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;    /**
+<i>453</i>&nbsp;     * Read Image data
+<i>454</i>&nbsp;     */
+<i>455</i>&nbsp;    private boolean readImage(boolean first, int disposal_method, int delay)
+<i>456</i>&nbsp;        throws IOException
+<i>457</i>&nbsp;    {
+<i>458</i>&nbsp;        if (curframe != null &amp;&amp; !curframe.dispose()) {
+<i>459</i>&nbsp;            abort();
+<i>460</i>&nbsp;            return false;
+<i>461</i>&nbsp;        }
+<i>462</i>&nbsp;
+<i>463</i>&nbsp;        long tm = 0;
+<i>464</i>&nbsp;
+<i>465</i>&nbsp;        if (verbose) {
+<i>466</i>&nbsp;            tm = System.currentTimeMillis();
+<i>467</i>&nbsp;        }
+<i>468</i>&nbsp;
+<i>469</i>&nbsp;        // Allocate the buffer
+<i>470</i>&nbsp;        byte block[] = new byte[256 + 3];
+<i>471</i>&nbsp;
+<i>472</i>&nbsp;        // Read the image descriptor
+<i>473</i>&nbsp;        if (readBytes(block, 0, 10) != 0) {
+<i>474</i>&nbsp;            throw new IOException();
+<i>475</i>&nbsp;        }
+<i>476</i>&nbsp;        int x = ExtractWord(block, 0);
+<i>477</i>&nbsp;        int y = ExtractWord(block, 2);
+<i>478</i>&nbsp;        int width = ExtractWord(block, 4);
+<i>479</i>&nbsp;        int height = ExtractWord(block, 6);
+<i>480</i>&nbsp;
+<i>481</i>&nbsp;        /*
+<i>482</i>&nbsp;         * Majority of gif images have
+<i>483</i>&nbsp;         * same logical screen and frame dimensions.
+<i>484</i>&nbsp;         * Also, Photoshop and Mozilla seem to use the logical
+<i>485</i>&nbsp;         * screen dimension (from the global stream header)
+<i>486</i>&nbsp;         * if frame dimension is invalid.
+<i>487</i>&nbsp;         *
+<i>488</i>&nbsp;         * We use similar heuristic and trying to recover
+<i>489</i>&nbsp;         * frame width from logical screen dimension and
+<i>490</i>&nbsp;         * frame offset.
+<i>491</i>&nbsp;         */
+<i>492</i>&nbsp;        if (width == 0 &amp;&amp; global_width != 0) {
+<i>493</i>&nbsp;            width = global_width - x;
+<i>494</i>&nbsp;        }
+<i>495</i>&nbsp;        if (height == 0 &amp;&amp; global_height != 0) {
+<i>496</i>&nbsp;            height = global_height - y;
+<i>497</i>&nbsp;        }
+<i>498</i>&nbsp;
+<i>499</i>&nbsp;        boolean interlace = (block[8] &amp; INTERLACEMASK) != 0;
+<i>500</i>&nbsp;
+<i>501</i>&nbsp;        IndexColorModel model = global_model;
+<i>502</i>&nbsp;
+<i>503</i>&nbsp;        if ((block[8] &amp; COLORMAPMASK) != 0) {
+<i>504</i>&nbsp;            // We read one extra byte above so now when we must
+<i>505</i>&nbsp;            // transfer that byte as the first colormap byte
+<i>506</i>&nbsp;            // and manually read the code size when we are done
+<i>507</i>&nbsp;            int num_local_colors = 1 &lt;&lt; ((block[8] &amp; 0x7) + 1);
+<i>508</i>&nbsp;
+<i>509</i>&nbsp;            // Read local colors
+<i>510</i>&nbsp;            byte[] local_colormap = new byte[num_local_colors * 3];
+<i>511</i>&nbsp;            local_colormap[0] = block[9];
+<i>512</i>&nbsp;            if (readBytes(local_colormap, 1, num_local_colors * 3 - 1) != 0) {
+<i>513</i>&nbsp;                throw new IOException();
+<i>514</i>&nbsp;            }
+<i>515</i>&nbsp;
+<i>516</i>&nbsp;            // Now read the &quot;real&quot; code size byte which follows
+<i>517</i>&nbsp;            // the local color table
+<i>518</i>&nbsp;            if (readBytes(block, 9, 1) != 0) {
+<i>519</i>&nbsp;                throw new IOException();
+<i>520</i>&nbsp;            }
+<i>521</i>&nbsp;            if (trans_pixel &gt;= num_local_colors) {
+<i>522</i>&nbsp;                // Fix for 4233748: extend colormap to contain transparent pixel
+<i>523</i>&nbsp;                num_local_colors = trans_pixel + 1;
+<i>524</i>&nbsp;                local_colormap = grow_colormap(local_colormap, num_local_colors);
+<i>525</i>&nbsp;            }
+<i>526</i>&nbsp;            model = new IndexColorModel(8, num_local_colors, local_colormap,
+<i>527</i>&nbsp;                                        0, false, trans_pixel);
+<i>528</i>&nbsp;        } else if (model == null
+<i>529</i>&nbsp;                   || trans_pixel != model.getTransparentPixel()) {
+<i>530</i>&nbsp;            if (trans_pixel &gt;= num_global_colors) {
+<i>531</i>&nbsp;                // Fix for 4233748: extend colormap to contain transparent pixel
+<i>532</i>&nbsp;                num_global_colors = trans_pixel + 1;
+<i>533</i>&nbsp;                global_colormap = grow_colormap(global_colormap, num_global_colors);
+<i>534</i>&nbsp;            }
+<i>535</i>&nbsp;            model = new IndexColorModel(8, num_global_colors, global_colormap,
+<i>536</i>&nbsp;                                        0, false, trans_pixel);
+<i>537</i>&nbsp;            global_model = model;
+<i>538</i>&nbsp;        }
+<i>539</i>&nbsp;
+<i>540</i>&nbsp;        // Notify the consumers
+<i>541</i>&nbsp;        if (first) {
+<i>542</i>&nbsp;            if (global_width == 0) global_width = width;
+<i>543</i>&nbsp;            if (global_height == 0) global_height = height;
+<i>544</i>&nbsp;
+<i>545</i>&nbsp;            setDimensions(global_width, global_height);
+<i>546</i>&nbsp;            setProperties(props);
+<i>547</i>&nbsp;            setColorModel(model);
+<i>548</i>&nbsp;            headerComplete();
+<i>549</i>&nbsp;        }
+<i>550</i>&nbsp;
+<i>551</i>&nbsp;        if (disposal_method == GifFrame.DISPOSAL_SAVE &amp;&amp; saved_image == null) {
+<i>552</i>&nbsp;            saved_image = new byte[global_width * global_height];
+<i>553</i>&nbsp;            /*
+<i>554</i>&nbsp;             * If height of current image is smaller than the global height,
+<i>555</i>&nbsp;             * fill the gap with transparent pixels.
+<i>556</i>&nbsp;             */
+<i>557</i>&nbsp;            if ((height &lt; global_height) &amp;&amp; (model != null)) {
+<i>558</i>&nbsp;                byte tpix = (byte)model.getTransparentPixel();
+<i>559</i>&nbsp;                if (tpix &gt;= 0) {
+<i>560</i>&nbsp;                    byte trans_rasline[] = new byte[global_width];
+<i>561</i>&nbsp;                    for (int i=0; i&lt;global_width;i++) {
+<i>562</i>&nbsp;                        trans_rasline[i] = tpix;
+<i>563</i>&nbsp;                    }
+<i>564</i>&nbsp;
+<i>565</i>&nbsp;                    setPixels(0, 0, global_width, y,
+<i>566</i>&nbsp;                              model, trans_rasline, 0, 0);
+<i>567</i>&nbsp;                    setPixels(0, y+height, global_width,
+<i>568</i>&nbsp;                              global_height-height-y, model, trans_rasline,
+<i>569</i>&nbsp;                              0, 0);
+<i>570</i>&nbsp;                }
+<i>571</i>&nbsp;            }
+<i>572</i>&nbsp;        }
+<i>573</i>&nbsp;
+<i>574</i>&nbsp;        int hints = (interlace ? interlaceflags : normalflags);
+<i>575</i>&nbsp;        setHints(hints);
+<i>576</i>&nbsp;
+<i>577</i>&nbsp;        curframe = new GifFrame(this, disposal_method, delay,
+<i>578</i>&nbsp;                                (curframe == null), model,
+<i>579</i>&nbsp;                                x, y, width, height);
+<i>580</i>&nbsp;
+<i>581</i>&nbsp;        // allocate the raster data
+<i>582</i>&nbsp;        byte rasline[] = new byte[width];
+<i>583</i>&nbsp;
+<i>584</i>&nbsp;        if (verbose) {
+<i>585</i>&nbsp;            System.out.print(&quot;Reading a &quot; + width + &quot; by &quot; + height + &quot; &quot; +
+<i>586</i>&nbsp;                      (interlace ? &quot;&quot; : &quot;non-&quot;) + &quot;interlaced image...&quot;);
+<i>587</i>&nbsp;        }
+<i>588</i>&nbsp;        int initCodeSize = ExtractByte(block, 9);
+<i>589</i>&nbsp;        if (initCodeSize &gt;= 12) {
+<i>590</i>&nbsp;            if (verbose) {
+<i>591</i>&nbsp;                System.out.println(&quot;Invalid initial code size: &quot; +
+<i>592</i>&nbsp;                                   initCodeSize);
+<i>593</i>&nbsp;            }
+<i>594</i>&nbsp;            return false;
+<i>595</i>&nbsp;        }
+<i>596</i>&nbsp;        boolean ret = parseImage(x, y, width, height,
+<i>597</i>&nbsp;                                 interlace, initCodeSize,
+<i>598</i>&nbsp;                                 block, rasline, model);
+<i>599</i>&nbsp;
+<i>600</i>&nbsp;        if (!ret) {
+<i>601</i>&nbsp;            abort();
+<i>602</i>&nbsp;        }
+<i>603</i>&nbsp;
+<i>604</i>&nbsp;        if (verbose) {
+<i>605</i>&nbsp;            System.out.println(&quot;done in &quot;
+<i>606</i>&nbsp;                               + (System.currentTimeMillis() - tm)
+<i>607</i>&nbsp;                               + &quot;ms&quot;);
+<i>608</i>&nbsp;        }
+<i>609</i>&nbsp;
+<i>610</i>&nbsp;        return ret;
+<i>611</i>&nbsp;    }
+<i>612</i>&nbsp;
+<i>613</i>&nbsp;    public static byte[] grow_colormap(byte[] colormap, int newlen) {
+<i>614</i>&nbsp;        byte[] newcm = new byte[newlen * 3];
+<i>615</i>&nbsp;        System.arraycopy(colormap, 0, newcm, 0, colormap.length);
+<i>616</i>&nbsp;        return newcm;
+<i>617</i>&nbsp;    }
+<i>618</i>&nbsp;}
+<i>619</i>&nbsp;
+<i>620</i>&nbsp;class GifFrame {
+<i>621</i>&nbsp;    private static final boolean verbose = false;
+<i>622</i>&nbsp;
+<i>623</i>&nbsp;    static final int DISPOSAL_NONE      = 0x00;
+<i>624</i>&nbsp;    static final int DISPOSAL_SAVE      = 0x01;
+<i>625</i>&nbsp;    static final int DISPOSAL_BGCOLOR   = 0x02;
+<i>626</i>&nbsp;    static final int DISPOSAL_PREVIOUS  = 0x03;
+<i>627</i>&nbsp;
+<i>628</i>&nbsp;    GifImageDecoder decoder;
+<i>629</i>&nbsp;
+<i>630</i>&nbsp;    int disposal_method;
+<i>631</i>&nbsp;    int delay;
+<i>632</i>&nbsp;
+<i>633</i>&nbsp;    IndexColorModel model;
+<i>634</i>&nbsp;
+<i>635</i>&nbsp;    int x;
+<i>636</i>&nbsp;    int y;
+<i>637</i>&nbsp;    int width;
+<i>638</i>&nbsp;    int height;
+<i>639</i>&nbsp;
+<i>640</i>&nbsp;    boolean initialframe;
+<i>641</i>&nbsp;
+<i>642</i>&nbsp;    public GifFrame(GifImageDecoder id, int dm, int dl, boolean init,
+<i>643</i>&nbsp;                    IndexColorModel cm, int x, int y, int w, int h) {
+<b class="nc"><i>644</i>&nbsp;        this.decoder = id;</b>
+<b class="nc"><i>645</i>&nbsp;        this.disposal_method = dm;</b>
+<b class="nc"><i>646</i>&nbsp;        this.delay = dl;</b>
+<b class="nc"><i>647</i>&nbsp;        this.model = cm;</b>
+<b class="nc"><i>648</i>&nbsp;        this.initialframe = init;</b>
+<b class="nc"><i>649</i>&nbsp;        this.x = x;</b>
+<b class="nc"><i>650</i>&nbsp;        this.y = y;</b>
+<b class="nc"><i>651</i>&nbsp;        this.width = w;</b>
+<b class="nc"><i>652</i>&nbsp;        this.height = h;</b>
+<b class="nc"><i>653</i>&nbsp;    }</b>
+<i>654</i>&nbsp;
+<i>655</i>&nbsp;    private void setPixels(int x, int y, int w, int h,
+<i>656</i>&nbsp;                           ColorModel cm, byte[] pix, int off, int scan) {
+<i>657</i>&nbsp;        decoder.setPixels(x, y, w, h, cm, pix, off, scan);
+<b class="nc"><i>658</i>&nbsp;    }</b>
+<i>659</i>&nbsp;
+<i>660</i>&nbsp;    public boolean dispose() {
+<i>661</i>&nbsp;        if (decoder.imageComplete(ImageConsumer.SINGLEFRAMEDONE, false) == 0) {
+<b class="nc"><i>662</i>&nbsp;            return false;</b>
+<b class="nc"><i>663</i>&nbsp;        } else {</b>
+<i>664</i>&nbsp;            if (delay &gt; 0) {
+<b class="nc"><i>665</i>&nbsp;                try {</b>
+<i>666</i>&nbsp;                    if (verbose) {
+<i>667</i>&nbsp;                        System.out.println(&quot;sleeping: &quot;+delay);
+<i>668</i>&nbsp;                    }
+<i>669</i>&nbsp;                    Thread.sleep(delay);
+<b class="nc"><i>670</i>&nbsp;                } catch (InterruptedException e) {</b>
+<b class="nc"><i>671</i>&nbsp;                    return false;</b>
+<b class="nc"><i>672</i>&nbsp;                }</b>
+<b class="nc"><i>673</i>&nbsp;            } else {</b>
+<i>674</i>&nbsp;                Thread.yield();
+<b class="nc"><i>675</i>&nbsp;            }</b>
+<i>676</i>&nbsp;
+<i>677</i>&nbsp;            if (verbose &amp;&amp; disposal_method != 0) {
+<i>678</i>&nbsp;                System.out.println(&quot;disposal method: &quot;+disposal_method);
+<i>679</i>&nbsp;            }
+<i>680</i>&nbsp;
+<i>681</i>&nbsp;            int global_width = decoder.global_width;
+<b class="nc"><i>682</i>&nbsp;            int global_height = decoder.global_height;</b>
+<b class="nc"><i>683</i>&nbsp;</b>
+<i>684</i>&nbsp;            if (x &lt; 0) {
+<b class="nc"><i>685</i>&nbsp;                width += x;</b>
+<b class="nc"><i>686</i>&nbsp;                x = 0;</b>
+<b class="nc"><i>687</i>&nbsp;            }</b>
+<i>688</i>&nbsp;            if (x + width &gt; global_width) {
+<b class="nc"><i>689</i>&nbsp;                width = global_width - x;</b>
+<b class="nc"><i>690</i>&nbsp;            }</b>
+<i>691</i>&nbsp;            if (width &lt;= 0) {
+<b class="nc"><i>692</i>&nbsp;                disposal_method = DISPOSAL_NONE;</b>
+<b class="nc"><i>693</i>&nbsp;            } else {</b>
+<i>694</i>&nbsp;                if (y &lt; 0) {
+<b class="nc"><i>695</i>&nbsp;                    height += y;</b>
+<b class="nc"><i>696</i>&nbsp;                    y = 0;</b>
+<b class="nc"><i>697</i>&nbsp;                }</b>
+<i>698</i>&nbsp;                if (y + height &gt; global_height) {
+<b class="nc"><i>699</i>&nbsp;                    height = global_height - y;</b>
+<b class="nc"><i>700</i>&nbsp;                }</b>
+<i>701</i>&nbsp;                if (height &lt;= 0) {
+<b class="nc"><i>702</i>&nbsp;                    disposal_method = DISPOSAL_NONE;</b>
+<b class="nc"><i>703</i>&nbsp;                }</b>
+<i>704</i>&nbsp;            }
+<i>705</i>&nbsp;
+<i>706</i>&nbsp;            switch (disposal_method) {
+<b class="nc"><i>707</i>&nbsp;            case DISPOSAL_PREVIOUS:</b>
+<i>708</i>&nbsp;                byte[] saved_image = decoder.saved_image;
+<b class="nc"><i>709</i>&nbsp;                IndexColorModel saved_model = decoder.saved_model;</b>
+<b class="nc"><i>710</i>&nbsp;                if (saved_image != null) {</b>
+<b class="nc"><i>711</i>&nbsp;                    setPixels(x, y, width, height,</b>
+<b class="nc"><i>712</i>&nbsp;                              saved_model, saved_image,</b>
+<i>713</i>&nbsp;                              y * global_width + x, global_width);
+<i>714</i>&nbsp;                }
+<i>715</i>&nbsp;                break;
+<i>716</i>&nbsp;            case DISPOSAL_BGCOLOR:
+<i>717</i>&nbsp;                byte tpix;
+<i>718</i>&nbsp;                if (model.getTransparentPixel() &lt; 0) {
+<b class="nc"><i>719</i>&nbsp;                    tpix = 0;</b>
+<b class="nc"><i>720</i>&nbsp;                } else {</b>
+<b class="nc"><i>721</i>&nbsp;                    tpix = (byte) model.getTransparentPixel();</b>
+<b class="nc"><i>722</i>&nbsp;                }</b>
+<i>723</i>&nbsp;                byte[] rasline = new byte[width];
+<b class="nc"><i>724</i>&nbsp;                if (tpix != 0) {</b>
+<i>725</i>&nbsp;                    for (int i = 0; i &lt; width; i++) {
+<b class="nc"><i>726</i>&nbsp;                        rasline[i] = tpix;</b>
+<i>727</i>&nbsp;                    }
+<b class="nc"><i>728</i>&nbsp;                }</b>
+<i>729</i>&nbsp;
+<b class="nc"><i>730</i>&nbsp;                // clear saved_image using transparent pixels</b>
+<b class="nc"><i>731</i>&nbsp;                // this will be used as the background in the next display</b>
+<b class="nc"><i>732</i>&nbsp;                if( decoder.saved_image != null ) {</b>
+<b class="nc"><i>733</i>&nbsp;                    for( int i = 0; i &lt; global_width * global_height; i ++ )</b>
+<i>734</i>&nbsp;                        decoder.saved_image[i] = tpix;
+<i>735</i>&nbsp;                }
+<i>736</i>&nbsp;
+<i>737</i>&nbsp;                setPixels(x, y, width, height, model, rasline, 0, 0);
+<i>738</i>&nbsp;                break;
+<b class="nc"><i>739</i>&nbsp;            case DISPOSAL_SAVE:</b>
+<b class="nc"><i>740</i>&nbsp;                decoder.saved_model = model;</b>
+<b class="nc"><i>741</i>&nbsp;                break;</b>
+<i>742</i>&nbsp;            }
+<i>743</i>&nbsp;        }
+<b class="nc"><i>744</i>&nbsp;        return true;</b>
+<b class="nc"><i>745</i>&nbsp;    }</b>
+<i>746</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,2756 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: SourceClass</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.javac</a> ]
+</div>
+
+<h1>Coverage Summary for Class: SourceClass (sun.tools.javac)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SourceClass</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 39)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1124)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1994, 2014, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.javac;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import sun.tools.java.*;
+<i>29</i>&nbsp;import sun.tools.tree.*;
+<i>30</i>&nbsp;import sun.tools.tree.CompoundStatement;
+<i>31</i>&nbsp;import sun.tools.asm.Assembler;
+<i>32</i>&nbsp;import sun.tools.asm.ConstantPool;
+<i>33</i>&nbsp;import java.util.Vector;
+<i>34</i>&nbsp;import java.util.Enumeration;
+<i>35</i>&nbsp;import java.util.Hashtable;
+<i>36</i>&nbsp;import java.util.Iterator;
+<i>37</i>&nbsp;import java.io.IOException;
+<i>38</i>&nbsp;import java.io.OutputStream;
+<i>39</i>&nbsp;import java.io.DataOutputStream;
+<i>40</i>&nbsp;import java.io.ByteArrayOutputStream;
+<i>41</i>&nbsp;import java.io.File;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;/**
+<i>44</i>&nbsp; * This class represents an Java class as it is read from
+<i>45</i>&nbsp; * an Java source file.
+<i>46</i>&nbsp; *
+<i>47</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>48</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>49</i>&nbsp; * they are subject to change or removal without notice.
+<i>50</i>&nbsp; */
+<i>51</i>&nbsp;@Deprecated
+<i>52</i>&nbsp;public
+<i>53</i>&nbsp;class SourceClass extends ClassDefinition {
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    /**
+<i>56</i>&nbsp;     * The toplevel environment, shared with the parser
+<i>57</i>&nbsp;     */
+<i>58</i>&nbsp;    Environment toplevelEnv;
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    /**
+<i>61</i>&nbsp;     * The default constructor
+<i>62</i>&nbsp;     */
+<i>63</i>&nbsp;    SourceMember defConstructor;
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    /**
+<i>66</i>&nbsp;     * The constant pool
+<i>67</i>&nbsp;     */
+<b class="nc"><i>68</i>&nbsp;    ConstantPool tab = new ConstantPool();</b>
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;   /**
+<i>71</i>&nbsp;     * The list of class dependencies
+<i>72</i>&nbsp;     */
+<b class="nc"><i>73</i>&nbsp;    Hashtable&lt;ClassDeclaration, ClassDeclaration&gt; deps = new Hashtable&lt;&gt;(11);</b>
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    /**
+<i>76</i>&nbsp;     * The field used to represent &quot;this&quot; in all of my code.
+<i>77</i>&nbsp;     */
+<i>78</i>&nbsp;    LocalMember thisArg;
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;    /**
+<i>81</i>&nbsp;     * Last token of class, as reported by parser.
+<i>82</i>&nbsp;     */
+<i>83</i>&nbsp;    long endPosition;
+<i>84</i>&nbsp;
+<i>85</i>&nbsp;    /**
+<i>86</i>&nbsp;     * Access methods for constructors are distinguished from
+<i>87</i>&nbsp;     * the constructors themselves by a dummy first argument.
+<i>88</i>&nbsp;     * A unique type used for this purpose and shared by all
+<i>89</i>&nbsp;     * constructor access methods within a package-member class is
+<i>90</i>&nbsp;     * maintained here.
+<i>91</i>&nbsp;     * &lt;p&gt;
+<i>92</i>&nbsp;     * This field is null except in an outermost class containing
+<i>93</i>&nbsp;     * one or more classes needing such an access method.
+<i>94</i>&nbsp;     */
+<b class="nc"><i>95</i>&nbsp;    private Type dummyArgumentType = null;</b>
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    /**
+<i>98</i>&nbsp;     * Constructor
+<i>99</i>&nbsp;     */
+<i>100</i>&nbsp;    public SourceClass(Environment env, long where,
+<i>101</i>&nbsp;                       ClassDeclaration declaration, String documentation,
+<i>102</i>&nbsp;                       int modifiers, IdentifierToken superClass,
+<i>103</i>&nbsp;                       IdentifierToken interfaces[],
+<i>104</i>&nbsp;                       SourceClass outerClass, Identifier localName) {
+<b class="nc"><i>105</i>&nbsp;        super(env.getSource(), where,</b>
+<i>106</i>&nbsp;              declaration, modifiers, superClass, interfaces);
+<b class="nc"><i>107</i>&nbsp;        setOuterClass(outerClass);</b>
+<i>108</i>&nbsp;
+<b class="nc"><i>109</i>&nbsp;        this.toplevelEnv = env;</b>
+<b class="nc"><i>110</i>&nbsp;        this.documentation = documentation;</b>
+<i>111</i>&nbsp;
+<b class="nc"><i>112</i>&nbsp;        if (ClassDefinition.containsDeprecated(documentation)) {</b>
+<b class="nc"><i>113</i>&nbsp;            this.modifiers |= M_DEPRECATED;</b>
+<i>114</i>&nbsp;        }
+<i>115</i>&nbsp;
+<i>116</i>&nbsp;        // Check for a package level class which is declared static.
+<b class="nc"><i>117</i>&nbsp;        if (isStatic() &amp;&amp; outerClass == null) {</b>
+<b class="nc"><i>118</i>&nbsp;            env.error(where, &quot;static.class&quot;, this);</b>
+<b class="nc"><i>119</i>&nbsp;            this.modifiers &amp;=~ M_STATIC;</b>
+<i>120</i>&nbsp;        }
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;        // Inner classes cannot be static, nor can they be interfaces
+<i>123</i>&nbsp;        // (which are implicitly static).  Static classes and interfaces
+<i>124</i>&nbsp;        // can only occur as top-level entities.
+<i>125</i>&nbsp;        //
+<i>126</i>&nbsp;        // Note that we do not have to check for local classes declared
+<i>127</i>&nbsp;        // to be static (this is currently caught by the parser) but
+<i>128</i>&nbsp;        // we check anyway in case the parser is modified to allow this.
+<b class="nc"><i>129</i>&nbsp;        if (isLocal() || (outerClass != null &amp;&amp; !outerClass.isTopLevel())) {</b>
+<b class="nc"><i>130</i>&nbsp;            if (isInterface()) {</b>
+<b class="nc"><i>131</i>&nbsp;                env.error(where, &quot;inner.interface&quot;);</b>
+<b class="nc"><i>132</i>&nbsp;            } else if (isStatic()) {</b>
+<b class="nc"><i>133</i>&nbsp;                env.error(where, &quot;static.inner.class&quot;, this);</b>
+<b class="nc"><i>134</i>&nbsp;                this.modifiers &amp;=~ M_STATIC;</b>
+<b class="nc"><i>135</i>&nbsp;                if (innerClassMember != null) {</b>
+<b class="nc"><i>136</i>&nbsp;                    innerClassMember.subModifiers(M_STATIC);</b>
+<i>137</i>&nbsp;                }
+<i>138</i>&nbsp;            }
+<i>139</i>&nbsp;        }
+<i>140</i>&nbsp;
+<b class="nc"><i>141</i>&nbsp;        if (isPrivate() &amp;&amp; outerClass == null) {</b>
+<b class="nc"><i>142</i>&nbsp;            env.error(where, &quot;private.class&quot;, this);</b>
+<b class="nc"><i>143</i>&nbsp;            this.modifiers &amp;=~ M_PRIVATE;</b>
+<i>144</i>&nbsp;        }
+<b class="nc"><i>145</i>&nbsp;        if (isProtected() &amp;&amp; outerClass == null) {</b>
+<b class="nc"><i>146</i>&nbsp;            env.error(where, &quot;protected.class&quot;, this);</b>
+<b class="nc"><i>147</i>&nbsp;            this.modifiers &amp;=~ M_PROTECTED;</b>
+<i>148</i>&nbsp;        }
+<i>149</i>&nbsp;        /*----*
+<i>150</i>&nbsp;        if ((isPublic() || isProtected()) &amp;&amp; isInsideLocal()) {
+<i>151</i>&nbsp;            env.error(where, &quot;warn.public.local.class&quot;, this);
+<i>152</i>&nbsp;        }
+<i>153</i>&nbsp;         *----*/
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;        // maybe define an uplevel &quot;A.this&quot; current instance field
+<b class="nc"><i>156</i>&nbsp;        if (!isTopLevel() &amp;&amp; !isLocal()) {</b>
+<b class="nc"><i>157</i>&nbsp;            LocalMember outerArg = outerClass.getThisArgument();</b>
+<b class="nc"><i>158</i>&nbsp;            UplevelReference r = getReference(outerArg);</b>
+<b class="nc"><i>159</i>&nbsp;            setOuterMember(r.getLocalField(env));</b>
+<i>160</i>&nbsp;        }
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;        // Set simple, unmangled local name for a local or anonymous class.
+<i>163</i>&nbsp;        // NOTE: It would be OK to do this unconditionally, as null is the
+<i>164</i>&nbsp;        // correct value for a member (non-local) class.
+<b class="nc"><i>165</i>&nbsp;        if (localName != null)</b>
+<b class="nc"><i>166</i>&nbsp;            setLocalName(localName);</b>
+<i>167</i>&nbsp;
+<i>168</i>&nbsp;        // Check for inner class with same simple name as one of
+<i>169</i>&nbsp;        // its enclosing classes.  Note that &#39;getLocalName&#39; returns
+<i>170</i>&nbsp;        // the simple, unmangled source-level name of any class.
+<i>171</i>&nbsp;        // The previous version of this code was not careful to avoid
+<i>172</i>&nbsp;        // mangled local class names.  This version fixes 4047746.
+<b class="nc"><i>173</i>&nbsp;        Identifier thisName = getLocalName();</b>
+<b class="nc"><i>174</i>&nbsp;        if (thisName != idNull) {</b>
+<i>175</i>&nbsp;            // Test above suppresses error for nested anonymous classes,
+<i>176</i>&nbsp;            // which have an internal &quot;name&quot;, but are not named in source code.
+<b class="nc"><i>177</i>&nbsp;            for (ClassDefinition scope = outerClass; scope != null;</b>
+<b class="nc"><i>178</i>&nbsp;                  scope = scope.getOuterClass()) {</b>
+<b class="nc"><i>179</i>&nbsp;                Identifier outerName = scope.getLocalName();</b>
+<b class="nc"><i>180</i>&nbsp;                if (thisName.equals(outerName))</b>
+<b class="nc"><i>181</i>&nbsp;                    env.error(where, &quot;inner.redefined&quot;, thisName);</b>
+<i>182</i>&nbsp;            }
+<i>183</i>&nbsp;        }
+<i>184</i>&nbsp;    }
+<i>185</i>&nbsp;
+<i>186</i>&nbsp;    /**
+<i>187</i>&nbsp;     * Return last position in this class.
+<i>188</i>&nbsp;     * @see #getWhere
+<i>189</i>&nbsp;     */
+<i>190</i>&nbsp;    public long getEndPosition() {
+<b class="nc"><i>191</i>&nbsp;        return endPosition;</b>
+<i>192</i>&nbsp;    }
+<i>193</i>&nbsp;
+<i>194</i>&nbsp;    public void setEndPosition(long endPosition) {
+<b class="nc"><i>195</i>&nbsp;        this.endPosition = endPosition;</b>
+<i>196</i>&nbsp;    }
+<i>197</i>&nbsp;
+<i>198</i>&nbsp;
+<i>199</i>&nbsp;// JCOV
+<i>200</i>&nbsp;    /**
+<i>201</i>&nbsp;     * Return absolute name of source file
+<i>202</i>&nbsp;     */
+<i>203</i>&nbsp;    public String getAbsoluteName() {
+<b class="nc"><i>204</i>&nbsp;        String AbsName = ((ClassFile)getSource()).getAbsoluteName();</b>
+<i>205</i>&nbsp;
+<b class="nc"><i>206</i>&nbsp;        return AbsName;</b>
+<i>207</i>&nbsp;    }
+<i>208</i>&nbsp;//end JCOV
+<i>209</i>&nbsp;
+<i>210</i>&nbsp;    /**
+<i>211</i>&nbsp;     * Return imports
+<i>212</i>&nbsp;     */
+<i>213</i>&nbsp;    public Imports getImports() {
+<b class="nc"><i>214</i>&nbsp;        return toplevelEnv.getImports();</b>
+<i>215</i>&nbsp;    }
+<i>216</i>&nbsp;
+<i>217</i>&nbsp;    /**
+<i>218</i>&nbsp;     * Find or create my &quot;this&quot; argument, which is used for all methods.
+<i>219</i>&nbsp;     */
+<i>220</i>&nbsp;    public LocalMember getThisArgument() {
+<b class="nc"><i>221</i>&nbsp;        if (thisArg == null) {</b>
+<b class="nc"><i>222</i>&nbsp;            thisArg = new LocalMember(where, this, 0, getType(), idThis);</b>
+<i>223</i>&nbsp;        }
+<b class="nc"><i>224</i>&nbsp;        return thisArg;</b>
+<i>225</i>&nbsp;    }
+<i>226</i>&nbsp;
+<i>227</i>&nbsp;    /**
+<i>228</i>&nbsp;     * Add a dependency
+<i>229</i>&nbsp;     */
+<i>230</i>&nbsp;    public void addDependency(ClassDeclaration c) {
+<b class="nc"><i>231</i>&nbsp;        if (tab != null) {</b>
+<b class="nc"><i>232</i>&nbsp;            tab.put(c);</b>
+<i>233</i>&nbsp;        }
+<i>234</i>&nbsp;        // If doing -xdepend option, save away list of class dependencies
+<i>235</i>&nbsp;        //   making sure to NOT include duplicates or the class we are in
+<i>236</i>&nbsp;        //   (Hashtable&#39;s put() makes sure we don&#39;t have duplicates)
+<b class="nc"><i>237</i>&nbsp;        if ( toplevelEnv.print_dependencies() &amp;&amp; c != getClassDeclaration() ) {</b>
+<b class="nc"><i>238</i>&nbsp;            deps.put(c,c);</b>
+<i>239</i>&nbsp;        }
+<i>240</i>&nbsp;    }
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;    /**
+<i>243</i>&nbsp;     * Add a field (check it first)
+<i>244</i>&nbsp;     */
+<i>245</i>&nbsp;    public void addMember(Environment env, MemberDefinition f) {
+<i>246</i>&nbsp;        // Make sure the access permissions are self-consistent:
+<b class="nc"><i>247</i>&nbsp;        switch (f.getModifiers() &amp; (M_PUBLIC | M_PRIVATE | M_PROTECTED)) {</b>
+<i>248</i>&nbsp;        case M_PUBLIC:
+<i>249</i>&nbsp;        case M_PRIVATE:
+<i>250</i>&nbsp;        case M_PROTECTED:
+<i>251</i>&nbsp;        case 0:
+<b class="nc"><i>252</i>&nbsp;            break;</b>
+<i>253</i>&nbsp;        default:
+<b class="nc"><i>254</i>&nbsp;            env.error(f.getWhere(), &quot;inconsistent.modifier&quot;, f);</b>
+<i>255</i>&nbsp;            // Cut out the more restrictive modifier(s):
+<b class="nc"><i>256</i>&nbsp;            if (f.isPublic()) {</b>
+<b class="nc"><i>257</i>&nbsp;                f.subModifiers(M_PRIVATE | M_PROTECTED);</b>
+<i>258</i>&nbsp;            } else {
+<b class="nc"><i>259</i>&nbsp;                f.subModifiers(M_PRIVATE);</b>
+<i>260</i>&nbsp;            }
+<i>261</i>&nbsp;            break;
+<i>262</i>&nbsp;        }
+<i>263</i>&nbsp;
+<i>264</i>&nbsp;        // Note exemption for synthetic members below.
+<b class="nc"><i>265</i>&nbsp;        if (f.isStatic() &amp;&amp; !isTopLevel() &amp;&amp; !f.isSynthetic()) {</b>
+<b class="nc"><i>266</i>&nbsp;            if (f.isMethod()) {</b>
+<b class="nc"><i>267</i>&nbsp;                env.error(f.getWhere(), &quot;static.inner.method&quot;, f, this);</b>
+<b class="nc"><i>268</i>&nbsp;                f.subModifiers(M_STATIC);</b>
+<b class="nc"><i>269</i>&nbsp;            } else if (f.isVariable()) {</b>
+<b class="nc"><i>270</i>&nbsp;                if (!f.isFinal() || f.isBlankFinal()) {</b>
+<b class="nc"><i>271</i>&nbsp;                    env.error(f.getWhere(), &quot;static.inner.field&quot;, f.getName(), this);</b>
+<b class="nc"><i>272</i>&nbsp;                    f.subModifiers(M_STATIC);</b>
+<i>273</i>&nbsp;                }
+<i>274</i>&nbsp;                // Even if a static passes this test, there is still another
+<i>275</i>&nbsp;                // check in &#39;SourceMember.check&#39;.  The check is delayed so
+<i>276</i>&nbsp;                // that the initializer may be inspected more closely, using
+<i>277</i>&nbsp;                // &#39;isConstant()&#39;.  Part of fix for 4095568.
+<i>278</i>&nbsp;            } else {
+<i>279</i>&nbsp;                // Static inner classes are diagnosed in &#39;SourceClass.&lt;init&gt;&#39;.
+<b class="nc"><i>280</i>&nbsp;                f.subModifiers(M_STATIC);</b>
+<i>281</i>&nbsp;            }
+<i>282</i>&nbsp;        }
+<i>283</i>&nbsp;
+<b class="nc"><i>284</i>&nbsp;        if (f.isMethod()) {</b>
+<b class="nc"><i>285</i>&nbsp;            if (f.isConstructor()) {</b>
+<b class="nc"><i>286</i>&nbsp;                if (f.getClassDefinition().isInterface()) {</b>
+<b class="nc"><i>287</i>&nbsp;                    env.error(f.getWhere(), &quot;intf.constructor&quot;);</b>
+<i>288</i>&nbsp;                    return;
+<i>289</i>&nbsp;                }
+<b class="nc"><i>290</i>&nbsp;                if (f.isNative() || f.isAbstract() ||</b>
+<b class="nc"><i>291</i>&nbsp;                      f.isStatic() || f.isSynchronized() || f.isFinal()) {</b>
+<b class="nc"><i>292</i>&nbsp;                    env.error(f.getWhere(), &quot;constr.modifier&quot;, f);</b>
+<b class="nc"><i>293</i>&nbsp;                    f.subModifiers(M_NATIVE | M_ABSTRACT |</b>
+<i>294</i>&nbsp;                                   M_STATIC | M_SYNCHRONIZED | M_FINAL);
+<i>295</i>&nbsp;                }
+<b class="nc"><i>296</i>&nbsp;            } else if (f.isInitializer()) {</b>
+<b class="nc"><i>297</i>&nbsp;                if (f.getClassDefinition().isInterface()) {</b>
+<b class="nc"><i>298</i>&nbsp;                    env.error(f.getWhere(), &quot;intf.initializer&quot;);</b>
+<i>299</i>&nbsp;                    return;
+<i>300</i>&nbsp;                }
+<i>301</i>&nbsp;            }
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;            // f is not allowed to return an array of void
+<b class="nc"><i>304</i>&nbsp;            if ((f.getType().getReturnType()).isVoidArray()) {</b>
+<b class="nc"><i>305</i>&nbsp;                env.error(f.getWhere(), &quot;void.array&quot;);</b>
+<i>306</i>&nbsp;            }
+<i>307</i>&nbsp;
+<b class="nc"><i>308</i>&nbsp;            if (f.getClassDefinition().isInterface() &amp;&amp;</b>
+<b class="nc"><i>309</i>&nbsp;                (f.isStatic() || f.isSynchronized() || f.isNative()</b>
+<b class="nc"><i>310</i>&nbsp;                 || f.isFinal() || f.isPrivate() || f.isProtected())) {</b>
+<b class="nc"><i>311</i>&nbsp;                env.error(f.getWhere(), &quot;intf.modifier.method&quot;, f);</b>
+<b class="nc"><i>312</i>&nbsp;                f.subModifiers(M_STATIC |  M_SYNCHRONIZED | M_NATIVE |</b>
+<i>313</i>&nbsp;                               M_FINAL | M_PRIVATE);
+<i>314</i>&nbsp;            }
+<b class="nc"><i>315</i>&nbsp;            if (f.isTransient()) {</b>
+<b class="nc"><i>316</i>&nbsp;                env.error(f.getWhere(), &quot;transient.meth&quot;, f);</b>
+<b class="nc"><i>317</i>&nbsp;                f.subModifiers(M_TRANSIENT);</b>
+<i>318</i>&nbsp;            }
+<b class="nc"><i>319</i>&nbsp;            if (f.isVolatile()) {</b>
+<b class="nc"><i>320</i>&nbsp;                env.error(f.getWhere(), &quot;volatile.meth&quot;, f);</b>
+<b class="nc"><i>321</i>&nbsp;                f.subModifiers(M_VOLATILE);</b>
+<i>322</i>&nbsp;            }
+<b class="nc"><i>323</i>&nbsp;            if (f.isAbstract()) {</b>
+<b class="nc"><i>324</i>&nbsp;                if (f.isPrivate()) {</b>
+<b class="nc"><i>325</i>&nbsp;                    env.error(f.getWhere(), &quot;abstract.private.modifier&quot;, f);</b>
+<b class="nc"><i>326</i>&nbsp;                    f.subModifiers(M_PRIVATE);</b>
+<i>327</i>&nbsp;                }
+<b class="nc"><i>328</i>&nbsp;                if (f.isStatic()) {</b>
+<b class="nc"><i>329</i>&nbsp;                    env.error(f.getWhere(), &quot;abstract.static.modifier&quot;, f);</b>
+<b class="nc"><i>330</i>&nbsp;                    f.subModifiers(M_STATIC);</b>
+<i>331</i>&nbsp;                }
+<b class="nc"><i>332</i>&nbsp;                if (f.isFinal()) {</b>
+<b class="nc"><i>333</i>&nbsp;                    env.error(f.getWhere(), &quot;abstract.final.modifier&quot;, f);</b>
+<b class="nc"><i>334</i>&nbsp;                    f.subModifiers(M_FINAL);</b>
+<i>335</i>&nbsp;                }
+<b class="nc"><i>336</i>&nbsp;                if (f.isNative()) {</b>
+<b class="nc"><i>337</i>&nbsp;                    env.error(f.getWhere(), &quot;abstract.native.modifier&quot;, f);</b>
+<b class="nc"><i>338</i>&nbsp;                    f.subModifiers(M_NATIVE);</b>
+<i>339</i>&nbsp;                }
+<b class="nc"><i>340</i>&nbsp;                if (f.isSynchronized()) {</b>
+<b class="nc"><i>341</i>&nbsp;                    env.error(f.getWhere(),&quot;abstract.synchronized.modifier&quot;,f);</b>
+<b class="nc"><i>342</i>&nbsp;                    f.subModifiers(M_SYNCHRONIZED);</b>
+<i>343</i>&nbsp;                }
+<i>344</i>&nbsp;            }
+<b class="nc"><i>345</i>&nbsp;            if (f.isAbstract() || f.isNative()) {</b>
+<b class="nc"><i>346</i>&nbsp;                if (f.getValue() != null) {</b>
+<b class="nc"><i>347</i>&nbsp;                    env.error(f.getWhere(), &quot;invalid.meth.body&quot;, f);</b>
+<b class="nc"><i>348</i>&nbsp;                    f.setValue(null);</b>
+<i>349</i>&nbsp;                }
+<i>350</i>&nbsp;            } else {
+<b class="nc"><i>351</i>&nbsp;                if (f.getValue() == null) {</b>
+<b class="nc"><i>352</i>&nbsp;                    if (f.isConstructor()) {</b>
+<b class="nc"><i>353</i>&nbsp;                        env.error(f.getWhere(), &quot;no.constructor.body&quot;, f);</b>
+<i>354</i>&nbsp;                    } else {
+<b class="nc"><i>355</i>&nbsp;                        env.error(f.getWhere(), &quot;no.meth.body&quot;, f);</b>
+<i>356</i>&nbsp;                    }
+<b class="nc"><i>357</i>&nbsp;                    f.addModifiers(M_ABSTRACT);</b>
+<i>358</i>&nbsp;                }
+<i>359</i>&nbsp;            }
+<b class="nc"><i>360</i>&nbsp;            Vector&lt;MemberDefinition&gt; arguments = f.getArguments();</b>
+<b class="nc"><i>361</i>&nbsp;            if (arguments != null) {</b>
+<i>362</i>&nbsp;                // arguments can be null if this is an implicit abstract method
+<b class="nc"><i>363</i>&nbsp;                int argumentLength = arguments.size();</b>
+<b class="nc"><i>364</i>&nbsp;                Type argTypes[] = f.getType().getArgumentTypes();</b>
+<b class="nc"><i>365</i>&nbsp;                for (int i = 0; i &lt; argTypes.length; i++) {</b>
+<b class="nc"><i>366</i>&nbsp;                    Object arg = arguments.elementAt(i);</b>
+<b class="nc"><i>367</i>&nbsp;                    long where = f.getWhere();</b>
+<b class="nc"><i>368</i>&nbsp;                    if (arg instanceof MemberDefinition) {</b>
+<b class="nc"><i>369</i>&nbsp;                        where = ((MemberDefinition)arg).getWhere();</b>
+<b class="nc"><i>370</i>&nbsp;                        arg = ((MemberDefinition)arg).getName();</b>
+<i>371</i>&nbsp;                    }
+<i>372</i>&nbsp;                    // (arg should be an Identifier now)
+<b class="nc"><i>373</i>&nbsp;                    if (argTypes[i].isType(TC_VOID)</b>
+<b class="nc"><i>374</i>&nbsp;                        || argTypes[i].isVoidArray()) {</b>
+<b class="nc"><i>375</i>&nbsp;                        env.error(where, &quot;void.argument&quot;, arg);</b>
+<i>376</i>&nbsp;                    }
+<i>377</i>&nbsp;                }
+<i>378</i>&nbsp;            }
+<b class="nc"><i>379</i>&nbsp;        } else if (f.isInnerClass()) {</b>
+<b class="nc"><i>380</i>&nbsp;            if (f.isVolatile() ||</b>
+<b class="nc"><i>381</i>&nbsp;                f.isTransient() || f.isNative() || f.isSynchronized()) {</b>
+<b class="nc"><i>382</i>&nbsp;                env.error(f.getWhere(), &quot;inner.modifier&quot;, f);</b>
+<b class="nc"><i>383</i>&nbsp;                f.subModifiers(M_VOLATILE | M_TRANSIENT |</b>
+<i>384</i>&nbsp;                               M_NATIVE | M_SYNCHRONIZED);
+<i>385</i>&nbsp;            }
+<i>386</i>&nbsp;            // same check as for fields, below:
+<b class="nc"><i>387</i>&nbsp;            if (f.getClassDefinition().isInterface() &amp;&amp;</b>
+<b class="nc"><i>388</i>&nbsp;                  (f.isPrivate() || f.isProtected())) {</b>
+<b class="nc"><i>389</i>&nbsp;                env.error(f.getWhere(), &quot;intf.modifier.field&quot;, f);</b>
+<b class="nc"><i>390</i>&nbsp;                f.subModifiers(M_PRIVATE | M_PROTECTED);</b>
+<b class="nc"><i>391</i>&nbsp;                f.addModifiers(M_PUBLIC);</b>
+<i>392</i>&nbsp;                // Fix up the class itself to agree with
+<i>393</i>&nbsp;                // the inner-class member.
+<b class="nc"><i>394</i>&nbsp;                ClassDefinition c = f.getInnerClass();</b>
+<b class="nc"><i>395</i>&nbsp;                c.subModifiers(M_PRIVATE | M_PROTECTED);</b>
+<b class="nc"><i>396</i>&nbsp;                c.addModifiers(M_PUBLIC);</b>
+<b class="nc"><i>397</i>&nbsp;            }</b>
+<i>398</i>&nbsp;        } else {
+<b class="nc"><i>399</i>&nbsp;            if (f.getType().isType(TC_VOID) || f.getType().isVoidArray()) {</b>
+<b class="nc"><i>400</i>&nbsp;                env.error(f.getWhere(), &quot;void.inst.var&quot;, f.getName());</b>
+<i>401</i>&nbsp;                // REMIND: set type to error
+<i>402</i>&nbsp;                return;
+<i>403</i>&nbsp;            }
+<i>404</i>&nbsp;
+<b class="nc"><i>405</i>&nbsp;            if (f.isSynchronized() || f.isAbstract() || f.isNative()) {</b>
+<b class="nc"><i>406</i>&nbsp;                env.error(f.getWhere(), &quot;var.modifier&quot;, f);</b>
+<b class="nc"><i>407</i>&nbsp;                f.subModifiers(M_SYNCHRONIZED | M_ABSTRACT | M_NATIVE);</b>
+<i>408</i>&nbsp;            }
+<b class="nc"><i>409</i>&nbsp;            if (f.isStrict()) {</b>
+<b class="nc"><i>410</i>&nbsp;                env.error(f.getWhere(), &quot;var.floatmodifier&quot;, f);</b>
+<b class="nc"><i>411</i>&nbsp;                f.subModifiers(M_STRICTFP);</b>
+<i>412</i>&nbsp;            }
+<b class="nc"><i>413</i>&nbsp;            if (f.isTransient() &amp;&amp; isInterface()) {</b>
+<b class="nc"><i>414</i>&nbsp;                env.error(f.getWhere(), &quot;transient.modifier&quot;, f);</b>
+<b class="nc"><i>415</i>&nbsp;                f.subModifiers(M_TRANSIENT);</b>
+<i>416</i>&nbsp;            }
+<b class="nc"><i>417</i>&nbsp;            if (f.isVolatile() &amp;&amp; (isInterface() || f.isFinal())) {</b>
+<b class="nc"><i>418</i>&nbsp;                env.error(f.getWhere(), &quot;volatile.modifier&quot;, f);</b>
+<b class="nc"><i>419</i>&nbsp;                f.subModifiers(M_VOLATILE);</b>
+<i>420</i>&nbsp;            }
+<b class="nc"><i>421</i>&nbsp;            if (f.isFinal() &amp;&amp; (f.getValue() == null) &amp;&amp; isInterface()) {</b>
+<b class="nc"><i>422</i>&nbsp;                env.error(f.getWhere(), &quot;initializer.needed&quot;, f);</b>
+<b class="nc"><i>423</i>&nbsp;                f.subModifiers(M_FINAL);</b>
+<i>424</i>&nbsp;            }
+<i>425</i>&nbsp;
+<b class="nc"><i>426</i>&nbsp;            if (f.getClassDefinition().isInterface() &amp;&amp;</b>
+<b class="nc"><i>427</i>&nbsp;                  (f.isPrivate() || f.isProtected())) {</b>
+<b class="nc"><i>428</i>&nbsp;                env.error(f.getWhere(), &quot;intf.modifier.field&quot;, f);</b>
+<b class="nc"><i>429</i>&nbsp;                f.subModifiers(M_PRIVATE | M_PROTECTED);</b>
+<b class="nc"><i>430</i>&nbsp;                f.addModifiers(M_PUBLIC);</b>
+<i>431</i>&nbsp;            }
+<i>432</i>&nbsp;        }
+<i>433</i>&nbsp;        // Do not check for repeated methods here:  Types are not yet resolved.
+<b class="nc"><i>434</i>&nbsp;        if (!f.isInitializer()) {</b>
+<b class="nc"><i>435</i>&nbsp;            for (MemberDefinition f2 = getFirstMatch(f.getName());</b>
+<b class="nc"><i>436</i>&nbsp;                         f2 != null; f2 = f2.getNextMatch()) {</b>
+<b class="nc"><i>437</i>&nbsp;                if (f.isVariable() &amp;&amp; f2.isVariable()) {</b>
+<b class="nc"><i>438</i>&nbsp;                    env.error(f.getWhere(), &quot;var.multidef&quot;, f, f2);</b>
+<i>439</i>&nbsp;                    return;
+<b class="nc"><i>440</i>&nbsp;                } else if (f.isInnerClass() &amp;&amp; f2.isInnerClass() &amp;&amp;</b>
+<b class="nc"><i>441</i>&nbsp;                           !f.getInnerClass().isLocal() &amp;&amp;</b>
+<b class="nc"><i>442</i>&nbsp;                           !f2.getInnerClass().isLocal()) {</b>
+<i>443</i>&nbsp;                    // Found a duplicate inner-class member.
+<i>444</i>&nbsp;                    // Duplicate local classes are detected in
+<i>445</i>&nbsp;                    // &#39;VarDeclarationStatement.checkDeclaration&#39;.
+<b class="nc"><i>446</i>&nbsp;                    env.error(f.getWhere(), &quot;inner.class.multidef&quot;, f);</b>
+<i>447</i>&nbsp;                    return;
+<i>448</i>&nbsp;                }
+<i>449</i>&nbsp;            }
+<i>450</i>&nbsp;        }
+<i>451</i>&nbsp;
+<b class="nc"><i>452</i>&nbsp;        super.addMember(env, f);</b>
+<i>453</i>&nbsp;    }
+<i>454</i>&nbsp;
+<i>455</i>&nbsp;    /**
+<i>456</i>&nbsp;     * Create an environment suitable for checking this class.
+<i>457</i>&nbsp;     * Make sure the source and imports are set right.
+<i>458</i>&nbsp;     * Make sure the environment contains no context information.
+<i>459</i>&nbsp;     * (Actually, throw away env altogether and use toplevelEnv instead.)
+<i>460</i>&nbsp;     */
+<i>461</i>&nbsp;    public Environment setupEnv(Environment env) {
+<i>462</i>&nbsp;        // In some cases, we go to some trouble to create the &#39;env&#39; argument
+<i>463</i>&nbsp;        // that is discarded.  We should remove the &#39;env&#39; argument entirely
+<i>464</i>&nbsp;        // as well as the vestigial code that supports it.  See comments on
+<i>465</i>&nbsp;        // &#39;newEnvironment&#39; in &#39;checkInternal&#39; below.
+<b class="nc"><i>466</i>&nbsp;        return new Environment(toplevelEnv, this);</b>
+<i>467</i>&nbsp;    }
+<i>468</i>&nbsp;
+<i>469</i>&nbsp;    /**
+<i>470</i>&nbsp;     * A source class never reports deprecation, since the compiler
+<i>471</i>&nbsp;     * allows access to deprecated features that are being compiled
+<i>472</i>&nbsp;     * in the same job.
+<i>473</i>&nbsp;     */
+<i>474</i>&nbsp;    public boolean reportDeprecated(Environment env) {
+<b class="nc"><i>475</i>&nbsp;        return false;</b>
+<i>476</i>&nbsp;    }
+<i>477</i>&nbsp;
+<i>478</i>&nbsp;    /**
+<i>479</i>&nbsp;     * See if the source file of this class is right.
+<i>480</i>&nbsp;     * @see ClassDefinition#noteUsedBy
+<i>481</i>&nbsp;     */
+<i>482</i>&nbsp;    public void noteUsedBy(ClassDefinition ref, long where, Environment env) {
+<i>483</i>&nbsp;        // If this class is not public, watch for cross-file references.
+<b class="nc"><i>484</i>&nbsp;        super.noteUsedBy(ref, where, env);</b>
+<b class="nc"><i>485</i>&nbsp;        ClassDefinition def = this;</b>
+<b class="nc"><i>486</i>&nbsp;        while (def.isInnerClass()) {</b>
+<b class="nc"><i>487</i>&nbsp;            def = def.getOuterClass();</b>
+<i>488</i>&nbsp;        }
+<b class="nc"><i>489</i>&nbsp;        if (def.isPublic()) {</b>
+<i>490</i>&nbsp;            return;             // already checked
+<i>491</i>&nbsp;        }
+<b class="nc"><i>492</i>&nbsp;        while (ref.isInnerClass()) {</b>
+<b class="nc"><i>493</i>&nbsp;            ref = ref.getOuterClass();</b>
+<i>494</i>&nbsp;        }
+<b class="nc"><i>495</i>&nbsp;        if (def.getSource().equals(ref.getSource())) {</b>
+<i>496</i>&nbsp;            return;             // intra-file reference
+<i>497</i>&nbsp;        }
+<b class="nc"><i>498</i>&nbsp;        ((SourceClass)def).checkSourceFile(env, where);</b>
+<i>499</i>&nbsp;    }
+<i>500</i>&nbsp;
+<i>501</i>&nbsp;    /**
+<i>502</i>&nbsp;     * Check this class and all its fields.
+<i>503</i>&nbsp;     */
+<i>504</i>&nbsp;    public void check(Environment env) throws ClassNotFound {
+<b class="nc"><i>505</i>&nbsp;        if (tracing) env.dtEnter(&quot;SourceClass.check: &quot; + getName());</b>
+<b class="nc"><i>506</i>&nbsp;        if (isInsideLocal()) {</b>
+<i>507</i>&nbsp;            // An inaccessible class gets checked when the surrounding
+<i>508</i>&nbsp;            // block is checked.
+<i>509</i>&nbsp;            // QUERY: Should this case ever occur?
+<i>510</i>&nbsp;            // What would invoke checking of a local class aside from
+<i>511</i>&nbsp;            // checking the surrounding method body?
+<b class="nc"><i>512</i>&nbsp;            if (tracing) env.dtEvent(&quot;SourceClass.check: INSIDE LOCAL &quot; +</b>
+<b class="nc"><i>513</i>&nbsp;                                     getOuterClass().getName());</b>
+<b class="nc"><i>514</i>&nbsp;            getOuterClass().check(env);</b>
+<i>515</i>&nbsp;        } else {
+<b class="nc"><i>516</i>&nbsp;            if (isInnerClass()) {</b>
+<b class="nc"><i>517</i>&nbsp;                if (tracing) env.dtEvent(&quot;SourceClass.check: INNER CLASS &quot; +</b>
+<b class="nc"><i>518</i>&nbsp;                                         getOuterClass().getName());</b>
+<i>519</i>&nbsp;                // Make sure the outer is checked first.
+<b class="nc"><i>520</i>&nbsp;                ((SourceClass)getOuterClass()).maybeCheck(env);</b>
+<i>521</i>&nbsp;            }
+<b class="nc"><i>522</i>&nbsp;            Vset vset = new Vset();</b>
+<b class="nc"><i>523</i>&nbsp;            Context ctx = null;</b>
+<i>524</i>&nbsp;            if (tracing)
+<b class="nc"><i>525</i>&nbsp;                env.dtEvent(&quot;SourceClass.check: CHECK INTERNAL &quot; + getName());</b>
+<b class="nc"><i>526</i>&nbsp;            vset = checkInternal(setupEnv(env), ctx, vset);</b>
+<i>527</i>&nbsp;            // drop vset here
+<i>528</i>&nbsp;        }
+<b class="nc"><i>529</i>&nbsp;        if (tracing) env.dtExit(&quot;SourceClass.check: &quot; + getName());</b>
+<i>530</i>&nbsp;    }
+<i>531</i>&nbsp;
+<i>532</i>&nbsp;    private void maybeCheck(Environment env) throws ClassNotFound {
+<b class="nc"><i>533</i>&nbsp;        if (tracing) env.dtEvent(&quot;SourceClass.maybeCheck: &quot; + getName());</b>
+<i>534</i>&nbsp;        // Check this class now, if it has not yet been checked.
+<i>535</i>&nbsp;        // Cf. Main.compile().  Perhaps this code belongs there somehow.
+<b class="nc"><i>536</i>&nbsp;        ClassDeclaration c = getClassDeclaration();</b>
+<b class="nc"><i>537</i>&nbsp;        if (c.getStatus() == CS_PARSED) {</b>
+<i>538</i>&nbsp;            // Set it first to avoid vicious circularity:
+<b class="nc"><i>539</i>&nbsp;            c.setDefinition(this, CS_CHECKED);</b>
+<b class="nc"><i>540</i>&nbsp;            check(env);</b>
+<i>541</i>&nbsp;        }
+<i>542</i>&nbsp;    }
+<i>543</i>&nbsp;
+<i>544</i>&nbsp;    private Vset checkInternal(Environment env, Context ctx, Vset vset)
+<i>545</i>&nbsp;                throws ClassNotFound {
+<b class="nc"><i>546</i>&nbsp;        Identifier nm = getClassDeclaration().getName();</b>
+<b class="nc"><i>547</i>&nbsp;        if (env.verbose()) {</b>
+<b class="nc"><i>548</i>&nbsp;            env.output(&quot;[checking class &quot; + nm + &quot;]&quot;);</b>
+<i>549</i>&nbsp;        }
+<i>550</i>&nbsp;
+<i>551</i>&nbsp;        // Save context enclosing class for later access
+<i>552</i>&nbsp;        // by &#39;ClassDefinition.resolveName.&#39;
+<b class="nc"><i>553</i>&nbsp;        classContext = ctx;</b>
+<i>554</i>&nbsp;
+<i>555</i>&nbsp;        // At present, the call to &#39;newEnvironment&#39; is not needed.
+<i>556</i>&nbsp;        // The incoming environment to &#39;basicCheck&#39; is always passed to
+<i>557</i>&nbsp;        // &#39;setupEnv&#39;, which discards it completely.  This is also the
+<i>558</i>&nbsp;        // only call to &#39;newEnvironment&#39;, which is now apparently dead code.
+<b class="nc"><i>559</i>&nbsp;        basicCheck(Context.newEnvironment(env, ctx));</b>
+<i>560</i>&nbsp;
+<i>561</i>&nbsp;        // Validate access for all inner-class components
+<i>562</i>&nbsp;        // of a qualified name, not just the last one, which
+<i>563</i>&nbsp;        // is checked below.  Yes, this is a dirty hack...
+<i>564</i>&nbsp;        // Much of this code was cribbed from &#39;checkSupers&#39;.
+<i>565</i>&nbsp;        // Part of fix for 4094658.
+<b class="nc"><i>566</i>&nbsp;        ClassDeclaration sup = getSuperClass();</b>
+<b class="nc"><i>567</i>&nbsp;        if (sup != null) {</b>
+<b class="nc"><i>568</i>&nbsp;            long where = getWhere();</b>
+<b class="nc"><i>569</i>&nbsp;            where = IdentifierToken.getWhere(superClassId, where);</b>
+<b class="nc"><i>570</i>&nbsp;            env.resolveExtendsByName(where, this, sup.getName());</b>
+<i>571</i>&nbsp;        }
+<b class="nc"><i>572</i>&nbsp;        for (int i = 0 ; i &lt; interfaces.length ; i++) {</b>
+<b class="nc"><i>573</i>&nbsp;            ClassDeclaration intf = interfaces[i];</b>
+<b class="nc"><i>574</i>&nbsp;            long where = getWhere();</b>
+<i>575</i>&nbsp;            // Error localization fails here if interfaces were
+<i>576</i>&nbsp;            // elided during error recovery from an invalid one.
+<b class="nc"><i>577</i>&nbsp;            if (interfaceIds != null</b>
+<i>578</i>&nbsp;                &amp;&amp; interfaceIds.length == interfaces.length) {
+<b class="nc"><i>579</i>&nbsp;                where = IdentifierToken.getWhere(interfaceIds[i], where);</b>
+<i>580</i>&nbsp;            }
+<b class="nc"><i>581</i>&nbsp;            env.resolveExtendsByName(where, this, intf.getName());</b>
+<i>582</i>&nbsp;        }
+<i>583</i>&nbsp;
+<i>584</i>&nbsp;        // Does the name already exist in an imported package?
+<i>585</i>&nbsp;        // See JLS 8.1 for the precise rules.
+<b class="nc"><i>586</i>&nbsp;        if (!isInnerClass() &amp;&amp; !isInsideLocal()) {</b>
+<i>587</i>&nbsp;            // Discard package qualification for the import checks.
+<b class="nc"><i>588</i>&nbsp;            Identifier simpleName = nm.getName();</b>
+<i>589</i>&nbsp;            try {
+<i>590</i>&nbsp;                // We want this to throw a ClassNotFound exception
+<b class="nc"><i>591</i>&nbsp;                Imports imports = toplevelEnv.getImports();</b>
+<b class="nc"><i>592</i>&nbsp;                Identifier ID = imports.resolve(env, simpleName);</b>
+<b class="nc"><i>593</i>&nbsp;                if (ID != getName())</b>
+<b class="nc"><i>594</i>&nbsp;                    env.error(where, &quot;class.multidef.import&quot;, simpleName, ID);</b>
+<b class="nc"><i>595</i>&nbsp;            } catch (AmbiguousClass e) {</b>
+<i>596</i>&nbsp;                // At least one of e.name1 and e.name2 must be different
+<b class="nc"><i>597</i>&nbsp;                Identifier ID = (e.name1 != getName()) ? e.name1 : e.name2;</b>
+<b class="nc"><i>598</i>&nbsp;                env.error(where, &quot;class.multidef.import&quot;, simpleName, ID);</b>
+<b class="nc"><i>599</i>&nbsp;            }  catch (ClassNotFound e) {</b>
+<i>600</i>&nbsp;                // we want this to happen
+<b class="nc"><i>601</i>&nbsp;            }</b>
+<i>602</i>&nbsp;
+<i>603</i>&nbsp;            // Make sure that no package with the same fully qualified
+<i>604</i>&nbsp;            // name exists.  This is required by JLS 7.1.  We only need
+<i>605</i>&nbsp;            // to perform this check for top level classes -- it isn&#39;t
+<i>606</i>&nbsp;            // necessary for inner classes.  (bug 4101529)
+<i>607</i>&nbsp;            //
+<i>608</i>&nbsp;            // This change has been backed out because, on WIN32, it
+<i>609</i>&nbsp;            // failed to distinguish between java.awt.event and
+<i>610</i>&nbsp;            // java.awt.Event when looking for a directory.  We will
+<i>611</i>&nbsp;            // add this back in later.
+<i>612</i>&nbsp;            //
+<i>613</i>&nbsp;            // try {
+<i>614</i>&nbsp;            //  if (env.getPackage(nm).exists()) {
+<i>615</i>&nbsp;            //      env.error(where, &quot;class.package.conflict&quot;, nm);
+<i>616</i>&nbsp;            //  }
+<i>617</i>&nbsp;            // } catch (java.io.IOException ee) {
+<i>618</i>&nbsp;            //  env.error(where, &quot;io.exception.package&quot;, nm);
+<i>619</i>&nbsp;            // }
+<i>620</i>&nbsp;
+<i>621</i>&nbsp;            // Make sure it was defined in the right file
+<b class="nc"><i>622</i>&nbsp;            if (isPublic()) {</b>
+<b class="nc"><i>623</i>&nbsp;                checkSourceFile(env, getWhere());</b>
+<i>624</i>&nbsp;            }
+<i>625</i>&nbsp;        }
+<i>626</i>&nbsp;
+<b class="nc"><i>627</i>&nbsp;        vset = checkMembers(env, ctx, vset);</b>
+<b class="nc"><i>628</i>&nbsp;        return vset;</b>
+<i>629</i>&nbsp;    }
+<i>630</i>&nbsp;
+<b class="nc"><i>631</i>&nbsp;    private boolean sourceFileChecked = false;</b>
+<i>632</i>&nbsp;
+<i>633</i>&nbsp;    /**
+<i>634</i>&nbsp;     * See if the source file of this class is of the right name.
+<i>635</i>&nbsp;     */
+<i>636</i>&nbsp;    public void checkSourceFile(Environment env, long where) {
+<i>637</i>&nbsp;        // one error per offending class is sufficient
+<b class="nc"><i>638</i>&nbsp;        if (sourceFileChecked)  return;</b>
+<b class="nc"><i>639</i>&nbsp;        sourceFileChecked = true;</b>
+<i>640</i>&nbsp;
+<b class="nc"><i>641</i>&nbsp;        String fname = getName().getName() + &quot;.java&quot;;</b>
+<b class="nc"><i>642</i>&nbsp;        String src = ((ClassFile)getSource()).getName();</b>
+<b class="nc"><i>643</i>&nbsp;        if (!src.equals(fname)) {</b>
+<b class="nc"><i>644</i>&nbsp;            if (isPublic()) {</b>
+<b class="nc"><i>645</i>&nbsp;                env.error(where, &quot;public.class.file&quot;, this, fname);</b>
+<i>646</i>&nbsp;            } else {
+<b class="nc"><i>647</i>&nbsp;                env.error(where, &quot;warn.package.class.file&quot;, this, src, fname);</b>
+<i>648</i>&nbsp;            }
+<i>649</i>&nbsp;        }
+<i>650</i>&nbsp;    }
+<i>651</i>&nbsp;
+<i>652</i>&nbsp;    // Set true if superclass (but not necessarily superinterfaces) have
+<i>653</i>&nbsp;    // been checked.  If the superclass is still unresolved, then an error
+<i>654</i>&nbsp;    // message should have been issued, and we assume that no further
+<i>655</i>&nbsp;    // resolution is possible.
+<b class="nc"><i>656</i>&nbsp;    private boolean supersChecked = false;</b>
+<i>657</i>&nbsp;
+<i>658</i>&nbsp;    /**
+<i>659</i>&nbsp;     * Overrides &#39;ClassDefinition.getSuperClass&#39;.
+<i>660</i>&nbsp;     */
+<i>661</i>&nbsp;
+<i>662</i>&nbsp;    public ClassDeclaration getSuperClass(Environment env) {
+<b class="nc"><i>663</i>&nbsp;        if (tracing) env.dtEnter(&quot;SourceClass.getSuperClass: &quot; + this);</b>
+<i>664</i>&nbsp;        // Superclass may fail to be set because of error recovery,
+<i>665</i>&nbsp;        // so resolve types here only if &#39;checkSupers&#39; has not yet
+<i>666</i>&nbsp;        // completed its checks on the superclass.
+<i>667</i>&nbsp;        // QUERY: Can we eliminate the need to resolve superclasses on demand?
+<i>668</i>&nbsp;        // See comments in &#39;checkSupers&#39; and in &#39;ClassDefinition.getInnerClass&#39;.
+<b class="nc"><i>669</i>&nbsp;        if (superClass == null &amp;&amp; superClassId != null &amp;&amp; !supersChecked) {</b>
+<b class="nc"><i>670</i>&nbsp;            resolveTypeStructure(env);</b>
+<i>671</i>&nbsp;            // We used to report an error here if the superclass was not
+<i>672</i>&nbsp;            // resolved.  Having moved the call to &#39;checkSupers&#39; from &#39;basicCheck&#39;
+<i>673</i>&nbsp;            // into &#39;resolveTypeStructure&#39;, the errors reported here should have
+<i>674</i>&nbsp;            // already been reported.  Furthermore, error recovery can null out
+<i>675</i>&nbsp;            // the superclass, which would cause a spurious error from the test here.
+<i>676</i>&nbsp;        }
+<b class="nc"><i>677</i>&nbsp;        if (tracing) env.dtExit(&quot;SourceClass.getSuperClass: &quot; + this);</b>
+<b class="nc"><i>678</i>&nbsp;        return superClass;</b>
+<i>679</i>&nbsp;    }
+<i>680</i>&nbsp;
+<i>681</i>&nbsp;    /**
+<i>682</i>&nbsp;     * Check that all superclasses and superinterfaces are defined and
+<i>683</i>&nbsp;     * well formed.  Among other checks, verify that the inheritance
+<i>684</i>&nbsp;     * graph is acyclic.  Called from &#39;resolveTypeStructure&#39;.
+<i>685</i>&nbsp;     */
+<i>686</i>&nbsp;
+<i>687</i>&nbsp;    private void checkSupers(Environment env) throws ClassNotFound {
+<i>688</i>&nbsp;
+<i>689</i>&nbsp;        // *** DEBUG ***
+<b class="nc"><i>690</i>&nbsp;        supersCheckStarted = true;</b>
+<i>691</i>&nbsp;
+<b class="nc"><i>692</i>&nbsp;        if (tracing) env.dtEnter(&quot;SourceClass.checkSupers: &quot; + this);</b>
+<i>693</i>&nbsp;
+<b class="nc"><i>694</i>&nbsp;        if (isInterface()) {</b>
+<b class="nc"><i>695</i>&nbsp;            if (isFinal()) {</b>
+<b class="nc"><i>696</i>&nbsp;                Identifier nm = getClassDeclaration().getName();</b>
+<b class="nc"><i>697</i>&nbsp;                env.error(getWhere(), &quot;final.intf&quot;, nm);</b>
+<i>698</i>&nbsp;                // Interfaces have no superclass.  Superinterfaces
+<i>699</i>&nbsp;                // are checked below, in code shared with the class case.
+<b class="nc"><i>700</i>&nbsp;            }</b>
+<i>701</i>&nbsp;        } else {
+<i>702</i>&nbsp;            // Check superclass.
+<i>703</i>&nbsp;            // Call to &#39;getSuperClass(env)&#39; (note argument) attempts
+<i>704</i>&nbsp;            // &#39;resolveTypeStructure&#39; if superclass has not successfully
+<i>705</i>&nbsp;            // been resolved.  Since we have just now called &#39;resolveSupers&#39;
+<i>706</i>&nbsp;            // (see our call in &#39;resolveTypeStructure&#39;), it is not clear
+<i>707</i>&nbsp;            // that this can do any good.  Why not &#39;getSuperClass()&#39; here?
+<b class="nc"><i>708</i>&nbsp;            if (getSuperClass(env) != null) {</b>
+<b class="nc"><i>709</i>&nbsp;                long where = getWhere();</b>
+<b class="nc"><i>710</i>&nbsp;                where = IdentifierToken.getWhere(superClassId, where);</b>
+<i>711</i>&nbsp;                try {
+<b class="nc"><i>712</i>&nbsp;                    ClassDefinition def =</b>
+<b class="nc"><i>713</i>&nbsp;                        getSuperClass().getClassDefinition(env);</b>
+<i>714</i>&nbsp;                    // Resolve superclass and its ancestors.
+<b class="nc"><i>715</i>&nbsp;                    def.resolveTypeStructure(env);</b>
+<i>716</i>&nbsp;                    // Access to the superclass should be checked relative
+<i>717</i>&nbsp;                    // to the surrounding context, not as if the reference
+<i>718</i>&nbsp;                    // appeared within the class body. Changed &#39;canAccess&#39;
+<i>719</i>&nbsp;                    // to &#39;extendsCanAccess&#39; to fix 4087314.
+<b class="nc"><i>720</i>&nbsp;                    if (!extendsCanAccess(env, getSuperClass())) {</b>
+<b class="nc"><i>721</i>&nbsp;                        env.error(where, &quot;cant.access.class&quot;, getSuperClass());</b>
+<i>722</i>&nbsp;                        // Might it be a better recovery to let the access go through?
+<b class="nc"><i>723</i>&nbsp;                        superClass = null;</b>
+<b class="nc"><i>724</i>&nbsp;                    } else if (def.isFinal()) {</b>
+<b class="nc"><i>725</i>&nbsp;                        env.error(where, &quot;super.is.final&quot;, getSuperClass());</b>
+<i>726</i>&nbsp;                        // Might it be a better recovery to let the access go through?
+<b class="nc"><i>727</i>&nbsp;                        superClass = null;</b>
+<b class="nc"><i>728</i>&nbsp;                    } else if (def.isInterface()) {</b>
+<b class="nc"><i>729</i>&nbsp;                        env.error(where, &quot;super.is.intf&quot;, getSuperClass());</b>
+<b class="nc"><i>730</i>&nbsp;                        superClass = null;</b>
+<b class="nc"><i>731</i>&nbsp;                    } else if (superClassOf(env, getSuperClass())) {</b>
+<b class="nc"><i>732</i>&nbsp;                        env.error(where, &quot;cyclic.super&quot;);</b>
+<b class="nc"><i>733</i>&nbsp;                        superClass = null;</b>
+<i>734</i>&nbsp;                    } else {
+<b class="nc"><i>735</i>&nbsp;                        def.noteUsedBy(this, where, env);</b>
+<i>736</i>&nbsp;                    }
+<b class="nc"><i>737</i>&nbsp;                    if (superClass == null) {</b>
+<b class="nc"><i>738</i>&nbsp;                        def = null;</b>
+<i>739</i>&nbsp;                    } else {
+<i>740</i>&nbsp;                        // If we have a valid superclass, check its
+<i>741</i>&nbsp;                        // supers as well, and so on up to root class.
+<i>742</i>&nbsp;                        // Call to &#39;enclosingClassOf&#39; will raise
+<i>743</i>&nbsp;                        // &#39;NullPointerException&#39; if &#39;def&#39; is null,
+<i>744</i>&nbsp;                        // so omit this check as error recovery.
+<b class="nc"><i>745</i>&nbsp;                        ClassDefinition sup = def;</b>
+<i>746</i>&nbsp;                        for (;;) {
+<b class="nc"><i>747</i>&nbsp;                            if (enclosingClassOf(sup)) {</b>
+<i>748</i>&nbsp;                                // Do we need a similar test for
+<i>749</i>&nbsp;                                // interfaces?  See bugid 4038529.
+<b class="nc"><i>750</i>&nbsp;                                env.error(where, &quot;super.is.inner&quot;);</b>
+<b class="nc"><i>751</i>&nbsp;                                superClass = null;</b>
+<b class="nc"><i>752</i>&nbsp;                                break;</b>
+<i>753</i>&nbsp;                            }
+<i>754</i>&nbsp;                            // Since we resolved the superclass and its
+<i>755</i>&nbsp;                            // ancestors above, we should not discover
+<i>756</i>&nbsp;                            // any unresolved classes on the superclass
+<i>757</i>&nbsp;                            // chain.  It should thus be sufficient to
+<i>758</i>&nbsp;                            // call &#39;getSuperClass()&#39; (no argument) here.
+<b class="nc"><i>759</i>&nbsp;                            ClassDeclaration s = sup.getSuperClass(env);</b>
+<b class="nc"><i>760</i>&nbsp;                            if (s == null) {</b>
+<i>761</i>&nbsp;                                // Superclass not resolved due to error.
+<b class="nc"><i>762</i>&nbsp;                                break;</b>
+<i>763</i>&nbsp;                            }
+<b class="nc"><i>764</i>&nbsp;                            sup = s.getClassDefinition(env);</b>
+<b class="nc"><i>765</i>&nbsp;                        }</b>
+<i>766</i>&nbsp;                    }
+<b class="nc"><i>767</i>&nbsp;                } catch (ClassNotFound e) {</b>
+<i>768</i>&nbsp;                    // Error is detected in call to &#39;getClassDefinition&#39;.
+<i>769</i>&nbsp;                    // The class may actually exist but be ambiguous.
+<i>770</i>&nbsp;                    // Call env.resolve(e.name) to see if it is.
+<i>771</i>&nbsp;                    // env.resolve(name) will definitely tell us if the
+<i>772</i>&nbsp;                    // class is ambiguous, but may not necessarily tell
+<i>773</i>&nbsp;                    // us if the class is not found.
+<i>774</i>&nbsp;                    // (part of solution for 4059855)
+<i>775</i>&nbsp;                reportError: {
+<i>776</i>&nbsp;                        try {
+<b class="nc"><i>777</i>&nbsp;                            env.resolve(e.name);</b>
+<b class="nc"><i>778</i>&nbsp;                        } catch (AmbiguousClass ee) {</b>
+<b class="nc"><i>779</i>&nbsp;                            env.error(where,</b>
+<i>780</i>&nbsp;                                      &quot;ambig.class&quot;, ee.name1, ee.name2);
+<b class="nc"><i>781</i>&nbsp;                            superClass = null;</b>
+<b class="nc"><i>782</i>&nbsp;                            break reportError;</b>
+<b class="nc"><i>783</i>&nbsp;                        } catch (ClassNotFound ee) {</b>
+<i>784</i>&nbsp;                            // fall through
+<b class="nc"><i>785</i>&nbsp;                        }</b>
+<b class="nc"><i>786</i>&nbsp;                        env.error(where, &quot;super.not.found&quot;, e.name, this);</b>
+<b class="nc"><i>787</i>&nbsp;                        superClass = null;</b>
+<i>788</i>&nbsp;                    } // The break exits this block
+<b class="nc"><i>789</i>&nbsp;                }</b>
+<i>790</i>&nbsp;
+<b class="nc"><i>791</i>&nbsp;            } else {</b>
+<i>792</i>&nbsp;                // Superclass was null on entry, after call to
+<i>793</i>&nbsp;                // &#39;resolveSupers&#39;.  This should normally not happen,
+<i>794</i>&nbsp;                // as &#39;resolveSupers&#39; sets &#39;superClass&#39; to a non-null
+<i>795</i>&nbsp;                // value for all named classes, except for one special
+<i>796</i>&nbsp;                // case: &#39;java.lang.Object&#39;, which has no superclass.
+<b class="nc"><i>797</i>&nbsp;                if (isAnonymous()) {</b>
+<i>798</i>&nbsp;                    // checker should have filled it in first
+<b class="nc"><i>799</i>&nbsp;                    throw new CompilerError(&quot;anonymous super&quot;);</b>
+<b class="nc"><i>800</i>&nbsp;                } else  if (!getName().equals(idJavaLangObject)) {</b>
+<b class="nc"><i>801</i>&nbsp;                    throw new CompilerError(&quot;unresolved super&quot;);</b>
+<i>802</i>&nbsp;                }
+<i>803</i>&nbsp;            }
+<i>804</i>&nbsp;        }
+<i>805</i>&nbsp;
+<i>806</i>&nbsp;        // At this point, if &#39;superClass&#39; is null due to an error
+<i>807</i>&nbsp;        // in the user program, a message should have been issued.
+<b class="nc"><i>808</i>&nbsp;        supersChecked = true;</b>
+<i>809</i>&nbsp;
+<i>810</i>&nbsp;        // Check interfaces
+<b class="nc"><i>811</i>&nbsp;        for (int i = 0 ; i &lt; interfaces.length ; i++) {</b>
+<b class="nc"><i>812</i>&nbsp;            ClassDeclaration intf = interfaces[i];</b>
+<b class="nc"><i>813</i>&nbsp;            long where = getWhere();</b>
+<b class="nc"><i>814</i>&nbsp;            if (interfaceIds != null</b>
+<i>815</i>&nbsp;                &amp;&amp; interfaceIds.length == interfaces.length) {
+<b class="nc"><i>816</i>&nbsp;                where = IdentifierToken.getWhere(interfaceIds[i], where);</b>
+<i>817</i>&nbsp;            }
+<i>818</i>&nbsp;            try {
+<b class="nc"><i>819</i>&nbsp;                ClassDefinition def = intf.getClassDefinition(env);</b>
+<i>820</i>&nbsp;                // Resolve superinterface and its ancestors.
+<b class="nc"><i>821</i>&nbsp;                def.resolveTypeStructure(env);</b>
+<i>822</i>&nbsp;                // Check superinterface access in the correct context.
+<i>823</i>&nbsp;                // Changed &#39;canAccess&#39; to &#39;extendsCanAccess&#39; to fix 4087314.
+<b class="nc"><i>824</i>&nbsp;                if (!extendsCanAccess(env, intf)) {</b>
+<b class="nc"><i>825</i>&nbsp;                    env.error(where, &quot;cant.access.class&quot;, intf);</b>
+<b class="nc"><i>826</i>&nbsp;                } else if (!intf.getClassDefinition(env).isInterface()) {</b>
+<b class="nc"><i>827</i>&nbsp;                    env.error(where, &quot;not.intf&quot;, intf);</b>
+<b class="nc"><i>828</i>&nbsp;                } else if (isInterface() &amp;&amp; implementedBy(env, intf)) {</b>
+<b class="nc"><i>829</i>&nbsp;                    env.error(where, &quot;cyclic.intf&quot;, intf);</b>
+<i>830</i>&nbsp;                } else {
+<b class="nc"><i>831</i>&nbsp;                    def.noteUsedBy(this, where, env);</b>
+<i>832</i>&nbsp;                    // Interface is OK, leave it in the interface list.
+<b class="nc"><i>833</i>&nbsp;                    continue;</b>
+<i>834</i>&nbsp;                }
+<b class="nc"><i>835</i>&nbsp;            } catch (ClassNotFound e) {</b>
+<i>836</i>&nbsp;                // The interface may actually exist but be ambiguous.
+<i>837</i>&nbsp;                // Call env.resolve(e.name) to see if it is.
+<i>838</i>&nbsp;                // env.resolve(name) will definitely tell us if the
+<i>839</i>&nbsp;                // interface is ambiguous, but may not necessarily tell
+<i>840</i>&nbsp;                // us if the interface is not found.
+<i>841</i>&nbsp;                // (part of solution for 4059855)
+<i>842</i>&nbsp;            reportError2: {
+<i>843</i>&nbsp;                    try {
+<b class="nc"><i>844</i>&nbsp;                        env.resolve(e.name);</b>
+<b class="nc"><i>845</i>&nbsp;                    } catch (AmbiguousClass ee) {</b>
+<b class="nc"><i>846</i>&nbsp;                        env.error(where,</b>
+<i>847</i>&nbsp;                                  &quot;ambig.class&quot;, ee.name1, ee.name2);
+<b class="nc"><i>848</i>&nbsp;                        superClass = null;</b>
+<b class="nc"><i>849</i>&nbsp;                        break reportError2;</b>
+<b class="nc"><i>850</i>&nbsp;                    } catch (ClassNotFound ee) {</b>
+<i>851</i>&nbsp;                        // fall through
+<b class="nc"><i>852</i>&nbsp;                    }</b>
+<b class="nc"><i>853</i>&nbsp;                    env.error(where, &quot;intf.not.found&quot;, e.name, this);</b>
+<b class="nc"><i>854</i>&nbsp;                    superClass = null;</b>
+<i>855</i>&nbsp;                } // The break exits this block
+<b class="nc"><i>856</i>&nbsp;            }</b>
+<i>857</i>&nbsp;            // Remove this interface from the list of interfaces
+<i>858</i>&nbsp;            // as recovery from an error.
+<b class="nc"><i>859</i>&nbsp;            ClassDeclaration newInterfaces[] =</b>
+<i>860</i>&nbsp;                new ClassDeclaration[interfaces.length - 1];
+<b class="nc"><i>861</i>&nbsp;            System.arraycopy(interfaces, 0, newInterfaces, 0, i);</b>
+<b class="nc"><i>862</i>&nbsp;            System.arraycopy(interfaces, i + 1, newInterfaces, i,</b>
+<i>863</i>&nbsp;                             newInterfaces.length - i);
+<b class="nc"><i>864</i>&nbsp;            interfaces = newInterfaces;</b>
+<b class="nc"><i>865</i>&nbsp;            --i;</b>
+<i>866</i>&nbsp;        }
+<b class="nc"><i>867</i>&nbsp;        if (tracing) env.dtExit(&quot;SourceClass.checkSupers: &quot; + this);</b>
+<i>868</i>&nbsp;    }
+<i>869</i>&nbsp;
+<i>870</i>&nbsp;    /**
+<i>871</i>&nbsp;     * Check all of the members of this class.
+<i>872</i>&nbsp;     * &lt;p&gt;
+<i>873</i>&nbsp;     * Inner classes are checked in the following way.  Any class which
+<i>874</i>&nbsp;     * is immediately contained in a block (anonymous and local classes)
+<i>875</i>&nbsp;     * is checked along with its containing method; see the
+<i>876</i>&nbsp;     * SourceMember.check() method for more information.  Member classes
+<i>877</i>&nbsp;     * of this class are checked immediately after this class, unless this
+<i>878</i>&nbsp;     * class is insideLocal(), in which case, they are checked with the
+<i>879</i>&nbsp;     * rest of the members.
+<i>880</i>&nbsp;     */
+<i>881</i>&nbsp;    private Vset checkMembers(Environment env, Context ctx, Vset vset)
+<i>882</i>&nbsp;            throws ClassNotFound {
+<i>883</i>&nbsp;
+<i>884</i>&nbsp;        // bail out if there were any errors
+<b class="nc"><i>885</i>&nbsp;        if (getError()) {</b>
+<b class="nc"><i>886</i>&nbsp;            return vset;</b>
+<i>887</i>&nbsp;        }
+<i>888</i>&nbsp;
+<i>889</i>&nbsp;        // Make sure that all of our member classes have been
+<i>890</i>&nbsp;        // basicCheck&#39;ed before we check the rest of our members.
+<i>891</i>&nbsp;        // If our member classes haven&#39;t been basicCheck&#39;ed, then they
+<i>892</i>&nbsp;        // may not have &lt;init&gt; methods.  It is important that they
+<i>893</i>&nbsp;        // have &lt;init&gt; methods so we can process NewInstanceExpressions
+<i>894</i>&nbsp;        // correctly.  This problem didn&#39;t occur before 1.2beta1.
+<i>895</i>&nbsp;        // This is a fix for bug 4082816.
+<b class="nc"><i>896</i>&nbsp;        for (MemberDefinition f = getFirstMember();</b>
+<b class="nc"><i>897</i>&nbsp;                     f != null; f = f.getNextMember()) {</b>
+<b class="nc"><i>898</i>&nbsp;            if (f.isInnerClass()) {</b>
+<i>899</i>&nbsp;                // System.out.println(&quot;Considering &quot; + f + &quot; in &quot; + this);
+<b class="nc"><i>900</i>&nbsp;                SourceClass cdef = (SourceClass) f.getInnerClass();</b>
+<b class="nc"><i>901</i>&nbsp;                if (cdef.isMember()) {</b>
+<b class="nc"><i>902</i>&nbsp;                    cdef.basicCheck(env);</b>
+<i>903</i>&nbsp;                }
+<i>904</i>&nbsp;            }
+<i>905</i>&nbsp;        }
+<i>906</i>&nbsp;
+<b class="nc"><i>907</i>&nbsp;        if (isFinal() &amp;&amp; isAbstract()) {</b>
+<b class="nc"><i>908</i>&nbsp;            env.error(where, &quot;final.abstract&quot;, this.getName().getName());</b>
+<i>909</i>&nbsp;        }
+<i>910</i>&nbsp;
+<i>911</i>&nbsp;        // This class should be abstract if there are any abstract methods
+<i>912</i>&nbsp;        // in our parent classes and interfaces which we do not override.
+<i>913</i>&nbsp;        // There are odd cases when, even though we cannot access some
+<i>914</i>&nbsp;        // abstract method from our superclass, that abstract method can
+<i>915</i>&nbsp;        // still force this class to be abstract.  See the discussion in
+<i>916</i>&nbsp;        // bug id 1240831.
+<b class="nc"><i>917</i>&nbsp;        if (!isInterface() &amp;&amp; !isAbstract() &amp;&amp; mustBeAbstract(env)) {</b>
+<i>918</i>&nbsp;            // Set the class abstract.
+<b class="nc"><i>919</i>&nbsp;            modifiers |= M_ABSTRACT;</b>
+<i>920</i>&nbsp;
+<i>921</i>&nbsp;            // Tell the user which methods force this class to be abstract.
+<i>922</i>&nbsp;
+<i>923</i>&nbsp;            // First list all of the &quot;unimplementable&quot; abstract methods.
+<b class="nc"><i>924</i>&nbsp;            Iterator&lt;MemberDefinition&gt; iter = getPermanentlyAbstractMethods();</b>
+<b class="nc"><i>925</i>&nbsp;            while (iter.hasNext()) {</b>
+<b class="nc"><i>926</i>&nbsp;                MemberDefinition method = iter.next();</b>
+<i>927</i>&nbsp;                // We couldn&#39;t override this method even if we
+<i>928</i>&nbsp;                // wanted to.  Try to make the error message
+<i>929</i>&nbsp;                // as non-confusing as possible.
+<b class="nc"><i>930</i>&nbsp;                env.error(where, &quot;abstract.class.cannot.override&quot;,</b>
+<b class="nc"><i>931</i>&nbsp;                          getClassDeclaration(), method,</b>
+<b class="nc"><i>932</i>&nbsp;                          method.getDefiningClassDeclaration());</b>
+<b class="nc"><i>933</i>&nbsp;            }</b>
+<i>934</i>&nbsp;
+<i>935</i>&nbsp;            // Now list all of the traditional abstract methods.
+<b class="nc"><i>936</i>&nbsp;            iter = getMethods(env);</b>
+<b class="nc"><i>937</i>&nbsp;            while (iter.hasNext()) {</b>
+<i>938</i>&nbsp;                // For each method, check if it is abstract.  If it is,
+<i>939</i>&nbsp;                // output an appropriate error message.
+<b class="nc"><i>940</i>&nbsp;                MemberDefinition method = iter.next();</b>
+<b class="nc"><i>941</i>&nbsp;                if (method.isAbstract()) {</b>
+<b class="nc"><i>942</i>&nbsp;                    env.error(where, &quot;abstract.class&quot;,</b>
+<b class="nc"><i>943</i>&nbsp;                              getClassDeclaration(), method,</b>
+<b class="nc"><i>944</i>&nbsp;                              method.getDefiningClassDeclaration());</b>
+<i>945</i>&nbsp;                }
+<b class="nc"><i>946</i>&nbsp;            }</b>
+<i>947</i>&nbsp;        }
+<i>948</i>&nbsp;
+<i>949</i>&nbsp;        // Check the instance variables in a pre-pass before any constructors.
+<i>950</i>&nbsp;        // This lets constructors &quot;in-line&quot; any initializers directly.
+<i>951</i>&nbsp;        // It also lets us do some definite assignment checks on variables.
+<b class="nc"><i>952</i>&nbsp;        Context ctxInit = new Context(ctx);</b>
+<b class="nc"><i>953</i>&nbsp;        Vset vsInst = vset.copy();</b>
+<b class="nc"><i>954</i>&nbsp;        Vset vsClass = vset.copy();</b>
+<i>955</i>&nbsp;
+<i>956</i>&nbsp;        // Do definite assignment checking on blank finals.
+<i>957</i>&nbsp;        // Other variables do not need such checks.  The simple textual
+<i>958</i>&nbsp;        // ordering constraints implemented by MemberDefinition.canReach()
+<i>959</i>&nbsp;        // are necessary and sufficient for the other variables.
+<i>960</i>&nbsp;        // Note that within non-static code, all statics are always
+<i>961</i>&nbsp;        // definitely assigned, and vice-versa.
+<b class="nc"><i>962</i>&nbsp;        for (MemberDefinition f = getFirstMember();</b>
+<b class="nc"><i>963</i>&nbsp;                     f != null; f = f.getNextMember()) {</b>
+<b class="nc"><i>964</i>&nbsp;            if (f.isVariable() &amp;&amp; f.isBlankFinal()) {</b>
+<i>965</i>&nbsp;                // The following allocates a LocalMember object as a proxy
+<i>966</i>&nbsp;                // to represent the field.
+<b class="nc"><i>967</i>&nbsp;                int number = ctxInit.declareFieldNumber(f);</b>
+<b class="nc"><i>968</i>&nbsp;                if (f.isStatic()) {</b>
+<b class="nc"><i>969</i>&nbsp;                    vsClass = vsClass.addVarUnassigned(number);</b>
+<b class="nc"><i>970</i>&nbsp;                    vsInst = vsInst.addVar(number);</b>
+<i>971</i>&nbsp;                } else {
+<b class="nc"><i>972</i>&nbsp;                    vsInst = vsInst.addVarUnassigned(number);</b>
+<b class="nc"><i>973</i>&nbsp;                    vsClass = vsClass.addVar(number);</b>
+<i>974</i>&nbsp;                }
+<i>975</i>&nbsp;            }
+<i>976</i>&nbsp;        }
+<i>977</i>&nbsp;
+<i>978</i>&nbsp;        // For instance variable checks, use a context with a &quot;this&quot; parameter.
+<b class="nc"><i>979</i>&nbsp;        Context ctxInst = new Context(ctxInit, this);</b>
+<b class="nc"><i>980</i>&nbsp;        LocalMember thisArg = getThisArgument();</b>
+<b class="nc"><i>981</i>&nbsp;        int thisNumber = ctxInst.declare(env, thisArg);</b>
+<b class="nc"><i>982</i>&nbsp;        vsInst = vsInst.addVar(thisNumber);</b>
+<i>983</i>&nbsp;
+<i>984</i>&nbsp;        // Do all the initializers in order, checking the definite
+<i>985</i>&nbsp;        // assignment of blank finals.  Separate static from non-static.
+<b class="nc"><i>986</i>&nbsp;        for (MemberDefinition f = getFirstMember();</b>
+<b class="nc"><i>987</i>&nbsp;                     f != null; f = f.getNextMember()) {</b>
+<i>988</i>&nbsp;            try {
+<b class="nc"><i>989</i>&nbsp;                if (f.isVariable() || f.isInitializer()) {</b>
+<b class="nc"><i>990</i>&nbsp;                    if (f.isStatic()) {</b>
+<b class="nc"><i>991</i>&nbsp;                        vsClass = f.check(env, ctxInit, vsClass);</b>
+<i>992</i>&nbsp;                    } else {
+<b class="nc"><i>993</i>&nbsp;                        vsInst = f.check(env, ctxInst, vsInst);</b>
+<i>994</i>&nbsp;                    }
+<i>995</i>&nbsp;                }
+<b class="nc"><i>996</i>&nbsp;            } catch (ClassNotFound ee) {</b>
+<b class="nc"><i>997</i>&nbsp;                env.error(f.getWhere(), &quot;class.not.found&quot;, ee.name, this);</b>
+<b class="nc"><i>998</i>&nbsp;            }</b>
+<i>999</i>&nbsp;        }
+<i>1000</i>&nbsp;
+<b class="nc"><i>1001</i>&nbsp;        checkBlankFinals(env, ctxInit, vsClass, true);</b>
+<i>1002</i>&nbsp;
+<i>1003</i>&nbsp;        // Check the rest of the field definitions.
+<i>1004</i>&nbsp;        // (Note:  Re-checking a field is a no-op.)
+<b class="nc"><i>1005</i>&nbsp;        for (MemberDefinition f = getFirstMember();</b>
+<b class="nc"><i>1006</i>&nbsp;                     f != null; f = f.getNextMember()) {</b>
+<i>1007</i>&nbsp;            try {
+<b class="nc"><i>1008</i>&nbsp;                if (f.isConstructor()) {</b>
+<i>1009</i>&nbsp;                    // When checking a constructor, an explicit call to
+<i>1010</i>&nbsp;                    // &#39;this(...)&#39; makes all blank finals definitely assigned.
+<i>1011</i>&nbsp;                    // See &#39;MethodExpression.checkValue&#39;.
+<b class="nc"><i>1012</i>&nbsp;                    Vset vsCon = f.check(env, ctxInit, vsInst.copy());</b>
+<i>1013</i>&nbsp;                    // May issue multiple messages for the same variable!!
+<b class="nc"><i>1014</i>&nbsp;                    checkBlankFinals(env, ctxInit, vsCon, false);</b>
+<i>1015</i>&nbsp;                    // (drop vsCon here)
+<b class="nc"><i>1016</i>&nbsp;                } else {</b>
+<b class="nc"><i>1017</i>&nbsp;                    Vset vsFld = f.check(env, ctx, vset.copy());</b>
+<i>1018</i>&nbsp;                    // (drop vsFld here)
+<i>1019</i>&nbsp;                }
+<b class="nc"><i>1020</i>&nbsp;            } catch (ClassNotFound ee) {</b>
+<b class="nc"><i>1021</i>&nbsp;                env.error(f.getWhere(), &quot;class.not.found&quot;, ee.name, this);</b>
+<b class="nc"><i>1022</i>&nbsp;            }</b>
+<i>1023</i>&nbsp;        }
+<i>1024</i>&nbsp;
+<i>1025</i>&nbsp;        // Must mark class as checked before visiting inner classes,
+<i>1026</i>&nbsp;        // as they may in turn request checking of the current class
+<i>1027</i>&nbsp;        // as an outer class.  Fix for bug id 4056774.
+<b class="nc"><i>1028</i>&nbsp;        getClassDeclaration().setDefinition(this, CS_CHECKED);</b>
+<i>1029</i>&nbsp;
+<i>1030</i>&nbsp;        // Also check other classes in the same nest.
+<i>1031</i>&nbsp;        // All checking of this nest must be finished before any
+<i>1032</i>&nbsp;        // of its classes emit bytecode.
+<i>1033</i>&nbsp;        // Otherwise, the inner classes might not have a chance to
+<i>1034</i>&nbsp;        // add access or class literal fields to the outer class.
+<b class="nc"><i>1035</i>&nbsp;        for (MemberDefinition f = getFirstMember();</b>
+<b class="nc"><i>1036</i>&nbsp;                     f != null; f = f.getNextMember()) {</b>
+<b class="nc"><i>1037</i>&nbsp;            if (f.isInnerClass()) {</b>
+<b class="nc"><i>1038</i>&nbsp;                SourceClass cdef = (SourceClass) f.getInnerClass();</b>
+<b class="nc"><i>1039</i>&nbsp;                if (!cdef.isInsideLocal()) {</b>
+<b class="nc"><i>1040</i>&nbsp;                    cdef.maybeCheck(env);</b>
+<i>1041</i>&nbsp;                }
+<i>1042</i>&nbsp;            }
+<i>1043</i>&nbsp;        }
+<i>1044</i>&nbsp;
+<i>1045</i>&nbsp;        // Note:  Since inner classes cannot set up-level variables,
+<i>1046</i>&nbsp;        // the returned vset is always equal to the passed-in vset.
+<i>1047</i>&nbsp;        // Still, we&#39;ll return it for the sake of regularity.
+<b class="nc"><i>1048</i>&nbsp;        return vset;</b>
+<i>1049</i>&nbsp;    }
+<i>1050</i>&nbsp;
+<i>1051</i>&nbsp;    /** Make sure all my blank finals exist now. */
+<i>1052</i>&nbsp;
+<i>1053</i>&nbsp;    private void checkBlankFinals(Environment env, Context ctxInit, Vset vset,
+<i>1054</i>&nbsp;                                  boolean isStatic) {
+<b class="nc"><i>1055</i>&nbsp;        for (int i = 0; i &lt; ctxInit.getVarNumber(); i++) {</b>
+<b class="nc"><i>1056</i>&nbsp;            if (!vset.testVar(i)) {</b>
+<b class="nc"><i>1057</i>&nbsp;                MemberDefinition ff = ctxInit.getElement(i);</b>
+<b class="nc"><i>1058</i>&nbsp;                if (ff != null &amp;&amp; ff.isBlankFinal()</b>
+<b class="nc"><i>1059</i>&nbsp;                    &amp;&amp; ff.isStatic() == isStatic</b>
+<b class="nc"><i>1060</i>&nbsp;                    &amp;&amp; ff.getClassDefinition() == this) {</b>
+<b class="nc"><i>1061</i>&nbsp;                    env.error(ff.getWhere(),</b>
+<b class="nc"><i>1062</i>&nbsp;                              &quot;final.var.not.initialized&quot;, ff.getName());</b>
+<i>1063</i>&nbsp;                }
+<i>1064</i>&nbsp;            }
+<i>1065</i>&nbsp;        }
+<i>1066</i>&nbsp;    }
+<i>1067</i>&nbsp;
+<i>1068</i>&nbsp;    /**
+<i>1069</i>&nbsp;     * Check this class has its superclass and its interfaces.  Also
+<i>1070</i>&nbsp;     * force it to have an &lt;init&gt; method (if it doesn&#39;t already have one)
+<i>1071</i>&nbsp;     * and to have all the abstract methods of its parents.
+<i>1072</i>&nbsp;     */
+<b class="nc"><i>1073</i>&nbsp;    private boolean basicChecking = false;</b>
+<b class="nc"><i>1074</i>&nbsp;    private boolean basicCheckDone = false;</b>
+<i>1075</i>&nbsp;    protected void basicCheck(Environment env) throws ClassNotFound {
+<i>1076</i>&nbsp;
+<b class="nc"><i>1077</i>&nbsp;        if (tracing) env.dtEnter(&quot;SourceClass.basicCheck: &quot; + getName());</b>
+<i>1078</i>&nbsp;
+<b class="nc"><i>1079</i>&nbsp;        super.basicCheck(env);</b>
+<i>1080</i>&nbsp;
+<b class="nc"><i>1081</i>&nbsp;        if (basicChecking || basicCheckDone) {</b>
+<b class="nc"><i>1082</i>&nbsp;            if (tracing) env.dtExit(&quot;SourceClass.basicCheck: OK &quot; + getName());</b>
+<i>1083</i>&nbsp;            return;
+<i>1084</i>&nbsp;        }
+<i>1085</i>&nbsp;
+<b class="nc"><i>1086</i>&nbsp;        if (tracing) env.dtEvent(&quot;SourceClass.basicCheck: CHECKING &quot; + getName());</b>
+<i>1087</i>&nbsp;
+<b class="nc"><i>1088</i>&nbsp;        basicChecking = true;</b>
+<i>1089</i>&nbsp;
+<b class="nc"><i>1090</i>&nbsp;        env = setupEnv(env);</b>
+<i>1091</i>&nbsp;
+<b class="nc"><i>1092</i>&nbsp;        Imports imports = env.getImports();</b>
+<b class="nc"><i>1093</i>&nbsp;        if (imports != null) {</b>
+<b class="nc"><i>1094</i>&nbsp;            imports.resolve(env);</b>
+<i>1095</i>&nbsp;        }
+<i>1096</i>&nbsp;
+<b class="nc"><i>1097</i>&nbsp;        resolveTypeStructure(env);</b>
+<i>1098</i>&nbsp;
+<i>1099</i>&nbsp;        // Check the existence of the superclass and all interfaces.
+<i>1100</i>&nbsp;        // Also responsible for breaking inheritance cycles.  This call
+<i>1101</i>&nbsp;        // has been moved to &#39;resolveTypeStructure&#39;, just after the call
+<i>1102</i>&nbsp;        // to &#39;resolveSupers&#39;, as inheritance cycles must be broken before
+<i>1103</i>&nbsp;        // resolving types within the members.  Fixes 4073739.
+<i>1104</i>&nbsp;        //   checkSupers(env);
+<i>1105</i>&nbsp;
+<b class="nc"><i>1106</i>&nbsp;        if (!isInterface()) {</b>
+<i>1107</i>&nbsp;
+<i>1108</i>&nbsp;            // Add implicit &lt;init&gt; method, if necessary.
+<i>1109</i>&nbsp;            // QUERY:  What keeps us from adding an implicit constructor
+<i>1110</i>&nbsp;            // when the user explicitly declares one?  Is it truly guaranteed
+<i>1111</i>&nbsp;            // that the declaration for such an explicit constructor will have
+<i>1112</i>&nbsp;            // been processed by the time we arrive here?  In general, &#39;basicCheck&#39;
+<i>1113</i>&nbsp;            // is called very early, prior to the normal member checking phase.
+<b class="nc"><i>1114</i>&nbsp;            if (!hasConstructor()) {</b>
+<b class="nc"><i>1115</i>&nbsp;                Node code = new CompoundStatement(getWhere(), new Statement[0]);</b>
+<b class="nc"><i>1116</i>&nbsp;                Type t = Type.tMethod(Type.tVoid);</b>
+<i>1117</i>&nbsp;
+<i>1118</i>&nbsp;                // Default constructors inherit the access modifiers of their
+<i>1119</i>&nbsp;                // class.  For non-inner classes, this follows from JLS 8.6.7,
+<i>1120</i>&nbsp;                // as the only possible modifier is &#39;public&#39;.  For the sake of
+<i>1121</i>&nbsp;                // robustness in the presence of errors, we ignore any other
+<i>1122</i>&nbsp;                // modifiers.  For inner classes, the rule needs to be extended
+<i>1123</i>&nbsp;                // in some way to account for the possibility of private and
+<i>1124</i>&nbsp;                // protected classes.  We make the &#39;obvious&#39; extension, however,
+<i>1125</i>&nbsp;                // the inner classes spec is silent on this issue, and a definitive
+<i>1126</i>&nbsp;                // resolution is needed.  See bugid 4087421.
+<i>1127</i>&nbsp;                // WORKAROUND: A private constructor might need an access method,
+<i>1128</i>&nbsp;                // but it is not possible to create one due to a restriction in
+<i>1129</i>&nbsp;                // the verifier.  (This is a known problem -- see 4015397.)
+<i>1130</i>&nbsp;                // We therefore do not inherit the &#39;private&#39; modifier from the class,
+<i>1131</i>&nbsp;                // allowing the default constructor to be package private.  This
+<i>1132</i>&nbsp;                // workaround can be observed via reflection, but is otherwise
+<i>1133</i>&nbsp;                // undetectable, as the constructor is always accessible within
+<i>1134</i>&nbsp;                // the class in which its containing (private) class appears.
+<b class="nc"><i>1135</i>&nbsp;                int accessModifiers = getModifiers() &amp;</b>
+<b class="nc"><i>1136</i>&nbsp;                    (isInnerClass() ? (M_PUBLIC | M_PROTECTED) : M_PUBLIC);</b>
+<b class="nc"><i>1137</i>&nbsp;                env.makeMemberDefinition(env, getWhere(), this, null,</b>
+<i>1138</i>&nbsp;                                         accessModifiers,
+<i>1139</i>&nbsp;                                         t, idInit, null, null, code);
+<i>1140</i>&nbsp;            }
+<i>1141</i>&nbsp;        }
+<i>1142</i>&nbsp;
+<i>1143</i>&nbsp;        // Only do the inheritance/override checks if they are turned on.
+<i>1144</i>&nbsp;        // The idea here is that they will be done in javac, but not
+<i>1145</i>&nbsp;        // in javadoc.  See the comment for turnOffChecks(), above.
+<b class="nc"><i>1146</i>&nbsp;        if (doInheritanceChecks) {</b>
+<i>1147</i>&nbsp;
+<i>1148</i>&nbsp;            // Verify the compatibility of all inherited method definitions
+<i>1149</i>&nbsp;            // by collecting all of our inheritable methods.
+<b class="nc"><i>1150</i>&nbsp;            collectInheritedMethods(env);</b>
+<i>1151</i>&nbsp;        }
+<i>1152</i>&nbsp;
+<b class="nc"><i>1153</i>&nbsp;        basicChecking = false;</b>
+<b class="nc"><i>1154</i>&nbsp;        basicCheckDone = true;</b>
+<b class="nc"><i>1155</i>&nbsp;        if (tracing) env.dtExit(&quot;SourceClass.basicCheck: &quot; + getName());</b>
+<i>1156</i>&nbsp;    }
+<i>1157</i>&nbsp;
+<i>1158</i>&nbsp;    /**
+<i>1159</i>&nbsp;     * Add a group of methods to this class as miranda methods.
+<i>1160</i>&nbsp;     *
+<i>1161</i>&nbsp;     * For a definition of Miranda methods, see the comment above the
+<i>1162</i>&nbsp;     * method addMirandaMethods() in the file
+<i>1163</i>&nbsp;     * sun/tools/java/ClassDeclaration.java
+<i>1164</i>&nbsp;     */
+<i>1165</i>&nbsp;    protected void addMirandaMethods(Environment env,
+<i>1166</i>&nbsp;                                     Iterator&lt;MemberDefinition&gt; mirandas) {
+<i>1167</i>&nbsp;
+<b class="nc"><i>1168</i>&nbsp;        while(mirandas.hasNext()) {</b>
+<b class="nc"><i>1169</i>&nbsp;            MemberDefinition method = mirandas.next();</b>
+<b class="nc"><i>1170</i>&nbsp;</b>
+<i>1171</i>&nbsp;            addMember(method);
+<b class="nc"><i>1172</i>&nbsp;</b>
+<i>1173</i>&nbsp;            //System.out.println(&quot;adding miranda method &quot; + newMethod +
+<i>1174</i>&nbsp;            //                   &quot; to &quot; + this);
+<i>1175</i>&nbsp;        }
+<b class="nc"><i>1176</i>&nbsp;    }</b>
+<i>1177</i>&nbsp;
+<i>1178</i>&nbsp;    /**
+<i>1179</i>&nbsp;     * &lt;em&gt;After parsing is complete&lt;/em&gt;, resolve all names
+<i>1180</i>&nbsp;     * except those inside method bodies or initializers.
+<i>1181</i>&nbsp;     * In particular, this is the point at which we find out what
+<i>1182</i>&nbsp;     * kinds of variables and methods there are in the classes,
+<i>1183</i>&nbsp;     * and therefore what is each class&#39;s interface to the world.
+<i>1184</i>&nbsp;     * &lt;p&gt;
+<i>1185</i>&nbsp;     * Also perform certain other transformations, such as inserting
+<i>1186</i>&nbsp;     * &quot;this$C&quot; arguments into constructors, and reorganizing structure
+<i>1187</i>&nbsp;     * to flatten qualified member names.
+<i>1188</i>&nbsp;     * &lt;p&gt;
+<i>1189</i>&nbsp;     * Do not perform type-based or name-based consistency checks
+<i>1190</i>&nbsp;     * or normalizations (such as default nullary constructors),
+<i>1191</i>&nbsp;     * and do not attempt to compile code against this class,
+<i>1192</i>&nbsp;     * until after this phase.
+<i>1193</i>&nbsp;     */
+<i>1194</i>&nbsp;
+<i>1195</i>&nbsp;    private boolean resolving = false;
+<b class="nc"><i>1196</i>&nbsp;</b>
+<i>1197</i>&nbsp;    public void resolveTypeStructure(Environment env) {
+<i>1198</i>&nbsp;
+<i>1199</i>&nbsp;        if (tracing)
+<i>1200</i>&nbsp;            env.dtEnter(&quot;SourceClass.resolveTypeStructure: &quot; + getName());
+<b class="nc"><i>1201</i>&nbsp;</b>
+<i>1202</i>&nbsp;        // Resolve immediately enclosing type, which in turn
+<i>1203</i>&nbsp;        // forces resolution of all enclosing type declarations.
+<i>1204</i>&nbsp;        ClassDefinition oc = getOuterClass();
+<b class="nc"><i>1205</i>&nbsp;        if (oc != null &amp;&amp; oc instanceof SourceClass</b>
+<b class="nc"><i>1206</i>&nbsp;            &amp;&amp; !((SourceClass)oc).resolved) {</b>
+<i>1207</i>&nbsp;            // Do the outer class first, always.
+<i>1208</i>&nbsp;            ((SourceClass)oc).resolveTypeStructure(env);
+<b class="nc"><i>1209</i>&nbsp;            // (Note:  this.resolved is probably true at this point.)</b>
+<i>1210</i>&nbsp;        }
+<i>1211</i>&nbsp;
+<i>1212</i>&nbsp;        // Punt if we&#39;ve already resolved this class, or are currently
+<i>1213</i>&nbsp;        // in the process of doing so.
+<i>1214</i>&nbsp;        if (resolved || resolving) {
+<b class="nc"><i>1215</i>&nbsp;            if (tracing)</b>
+<i>1216</i>&nbsp;                env.dtExit(&quot;SourceClass.resolveTypeStructure: OK &quot; + getName());
+<b class="nc"><i>1217</i>&nbsp;            return;</b>
+<i>1218</i>&nbsp;        }
+<i>1219</i>&nbsp;
+<i>1220</i>&nbsp;        // Previously, &#39;resolved&#39; was set here, and served to prevent
+<i>1221</i>&nbsp;        // duplicate resolutions here as well as its function in
+<i>1222</i>&nbsp;        // &#39;ClassDefinition.addMember&#39;.  Now, &#39;resolving&#39; serves the
+<i>1223</i>&nbsp;        // former purpose, distinct from that of &#39;resolved&#39;.
+<i>1224</i>&nbsp;        resolving = true;
+<b class="nc"><i>1225</i>&nbsp;</b>
+<i>1226</i>&nbsp;        if (tracing)
+<i>1227</i>&nbsp;            env.dtEvent(&quot;SourceClass.resolveTypeStructure: RESOLVING &quot; + getName());
+<b class="nc"><i>1228</i>&nbsp;</b>
+<i>1229</i>&nbsp;        env = setupEnv(env);
+<b class="nc"><i>1230</i>&nbsp;</b>
+<i>1231</i>&nbsp;        // Resolve superclass names to class declarations
+<i>1232</i>&nbsp;        // for the immediate superclass and superinterfaces.
+<i>1233</i>&nbsp;        resolveSupers(env);
+<b class="nc"><i>1234</i>&nbsp;</b>
+<i>1235</i>&nbsp;        // Check all ancestor superclasses for various
+<i>1236</i>&nbsp;        // errors, verifying definition of all superclasses
+<i>1237</i>&nbsp;        // and superinterfaces.  Also breaks inheritance cycles.
+<i>1238</i>&nbsp;        // Calls &#39;resolveTypeStructure&#39; recursively for ancestors
+<i>1239</i>&nbsp;        // This call used to appear in &#39;basicCheck&#39;, but was not
+<i>1240</i>&nbsp;        // performed early enough.  Most of the compiler will barf
+<i>1241</i>&nbsp;        // on inheritance cycles!
+<i>1242</i>&nbsp;        try {
+<i>1243</i>&nbsp;            checkSupers(env);
+<b class="nc"><i>1244</i>&nbsp;        } catch (ClassNotFound ee) {</b>
+<b class="nc"><i>1245</i>&nbsp;            // Undefined classes should be reported by &#39;checkSupers&#39;.</b>
+<i>1246</i>&nbsp;            env.error(where, &quot;class.not.found&quot;, ee.name, this);
+<b class="nc"><i>1247</i>&nbsp;        }</b>
+<b class="nc"><i>1248</i>&nbsp;</b>
+<i>1249</i>&nbsp;        for (MemberDefinition
+<i>1250</i>&nbsp;                 f = getFirstMember() ; f != null ; f = f.getNextMember()) {
+<b class="nc"><i>1251</i>&nbsp;            if (f instanceof SourceMember)</b>
+<b class="nc"><i>1252</i>&nbsp;                ((SourceMember)f).resolveTypeStructure(env);</b>
+<b class="nc"><i>1253</i>&nbsp;        }</b>
+<i>1254</i>&nbsp;
+<i>1255</i>&nbsp;        resolving = false;
+<b class="nc"><i>1256</i>&nbsp;</b>
+<i>1257</i>&nbsp;        // Mark class as resolved.  If new members are subsequently
+<i>1258</i>&nbsp;        // added to the class, they will be resolved at that time.
+<i>1259</i>&nbsp;        // See &#39;ClassDefinition.addMember&#39;.  Previously, this variable was
+<i>1260</i>&nbsp;        // set prior to the calls to &#39;checkSupers&#39; and &#39;resolveTypeStructure&#39;
+<i>1261</i>&nbsp;        // (which may engender further calls to &#39;checkSupers&#39;).  This could
+<i>1262</i>&nbsp;        // lead to duplicate resolution of implicit constructors, as the call to
+<i>1263</i>&nbsp;        // &#39;basicCheck&#39; from &#39;checkSupers&#39; could add the constructor while
+<i>1264</i>&nbsp;        // its class is marked resolved, and thus would resolve the constructor,
+<i>1265</i>&nbsp;        // believing it to be a &quot;late addition&quot;.  It would then be resolved
+<i>1266</i>&nbsp;        // redundantly during the normal traversal of the members, which
+<i>1267</i>&nbsp;        // immediately follows in the code above.
+<i>1268</i>&nbsp;        resolved = true;
+<b class="nc"><i>1269</i>&nbsp;</b>
+<i>1270</i>&nbsp;        // Now we have enough information to detect method repeats.
+<i>1271</i>&nbsp;        for (MemberDefinition
+<i>1272</i>&nbsp;                 f = getFirstMember() ; f != null ; f = f.getNextMember()) {
+<b class="nc"><i>1273</i>&nbsp;            if (f.isInitializer())  continue;</b>
+<b class="nc"><i>1274</i>&nbsp;            if (!f.isMethod())  continue;</b>
+<b class="nc"><i>1275</i>&nbsp;            for (MemberDefinition f2 = f; (f2 = f2.getNextMatch()) != null; ) {</b>
+<b class="nc"><i>1276</i>&nbsp;                if (!f2.isMethod())  continue;</b>
+<b class="nc"><i>1277</i>&nbsp;                if (f.getType().equals(f2.getType())) {</b>
+<b class="nc"><i>1278</i>&nbsp;                    env.error(f.getWhere(), &quot;meth.multidef&quot;, f);</b>
+<b class="nc"><i>1279</i>&nbsp;                    continue;</b>
+<b class="nc"><i>1280</i>&nbsp;                }</b>
+<i>1281</i>&nbsp;                if (f.getType().equalArguments(f2.getType())) {
+<b class="nc"><i>1282</i>&nbsp;                    env.error(f.getWhere(), &quot;meth.redef.rettype&quot;, f, f2);</b>
+<b class="nc"><i>1283</i>&nbsp;                    continue;</b>
+<b class="nc"><i>1284</i>&nbsp;                }</b>
+<i>1285</i>&nbsp;            }
+<i>1286</i>&nbsp;        }
+<i>1287</i>&nbsp;        if (tracing)
+<i>1288</i>&nbsp;            env.dtExit(&quot;SourceClass.resolveTypeStructure: &quot; + getName());
+<b class="nc"><i>1289</i>&nbsp;    }</b>
+<i>1290</i>&nbsp;
+<i>1291</i>&nbsp;    protected void resolveSupers(Environment env) {
+<i>1292</i>&nbsp;        if (tracing)
+<i>1293</i>&nbsp;            env.dtEnter(&quot;SourceClass.resolveSupers: &quot; + this);
+<b class="nc"><i>1294</i>&nbsp;        // Find the super class</b>
+<i>1295</i>&nbsp;        if (superClassId != null &amp;&amp; superClass == null) {
+<b class="nc"><i>1296</i>&nbsp;            superClass = resolveSuper(env, superClassId);</b>
+<b class="nc"><i>1297</i>&nbsp;            // Special-case java.lang.Object here (not in the parser).</b>
+<i>1298</i>&nbsp;            // In all other cases, if we have a valid &#39;superClassId&#39;,
+<i>1299</i>&nbsp;            // we return with a valid and non-null &#39;superClass&#39; value.
+<i>1300</i>&nbsp;            if (superClass == getClassDeclaration()
+<b class="nc"><i>1301</i>&nbsp;                &amp;&amp; getName().equals(idJavaLangObject)) {</b>
+<b class="nc"><i>1302</i>&nbsp;                    superClass = null;</b>
+<b class="nc"><i>1303</i>&nbsp;                    superClassId = null;</b>
+<b class="nc"><i>1304</i>&nbsp;            }</b>
+<i>1305</i>&nbsp;        }
+<i>1306</i>&nbsp;        // Find interfaces
+<i>1307</i>&nbsp;        if (interfaceIds != null &amp;&amp; interfaces == null) {
+<b class="nc"><i>1308</i>&nbsp;            interfaces = new ClassDeclaration[interfaceIds.length];</b>
+<b class="nc"><i>1309</i>&nbsp;            for (int i = 0 ; i &lt; interfaces.length ; i++) {</b>
+<b class="nc"><i>1310</i>&nbsp;                interfaces[i] = resolveSuper(env, interfaceIds[i]);</b>
+<b class="nc"><i>1311</i>&nbsp;                for (int j = 0; j &lt; i; j++) {</b>
+<b class="nc"><i>1312</i>&nbsp;                    if (interfaces[i] == interfaces[j]) {</b>
+<b class="nc"><i>1313</i>&nbsp;                        Identifier id = interfaceIds[i].getName();</b>
+<b class="nc"><i>1314</i>&nbsp;                        long where = interfaceIds[j].getWhere();</b>
+<b class="nc"><i>1315</i>&nbsp;                        env.error(where, &quot;intf.repeated&quot;, id);</b>
+<b class="nc"><i>1316</i>&nbsp;                    }</b>
+<i>1317</i>&nbsp;                }
+<i>1318</i>&nbsp;            }
+<i>1319</i>&nbsp;        }
+<i>1320</i>&nbsp;        if (tracing)
+<i>1321</i>&nbsp;            env.dtExit(&quot;SourceClass.resolveSupers: &quot; + this);
+<b class="nc"><i>1322</i>&nbsp;    }</b>
+<i>1323</i>&nbsp;
+<i>1324</i>&nbsp;    private ClassDeclaration resolveSuper(Environment env, IdentifierToken t) {
+<i>1325</i>&nbsp;        Identifier name = t.getName();
+<b class="nc"><i>1326</i>&nbsp;        if (tracing)</b>
+<i>1327</i>&nbsp;            env.dtEnter(&quot;SourceClass.resolveSuper: &quot; + name);
+<b class="nc"><i>1328</i>&nbsp;        if (isInnerClass())</b>
+<b class="nc"><i>1329</i>&nbsp;            name = outerClass.resolveName(env, name);</b>
+<b class="nc"><i>1330</i>&nbsp;        else</b>
+<i>1331</i>&nbsp;            name = env.resolveName(name);
+<b class="nc"><i>1332</i>&nbsp;        ClassDeclaration result = env.getClassDeclaration(name);</b>
+<b class="nc"><i>1333</i>&nbsp;        // Result is never null, as a new &#39;ClassDeclaration&#39; is</b>
+<i>1334</i>&nbsp;        // created if one with the given name does not exist.
+<i>1335</i>&nbsp;        if (tracing) env.dtExit(&quot;SourceClass.resolveSuper: &quot; + name);
+<b class="nc"><i>1336</i>&nbsp;        return result;</b>
+<b class="nc"><i>1337</i>&nbsp;    }</b>
+<i>1338</i>&nbsp;
+<i>1339</i>&nbsp;    /**
+<i>1340</i>&nbsp;     * During the type-checking of an outer method body or initializer,
+<i>1341</i>&nbsp;     * this routine is called to check a local class body
+<i>1342</i>&nbsp;     * in the proper context.
+<i>1343</i>&nbsp;     * @param   sup     the named super class or interface (if anonymous)
+<i>1344</i>&nbsp;     * @param   args    the actual arguments (if anonymous)
+<i>1345</i>&nbsp;     */
+<i>1346</i>&nbsp;    public Vset checkLocalClass(Environment env, Context ctx, Vset vset,
+<i>1347</i>&nbsp;                                ClassDefinition sup,
+<i>1348</i>&nbsp;                                Expression args[], Type argTypes[]
+<i>1349</i>&nbsp;                                ) throws ClassNotFound {
+<i>1350</i>&nbsp;        env = setupEnv(env);
+<b class="nc"><i>1351</i>&nbsp;</b>
+<i>1352</i>&nbsp;        if ((sup != null) != isAnonymous()) {
+<b class="nc"><i>1353</i>&nbsp;            throw new CompilerError(&quot;resolveAnonymousStructure&quot;);</b>
+<b class="nc"><i>1354</i>&nbsp;        }</b>
+<i>1355</i>&nbsp;        if (isAnonymous()) {
+<b class="nc"><i>1356</i>&nbsp;            resolveAnonymousStructure(env, sup, args, argTypes);</b>
+<b class="nc"><i>1357</i>&nbsp;        }</b>
+<i>1358</i>&nbsp;
+<i>1359</i>&nbsp;        // Run the checks in the lexical context from the outer class.
+<i>1360</i>&nbsp;        vset = checkInternal(env, ctx, vset);
+<b class="nc"><i>1361</i>&nbsp;</b>
+<i>1362</i>&nbsp;        // This is now done by &#39;checkInternal&#39; via its call to &#39;checkMembers&#39;.
+<i>1363</i>&nbsp;        // getClassDeclaration().setDefinition(this, CS_CHECKED);
+<i>1364</i>&nbsp;
+<i>1365</i>&nbsp;        return vset;
+<b class="nc"><i>1366</i>&nbsp;    }</b>
+<i>1367</i>&nbsp;
+<i>1368</i>&nbsp;    /**
+<i>1369</i>&nbsp;     * As with checkLocalClass, run the inline phase for a local class.
+<i>1370</i>&nbsp;     */
+<i>1371</i>&nbsp;    public void inlineLocalClass(Environment env) {
+<i>1372</i>&nbsp;        for (MemberDefinition
+<i>1373</i>&nbsp;                 f = getFirstMember(); f != null; f = f.getNextMember()) {
+<b class="nc"><i>1374</i>&nbsp;            if ((f.isVariable() || f.isInitializer()) &amp;&amp; !f.isStatic()) {</b>
+<b class="nc"><i>1375</i>&nbsp;                continue;       // inlined inside of constructors only</b>
+<b class="nc"><i>1376</i>&nbsp;            }</b>
+<i>1377</i>&nbsp;            try {
+<i>1378</i>&nbsp;                ((SourceMember)f).inline(env);
+<b class="nc"><i>1379</i>&nbsp;            } catch (ClassNotFound ee) {</b>
+<b class="nc"><i>1380</i>&nbsp;                env.error(f.getWhere(), &quot;class.not.found&quot;, ee.name, this);</b>
+<b class="nc"><i>1381</i>&nbsp;            }</b>
+<b class="nc"><i>1382</i>&nbsp;        }</b>
+<i>1383</i>&nbsp;        if (getReferencesFrozen() != null &amp;&amp; !inlinedLocalClass) {
+<b class="nc"><i>1384</i>&nbsp;            inlinedLocalClass = true;</b>
+<b class="nc"><i>1385</i>&nbsp;            // add more constructor arguments for uplevel references</b>
+<i>1386</i>&nbsp;            for (MemberDefinition
+<i>1387</i>&nbsp;                     f = getFirstMember(); f != null; f = f.getNextMember()) {
+<b class="nc"><i>1388</i>&nbsp;                if (f.isConstructor()) {</b>
+<b class="nc"><i>1389</i>&nbsp;                    //((SourceMember)f).addUplevelArguments(false);</b>
+<i>1390</i>&nbsp;                    ((SourceMember)f).addUplevelArguments();
+<b class="nc"><i>1391</i>&nbsp;                }</b>
+<i>1392</i>&nbsp;            }
+<i>1393</i>&nbsp;        }
+<i>1394</i>&nbsp;    }
+<i>1395</i>&nbsp;    private boolean inlinedLocalClass = false;
+<b class="nc"><i>1396</i>&nbsp;</b>
+<i>1397</i>&nbsp;    /**
+<i>1398</i>&nbsp;     * Check a class which is inside a local class, but is not itself local.
+<i>1399</i>&nbsp;     */
+<i>1400</i>&nbsp;    public Vset checkInsideClass(Environment env, Context ctx, Vset vset)
+<i>1401</i>&nbsp;                throws ClassNotFound {
+<i>1402</i>&nbsp;        if (!isInsideLocal() || isLocal()) {
+<b class="nc"><i>1403</i>&nbsp;            throw new CompilerError(&quot;checkInsideClass&quot;);</b>
+<b class="nc"><i>1404</i>&nbsp;        }</b>
+<i>1405</i>&nbsp;        return checkInternal(env, ctx, vset);
+<b class="nc"><i>1406</i>&nbsp;    }</b>
+<i>1407</i>&nbsp;
+<i>1408</i>&nbsp;    /**
+<i>1409</i>&nbsp;     * Just before checking an anonymous class, decide its true
+<i>1410</i>&nbsp;     * inheritance, and build its (sole, implicit) constructor.
+<i>1411</i>&nbsp;     */
+<i>1412</i>&nbsp;    private void resolveAnonymousStructure(Environment env,
+<i>1413</i>&nbsp;                                           ClassDefinition sup,
+<i>1414</i>&nbsp;                                           Expression args[], Type argTypes[]
+<i>1415</i>&nbsp;                                           ) throws ClassNotFound {
+<i>1416</i>&nbsp;
+<i>1417</i>&nbsp;        if (tracing) env.dtEvent(&quot;SourceClass.resolveAnonymousStructure: &quot; +
+<b class="nc"><i>1418</i>&nbsp;                                 this + &quot;, super &quot; + sup);</b>
+<i>1419</i>&nbsp;
+<i>1420</i>&nbsp;        // Decide now on the superclass.
+<i>1421</i>&nbsp;
+<i>1422</i>&nbsp;        // This check has been removed as part of the fix for 4055017.
+<i>1423</i>&nbsp;        // In the anonymous class created to hold the &#39;class$&#39; method
+<i>1424</i>&nbsp;        // of an interface, &#39;superClassId&#39; refers to &#39;java.lang.Object&#39;.
+<i>1425</i>&nbsp;        /*---------------------*
+<i>1426</i>&nbsp;        if (!(superClass == null &amp;&amp; superClassId.getName() == idNull)) {
+<i>1427</i>&nbsp;            throw new CompilerError(&quot;superclass &quot;+superClass);
+<i>1428</i>&nbsp;        }
+<i>1429</i>&nbsp;        *---------------------*/
+<i>1430</i>&nbsp;
+<i>1431</i>&nbsp;        if (sup.isInterface()) {
+<b class="nc"><i>1432</i>&nbsp;            // allow an interface in the &quot;super class&quot; position</b>
+<i>1433</i>&nbsp;            int ni = (interfaces == null) ? 0 : interfaces.length;
+<b class="nc"><i>1434</i>&nbsp;            ClassDeclaration i1[] = new ClassDeclaration[1+ni];</b>
+<b class="nc"><i>1435</i>&nbsp;            if (ni &gt; 0) {</b>
+<b class="nc"><i>1436</i>&nbsp;                System.arraycopy(interfaces, 0, i1, 1, ni);</b>
+<b class="nc"><i>1437</i>&nbsp;                if (interfaceIds != null &amp;&amp; interfaceIds.length == ni) {</b>
+<b class="nc"><i>1438</i>&nbsp;                    IdentifierToken id1[] = new IdentifierToken[1+ni];</b>
+<b class="nc"><i>1439</i>&nbsp;                    System.arraycopy(interfaceIds, 0, id1, 1, ni);</b>
+<b class="nc"><i>1440</i>&nbsp;                    id1[0] = new IdentifierToken(sup.getName());</b>
+<b class="nc"><i>1441</i>&nbsp;                }</b>
+<i>1442</i>&nbsp;            }
+<i>1443</i>&nbsp;            i1[0] = sup.getClassDeclaration();
+<b class="nc"><i>1444</i>&nbsp;            interfaces = i1;</b>
+<b class="nc"><i>1445</i>&nbsp;</b>
+<i>1446</i>&nbsp;            sup = toplevelEnv.getClassDefinition(idJavaLangObject);
+<b class="nc"><i>1447</i>&nbsp;        }</b>
+<i>1448</i>&nbsp;        superClass = sup.getClassDeclaration();
+<b class="nc"><i>1449</i>&nbsp;</b>
+<i>1450</i>&nbsp;        if (hasConstructor()) {
+<b class="nc"><i>1451</i>&nbsp;            throw new CompilerError(&quot;anonymous constructor&quot;);</b>
+<b class="nc"><i>1452</i>&nbsp;        }</b>
+<i>1453</i>&nbsp;
+<i>1454</i>&nbsp;        // Synthesize an appropriate constructor.
+<i>1455</i>&nbsp;        Type t = Type.tMethod(Type.tVoid, argTypes);
+<b class="nc"><i>1456</i>&nbsp;        IdentifierToken names[] = new IdentifierToken[argTypes.length];</b>
+<b class="nc"><i>1457</i>&nbsp;        for (int i = 0; i &lt; names.length; i++) {</b>
+<b class="nc"><i>1458</i>&nbsp;            names[i] = new IdentifierToken(args[i].getWhere(),</b>
+<b class="nc"><i>1459</i>&nbsp;                                           Identifier.lookup(&quot;$&quot;+i));</b>
+<b class="nc"><i>1460</i>&nbsp;        }</b>
+<i>1461</i>&nbsp;        int outerArg = (sup.isTopLevel() || sup.isLocal()) ? 0 : 1;
+<b class="nc"><i>1462</i>&nbsp;        Expression superArgs[] = new Expression[-outerArg + args.length];</b>
+<b class="nc"><i>1463</i>&nbsp;        for (int i = outerArg ; i &lt; args.length ; i++) {</b>
+<b class="nc"><i>1464</i>&nbsp;            superArgs[-outerArg + i] = new IdentifierExpression(names[i]);</b>
+<b class="nc"><i>1465</i>&nbsp;        }</b>
+<i>1466</i>&nbsp;        long where = getWhere();
+<b class="nc"><i>1467</i>&nbsp;        Expression superExp;</b>
+<i>1468</i>&nbsp;        if (outerArg == 0) {
+<b class="nc"><i>1469</i>&nbsp;            superExp = new SuperExpression(where);</b>
+<b class="nc"><i>1470</i>&nbsp;        } else {</b>
+<i>1471</i>&nbsp;            superExp = new SuperExpression(where,
+<b class="nc"><i>1472</i>&nbsp;                                           new IdentifierExpression(names[0]));</b>
+<i>1473</i>&nbsp;        }
+<i>1474</i>&nbsp;        Expression superCall = new MethodExpression(where,
+<b class="nc"><i>1475</i>&nbsp;                                                    superExp, idInit,</b>
+<i>1476</i>&nbsp;                                                    superArgs);
+<i>1477</i>&nbsp;        Statement body[] = { new ExpressionStatement(where, superCall) };
+<b class="nc"><i>1478</i>&nbsp;        Node code = new CompoundStatement(where, body);</b>
+<b class="nc"><i>1479</i>&nbsp;        int mod = M_SYNTHETIC; // ISSUE: make M_PRIVATE, with wrapper?</b>
+<b class="nc"><i>1480</i>&nbsp;        env.makeMemberDefinition(env, where, this, null,</b>
+<b class="nc"><i>1481</i>&nbsp;                                mod, t, idInit, names, null, code);</b>
+<i>1482</i>&nbsp;    }
+<i>1483</i>&nbsp;
+<i>1484</i>&nbsp;    /**
+<i>1485</i>&nbsp;     * Convert class modifiers to a string for diagnostic purposes.
+<i>1486</i>&nbsp;     * Accepts modifiers applicable to inner classes and that appear
+<i>1487</i>&nbsp;     * in the InnerClasses attribute only, as well as those that may
+<i>1488</i>&nbsp;     * appear in the class modifier proper.
+<i>1489</i>&nbsp;     */
+<i>1490</i>&nbsp;
+<i>1491</i>&nbsp;    private static int classModifierBits[] =
+<b class="nc"><i>1492</i>&nbsp;        { ACC_PUBLIC, ACC_PRIVATE, ACC_PROTECTED, ACC_STATIC, ACC_FINAL,</b>
+<i>1493</i>&nbsp;          ACC_INTERFACE, ACC_ABSTRACT, ACC_SUPER, M_ANONYMOUS, M_LOCAL,
+<i>1494</i>&nbsp;          M_STRICTFP, ACC_STRICT};
+<i>1495</i>&nbsp;
+<i>1496</i>&nbsp;    private static String classModifierNames[] =
+<b class="nc"><i>1497</i>&nbsp;        { &quot;PUBLIC&quot;, &quot;PRIVATE&quot;, &quot;PROTECTED&quot;, &quot;STATIC&quot;, &quot;FINAL&quot;,</b>
+<i>1498</i>&nbsp;          &quot;INTERFACE&quot;, &quot;ABSTRACT&quot;, &quot;SUPER&quot;, &quot;ANONYMOUS&quot;, &quot;LOCAL&quot;,
+<i>1499</i>&nbsp;          &quot;STRICTFP&quot;, &quot;STRICT&quot;};
+<i>1500</i>&nbsp;
+<i>1501</i>&nbsp;    static String classModifierString(int mods) {
+<i>1502</i>&nbsp;        String s = &quot;&quot;;
+<b class="nc"><i>1503</i>&nbsp;        for (int i = 0; i &lt; classModifierBits.length; i++) {</b>
+<b class="nc"><i>1504</i>&nbsp;            if ((mods &amp; classModifierBits[i]) != 0) {</b>
+<b class="nc"><i>1505</i>&nbsp;                s = s + &quot; &quot; + classModifierNames[i];</b>
+<b class="nc"><i>1506</i>&nbsp;                mods &amp;= ~classModifierBits[i];</b>
+<b class="nc"><i>1507</i>&nbsp;            }</b>
+<i>1508</i>&nbsp;        }
+<i>1509</i>&nbsp;        if (mods != 0) {
+<b class="nc"><i>1510</i>&nbsp;            s = s + &quot; ILLEGAL:&quot; + Integer.toHexString(mods);</b>
+<b class="nc"><i>1511</i>&nbsp;        }</b>
+<i>1512</i>&nbsp;        return s;
+<b class="nc"><i>1513</i>&nbsp;    }</b>
+<i>1514</i>&nbsp;
+<i>1515</i>&nbsp;    /**
+<i>1516</i>&nbsp;     * Find or create an access method for a private member,
+<i>1517</i>&nbsp;     * or return null if this is not possible.
+<i>1518</i>&nbsp;     */
+<i>1519</i>&nbsp;    public MemberDefinition getAccessMember(Environment env, Context ctx,
+<i>1520</i>&nbsp;                                          MemberDefinition field, boolean isSuper) {
+<i>1521</i>&nbsp;        return getAccessMember(env, ctx, field, false, isSuper);
+<b class="nc"><i>1522</i>&nbsp;    }</b>
+<i>1523</i>&nbsp;
+<i>1524</i>&nbsp;    public MemberDefinition getUpdateMember(Environment env, Context ctx,
+<i>1525</i>&nbsp;                                          MemberDefinition field, boolean isSuper) {
+<i>1526</i>&nbsp;        if (!field.isVariable()) {
+<b class="nc"><i>1527</i>&nbsp;            throw new CompilerError(&quot;method&quot;);</b>
+<b class="nc"><i>1528</i>&nbsp;        }</b>
+<i>1529</i>&nbsp;        return getAccessMember(env, ctx, field, true, isSuper);
+<b class="nc"><i>1530</i>&nbsp;    }</b>
+<i>1531</i>&nbsp;
+<i>1532</i>&nbsp;    private MemberDefinition getAccessMember(Environment env, Context ctx,
+<i>1533</i>&nbsp;                                             MemberDefinition field,
+<i>1534</i>&nbsp;                                             boolean isUpdate,
+<i>1535</i>&nbsp;                                             boolean isSuper) {
+<i>1536</i>&nbsp;
+<i>1537</i>&nbsp;        // The &#39;isSuper&#39; argument is really only meaningful when the
+<i>1538</i>&nbsp;        // target member is a method, in which case an &#39;invokespecial&#39;
+<i>1539</i>&nbsp;        // is needed.  For fields, &#39;getfield&#39; and &#39;putfield&#39; instructions
+<i>1540</i>&nbsp;        // are generated in either case, and &#39;isSuper&#39; currently plays
+<i>1541</i>&nbsp;        // no essential role.  Nonetheless, we maintain the distinction
+<i>1542</i>&nbsp;        // consistently for the time being.
+<i>1543</i>&nbsp;
+<i>1544</i>&nbsp;        boolean isStatic = field.isStatic();
+<b class="nc"><i>1545</i>&nbsp;        boolean isMethod = field.isMethod();</b>
+<b class="nc"><i>1546</i>&nbsp;</b>
+<i>1547</i>&nbsp;        // Find pre-existing access method.
+<i>1548</i>&nbsp;        // In the case of a field access method, we only look for the getter.
+<i>1549</i>&nbsp;        // A getter is always created whenever a setter is.
+<i>1550</i>&nbsp;        // QUERY: Why doesn&#39;t the &#39;MemberDefinition&#39; object for the field
+<i>1551</i>&nbsp;        // itself just have fields for its getter and setter?
+<i>1552</i>&nbsp;        MemberDefinition af;
+<i>1553</i>&nbsp;        for (af = getFirstMember(); af != null; af = af.getNextMember()) {
+<b class="nc"><i>1554</i>&nbsp;            if (af.getAccessMethodTarget() == field) {</b>
+<b class="nc"><i>1555</i>&nbsp;                if (isMethod &amp;&amp; af.isSuperAccessMethod() == isSuper) {</b>
+<b class="nc"><i>1556</i>&nbsp;                    break;</b>
+<b class="nc"><i>1557</i>&nbsp;                }</b>
+<i>1558</i>&nbsp;                // Distinguish the getter and the setter by the number of
+<i>1559</i>&nbsp;                // arguments.
+<i>1560</i>&nbsp;                int nargs = af.getType().getArgumentTypes().length;
+<b class="nc"><i>1561</i>&nbsp;                // This was (nargs == (isStatic ? 0 : 1) + (isUpdate ? 1 : 0))</b>
+<i>1562</i>&nbsp;                // in order to find a setter as well as a getter.  This caused
+<i>1563</i>&nbsp;                // allocation of multiple getters.
+<i>1564</i>&nbsp;                if (nargs == (isStatic ? 0 : 1)) {
+<b class="nc"><i>1565</i>&nbsp;                    break;</b>
+<b class="nc"><i>1566</i>&nbsp;                }</b>
+<i>1567</i>&nbsp;            }
+<i>1568</i>&nbsp;        }
+<i>1569</i>&nbsp;
+<i>1570</i>&nbsp;        if (af != null) {
+<b class="nc"><i>1571</i>&nbsp;            if (!isUpdate) {</b>
+<b class="nc"><i>1572</i>&nbsp;                return af;</b>
+<b class="nc"><i>1573</i>&nbsp;            } else {</b>
+<i>1574</i>&nbsp;                MemberDefinition uf = af.getAccessUpdateMember();
+<b class="nc"><i>1575</i>&nbsp;                if (uf != null) {</b>
+<b class="nc"><i>1576</i>&nbsp;                    return uf;</b>
+<b class="nc"><i>1577</i>&nbsp;                }</b>
+<i>1578</i>&nbsp;            }
+<b class="nc"><i>1579</i>&nbsp;        } else if (isUpdate) {</b>
+<b class="nc"><i>1580</i>&nbsp;            // must find or create the getter before creating the setter</b>
+<i>1581</i>&nbsp;            af = getAccessMember(env, ctx, field, false, isSuper);
+<b class="nc"><i>1582</i>&nbsp;        }</b>
+<i>1583</i>&nbsp;
+<i>1584</i>&nbsp;        // If we arrive here, we are creating a new access member.
+<i>1585</i>&nbsp;
+<i>1586</i>&nbsp;        Identifier anm;
+<i>1587</i>&nbsp;        Type dummyType = null;
+<b class="nc"><i>1588</i>&nbsp;</b>
+<i>1589</i>&nbsp;        if (field.isConstructor()) {
+<b class="nc"><i>1590</i>&nbsp;            // For a constructor, we use the same name as for all</b>
+<i>1591</i>&nbsp;            // constructors (&quot;&lt;init&gt;&quot;), but add a distinguishing
+<i>1592</i>&nbsp;            // argument of an otherwise unused &quot;dummy&quot; type.
+<i>1593</i>&nbsp;            anm = idInit;
+<b class="nc"><i>1594</i>&nbsp;            // Get the dummy class, creating it if necessary.</b>
+<i>1595</i>&nbsp;            SourceClass outerMostClass = (SourceClass)getTopClass();
+<b class="nc"><i>1596</i>&nbsp;            dummyType = outerMostClass.dummyArgumentType;</b>
+<b class="nc"><i>1597</i>&nbsp;            if (dummyType == null) {</b>
+<b class="nc"><i>1598</i>&nbsp;                // Create dummy class.</b>
+<i>1599</i>&nbsp;                IdentifierToken sup =
+<b class="nc"><i>1600</i>&nbsp;                    new IdentifierToken(0, idJavaLangObject);</b>
+<i>1601</i>&nbsp;                IdentifierToken interfaces[] = {};
+<b class="nc"><i>1602</i>&nbsp;                IdentifierToken t = new IdentifierToken(0, idNull);</b>
+<b class="nc"><i>1603</i>&nbsp;                int mod = M_ANONYMOUS | M_STATIC | M_SYNTHETIC;</b>
+<b class="nc"><i>1604</i>&nbsp;                // If an interface has a public inner class, the dummy class for</b>
+<i>1605</i>&nbsp;                // the constructor must always be accessible. Fix for 4221648.
+<i>1606</i>&nbsp;                if (outerMostClass.isInterface()) {
+<b class="nc"><i>1607</i>&nbsp;                    mod |= M_PUBLIC;</b>
+<b class="nc"><i>1608</i>&nbsp;                }</b>
+<i>1609</i>&nbsp;                ClassDefinition dummyClass =
+<b class="nc"><i>1610</i>&nbsp;                    toplevelEnv.makeClassDefinition(toplevelEnv,</b>
+<b class="nc"><i>1611</i>&nbsp;                                                    0, t, null, mod,</b>
+<i>1612</i>&nbsp;                                                    sup, interfaces,
+<i>1613</i>&nbsp;                                                    outerMostClass);
+<i>1614</i>&nbsp;                // Check the class.
+<i>1615</i>&nbsp;                // It is likely that a full check is not really necessary,
+<i>1616</i>&nbsp;                // but it is essential that the class be marked as parsed.
+<i>1617</i>&nbsp;                dummyClass.getClassDeclaration().setDefinition(dummyClass, CS_PARSED);
+<b class="nc"><i>1618</i>&nbsp;                Expression argsX[] = {};</b>
+<b class="nc"><i>1619</i>&nbsp;                Type argTypesX[] = {};</b>
+<b class="nc"><i>1620</i>&nbsp;                try {</b>
+<i>1621</i>&nbsp;                    ClassDefinition supcls =
+<b class="nc"><i>1622</i>&nbsp;                        toplevelEnv.getClassDefinition(idJavaLangObject);</b>
+<b class="nc"><i>1623</i>&nbsp;                    dummyClass.checkLocalClass(toplevelEnv, null,</b>
+<b class="nc"><i>1624</i>&nbsp;                                               new Vset(), supcls, argsX, argTypesX);</b>
+<i>1625</i>&nbsp;                } catch (ClassNotFound ee) {};
+<b class="nc"><i>1626</i>&nbsp;                // Get class type.</b>
+<i>1627</i>&nbsp;                dummyType = dummyClass.getType();
+<b class="nc"><i>1628</i>&nbsp;                outerMostClass.dummyArgumentType = dummyType;</b>
+<b class="nc"><i>1629</i>&nbsp;            }</b>
+<i>1630</i>&nbsp;        } else {
+<b class="nc"><i>1631</i>&nbsp;            // Otherwise, we use the name &quot;access$N&quot;, for the</b>
+<i>1632</i>&nbsp;            // smallest value of N &gt;= 0 yielding an unused name.
+<i>1633</i>&nbsp;            for (int i = 0; ; i++) {
+<b class="nc"><i>1634</i>&nbsp;                anm = Identifier.lookup(prefixAccess + i);</b>
+<b class="nc"><i>1635</i>&nbsp;                if (getFirstMatch(anm) == null) {</b>
+<b class="nc"><i>1636</i>&nbsp;                    break;</b>
+<b class="nc"><i>1637</i>&nbsp;                }</b>
+<i>1638</i>&nbsp;            }
+<i>1639</i>&nbsp;        }
+<i>1640</i>&nbsp;
+<i>1641</i>&nbsp;        Type argTypes[];
+<i>1642</i>&nbsp;        Type t = field.getType();
+<b class="nc"><i>1643</i>&nbsp;</b>
+<i>1644</i>&nbsp;        if (isStatic) {
+<b class="nc"><i>1645</i>&nbsp;            if (!isMethod) {</b>
+<b class="nc"><i>1646</i>&nbsp;                if (!isUpdate) {</b>
+<b class="nc"><i>1647</i>&nbsp;                    Type at[] = { };</b>
+<b class="nc"><i>1648</i>&nbsp;                    argTypes = at;</b>
+<b class="nc"><i>1649</i>&nbsp;                    t = Type.tMethod(t); // nullary getter</b>
+<b class="nc"><i>1650</i>&nbsp;                } else {</b>
+<b class="nc"><i>1651</i>&nbsp;                    Type at[] = { t };</b>
+<b class="nc"><i>1652</i>&nbsp;                    argTypes = at;</b>
+<b class="nc"><i>1653</i>&nbsp;                    t = Type.tMethod(Type.tVoid, argTypes); // unary setter</b>
+<b class="nc"><i>1654</i>&nbsp;                }</b>
+<b class="nc"><i>1655</i>&nbsp;            } else {</b>
+<i>1656</i>&nbsp;                // Since constructors are never static, we don&#39;t
+<i>1657</i>&nbsp;                // have to worry about a dummy argument here.
+<i>1658</i>&nbsp;                argTypes = t.getArgumentTypes();
+<b class="nc"><i>1659</i>&nbsp;            }</b>
+<i>1660</i>&nbsp;        } else {
+<i>1661</i>&nbsp;            // All access methods for non-static members get an explicit
+<i>1662</i>&nbsp;            // &#39;this&#39; pointer as an extra argument, as the access methods
+<i>1663</i>&nbsp;            // themselves must be static. EXCEPTION: Access methods for
+<i>1664</i>&nbsp;            // constructors are non-static.
+<i>1665</i>&nbsp;            Type classType = this.getType();
+<b class="nc"><i>1666</i>&nbsp;            if (!isMethod) {</b>
+<b class="nc"><i>1667</i>&nbsp;                if (!isUpdate) {</b>
+<b class="nc"><i>1668</i>&nbsp;                    Type at[] = { classType };</b>
+<b class="nc"><i>1669</i>&nbsp;                    argTypes = at;</b>
+<b class="nc"><i>1670</i>&nbsp;                    t = Type.tMethod(t, argTypes); // nullary getter</b>
+<b class="nc"><i>1671</i>&nbsp;                } else {</b>
+<b class="nc"><i>1672</i>&nbsp;                    Type at[] = { classType, t };</b>
+<b class="nc"><i>1673</i>&nbsp;                    argTypes = at;</b>
+<b class="nc"><i>1674</i>&nbsp;                    t = Type.tMethod(Type.tVoid, argTypes); // unary setter</b>
+<b class="nc"><i>1675</i>&nbsp;                }</b>
+<b class="nc"><i>1676</i>&nbsp;            } else {</b>
+<i>1677</i>&nbsp;                // Target is a method, possibly a constructor.
+<i>1678</i>&nbsp;                Type at[] = t.getArgumentTypes();
+<b class="nc"><i>1679</i>&nbsp;                int nargs = at.length;</b>
+<b class="nc"><i>1680</i>&nbsp;                if (field.isConstructor()) {</b>
+<b class="nc"><i>1681</i>&nbsp;                    // Access method is a constructor.</b>
+<i>1682</i>&nbsp;                    // Requires a dummy argument.
+<i>1683</i>&nbsp;                    MemberDefinition outerThisArg =
+<b class="nc"><i>1684</i>&nbsp;                        ((SourceMember)field).getOuterThisArg();</b>
+<b class="nc"><i>1685</i>&nbsp;                    if (outerThisArg != null) {</b>
+<b class="nc"><i>1686</i>&nbsp;                        // Outer instance link must be the first argument.</b>
+<i>1687</i>&nbsp;                        // The following is a sanity check that will catch
+<i>1688</i>&nbsp;                        // most cases in which in this requirement is violated.
+<i>1689</i>&nbsp;                        if (at[0] != outerThisArg.getType()) {
+<b class="nc"><i>1690</i>&nbsp;                            throw new CompilerError(&quot;misplaced outer this&quot;);</b>
+<b class="nc"><i>1691</i>&nbsp;                        }</b>
+<i>1692</i>&nbsp;                        // Strip outer &#39;this&#39; argument.
+<i>1693</i>&nbsp;                        // It will be added back when the access method is checked.
+<i>1694</i>&nbsp;                        argTypes = new Type[nargs];
+<b class="nc"><i>1695</i>&nbsp;                        argTypes[0] = dummyType;</b>
+<b class="nc"><i>1696</i>&nbsp;                        for (int i = 1; i &lt; nargs; i++) {</b>
+<b class="nc"><i>1697</i>&nbsp;                            argTypes[i] = at[i];</b>
+<b class="nc"><i>1698</i>&nbsp;                        }</b>
+<i>1699</i>&nbsp;                    } else {
+<i>1700</i>&nbsp;                        // There is no outer instance.
+<i>1701</i>&nbsp;                        argTypes = new Type[nargs+1];
+<b class="nc"><i>1702</i>&nbsp;                        argTypes[0] = dummyType;</b>
+<b class="nc"><i>1703</i>&nbsp;                        for (int i = 0; i &lt; nargs; i++) {</b>
+<b class="nc"><i>1704</i>&nbsp;                            argTypes[i+1] = at[i];</b>
+<b class="nc"><i>1705</i>&nbsp;                        }</b>
+<i>1706</i>&nbsp;                    }
+<i>1707</i>&nbsp;                } else {
+<b class="nc"><i>1708</i>&nbsp;                    // Access method is static.</b>
+<i>1709</i>&nbsp;                    // Requires an explicit &#39;this&#39; argument.
+<i>1710</i>&nbsp;                    argTypes = new Type[nargs+1];
+<b class="nc"><i>1711</i>&nbsp;                    argTypes[0] = classType;</b>
+<b class="nc"><i>1712</i>&nbsp;                    for (int i = 0; i &lt; nargs; i++) {</b>
+<b class="nc"><i>1713</i>&nbsp;                        argTypes[i+1] = at[i];</b>
+<b class="nc"><i>1714</i>&nbsp;                    }</b>
+<i>1715</i>&nbsp;                }
+<i>1716</i>&nbsp;                t = Type.tMethod(t.getReturnType(), argTypes);
+<b class="nc"><i>1717</i>&nbsp;            }</b>
+<i>1718</i>&nbsp;        }
+<i>1719</i>&nbsp;
+<i>1720</i>&nbsp;        int nlen = argTypes.length;
+<b class="nc"><i>1721</i>&nbsp;        long where = field.getWhere();</b>
+<b class="nc"><i>1722</i>&nbsp;        IdentifierToken names[] = new IdentifierToken[nlen];</b>
+<b class="nc"><i>1723</i>&nbsp;        for (int i = 0; i &lt; nlen; i++) {</b>
+<b class="nc"><i>1724</i>&nbsp;            names[i] = new IdentifierToken(where, Identifier.lookup(&quot;$&quot;+i));</b>
+<b class="nc"><i>1725</i>&nbsp;        }</b>
+<i>1726</i>&nbsp;
+<i>1727</i>&nbsp;        Expression access = null;
+<b class="nc"><i>1728</i>&nbsp;        Expression thisArg = null;</b>
+<b class="nc"><i>1729</i>&nbsp;        Expression args[] = null;</b>
+<b class="nc"><i>1730</i>&nbsp;</b>
+<i>1731</i>&nbsp;        if (isStatic) {
+<b class="nc"><i>1732</i>&nbsp;            args = new Expression[nlen];</b>
+<b class="nc"><i>1733</i>&nbsp;            for (int i = 0 ; i &lt; nlen ; i++) {</b>
+<b class="nc"><i>1734</i>&nbsp;                args[i] = new IdentifierExpression(names[i]);</b>
+<b class="nc"><i>1735</i>&nbsp;            }</b>
+<i>1736</i>&nbsp;        } else {
+<i>1737</i>&nbsp;            if (field.isConstructor()) {
+<b class="nc"><i>1738</i>&nbsp;                // Constructor access method is non-static, so</b>
+<i>1739</i>&nbsp;                // &#39;this&#39; works normally.
+<i>1740</i>&nbsp;                thisArg = new ThisExpression(where);
+<b class="nc"><i>1741</i>&nbsp;                // Remove dummy argument, as it is not</b>
+<i>1742</i>&nbsp;                // passed to the target method.
+<i>1743</i>&nbsp;                args = new Expression[nlen-1];
+<b class="nc"><i>1744</i>&nbsp;                for (int i = 1 ; i &lt; nlen ; i++) {</b>
+<b class="nc"><i>1745</i>&nbsp;                    args[i-1] = new IdentifierExpression(names[i]);</b>
+<b class="nc"><i>1746</i>&nbsp;                }</b>
+<i>1747</i>&nbsp;            } else {
+<i>1748</i>&nbsp;                // Non-constructor access method is static, so
+<i>1749</i>&nbsp;                // we use the first argument as &#39;this&#39;.
+<i>1750</i>&nbsp;                thisArg = new IdentifierExpression(names[0]);
+<b class="nc"><i>1751</i>&nbsp;                // Remove first argument.</b>
+<i>1752</i>&nbsp;                args = new Expression[nlen-1];
+<b class="nc"><i>1753</i>&nbsp;                for (int i = 1 ; i &lt; nlen ; i++) {</b>
+<b class="nc"><i>1754</i>&nbsp;                    args[i-1] = new IdentifierExpression(names[i]);</b>
+<b class="nc"><i>1755</i>&nbsp;                }</b>
+<i>1756</i>&nbsp;            }
+<i>1757</i>&nbsp;            access = thisArg;
+<b class="nc"><i>1758</i>&nbsp;        }</b>
+<i>1759</i>&nbsp;
+<i>1760</i>&nbsp;        if (!isMethod) {
+<b class="nc"><i>1761</i>&nbsp;            access = new FieldExpression(where, access, field);</b>
+<b class="nc"><i>1762</i>&nbsp;            if (isUpdate) {</b>
+<b class="nc"><i>1763</i>&nbsp;                access = new AssignExpression(where, access, args[0]);</b>
+<b class="nc"><i>1764</i>&nbsp;            }</b>
+<i>1765</i>&nbsp;        } else {
+<i>1766</i>&nbsp;            // If true, &#39;isSuper&#39; forces a non-virtual call.
+<i>1767</i>&nbsp;            access = new MethodExpression(where, access, field, args, isSuper);
+<b class="nc"><i>1768</i>&nbsp;        }</b>
+<i>1769</i>&nbsp;
+<i>1770</i>&nbsp;        Statement code;
+<i>1771</i>&nbsp;        if (t.getReturnType().isType(TC_VOID)) {
+<b class="nc"><i>1772</i>&nbsp;            code = new ExpressionStatement(where, access);</b>
+<b class="nc"><i>1773</i>&nbsp;        } else {</b>
+<i>1774</i>&nbsp;            code = new ReturnStatement(where, access);
+<b class="nc"><i>1775</i>&nbsp;        }</b>
+<i>1776</i>&nbsp;        Statement body[] = { code };
+<b class="nc"><i>1777</i>&nbsp;        code = new CompoundStatement(where, body);</b>
+<b class="nc"><i>1778</i>&nbsp;</b>
+<i>1779</i>&nbsp;        // Access methods are now static (constructors excepted), and no longer final.
+<i>1780</i>&nbsp;        // This change was mandated by the interaction of the access method
+<i>1781</i>&nbsp;        // naming conventions and the restriction against overriding final
+<i>1782</i>&nbsp;        // methods.
+<i>1783</i>&nbsp;        int mod = M_SYNTHETIC;
+<b class="nc"><i>1784</i>&nbsp;        if (!field.isConstructor()) {</b>
+<b class="nc"><i>1785</i>&nbsp;            mod |= M_STATIC;</b>
+<b class="nc"><i>1786</i>&nbsp;        }</b>
+<i>1787</i>&nbsp;
+<i>1788</i>&nbsp;        // Create the synthetic method within the class in which the referenced
+<i>1789</i>&nbsp;        // private member appears.  The &#39;env&#39; argument to &#39;makeMemberDefinition&#39;
+<i>1790</i>&nbsp;        // is suspect because it represents the environment at the point at
+<i>1791</i>&nbsp;        // which a reference takes place, while it should represent the
+<i>1792</i>&nbsp;        // environment in which the definition of the synthetic method appears.
+<i>1793</i>&nbsp;        // We get away with this because &#39;env&#39; is used only to access globals
+<i>1794</i>&nbsp;        // such as &#39;Environment.error&#39;, and also as an argument to
+<i>1795</i>&nbsp;        // &#39;resolveTypeStructure&#39;, which immediately discards it using
+<i>1796</i>&nbsp;        // &#39;setupEnv&#39;. Apparently, the current definition of &#39;setupEnv&#39;
+<i>1797</i>&nbsp;        // represents a design change that has not been thoroughly propagated.
+<i>1798</i>&nbsp;        // An access method is declared with same list of exceptions as its
+<i>1799</i>&nbsp;        // target. As the exceptions are simply listed by name, the correctness
+<i>1800</i>&nbsp;        // of this approach requires that the access method be checked
+<i>1801</i>&nbsp;        // (name-resolved) in the same context as its target method  This
+<i>1802</i>&nbsp;        // should always be the case.
+<i>1803</i>&nbsp;        SourceMember newf = (SourceMember)
+<b class="nc"><i>1804</i>&nbsp;            env.makeMemberDefinition(env, where, this,</b>
+<b class="nc"><i>1805</i>&nbsp;                                     null, mod, t, anm, names,</b>
+<i>1806</i>&nbsp;                                     field.getExceptionIds(), code);
+<b class="nc"><i>1807</i>&nbsp;        // Just to be safe, copy over the name-resolved exceptions from the</b>
+<i>1808</i>&nbsp;        // target so that the context in which the access method is checked
+<i>1809</i>&nbsp;        // doesn&#39;t matter.
+<i>1810</i>&nbsp;        newf.setExceptions(field.getExceptions(env));
+<b class="nc"><i>1811</i>&nbsp;</b>
+<i>1812</i>&nbsp;        newf.setAccessMethodTarget(field);
+<b class="nc"><i>1813</i>&nbsp;        if (isUpdate) {</b>
+<b class="nc"><i>1814</i>&nbsp;            af.setAccessUpdateMember(newf);</b>
+<b class="nc"><i>1815</i>&nbsp;        }</b>
+<i>1816</i>&nbsp;        newf.setIsSuperAccessMethod(isSuper);
+<b class="nc"><i>1817</i>&nbsp;</b>
+<i>1818</i>&nbsp;        // The call to &#39;check&#39; is not needed, as the access method will be
+<i>1819</i>&nbsp;        // checked by the containing class after it is added.  This is the
+<i>1820</i>&nbsp;        // idiom followed in the implementation of class literals. (See
+<i>1821</i>&nbsp;        // &#39;FieldExpression.java&#39;.) In any case, the context is wrong in the
+<i>1822</i>&nbsp;        // call below.  The access method must be checked in the context in
+<i>1823</i>&nbsp;        // which it is declared, i.e., the class containing the referenced
+<i>1824</i>&nbsp;        // private member, not the (inner) class in which the original member
+<i>1825</i>&nbsp;        // reference occurs.
+<i>1826</i>&nbsp;        //
+<i>1827</i>&nbsp;        // try {
+<i>1828</i>&nbsp;        //     newf.check(env, ctx, new Vset());
+<i>1829</i>&nbsp;        // } catch (ClassNotFound ee) {
+<i>1830</i>&nbsp;        //     env.error(where, &quot;class.not.found&quot;, ee.name, this);
+<i>1831</i>&nbsp;        // }
+<i>1832</i>&nbsp;
+<i>1833</i>&nbsp;        // The comment above is inaccurate.  While it is often the case
+<i>1834</i>&nbsp;        // that the containing class will check the access method, this is
+<i>1835</i>&nbsp;        // by no means guaranteed.  In fact, an access method may be added
+<i>1836</i>&nbsp;        // after the checking of its class is complete.  In this case, however,
+<i>1837</i>&nbsp;        // the context in which the class was checked will have been saved in
+<i>1838</i>&nbsp;        // the class definition object (by the fix for 4095716), allowing us
+<i>1839</i>&nbsp;        // to check the field now, and in the correct context.
+<i>1840</i>&nbsp;        // This fixes bug 4098093.
+<i>1841</i>&nbsp;
+<i>1842</i>&nbsp;        Context checkContext = newf.getClassDefinition().getClassContext();
+<b class="nc"><i>1843</i>&nbsp;        if (checkContext != null) {</b>
+<b class="nc"><i>1844</i>&nbsp;            //System.out.println(&quot;checking late addition: &quot; + this);</b>
+<i>1845</i>&nbsp;            try {
+<i>1846</i>&nbsp;                newf.check(env, checkContext, new Vset());
+<b class="nc"><i>1847</i>&nbsp;            } catch (ClassNotFound ee) {</b>
+<b class="nc"><i>1848</i>&nbsp;                env.error(where, &quot;class.not.found&quot;, ee.name, this);</b>
+<b class="nc"><i>1849</i>&nbsp;            }</b>
+<b class="nc"><i>1850</i>&nbsp;        }</b>
+<i>1851</i>&nbsp;
+<i>1852</i>&nbsp;
+<i>1853</i>&nbsp;        //System.out.println(&quot;[Access member &#39;&quot; +
+<i>1854</i>&nbsp;        //                      newf + &quot;&#39; created for field &#39;&quot; +
+<i>1855</i>&nbsp;        //                      field +&quot;&#39; in class &#39;&quot; + this + &quot;&#39;]&quot;);
+<i>1856</i>&nbsp;
+<i>1857</i>&nbsp;        return newf;
+<b class="nc"><i>1858</i>&nbsp;    }</b>
+<i>1859</i>&nbsp;
+<i>1860</i>&nbsp;    /**
+<i>1861</i>&nbsp;     * Find an inner class of &#39;this&#39;, chosen arbitrarily.
+<i>1862</i>&nbsp;     * Result is always an actual class, never an interface.
+<i>1863</i>&nbsp;     * Returns null if none found.
+<i>1864</i>&nbsp;     */
+<i>1865</i>&nbsp;    SourceClass findLookupContext() {
+<i>1866</i>&nbsp;        // Look for an immediate inner class.
+<i>1867</i>&nbsp;        for (MemberDefinition f = getFirstMember();
+<b class="nc"><i>1868</i>&nbsp;             f != null;</b>
+<b class="nc"><i>1869</i>&nbsp;             f = f.getNextMember()) {</b>
+<b class="nc"><i>1870</i>&nbsp;            if (f.isInnerClass()) {</b>
+<b class="nc"><i>1871</i>&nbsp;                SourceClass ic = (SourceClass)f.getInnerClass();</b>
+<b class="nc"><i>1872</i>&nbsp;                if (!ic.isInterface()) {</b>
+<b class="nc"><i>1873</i>&nbsp;                    return ic;</b>
+<b class="nc"><i>1874</i>&nbsp;                }</b>
+<i>1875</i>&nbsp;            }
+<i>1876</i>&nbsp;        }
+<i>1877</i>&nbsp;        // Look for a class nested within an immediate inner interface.
+<i>1878</i>&nbsp;        // At this point, we have given up on finding a minimally-nested
+<i>1879</i>&nbsp;        // class (which would require a breadth-first traversal).  It doesn&#39;t
+<i>1880</i>&nbsp;        // really matter which inner class we find.
+<i>1881</i>&nbsp;        for (MemberDefinition f = getFirstMember();
+<b class="nc"><i>1882</i>&nbsp;             f != null;</b>
+<b class="nc"><i>1883</i>&nbsp;             f = f.getNextMember()) {</b>
+<b class="nc"><i>1884</i>&nbsp;            if (f.isInnerClass()) {</b>
+<b class="nc"><i>1885</i>&nbsp;                SourceClass lc =</b>
+<b class="nc"><i>1886</i>&nbsp;                    ((SourceClass)f.getInnerClass()).findLookupContext();</b>
+<b class="nc"><i>1887</i>&nbsp;                if (lc != null) {</b>
+<b class="nc"><i>1888</i>&nbsp;                    return lc;</b>
+<b class="nc"><i>1889</i>&nbsp;                }</b>
+<i>1890</i>&nbsp;            }
+<i>1891</i>&nbsp;        }
+<i>1892</i>&nbsp;        // No inner classes.
+<i>1893</i>&nbsp;        return null;
+<b class="nc"><i>1894</i>&nbsp;    }</b>
+<i>1895</i>&nbsp;
+<i>1896</i>&nbsp;    private MemberDefinition lookup = null;
+<b class="nc"><i>1897</i>&nbsp;</b>
+<i>1898</i>&nbsp;    /**
+<i>1899</i>&nbsp;     * Get helper method for class literal lookup.
+<i>1900</i>&nbsp;     */
+<i>1901</i>&nbsp;    public MemberDefinition getClassLiteralLookup(long fwhere) {
+<i>1902</i>&nbsp;
+<i>1903</i>&nbsp;        // If we have already created a lookup method, reuse it.
+<i>1904</i>&nbsp;        if (lookup != null) {
+<b class="nc"><i>1905</i>&nbsp;            return lookup;</b>
+<b class="nc"><i>1906</i>&nbsp;        }</b>
+<i>1907</i>&nbsp;
+<i>1908</i>&nbsp;        // If the current class is a nested class, make sure we put the
+<i>1909</i>&nbsp;        // lookup method in the outermost class.  Set &#39;lookup&#39; for the
+<i>1910</i>&nbsp;        // intervening inner classes so we won&#39;t have to do the search
+<i>1911</i>&nbsp;        // again.
+<i>1912</i>&nbsp;        if (outerClass != null) {
+<b class="nc"><i>1913</i>&nbsp;            lookup = outerClass.getClassLiteralLookup(fwhere);</b>
+<b class="nc"><i>1914</i>&nbsp;            return lookup;</b>
+<b class="nc"><i>1915</i>&nbsp;        }</b>
+<i>1916</i>&nbsp;
+<i>1917</i>&nbsp;        // If we arrive here, there was no existing &#39;class$&#39; method.
+<i>1918</i>&nbsp;
+<i>1919</i>&nbsp;        ClassDefinition c = this;
+<b class="nc"><i>1920</i>&nbsp;        boolean needNewClass = false;</b>
+<b class="nc"><i>1921</i>&nbsp;</b>
+<i>1922</i>&nbsp;        if (isInterface()) {
+<b class="nc"><i>1923</i>&nbsp;            // The top-level type is an interface.  Try to find an existing</b>
+<i>1924</i>&nbsp;            // inner class in which to create the helper method.  Any will do.
+<i>1925</i>&nbsp;            c = findLookupContext();
+<b class="nc"><i>1926</i>&nbsp;            if (c == null) {</b>
+<b class="nc"><i>1927</i>&nbsp;                // The interface has no inner classes.  Create an anonymous</b>
+<i>1928</i>&nbsp;                // inner class to hold the helper method, as an interface must
+<i>1929</i>&nbsp;                // not have any methods.  The tests above for prior creation
+<i>1930</i>&nbsp;                // of a &#39;class$&#39; method assure that only one such class is
+<i>1931</i>&nbsp;                // allocated for each outermost class containing a class
+<i>1932</i>&nbsp;                // literal embedded somewhere within.  Part of fix for 4055017.
+<i>1933</i>&nbsp;                needNewClass = true;
+<b class="nc"><i>1934</i>&nbsp;                IdentifierToken sup =</b>
+<b class="nc"><i>1935</i>&nbsp;                    new IdentifierToken(fwhere, idJavaLangObject);</b>
+<i>1936</i>&nbsp;                IdentifierToken interfaces[] = {};
+<b class="nc"><i>1937</i>&nbsp;                IdentifierToken t = new IdentifierToken(fwhere, idNull);</b>
+<b class="nc"><i>1938</i>&nbsp;                int mod = M_PUBLIC | M_ANONYMOUS | M_STATIC | M_SYNTHETIC;</b>
+<b class="nc"><i>1939</i>&nbsp;                c = (SourceClass)</b>
+<b class="nc"><i>1940</i>&nbsp;                    toplevelEnv.makeClassDefinition(toplevelEnv,</b>
+<b class="nc"><i>1941</i>&nbsp;                                                    fwhere, t, null, mod,</b>
+<i>1942</i>&nbsp;                                                    sup, interfaces, this);
+<i>1943</i>&nbsp;            }
+<i>1944</i>&nbsp;        }
+<i>1945</i>&nbsp;
+<i>1946</i>&nbsp;
+<i>1947</i>&nbsp;        // The name of the class-getter stub is &quot;class$&quot;
+<i>1948</i>&nbsp;        Identifier idDClass = Identifier.lookup(prefixClass);
+<b class="nc"><i>1949</i>&nbsp;        Type strarg[] = { Type.tString };</b>
+<b class="nc"><i>1950</i>&nbsp;</b>
+<i>1951</i>&nbsp;        // Some sanity checks of questionable value.
+<i>1952</i>&nbsp;        //
+<i>1953</i>&nbsp;        // This check became useless after matchMethod() was modified
+<i>1954</i>&nbsp;        // to not return synthetic methods.
+<i>1955</i>&nbsp;        //
+<i>1956</i>&nbsp;        //try {
+<i>1957</i>&nbsp;        //    lookup = c.matchMethod(toplevelEnv, c, idDClass, strarg);
+<i>1958</i>&nbsp;        //} catch (ClassNotFound ee) {
+<i>1959</i>&nbsp;        //    throw new CompilerError(&quot;unexpected missing class&quot;);
+<i>1960</i>&nbsp;        //} catch (AmbiguousMember ee) {
+<i>1961</i>&nbsp;        //    throw new CompilerError(&quot;synthetic name clash&quot;);
+<i>1962</i>&nbsp;        //}
+<i>1963</i>&nbsp;        //if (lookup != null &amp;&amp; lookup.getClassDefinition() == c) {
+<i>1964</i>&nbsp;        //    // Error if method found was not inherited.
+<i>1965</i>&nbsp;        //    throw new CompilerError(&quot;unexpected duplicate&quot;);
+<i>1966</i>&nbsp;        //}
+<i>1967</i>&nbsp;        // Some sanity checks of questionable value.
+<i>1968</i>&nbsp;
+<i>1969</i>&nbsp;        /*  // The helper function looks like this.
+<i>1970</i>&nbsp;         *  // It simply maps a checked exception to an unchecked one.
+<i>1971</i>&nbsp;         *  static Class class$(String class$) {
+<i>1972</i>&nbsp;         *    try { return Class.forName(class$); }
+<i>1973</i>&nbsp;         *    catch (ClassNotFoundException forName) {
+<i>1974</i>&nbsp;         *      throw new NoClassDefFoundError(forName.getMessage());
+<i>1975</i>&nbsp;         *    }
+<i>1976</i>&nbsp;         *  }
+<i>1977</i>&nbsp;         */
+<i>1978</i>&nbsp;        long w = c.getWhere();
+<b class="nc"><i>1979</i>&nbsp;        IdentifierToken arg = new IdentifierToken(w, idDClass);</b>
+<b class="nc"><i>1980</i>&nbsp;        Expression e = new IdentifierExpression(arg);</b>
+<b class="nc"><i>1981</i>&nbsp;        Expression a1[] = { e };</b>
+<b class="nc"><i>1982</i>&nbsp;        Identifier idForName = Identifier.lookup(&quot;forName&quot;);</b>
+<b class="nc"><i>1983</i>&nbsp;        e = new MethodExpression(w, new TypeExpression(w, Type.tClassDesc),</b>
+<b class="nc"><i>1984</i>&nbsp;                                 idForName, a1);</b>
+<i>1985</i>&nbsp;        Statement body = new ReturnStatement(w, e);
+<b class="nc"><i>1986</i>&nbsp;        // map the exceptions</b>
+<i>1987</i>&nbsp;        Identifier idClassNotFound =
+<b class="nc"><i>1988</i>&nbsp;            Identifier.lookup(&quot;java.lang.ClassNotFoundException&quot;);</b>
+<b class="nc"><i>1989</i>&nbsp;        Identifier idNoClassDefFound =</b>
+<b class="nc"><i>1990</i>&nbsp;            Identifier.lookup(&quot;java.lang.NoClassDefFoundError&quot;);</b>
+<b class="nc"><i>1991</i>&nbsp;        Type ctyp = Type.tClass(idClassNotFound);</b>
+<b class="nc"><i>1992</i>&nbsp;        Type exptyp = Type.tClass(idNoClassDefFound);</b>
+<b class="nc"><i>1993</i>&nbsp;        Identifier idGetMessage = Identifier.lookup(&quot;getMessage&quot;);</b>
+<b class="nc"><i>1994</i>&nbsp;        e = new IdentifierExpression(w, idForName);</b>
+<b class="nc"><i>1995</i>&nbsp;        e = new MethodExpression(w, e, idGetMessage, new Expression[0]);</b>
+<b class="nc"><i>1996</i>&nbsp;        Expression a2[] = { e };</b>
+<b class="nc"><i>1997</i>&nbsp;        e = new NewInstanceExpression(w, new TypeExpression(w, exptyp), a2);</b>
+<b class="nc"><i>1998</i>&nbsp;        Statement handler = new CatchStatement(w, new TypeExpression(w, ctyp),</b>
+<b class="nc"><i>1999</i>&nbsp;                                               new IdentifierToken(idForName),</b>
+<i>2000</i>&nbsp;                                               new ThrowStatement(w, e));
+<i>2001</i>&nbsp;        Statement handlers[] = { handler };
+<b class="nc"><i>2002</i>&nbsp;        body = new TryStatement(w, body, handlers);</b>
+<b class="nc"><i>2003</i>&nbsp;</b>
+<i>2004</i>&nbsp;        Type mtype = Type.tMethod(Type.tClassDesc, strarg);
+<b class="nc"><i>2005</i>&nbsp;        IdentifierToken args[] = { arg };</b>
+<b class="nc"><i>2006</i>&nbsp;</b>
+<i>2007</i>&nbsp;        // Use default (package) access.  If private, an access method would
+<i>2008</i>&nbsp;        // be needed in the event that the class literal belonged to an interface.
+<i>2009</i>&nbsp;        // Also, making it private tickles bug 4098316.
+<i>2010</i>&nbsp;        lookup = toplevelEnv.makeMemberDefinition(toplevelEnv, w,
+<b class="nc"><i>2011</i>&nbsp;                                                  c, null,</b>
+<i>2012</i>&nbsp;                                                  M_STATIC | M_SYNTHETIC,
+<i>2013</i>&nbsp;                                                  mtype, idDClass,
+<i>2014</i>&nbsp;                                                  args, null, body);
+<i>2015</i>&nbsp;
+<i>2016</i>&nbsp;        // If a new class was created to contain the helper method,
+<i>2017</i>&nbsp;        // check it now.
+<i>2018</i>&nbsp;        if (needNewClass) {
+<b class="nc"><i>2019</i>&nbsp;            if (c.getClassDeclaration().getStatus() == CS_CHECKED) {</b>
+<b class="nc"><i>2020</i>&nbsp;                throw new CompilerError(&quot;duplicate check&quot;);</b>
+<b class="nc"><i>2021</i>&nbsp;            }</b>
+<i>2022</i>&nbsp;            c.getClassDeclaration().setDefinition(c, CS_PARSED);
+<b class="nc"><i>2023</i>&nbsp;            Expression argsX[] = {};</b>
+<b class="nc"><i>2024</i>&nbsp;            Type argTypesX[] = {};</b>
+<b class="nc"><i>2025</i>&nbsp;            try {</b>
+<i>2026</i>&nbsp;                ClassDefinition sup =
+<b class="nc"><i>2027</i>&nbsp;                    toplevelEnv.getClassDefinition(idJavaLangObject);</b>
+<b class="nc"><i>2028</i>&nbsp;                c.checkLocalClass(toplevelEnv, null,</b>
+<b class="nc"><i>2029</i>&nbsp;                                  new Vset(), sup, argsX, argTypesX);</b>
+<i>2030</i>&nbsp;            } catch (ClassNotFound ee) {};
+<b class="nc"><i>2031</i>&nbsp;        }</b>
+<i>2032</i>&nbsp;
+<i>2033</i>&nbsp;        return lookup;
+<b class="nc"><i>2034</i>&nbsp;    }</b>
+<i>2035</i>&nbsp;
+<i>2036</i>&nbsp;
+<i>2037</i>&nbsp;    /**
+<i>2038</i>&nbsp;     * A list of active ongoing compilations. This list
+<i>2039</i>&nbsp;     * is used to stop two compilations from saving the
+<i>2040</i>&nbsp;     * same class.
+<i>2041</i>&nbsp;     */
+<i>2042</i>&nbsp;    private static Vector&lt;Object&gt; active = new Vector&lt;&gt;();
+<b class="nc"><i>2043</i>&nbsp;</b>
+<i>2044</i>&nbsp;    /**
+<i>2045</i>&nbsp;     * Compile this class
+<i>2046</i>&nbsp;     */
+<i>2047</i>&nbsp;    public void compile(OutputStream out)
+<i>2048</i>&nbsp;                throws InterruptedException, IOException {
+<i>2049</i>&nbsp;        Environment env = toplevelEnv;
+<b class="nc"><i>2050</i>&nbsp;        synchronized (active) {</b>
+<b class="nc"><i>2051</i>&nbsp;            while (active.contains(getName())) {</b>
+<b class="nc"><i>2052</i>&nbsp;                active.wait();</b>
+<b class="nc"><i>2053</i>&nbsp;            }</b>
+<i>2054</i>&nbsp;            active.addElement(getName());
+<b class="nc"><i>2055</i>&nbsp;        }</b>
+<b class="nc"><i>2056</i>&nbsp;</b>
+<i>2057</i>&nbsp;        try {
+<i>2058</i>&nbsp;            compileClass(env, out);
+<b class="nc"><i>2059</i>&nbsp;        } catch (ClassNotFound e) {</b>
+<b class="nc"><i>2060</i>&nbsp;            throw new CompilerError(e);</b>
+<b class="nc"><i>2061</i>&nbsp;        } finally {</b>
+<i>2062</i>&nbsp;            synchronized (active) {
+<b class="nc"><i>2063</i>&nbsp;                active.removeElement(getName());</b>
+<b class="nc"><i>2064</i>&nbsp;                active.notifyAll();</b>
+<b class="nc"><i>2065</i>&nbsp;            }</b>
+<b class="nc"><i>2066</i>&nbsp;        }</b>
+<b class="nc"><i>2067</i>&nbsp;    }</b>
+<i>2068</i>&nbsp;
+<i>2069</i>&nbsp;    /**
+<i>2070</i>&nbsp;     * Verify that the modifier bits included in &#39;required&#39; are
+<i>2071</i>&nbsp;     * all present in &#39;mods&#39;, otherwise signal an internal error.
+<i>2072</i>&nbsp;     * Note that errors in the source program may corrupt the modifiers,
+<i>2073</i>&nbsp;     * thus we rely on the fact that &#39;CompilerError&#39; exceptions are
+<i>2074</i>&nbsp;     * silently ignored after an error message has been issued.
+<i>2075</i>&nbsp;     */
+<i>2076</i>&nbsp;    private static void assertModifiers(int mods, int required) {
+<i>2077</i>&nbsp;        if ((mods &amp; required) != required) {
+<b class="nc"><i>2078</i>&nbsp;            throw new CompilerError(&quot;illegal class modifiers&quot;);</b>
+<b class="nc"><i>2079</i>&nbsp;        }</b>
+<i>2080</i>&nbsp;    }
+<i>2081</i>&nbsp;
+<i>2082</i>&nbsp;    protected void compileClass(Environment env, OutputStream out)
+<i>2083</i>&nbsp;                throws IOException, ClassNotFound {
+<i>2084</i>&nbsp;        Vector&lt;CompilerMember&gt; variables = new Vector&lt;&gt;();
+<b class="nc"><i>2085</i>&nbsp;        Vector&lt;CompilerMember&gt; methods = new Vector&lt;&gt;();</b>
+<b class="nc"><i>2086</i>&nbsp;        Vector&lt;ClassDefinition&gt; innerClasses = new Vector&lt;&gt;();</b>
+<b class="nc"><i>2087</i>&nbsp;        CompilerMember init = new CompilerMember(new MemberDefinition(getWhere(), this, M_STATIC, Type.tMethod(Type.tVoid), idClassInit, null, null), new Assembler());</b>
+<b class="nc"><i>2088</i>&nbsp;        Context ctx = new Context((Context)null, init.field);</b>
+<b class="nc"><i>2089</i>&nbsp;</b>
+<i>2090</i>&nbsp;        for (ClassDefinition def = this; def.isInnerClass(); def = def.getOuterClass()) {
+<b class="nc"><i>2091</i>&nbsp;            innerClasses.addElement(def);</b>
+<b class="nc"><i>2092</i>&nbsp;        }</b>
+<i>2093</i>&nbsp;        // Reverse the order, so that outer levels come first:
+<i>2094</i>&nbsp;        int ncsize = innerClasses.size();
+<b class="nc"><i>2095</i>&nbsp;        for (int i = ncsize; --i &gt;= 0; )</b>
+<b class="nc"><i>2096</i>&nbsp;            innerClasses.addElement(innerClasses.elementAt(i));</b>
+<b class="nc"><i>2097</i>&nbsp;        for (int i = ncsize; --i &gt;= 0; )</b>
+<b class="nc"><i>2098</i>&nbsp;            innerClasses.removeElementAt(i);</b>
+<b class="nc"><i>2099</i>&nbsp;</b>
+<i>2100</i>&nbsp;        // System.out.println(&quot;compile class &quot; + getName());
+<i>2101</i>&nbsp;
+<i>2102</i>&nbsp;        boolean haveDeprecated = this.isDeprecated();
+<b class="nc"><i>2103</i>&nbsp;        boolean haveSynthetic = this.isSynthetic();</b>
+<b class="nc"><i>2104</i>&nbsp;        boolean haveConstantValue = false;</b>
+<b class="nc"><i>2105</i>&nbsp;        boolean haveExceptions = false;</b>
+<b class="nc"><i>2106</i>&nbsp;</b>
+<i>2107</i>&nbsp;        // Generate code for all fields
+<i>2108</i>&nbsp;        for (SourceMember field = (SourceMember)getFirstMember();
+<b class="nc"><i>2109</i>&nbsp;             field != null;</b>
+<b class="nc"><i>2110</i>&nbsp;             field = (SourceMember)field.getNextMember()) {</b>
+<b class="nc"><i>2111</i>&nbsp;</b>
+<i>2112</i>&nbsp;            //System.out.println(&quot;compile field &quot; + field.getName());
+<i>2113</i>&nbsp;
+<i>2114</i>&nbsp;            haveDeprecated |= field.isDeprecated();
+<b class="nc"><i>2115</i>&nbsp;            haveSynthetic |= field.isSynthetic();</b>
+<b class="nc"><i>2116</i>&nbsp;</b>
+<i>2117</i>&nbsp;            try {
+<i>2118</i>&nbsp;                if (field.isMethod()) {
+<b class="nc"><i>2119</i>&nbsp;                    haveExceptions |=</b>
+<b class="nc"><i>2120</i>&nbsp;                        (field.getExceptions(env).length &gt; 0);</b>
+<b class="nc"><i>2121</i>&nbsp;</b>
+<i>2122</i>&nbsp;                    if (field.isInitializer()) {
+<b class="nc"><i>2123</i>&nbsp;                        if (field.isStatic()) {</b>
+<b class="nc"><i>2124</i>&nbsp;                            field.code(env, init.asm);</b>
+<b class="nc"><i>2125</i>&nbsp;                        }</b>
+<i>2126</i>&nbsp;                    } else {
+<i>2127</i>&nbsp;                        CompilerMember f =
+<b class="nc"><i>2128</i>&nbsp;                            new CompilerMember(field, new Assembler());</b>
+<i>2129</i>&nbsp;                        field.code(env, f.asm);
+<b class="nc"><i>2130</i>&nbsp;                        methods.addElement(f);</b>
+<b class="nc"><i>2131</i>&nbsp;                    }</b>
+<b class="nc"><i>2132</i>&nbsp;                } else if (field.isInnerClass()) {</b>
+<b class="nc"><i>2133</i>&nbsp;                    innerClasses.addElement(field.getInnerClass());</b>
+<b class="nc"><i>2134</i>&nbsp;                } else if (field.isVariable()) {</b>
+<b class="nc"><i>2135</i>&nbsp;                    field.inline(env);</b>
+<b class="nc"><i>2136</i>&nbsp;                    CompilerMember f = new CompilerMember(field, null);</b>
+<b class="nc"><i>2137</i>&nbsp;                    variables.addElement(f);</b>
+<b class="nc"><i>2138</i>&nbsp;                    if (field.isStatic()) {</b>
+<b class="nc"><i>2139</i>&nbsp;                        field.codeInit(env, ctx, init.asm);</b>
+<b class="nc"><i>2140</i>&nbsp;</b>
+<i>2141</i>&nbsp;                    }
+<i>2142</i>&nbsp;                    haveConstantValue |=
+<b class="nc"><i>2143</i>&nbsp;                        (field.getInitialValue() != null);</b>
+<b class="nc"><i>2144</i>&nbsp;                }</b>
+<i>2145</i>&nbsp;            } catch (CompilerError ee) {
+<b class="nc"><i>2146</i>&nbsp;                ee.printStackTrace();</b>
+<b class="nc"><i>2147</i>&nbsp;                env.error(field, 0, &quot;generic&quot;,</b>
+<b class="nc"><i>2148</i>&nbsp;                          field.getClassDeclaration() + &quot;:&quot; + field +</b>
+<b class="nc"><i>2149</i>&nbsp;                          &quot;@&quot; + ee.toString(), null, null);</b>
+<b class="nc"><i>2150</i>&nbsp;            }</b>
+<b class="nc"><i>2151</i>&nbsp;        }</b>
+<i>2152</i>&nbsp;        if (!init.asm.empty()) {
+<b class="nc"><i>2153</i>&nbsp;           init.asm.add(getWhere(), opc_return, true);</b>
+<b class="nc"><i>2154</i>&nbsp;            methods.addElement(init);</b>
+<b class="nc"><i>2155</i>&nbsp;        }</b>
+<i>2156</i>&nbsp;
+<i>2157</i>&nbsp;        // bail out if there were any errors
+<i>2158</i>&nbsp;        if (getNestError()) {
+<b class="nc"><i>2159</i>&nbsp;            return;</b>
+<i>2160</i>&nbsp;        }
+<i>2161</i>&nbsp;
+<i>2162</i>&nbsp;        int nClassAttrs = 0;
+<b class="nc"><i>2163</i>&nbsp;</b>
+<i>2164</i>&nbsp;        // Insert constants
+<i>2165</i>&nbsp;        if (methods.size() &gt; 0) {
+<b class="nc"><i>2166</i>&nbsp;            tab.put(&quot;Code&quot;);</b>
+<b class="nc"><i>2167</i>&nbsp;        }</b>
+<i>2168</i>&nbsp;        if (haveConstantValue) {
+<b class="nc"><i>2169</i>&nbsp;            tab.put(&quot;ConstantValue&quot;);</b>
+<b class="nc"><i>2170</i>&nbsp;        }</b>
+<i>2171</i>&nbsp;
+<i>2172</i>&nbsp;        String sourceFile = null;
+<b class="nc"><i>2173</i>&nbsp;        if (env.debug_source()) {</b>
+<b class="nc"><i>2174</i>&nbsp;            sourceFile = ((ClassFile)getSource()).getName();</b>
+<b class="nc"><i>2175</i>&nbsp;            tab.put(&quot;SourceFile&quot;);</b>
+<b class="nc"><i>2176</i>&nbsp;            tab.put(sourceFile);</b>
+<b class="nc"><i>2177</i>&nbsp;            nClassAttrs += 1;</b>
+<b class="nc"><i>2178</i>&nbsp;        }</b>
+<i>2179</i>&nbsp;
+<i>2180</i>&nbsp;        if (haveExceptions) {
+<b class="nc"><i>2181</i>&nbsp;            tab.put(&quot;Exceptions&quot;);</b>
+<b class="nc"><i>2182</i>&nbsp;        }</b>
+<i>2183</i>&nbsp;
+<i>2184</i>&nbsp;        if (env.debug_lines()) {
+<b class="nc"><i>2185</i>&nbsp;            tab.put(&quot;LineNumberTable&quot;);</b>
+<b class="nc"><i>2186</i>&nbsp;        }</b>
+<i>2187</i>&nbsp;        if (haveDeprecated) {
+<b class="nc"><i>2188</i>&nbsp;            tab.put(&quot;Deprecated&quot;);</b>
+<b class="nc"><i>2189</i>&nbsp;            if (this.isDeprecated()) {</b>
+<b class="nc"><i>2190</i>&nbsp;                nClassAttrs += 1;</b>
+<b class="nc"><i>2191</i>&nbsp;            }</b>
+<i>2192</i>&nbsp;        }
+<i>2193</i>&nbsp;        if (haveSynthetic) {
+<b class="nc"><i>2194</i>&nbsp;            tab.put(&quot;Synthetic&quot;);</b>
+<b class="nc"><i>2195</i>&nbsp;            if (this.isSynthetic()) {</b>
+<b class="nc"><i>2196</i>&nbsp;                nClassAttrs += 1;</b>
+<b class="nc"><i>2197</i>&nbsp;            }</b>
+<i>2198</i>&nbsp;        }
+<i>2199</i>&nbsp;// JCOV
+<i>2200</i>&nbsp;        if (env.coverage()) {
+<b class="nc"><i>2201</i>&nbsp;            nClassAttrs += 2;           // AbsoluteSourcePath, TimeStamp</b>
+<b class="nc"><i>2202</i>&nbsp;            tab.put(&quot;AbsoluteSourcePath&quot;);</b>
+<b class="nc"><i>2203</i>&nbsp;            tab.put(&quot;TimeStamp&quot;);</b>
+<b class="nc"><i>2204</i>&nbsp;            tab.put(&quot;CoverageTable&quot;);</b>
+<b class="nc"><i>2205</i>&nbsp;        }</b>
+<i>2206</i>&nbsp;// end JCOV
+<i>2207</i>&nbsp;        if (env.debug_vars()) {
+<b class="nc"><i>2208</i>&nbsp;            tab.put(&quot;LocalVariableTable&quot;);</b>
+<b class="nc"><i>2209</i>&nbsp;        }</b>
+<i>2210</i>&nbsp;        if (innerClasses.size() &gt; 0) {
+<b class="nc"><i>2211</i>&nbsp;            tab.put(&quot;InnerClasses&quot;);</b>
+<b class="nc"><i>2212</i>&nbsp;            nClassAttrs += 1;           // InnerClasses</b>
+<b class="nc"><i>2213</i>&nbsp;        }</b>
+<i>2214</i>&nbsp;
+<i>2215</i>&nbsp;// JCOV
+<i>2216</i>&nbsp;        String absoluteSourcePath = &quot;&quot;;
+<b class="nc"><i>2217</i>&nbsp;        long timeStamp = 0;</b>
+<b class="nc"><i>2218</i>&nbsp;</b>
+<i>2219</i>&nbsp;        if (env.coverage()) {
+<b class="nc"><i>2220</i>&nbsp;                absoluteSourcePath = getAbsoluteName();</b>
+<b class="nc"><i>2221</i>&nbsp;                timeStamp = System.currentTimeMillis();</b>
+<b class="nc"><i>2222</i>&nbsp;                tab.put(absoluteSourcePath);</b>
+<b class="nc"><i>2223</i>&nbsp;        }</b>
+<i>2224</i>&nbsp;// end JCOV
+<i>2225</i>&nbsp;        tab.put(getClassDeclaration());
+<b class="nc"><i>2226</i>&nbsp;        if (getSuperClass() != null) {</b>
+<b class="nc"><i>2227</i>&nbsp;            tab.put(getSuperClass());</b>
+<b class="nc"><i>2228</i>&nbsp;        }</b>
+<i>2229</i>&nbsp;        for (int i = 0 ; i &lt; interfaces.length ; i++) {
+<b class="nc"><i>2230</i>&nbsp;            tab.put(interfaces[i]);</b>
+<b class="nc"><i>2231</i>&nbsp;        }</b>
+<i>2232</i>&nbsp;
+<i>2233</i>&nbsp;        // Sort the methods in order to make sure both constant pool
+<i>2234</i>&nbsp;        // entries and methods are in a deterministic order from run
+<i>2235</i>&nbsp;        // to run (this allows comparing class files for a fixed point
+<i>2236</i>&nbsp;        // to validate the compiler)
+<i>2237</i>&nbsp;        CompilerMember[] ordered_methods =
+<b class="nc"><i>2238</i>&nbsp;            new CompilerMember[methods.size()];</b>
+<b class="nc"><i>2239</i>&nbsp;        methods.copyInto(ordered_methods);</b>
+<b class="nc"><i>2240</i>&nbsp;        java.util.Arrays.sort(ordered_methods);</b>
+<b class="nc"><i>2241</i>&nbsp;        for (int i=0; i&lt;methods.size(); i++)</b>
+<b class="nc"><i>2242</i>&nbsp;            methods.setElementAt(ordered_methods[i], i);</b>
+<b class="nc"><i>2243</i>&nbsp;</b>
+<i>2244</i>&nbsp;        // Optimize Code and Collect method constants
+<i>2245</i>&nbsp;        for (Enumeration&lt;CompilerMember&gt; e = methods.elements() ; e.hasMoreElements() ; ) {
+<b class="nc"><i>2246</i>&nbsp;            CompilerMember f = e.nextElement();</b>
+<b class="nc"><i>2247</i>&nbsp;            try {</b>
+<i>2248</i>&nbsp;                f.asm.optimize(env);
+<b class="nc"><i>2249</i>&nbsp;                f.asm.collect(env, f.field, tab);</b>
+<b class="nc"><i>2250</i>&nbsp;                tab.put(f.name);</b>
+<b class="nc"><i>2251</i>&nbsp;                tab.put(f.sig);</b>
+<b class="nc"><i>2252</i>&nbsp;                ClassDeclaration exp[] = f.field.getExceptions(env);</b>
+<b class="nc"><i>2253</i>&nbsp;                for (int i = 0 ; i &lt; exp.length ; i++) {</b>
+<b class="nc"><i>2254</i>&nbsp;                    tab.put(exp[i]);</b>
+<b class="nc"><i>2255</i>&nbsp;                }</b>
+<i>2256</i>&nbsp;            } catch (Exception ee) {
+<b class="nc"><i>2257</i>&nbsp;                ee.printStackTrace();</b>
+<b class="nc"><i>2258</i>&nbsp;                env.error(f.field, -1, &quot;generic&quot;, f.field.getName() + &quot;@&quot; + ee.toString(), null, null);</b>
+<b class="nc"><i>2259</i>&nbsp;                f.asm.listing(System.out);</b>
+<b class="nc"><i>2260</i>&nbsp;            }</b>
+<b class="nc"><i>2261</i>&nbsp;        }</b>
+<b class="nc"><i>2262</i>&nbsp;</b>
+<i>2263</i>&nbsp;        // Collect field constants
+<i>2264</i>&nbsp;        for (Enumeration&lt;CompilerMember&gt; e = variables.elements() ; e.hasMoreElements() ; ) {
+<b class="nc"><i>2265</i>&nbsp;            CompilerMember f = e.nextElement();</b>
+<b class="nc"><i>2266</i>&nbsp;            tab.put(f.name);</b>
+<b class="nc"><i>2267</i>&nbsp;            tab.put(f.sig);</b>
+<b class="nc"><i>2268</i>&nbsp;</b>
+<i>2269</i>&nbsp;            Object val = f.field.getInitialValue();
+<b class="nc"><i>2270</i>&nbsp;            if (val != null) {</b>
+<b class="nc"><i>2271</i>&nbsp;                tab.put((val instanceof String) ? new StringExpression(f.field.getWhere(), (String)val) : val);</b>
+<b class="nc"><i>2272</i>&nbsp;            }</b>
+<i>2273</i>&nbsp;        }
+<b class="nc"><i>2274</i>&nbsp;</b>
+<i>2275</i>&nbsp;        // Collect inner class constants
+<i>2276</i>&nbsp;        for (Enumeration&lt;ClassDefinition&gt; e = innerClasses.elements();
+<b class="nc"><i>2277</i>&nbsp;             e.hasMoreElements() ; ) {</b>
+<b class="nc"><i>2278</i>&nbsp;            ClassDefinition inner = e.nextElement();</b>
+<b class="nc"><i>2279</i>&nbsp;            tab.put(inner.getClassDeclaration());</b>
+<b class="nc"><i>2280</i>&nbsp;</b>
+<i>2281</i>&nbsp;            // If the inner class is local, we do not need to add its
+<i>2282</i>&nbsp;            // outer class here -- the outer_class_info_index is zero.
+<i>2283</i>&nbsp;            if (!inner.isLocal()) {
+<b class="nc"><i>2284</i>&nbsp;                ClassDefinition outer = inner.getOuterClass();</b>
+<b class="nc"><i>2285</i>&nbsp;                tab.put(outer.getClassDeclaration());</b>
+<b class="nc"><i>2286</i>&nbsp;            }</b>
+<i>2287</i>&nbsp;
+<i>2288</i>&nbsp;            // If the local name of the class is idNull, don&#39;t bother to
+<i>2289</i>&nbsp;            // add it to the constant pool.  We won&#39;t need it.
+<i>2290</i>&nbsp;            Identifier inner_local_name = inner.getLocalName();
+<b class="nc"><i>2291</i>&nbsp;            if (inner_local_name != idNull) {</b>
+<b class="nc"><i>2292</i>&nbsp;                tab.put(inner_local_name.toString());</b>
+<b class="nc"><i>2293</i>&nbsp;            }</b>
+<i>2294</i>&nbsp;        }
+<b class="nc"><i>2295</i>&nbsp;</b>
+<i>2296</i>&nbsp;        // Write header
+<i>2297</i>&nbsp;        DataOutputStream data = new DataOutputStream(out);
+<b class="nc"><i>2298</i>&nbsp;        data.writeInt(JAVA_MAGIC);</b>
+<b class="nc"><i>2299</i>&nbsp;        data.writeShort(toplevelEnv.getMinorVersion());</b>
+<b class="nc"><i>2300</i>&nbsp;        data.writeShort(toplevelEnv.getMajorVersion());</b>
+<b class="nc"><i>2301</i>&nbsp;        tab.write(env, data);</b>
+<b class="nc"><i>2302</i>&nbsp;</b>
+<i>2303</i>&nbsp;        // Write class information
+<i>2304</i>&nbsp;        int cmods = getModifiers() &amp; MM_CLASS;
+<b class="nc"><i>2305</i>&nbsp;</b>
+<i>2306</i>&nbsp;        // Certain modifiers are implied:
+<i>2307</i>&nbsp;        // 1.  Any interface (nested or not) is implicitly deemed to be abstract,
+<i>2308</i>&nbsp;        //     whether it is explicitly marked so or not.  (Java 1.0.)
+<i>2309</i>&nbsp;        // 2.  A interface which is a member of a type is implicitly deemed to
+<i>2310</i>&nbsp;        //     be static, whether it is explicitly marked so or not.
+<i>2311</i>&nbsp;        // 3a. A type which is a member of an interface is implicitly deemed
+<i>2312</i>&nbsp;        //     to be public, whether it is explicitly marked so or not.
+<i>2313</i>&nbsp;        // 3b. A type which is a member of an interface is implicitly deemed
+<i>2314</i>&nbsp;        //     to be static, whether it is explicitly marked so or not.
+<i>2315</i>&nbsp;        // All of these rules are implemented in &#39;BatchParser.beginClass&#39;,
+<i>2316</i>&nbsp;        // but the results are verified here.
+<i>2317</i>&nbsp;
+<i>2318</i>&nbsp;        if (isInterface()) {
+<b class="nc"><i>2319</i>&nbsp;            // Rule 1.</b>
+<i>2320</i>&nbsp;            // The VM spec states that ACC_ABSTRACT must be set when
+<i>2321</i>&nbsp;            // ACC_INTERFACE is; this was not done by javac prior to 1.2,
+<i>2322</i>&nbsp;            // and the runtime compensates by setting it.  Making sure
+<i>2323</i>&nbsp;            // it is set here will allow the runtime hack to eventually
+<i>2324</i>&nbsp;            // be removed. Rule 2 doesn&#39;t apply to transformed modifiers.
+<i>2325</i>&nbsp;            assertModifiers(cmods, ACC_ABSTRACT);
+<b class="nc"><i>2326</i>&nbsp;        } else {</b>
+<i>2327</i>&nbsp;            // Contrary to the JVM spec, we only set ACC_SUPER for classes,
+<i>2328</i>&nbsp;            // not interfaces.  This is a workaround for a bug in IE3.0,
+<i>2329</i>&nbsp;            // which refuses interfaces with ACC_SUPER on.
+<i>2330</i>&nbsp;            cmods |= ACC_SUPER;
+<b class="nc"><i>2331</i>&nbsp;        }</b>
+<i>2332</i>&nbsp;
+<i>2333</i>&nbsp;        // If this is a nested class, transform access modifiers.
+<i>2334</i>&nbsp;        if (outerClass != null) {
+<b class="nc"><i>2335</i>&nbsp;            // If private, transform to default (package) access.</b>
+<i>2336</i>&nbsp;            // If protected, transform to public.
+<i>2337</i>&nbsp;            // M_PRIVATE and M_PROTECTED are already masked off by MM_CLASS above.
+<i>2338</i>&nbsp;            // cmods &amp;= ~(M_PRIVATE | M_PROTECTED);
+<i>2339</i>&nbsp;            if (isProtected()) cmods |= M_PUBLIC;
+<b class="nc"><i>2340</i>&nbsp;            // Rule 3a.  Note that Rule 3b doesn&#39;t apply to transformed modifiers.</b>
+<i>2341</i>&nbsp;            if (outerClass.isInterface()) {
+<b class="nc"><i>2342</i>&nbsp;                assertModifiers(cmods, M_PUBLIC);</b>
+<b class="nc"><i>2343</i>&nbsp;            }</b>
+<i>2344</i>&nbsp;        }
+<i>2345</i>&nbsp;
+<i>2346</i>&nbsp;        data.writeShort(cmods);
+<b class="nc"><i>2347</i>&nbsp;</b>
+<i>2348</i>&nbsp;        if (env.dumpModifiers()) {
+<b class="nc"><i>2349</i>&nbsp;            Identifier cn = getName();</b>
+<b class="nc"><i>2350</i>&nbsp;            Identifier nm =</b>
+<b class="nc"><i>2351</i>&nbsp;                Identifier.lookup(cn.getQualifier(), cn.getFlatName());</b>
+<b class="nc"><i>2352</i>&nbsp;            System.out.println();</b>
+<b class="nc"><i>2353</i>&nbsp;            System.out.println(&quot;CLASSFILE  &quot; + nm);</b>
+<b class="nc"><i>2354</i>&nbsp;            System.out.println(&quot;---&quot; + classModifierString(cmods));</b>
+<b class="nc"><i>2355</i>&nbsp;        }</b>
+<i>2356</i>&nbsp;
+<i>2357</i>&nbsp;        data.writeShort(tab.index(getClassDeclaration()));
+<b class="nc"><i>2358</i>&nbsp;        data.writeShort((getSuperClass() != null) ? tab.index(getSuperClass()) : 0);</b>
+<b class="nc"><i>2359</i>&nbsp;        data.writeShort(interfaces.length);</b>
+<b class="nc"><i>2360</i>&nbsp;        for (int i = 0 ; i &lt; interfaces.length ; i++) {</b>
+<b class="nc"><i>2361</i>&nbsp;            data.writeShort(tab.index(interfaces[i]));</b>
+<b class="nc"><i>2362</i>&nbsp;        }</b>
+<i>2363</i>&nbsp;
+<i>2364</i>&nbsp;        // write variables
+<i>2365</i>&nbsp;        ByteArrayOutputStream buf = new ByteArrayOutputStream(256);
+<b class="nc"><i>2366</i>&nbsp;        ByteArrayOutputStream attbuf = new ByteArrayOutputStream(256);</b>
+<b class="nc"><i>2367</i>&nbsp;        DataOutputStream databuf = new DataOutputStream(buf);</b>
+<b class="nc"><i>2368</i>&nbsp;</b>
+<i>2369</i>&nbsp;        data.writeShort(variables.size());
+<b class="nc"><i>2370</i>&nbsp;        for (Enumeration&lt;CompilerMember&gt; e = variables.elements() ; e.hasMoreElements() ; ) {</b>
+<b class="nc"><i>2371</i>&nbsp;            CompilerMember f = e.nextElement();</b>
+<b class="nc"><i>2372</i>&nbsp;            Object val = f.field.getInitialValue();</b>
+<b class="nc"><i>2373</i>&nbsp;</b>
+<i>2374</i>&nbsp;            data.writeShort(f.field.getModifiers() &amp; MM_FIELD);
+<b class="nc"><i>2375</i>&nbsp;            data.writeShort(tab.index(f.name));</b>
+<b class="nc"><i>2376</i>&nbsp;            data.writeShort(tab.index(f.sig));</b>
+<b class="nc"><i>2377</i>&nbsp;</b>
+<i>2378</i>&nbsp;            int fieldAtts = (val != null ? 1 : 0);
+<b class="nc"><i>2379</i>&nbsp;            boolean dep = f.field.isDeprecated();</b>
+<b class="nc"><i>2380</i>&nbsp;            boolean syn = f.field.isSynthetic();</b>
+<b class="nc"><i>2381</i>&nbsp;            fieldAtts += (dep ? 1 : 0) + (syn ? 1 : 0);</b>
+<b class="nc"><i>2382</i>&nbsp;</b>
+<i>2383</i>&nbsp;            data.writeShort(fieldAtts);
+<b class="nc"><i>2384</i>&nbsp;            if (val != null) {</b>
+<b class="nc"><i>2385</i>&nbsp;                data.writeShort(tab.index(&quot;ConstantValue&quot;));</b>
+<b class="nc"><i>2386</i>&nbsp;                data.writeInt(2);</b>
+<b class="nc"><i>2387</i>&nbsp;                data.writeShort(tab.index((val instanceof String) ? new StringExpression(f.field.getWhere(), (String)val) : val));</b>
+<b class="nc"><i>2388</i>&nbsp;            }</b>
+<i>2389</i>&nbsp;            if (dep) {
+<b class="nc"><i>2390</i>&nbsp;                data.writeShort(tab.index(&quot;Deprecated&quot;));</b>
+<b class="nc"><i>2391</i>&nbsp;                data.writeInt(0);</b>
+<b class="nc"><i>2392</i>&nbsp;            }</b>
+<i>2393</i>&nbsp;            if (syn) {
+<b class="nc"><i>2394</i>&nbsp;                data.writeShort(tab.index(&quot;Synthetic&quot;));</b>
+<b class="nc"><i>2395</i>&nbsp;                data.writeInt(0);</b>
+<b class="nc"><i>2396</i>&nbsp;            }</b>
+<i>2397</i>&nbsp;        }
+<b class="nc"><i>2398</i>&nbsp;</b>
+<i>2399</i>&nbsp;        // write methods
+<i>2400</i>&nbsp;
+<i>2401</i>&nbsp;        data.writeShort(methods.size());
+<b class="nc"><i>2402</i>&nbsp;        for (Enumeration&lt;CompilerMember&gt; e = methods.elements() ; e.hasMoreElements() ; ) {</b>
+<b class="nc"><i>2403</i>&nbsp;            CompilerMember f = e.nextElement();</b>
+<b class="nc"><i>2404</i>&nbsp;</b>
+<i>2405</i>&nbsp;            int xmods = f.field.getModifiers() &amp; MM_METHOD;
+<b class="nc"><i>2406</i>&nbsp;            // Transform floating point modifiers.  M_STRICTFP</b>
+<i>2407</i>&nbsp;            // of member + status of enclosing class turn into
+<i>2408</i>&nbsp;            // ACC_STRICT bit.
+<i>2409</i>&nbsp;            if (((xmods &amp; M_STRICTFP)!=0) || ((cmods &amp; M_STRICTFP)!=0)) {
+<b class="nc"><i>2410</i>&nbsp;                xmods |= ACC_STRICT;</b>
+<b class="nc"><i>2411</i>&nbsp;            } else {</b>
+<i>2412</i>&nbsp;                // Use the default
+<i>2413</i>&nbsp;                if (env.strictdefault()) {
+<b class="nc"><i>2414</i>&nbsp;                    xmods |= ACC_STRICT;</b>
+<b class="nc"><i>2415</i>&nbsp;                }</b>
+<i>2416</i>&nbsp;            }
+<i>2417</i>&nbsp;            data.writeShort(xmods);
+<b class="nc"><i>2418</i>&nbsp;</b>
+<i>2419</i>&nbsp;            data.writeShort(tab.index(f.name));
+<b class="nc"><i>2420</i>&nbsp;            data.writeShort(tab.index(f.sig));</b>
+<b class="nc"><i>2421</i>&nbsp;            ClassDeclaration exp[] = f.field.getExceptions(env);</b>
+<b class="nc"><i>2422</i>&nbsp;            int methodAtts = ((exp.length &gt; 0) ? 1 : 0);</b>
+<b class="nc"><i>2423</i>&nbsp;            boolean dep = f.field.isDeprecated();</b>
+<b class="nc"><i>2424</i>&nbsp;            boolean syn = f.field.isSynthetic();</b>
+<b class="nc"><i>2425</i>&nbsp;            methodAtts += (dep ? 1 : 0) + (syn ? 1 : 0);</b>
+<b class="nc"><i>2426</i>&nbsp;</b>
+<i>2427</i>&nbsp;            if (!f.asm.empty()) {
+<b class="nc"><i>2428</i>&nbsp;                data.writeShort(methodAtts+1);</b>
+<b class="nc"><i>2429</i>&nbsp;                f.asm.write(env, databuf, f.field, tab);</b>
+<b class="nc"><i>2430</i>&nbsp;                int natts = 0;</b>
+<b class="nc"><i>2431</i>&nbsp;                if (env.debug_lines()) {</b>
+<b class="nc"><i>2432</i>&nbsp;                    natts++;</b>
+<b class="nc"><i>2433</i>&nbsp;                }</b>
+<i>2434</i>&nbsp;// JCOV
+<i>2435</i>&nbsp;                if (env.coverage()) {
+<b class="nc"><i>2436</i>&nbsp;                    natts++;</b>
+<b class="nc"><i>2437</i>&nbsp;                }</b>
+<i>2438</i>&nbsp;// end JCOV
+<i>2439</i>&nbsp;                if (env.debug_vars()) {
+<b class="nc"><i>2440</i>&nbsp;                    natts++;</b>
+<b class="nc"><i>2441</i>&nbsp;                }</b>
+<i>2442</i>&nbsp;                databuf.writeShort(natts);
+<b class="nc"><i>2443</i>&nbsp;</b>
+<i>2444</i>&nbsp;                if (env.debug_lines()) {
+<b class="nc"><i>2445</i>&nbsp;                    f.asm.writeLineNumberTable(env, new DataOutputStream(attbuf), tab);</b>
+<b class="nc"><i>2446</i>&nbsp;                    databuf.writeShort(tab.index(&quot;LineNumberTable&quot;));</b>
+<b class="nc"><i>2447</i>&nbsp;                    databuf.writeInt(attbuf.size());</b>
+<b class="nc"><i>2448</i>&nbsp;                    attbuf.writeTo(buf);</b>
+<b class="nc"><i>2449</i>&nbsp;                    attbuf.reset();</b>
+<b class="nc"><i>2450</i>&nbsp;                }</b>
+<i>2451</i>&nbsp;
+<i>2452</i>&nbsp;//JCOV
+<i>2453</i>&nbsp;                if (env.coverage()) {
+<b class="nc"><i>2454</i>&nbsp;                    f.asm.writeCoverageTable(env, (ClassDefinition)this, new DataOutputStream(attbuf), tab, f.field.getWhere());</b>
+<b class="nc"><i>2455</i>&nbsp;                    databuf.writeShort(tab.index(&quot;CoverageTable&quot;));</b>
+<b class="nc"><i>2456</i>&nbsp;                    databuf.writeInt(attbuf.size());</b>
+<b class="nc"><i>2457</i>&nbsp;                    attbuf.writeTo(buf);</b>
+<b class="nc"><i>2458</i>&nbsp;                    attbuf.reset();</b>
+<b class="nc"><i>2459</i>&nbsp;                }</b>
+<i>2460</i>&nbsp;// end JCOV
+<i>2461</i>&nbsp;                if (env.debug_vars()) {
+<b class="nc"><i>2462</i>&nbsp;                    f.asm.writeLocalVariableTable(env, f.field, new DataOutputStream(attbuf), tab);</b>
+<b class="nc"><i>2463</i>&nbsp;                    databuf.writeShort(tab.index(&quot;LocalVariableTable&quot;));</b>
+<b class="nc"><i>2464</i>&nbsp;                    databuf.writeInt(attbuf.size());</b>
+<b class="nc"><i>2465</i>&nbsp;                    attbuf.writeTo(buf);</b>
+<b class="nc"><i>2466</i>&nbsp;                    attbuf.reset();</b>
+<b class="nc"><i>2467</i>&nbsp;                }</b>
+<i>2468</i>&nbsp;
+<i>2469</i>&nbsp;                data.writeShort(tab.index(&quot;Code&quot;));
+<b class="nc"><i>2470</i>&nbsp;                data.writeInt(buf.size());</b>
+<b class="nc"><i>2471</i>&nbsp;                buf.writeTo(data);</b>
+<b class="nc"><i>2472</i>&nbsp;                buf.reset();</b>
+<b class="nc"><i>2473</i>&nbsp;            } else {</b>
+<b class="nc"><i>2474</i>&nbsp;//JCOV</b>
+<i>2475</i>&nbsp;                if ((env.coverage()) &amp;&amp; ((f.field.getModifiers() &amp; M_NATIVE) &gt; 0))
+<b class="nc"><i>2476</i>&nbsp;                    f.asm.addNativeToJcovTab(env, (ClassDefinition)this);</b>
+<b class="nc"><i>2477</i>&nbsp;// end JCOV</b>
+<i>2478</i>&nbsp;                data.writeShort(methodAtts);
+<b class="nc"><i>2479</i>&nbsp;            }</b>
+<i>2480</i>&nbsp;
+<i>2481</i>&nbsp;            if (exp.length &gt; 0) {
+<b class="nc"><i>2482</i>&nbsp;                data.writeShort(tab.index(&quot;Exceptions&quot;));</b>
+<b class="nc"><i>2483</i>&nbsp;                data.writeInt(2 + exp.length * 2);</b>
+<b class="nc"><i>2484</i>&nbsp;                data.writeShort(exp.length);</b>
+<b class="nc"><i>2485</i>&nbsp;                for (int i = 0 ; i &lt; exp.length ; i++) {</b>
+<b class="nc"><i>2486</i>&nbsp;                    data.writeShort(tab.index(exp[i]));</b>
+<b class="nc"><i>2487</i>&nbsp;                }</b>
+<i>2488</i>&nbsp;            }
+<i>2489</i>&nbsp;            if (dep) {
+<b class="nc"><i>2490</i>&nbsp;                data.writeShort(tab.index(&quot;Deprecated&quot;));</b>
+<b class="nc"><i>2491</i>&nbsp;                data.writeInt(0);</b>
+<b class="nc"><i>2492</i>&nbsp;            }</b>
+<i>2493</i>&nbsp;            if (syn) {
+<b class="nc"><i>2494</i>&nbsp;                data.writeShort(tab.index(&quot;Synthetic&quot;));</b>
+<b class="nc"><i>2495</i>&nbsp;                data.writeInt(0);</b>
+<b class="nc"><i>2496</i>&nbsp;            }</b>
+<i>2497</i>&nbsp;        }
+<b class="nc"><i>2498</i>&nbsp;</b>
+<i>2499</i>&nbsp;        // class attributes
+<i>2500</i>&nbsp;        data.writeShort(nClassAttrs);
+<b class="nc"><i>2501</i>&nbsp;</b>
+<i>2502</i>&nbsp;        if (env.debug_source()) {
+<b class="nc"><i>2503</i>&nbsp;            data.writeShort(tab.index(&quot;SourceFile&quot;));</b>
+<b class="nc"><i>2504</i>&nbsp;            data.writeInt(2);</b>
+<b class="nc"><i>2505</i>&nbsp;            data.writeShort(tab.index(sourceFile));</b>
+<b class="nc"><i>2506</i>&nbsp;        }</b>
+<i>2507</i>&nbsp;
+<i>2508</i>&nbsp;        if (this.isDeprecated()) {
+<b class="nc"><i>2509</i>&nbsp;            data.writeShort(tab.index(&quot;Deprecated&quot;));</b>
+<b class="nc"><i>2510</i>&nbsp;            data.writeInt(0);</b>
+<b class="nc"><i>2511</i>&nbsp;        }</b>
+<i>2512</i>&nbsp;        if (this.isSynthetic()) {
+<b class="nc"><i>2513</i>&nbsp;            data.writeShort(tab.index(&quot;Synthetic&quot;));</b>
+<b class="nc"><i>2514</i>&nbsp;            data.writeInt(0);</b>
+<b class="nc"><i>2515</i>&nbsp;        }</b>
+<i>2516</i>&nbsp;
+<i>2517</i>&nbsp;// JCOV
+<i>2518</i>&nbsp;        if (env.coverage()) {
+<b class="nc"><i>2519</i>&nbsp;            data.writeShort(tab.index(&quot;AbsoluteSourcePath&quot;));</b>
+<b class="nc"><i>2520</i>&nbsp;            data.writeInt(2);</b>
+<b class="nc"><i>2521</i>&nbsp;            data.writeShort(tab.index(absoluteSourcePath));</b>
+<b class="nc"><i>2522</i>&nbsp;            data.writeShort(tab.index(&quot;TimeStamp&quot;));</b>
+<b class="nc"><i>2523</i>&nbsp;            data.writeInt(8);</b>
+<b class="nc"><i>2524</i>&nbsp;            data.writeLong(timeStamp);</b>
+<b class="nc"><i>2525</i>&nbsp;        }</b>
+<i>2526</i>&nbsp;// end JCOV
+<i>2527</i>&nbsp;
+<i>2528</i>&nbsp;        if (innerClasses.size() &gt; 0) {
+<b class="nc"><i>2529</i>&nbsp;            data.writeShort(tab.index(&quot;InnerClasses&quot;));</b>
+<b class="nc"><i>2530</i>&nbsp;            data.writeInt(2 + 2*4*innerClasses.size());</b>
+<b class="nc"><i>2531</i>&nbsp;            data.writeShort(innerClasses.size());</b>
+<b class="nc"><i>2532</i>&nbsp;            for (Enumeration&lt;ClassDefinition&gt; e = innerClasses.elements() ;</b>
+<b class="nc"><i>2533</i>&nbsp;                 e.hasMoreElements() ; ) {</b>
+<b class="nc"><i>2534</i>&nbsp;                // For each inner class name transformation, we have a record</b>
+<i>2535</i>&nbsp;                // with the following fields:
+<i>2536</i>&nbsp;                //
+<i>2537</i>&nbsp;                //    u2 inner_class_info_index;   // CONSTANT_Class_info index
+<i>2538</i>&nbsp;                //    u2 outer_class_info_index;   // CONSTANT_Class_info index
+<i>2539</i>&nbsp;                //    u2 inner_name_index;         // CONSTANT_Utf8_info index
+<i>2540</i>&nbsp;                //    u2 inner_class_access_flags; // access_flags bitmask
+<i>2541</i>&nbsp;                //
+<i>2542</i>&nbsp;                // The spec states that outer_class_info_index is 0 iff
+<i>2543</i>&nbsp;                // the inner class is not a member of its enclosing class (i.e.
+<i>2544</i>&nbsp;                // it is a local or anonymous class).  The spec also states
+<i>2545</i>&nbsp;                // that if a class is anonymous then inner_name_index should
+<i>2546</i>&nbsp;                // be 0.
+<i>2547</i>&nbsp;                //
+<i>2548</i>&nbsp;                // See also the initInnerClasses() method in BinaryClass.java.
+<i>2549</i>&nbsp;
+<i>2550</i>&nbsp;                // Generate inner_class_info_index.
+<i>2551</i>&nbsp;                ClassDefinition inner = e.nextElement();
+<b class="nc"><i>2552</i>&nbsp;                data.writeShort(tab.index(inner.getClassDeclaration()));</b>
+<b class="nc"><i>2553</i>&nbsp;</b>
+<i>2554</i>&nbsp;                // Generate outer_class_info_index.
+<i>2555</i>&nbsp;                //
+<i>2556</i>&nbsp;                // Checking isLocal() should probably be enough here,
+<i>2557</i>&nbsp;                // but the check for isAnonymous is added for good
+<i>2558</i>&nbsp;                // measure.
+<i>2559</i>&nbsp;                if (inner.isLocal() || inner.isAnonymous()) {
+<b class="nc"><i>2560</i>&nbsp;                    data.writeShort(0);</b>
+<b class="nc"><i>2561</i>&nbsp;                } else {</b>
+<i>2562</i>&nbsp;                    // Query: what about if inner.isInsideLocal()?
+<i>2563</i>&nbsp;                    // For now we continue to generate a nonzero
+<i>2564</i>&nbsp;                    // outer_class_info_index.
+<i>2565</i>&nbsp;                    ClassDefinition outer = inner.getOuterClass();
+<b class="nc"><i>2566</i>&nbsp;                    data.writeShort(tab.index(outer.getClassDeclaration()));</b>
+<b class="nc"><i>2567</i>&nbsp;                }</b>
+<i>2568</i>&nbsp;
+<i>2569</i>&nbsp;                // Generate inner_name_index.
+<i>2570</i>&nbsp;                Identifier inner_name = inner.getLocalName();
+<b class="nc"><i>2571</i>&nbsp;                if (inner_name == idNull) {</b>
+<b class="nc"><i>2572</i>&nbsp;                    if (!inner.isAnonymous()) {</b>
+<b class="nc"><i>2573</i>&nbsp;                        throw new CompilerError(&quot;compileClass(), anonymous&quot;);</b>
+<b class="nc"><i>2574</i>&nbsp;                    }</b>
+<i>2575</i>&nbsp;                    data.writeShort(0);
+<b class="nc"><i>2576</i>&nbsp;                } else {</b>
+<i>2577</i>&nbsp;                    data.writeShort(tab.index(inner_name.toString()));
+<b class="nc"><i>2578</i>&nbsp;                }</b>
+<i>2579</i>&nbsp;
+<i>2580</i>&nbsp;                // Generate inner_class_access_flags.
+<i>2581</i>&nbsp;                int imods = inner.getInnerClassMember().getModifiers()
+<b class="nc"><i>2582</i>&nbsp;                            &amp; ACCM_INNERCLASS;</b>
+<i>2583</i>&nbsp;
+<i>2584</i>&nbsp;                // Certain modifiers are implied for nested types.
+<i>2585</i>&nbsp;                // See rules 1, 2, 3a, and 3b enumerated above.
+<i>2586</i>&nbsp;                // All of these rules are implemented in &#39;BatchParser.beginClass&#39;,
+<i>2587</i>&nbsp;                // but are verified here.
+<i>2588</i>&nbsp;
+<i>2589</i>&nbsp;                if (inner.isInterface()) {
+<b class="nc"><i>2590</i>&nbsp;                    // Rules 1 and 2.</b>
+<i>2591</i>&nbsp;                    assertModifiers(imods, M_ABSTRACT | M_STATIC);
+<b class="nc"><i>2592</i>&nbsp;                }</b>
+<i>2593</i>&nbsp;                if (inner.getOuterClass().isInterface()) {
+<b class="nc"><i>2594</i>&nbsp;                    // Rules 3a and 3b.</b>
+<i>2595</i>&nbsp;                    imods &amp;= ~(M_PRIVATE | M_PROTECTED); // error recovery
+<b class="nc"><i>2596</i>&nbsp;                    assertModifiers(imods, M_PUBLIC | M_STATIC);</b>
+<b class="nc"><i>2597</i>&nbsp;                }</b>
+<i>2598</i>&nbsp;
+<i>2599</i>&nbsp;                data.writeShort(imods);
+<b class="nc"><i>2600</i>&nbsp;</b>
+<i>2601</i>&nbsp;                if (env.dumpModifiers()) {
+<b class="nc"><i>2602</i>&nbsp;                    Identifier fn = inner.getInnerClassMember().getName();</b>
+<b class="nc"><i>2603</i>&nbsp;                    Identifier nm =</b>
+<b class="nc"><i>2604</i>&nbsp;                        Identifier.lookup(fn.getQualifier(), fn.getFlatName());</b>
+<b class="nc"><i>2605</i>&nbsp;                    System.out.println(&quot;INNERCLASS &quot; + nm);</b>
+<b class="nc"><i>2606</i>&nbsp;                    System.out.println(&quot;---&quot; + classModifierString(imods));</b>
+<b class="nc"><i>2607</i>&nbsp;                }</b>
+<i>2608</i>&nbsp;
+<i>2609</i>&nbsp;            }
+<b class="nc"><i>2610</i>&nbsp;        }</b>
+<i>2611</i>&nbsp;
+<i>2612</i>&nbsp;        // Cleanup
+<i>2613</i>&nbsp;        data.flush();
+<b class="nc"><i>2614</i>&nbsp;        tab = null;</b>
+<b class="nc"><i>2615</i>&nbsp;</b>
+<i>2616</i>&nbsp;// JCOV
+<i>2617</i>&nbsp;        // generate coverage data
+<i>2618</i>&nbsp;        if (env.covdata()) {
+<b class="nc"><i>2619</i>&nbsp;            Assembler CovAsm = new Assembler();</b>
+<b class="nc"><i>2620</i>&nbsp;            CovAsm.GenVecJCov(env, (ClassDefinition)this, timeStamp);</b>
+<b class="nc"><i>2621</i>&nbsp;        }</b>
+<i>2622</i>&nbsp;// end JCOV
+<i>2623</i>&nbsp;    }
+<i>2624</i>&nbsp;
+<i>2625</i>&nbsp;    /**
+<i>2626</i>&nbsp;     * Print out the dependencies for this class (-xdepend) option
+<i>2627</i>&nbsp;     */
+<i>2628</i>&nbsp;
+<i>2629</i>&nbsp;    public void printClassDependencies(Environment env) {
+<i>2630</i>&nbsp;
+<i>2631</i>&nbsp;        // Only do this if the -xdepend flag is on
+<i>2632</i>&nbsp;        if ( toplevelEnv.print_dependencies() ) {
+<b class="nc"><i>2633</i>&nbsp;</b>
+<i>2634</i>&nbsp;            // Name of java source file this class was in (full path)
+<i>2635</i>&nbsp;            //    e.g. /home/ohair/Test.java
+<i>2636</i>&nbsp;            String src = ((ClassFile)getSource()).getAbsoluteName();
+<b class="nc"><i>2637</i>&nbsp;</b>
+<i>2638</i>&nbsp;            // Class name, fully qualified
+<i>2639</i>&nbsp;            //   e.g. &quot;java.lang.Object&quot; or &quot;FooBar&quot; or &quot;sun.tools.javac.Main&quot;
+<i>2640</i>&nbsp;            // Inner class names must be mangled, as ordinary &#39;.&#39; qualification
+<i>2641</i>&nbsp;            // is used internally where the spec requires &#39;$&#39; separators.
+<i>2642</i>&nbsp;            //   String className = getName().toString();
+<i>2643</i>&nbsp;            String className = Type.mangleInnerType(getName()).toString();
+<b class="nc"><i>2644</i>&nbsp;</b>
+<i>2645</i>&nbsp;            // Line number where class starts in the src file
+<i>2646</i>&nbsp;            long startLine = getWhere() &gt;&gt; WHEREOFFSETBITS;
+<b class="nc"><i>2647</i>&nbsp;</b>
+<i>2648</i>&nbsp;            // Line number where class ends in the src file (not used yet)
+<i>2649</i>&nbsp;            long endLine = getEndPosition() &gt;&gt; WHEREOFFSETBITS;
+<b class="nc"><i>2650</i>&nbsp;</b>
+<i>2651</i>&nbsp;            // First line looks like:
+<i>2652</i>&nbsp;            //    CLASS:src,startLine,endLine,className
+<i>2653</i>&nbsp;            System.out.println( &quot;CLASS:&quot;
+<b class="nc"><i>2654</i>&nbsp;                    + src               + &quot;,&quot;</b>
+<i>2655</i>&nbsp;                    + startLine         + &quot;,&quot;
+<i>2656</i>&nbsp;                    + endLine   + &quot;,&quot;
+<i>2657</i>&nbsp;                    + className);
+<i>2658</i>&nbsp;
+<i>2659</i>&nbsp;            // For each class this class is dependent on:
+<i>2660</i>&nbsp;            //    CLDEP:className1,className2
+<i>2661</i>&nbsp;            //  where className1 is the name of the class we are in, and
+<i>2662</i>&nbsp;            //        classname2 is the name of the class className1
+<i>2663</i>&nbsp;            //          is dependent on.
+<i>2664</i>&nbsp;            for(Enumeration&lt;ClassDeclaration&gt; e = deps.elements();  e.hasMoreElements(); ) {
+<b class="nc"><i>2665</i>&nbsp;                ClassDeclaration data = e.nextElement();</b>
+<b class="nc"><i>2666</i>&nbsp;                // Mangle name of class dependend on.</b>
+<i>2667</i>&nbsp;                String depName =
+<b class="nc"><i>2668</i>&nbsp;                    Type.mangleInnerType(data.getName()).toString();</b>
+<b class="nc"><i>2669</i>&nbsp;                env.output(&quot;CLDEP:&quot; + className + &quot;,&quot; + depName);</b>
+<b class="nc"><i>2670</i>&nbsp;            }</b>
+<b class="nc"><i>2671</i>&nbsp;        }</b>
+<i>2672</i>&nbsp;    }
+<i>2673</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

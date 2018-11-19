@@ -1,0 +1,554 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AlawCodec</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.media.sound</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AlawCodec (com.sun.media.sound)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AlawCodec</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 9)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 92)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">AlawCodec$AlawCodecStream</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 84)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 176)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1999, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.media.sound;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.util.Objects;
+<i>30</i>&nbsp;import java.util.Vector;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;import javax.sound.sampled.AudioFormat;
+<i>33</i>&nbsp;import javax.sound.sampled.AudioFormat.Encoding;
+<i>34</i>&nbsp;import javax.sound.sampled.AudioInputStream;
+<i>35</i>&nbsp;import javax.sound.sampled.AudioSystem;
+<i>36</i>&nbsp;import javax.sound.sampled.spi.FormatConversionProvider;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * A-law encodes linear data, and decodes a-law data to linear data.
+<i>40</i>&nbsp; *
+<b class="nc"><i>41</i>&nbsp; * @author Kara Kytle</b>
+<i>42</i>&nbsp; */
+<i>43</i>&nbsp;public final class AlawCodec extends FormatConversionProvider {
+<i>44</i>&nbsp;
+<b class="nc"><i>45</i>&nbsp;    /* Tables used for A-law decoding */</b>
+<b class="nc"><i>46</i>&nbsp;</b>
+<i>47</i>&nbsp;    private static final byte[] ALAW_TABH = new byte[256];
+<b class="nc"><i>48</i>&nbsp;    private static final byte[] ALAW_TABL = new byte[256];</b>
+<i>49</i>&nbsp;
+<b class="nc"><i>50</i>&nbsp;    private static final short seg_end[] = {</b>
+<i>51</i>&nbsp;            0xFF, 0x1FF, 0x3FF, 0x7FF, 0xFFF, 0x1FFF, 0x3FFF, 0x7FFF
+<i>52</i>&nbsp;    };
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;    /**
+<i>55</i>&nbsp;     * Initializes the decode tables.
+<i>56</i>&nbsp;     */
+<b class="nc"><i>57</i>&nbsp;    static {</b>
+<b class="nc"><i>58</i>&nbsp;        for (int i=0;i&lt;256;i++) {</b>
+<b class="nc"><i>59</i>&nbsp;            int input    = i ^ 0x55;</b>
+<b class="nc"><i>60</i>&nbsp;            int mantissa = (input &amp; 0xf ) &lt;&lt; 4;</b>
+<b class="nc"><i>61</i>&nbsp;            int segment  = (input &amp; 0x70) &gt;&gt; 4;</b>
+<i>62</i>&nbsp;            int value    = mantissa+8;
+<b class="nc"><i>63</i>&nbsp;</b>
+<b class="nc"><i>64</i>&nbsp;            if(segment&gt;=1)</b>
+<b class="nc"><i>65</i>&nbsp;                value+=0x100;</b>
+<b class="nc"><i>66</i>&nbsp;            if(segment&gt;1)</b>
+<i>67</i>&nbsp;                value &lt;&lt;= (segment -1);
+<b class="nc"><i>68</i>&nbsp;</b>
+<b class="nc"><i>69</i>&nbsp;            if( (input &amp; 0x80)==0 )</b>
+<i>70</i>&nbsp;                value = -value;
+<b class="nc"><i>71</i>&nbsp;</b>
+<b class="nc"><i>72</i>&nbsp;            ALAW_TABL[i] = (byte)value;</b>
+<i>73</i>&nbsp;            ALAW_TABH[i] = (byte)(value&gt;&gt;8);
+<i>74</i>&nbsp;        }
+<i>75</i>&nbsp;    }
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    @Override
+<i>78</i>&nbsp;    public AudioFormat.Encoding[] getSourceEncodings() {
+<i>79</i>&nbsp;        return new Encoding[]{Encoding.ALAW, Encoding.PCM_SIGNED};
+<i>80</i>&nbsp;    }
+<i>81</i>&nbsp;
+<b class="nc"><i>82</i>&nbsp;    @Override</b>
+<i>83</i>&nbsp;    public AudioFormat.Encoding[] getTargetEncodings() {
+<i>84</i>&nbsp;        return getSourceEncodings();
+<i>85</i>&nbsp;    }
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    @Override
+<i>88</i>&nbsp;    public AudioFormat.Encoding[] getTargetEncodings(AudioFormat sourceFormat){
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;        if( sourceFormat.getEncoding().equals( AudioFormat.Encoding.PCM_SIGNED )) {
+<b class="nc"><i>91</i>&nbsp;</b>
+<i>92</i>&nbsp;            if( sourceFormat.getSampleSizeInBits() == 16 ) {
+<b class="nc"><i>93</i>&nbsp;</b>
+<i>94</i>&nbsp;                AudioFormat.Encoding enc[] = new AudioFormat.Encoding[1];
+<b class="nc"><i>95</i>&nbsp;                enc[0] = AudioFormat.Encoding.ALAW;</b>
+<b class="nc"><i>96</i>&nbsp;                return enc;</b>
+<b class="nc"><i>97</i>&nbsp;</b>
+<i>98</i>&nbsp;            } else {
+<i>99</i>&nbsp;                return new AudioFormat.Encoding[0];
+<b class="nc"><i>100</i>&nbsp;            }</b>
+<i>101</i>&nbsp;        } else if( sourceFormat.getEncoding().equals( AudioFormat.Encoding.ALAW ) ) {
+<b class="nc"><i>102</i>&nbsp;</b>
+<i>103</i>&nbsp;            if( sourceFormat.getSampleSizeInBits() == 8 ) {
+<b class="nc"><i>104</i>&nbsp;</b>
+<i>105</i>&nbsp;                AudioFormat.Encoding enc[] = new AudioFormat.Encoding[1];
+<b class="nc"><i>106</i>&nbsp;                enc[0] = AudioFormat.Encoding.PCM_SIGNED;</b>
+<b class="nc"><i>107</i>&nbsp;                return enc;</b>
+<b class="nc"><i>108</i>&nbsp;</b>
+<i>109</i>&nbsp;            } else {
+<i>110</i>&nbsp;                return new AudioFormat.Encoding[0];
+<b class="nc"><i>111</i>&nbsp;            }</b>
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;        } else {
+<i>114</i>&nbsp;            return new AudioFormat.Encoding[0];
+<b class="nc"><i>115</i>&nbsp;        }</b>
+<i>116</i>&nbsp;    }
+<i>117</i>&nbsp;
+<i>118</i>&nbsp;    @Override
+<i>119</i>&nbsp;    public AudioFormat[] getTargetFormats(AudioFormat.Encoding targetEncoding, AudioFormat sourceFormat){
+<i>120</i>&nbsp;        Objects.requireNonNull(sourceFormat);
+<i>121</i>&nbsp;        if( (targetEncoding.equals( AudioFormat.Encoding.PCM_SIGNED ) &amp;&amp; sourceFormat.getEncoding().equals( AudioFormat.Encoding.ALAW)) ||
+<b class="nc"><i>122</i>&nbsp;            (targetEncoding.equals( AudioFormat.Encoding.ALAW) &amp;&amp; sourceFormat.getEncoding().equals( AudioFormat.Encoding.PCM_SIGNED)) ) {</b>
+<b class="nc"><i>123</i>&nbsp;                return getOutputFormats( sourceFormat );</b>
+<b class="nc"><i>124</i>&nbsp;            } else {</b>
+<i>125</i>&nbsp;                return new AudioFormat[0];
+<b class="nc"><i>126</i>&nbsp;            }</b>
+<i>127</i>&nbsp;    }
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    @Override
+<i>130</i>&nbsp;    public AudioInputStream getAudioInputStream(AudioFormat.Encoding targetEncoding, AudioInputStream sourceStream){
+<i>131</i>&nbsp;        AudioFormat sourceFormat = sourceStream.getFormat();
+<i>132</i>&nbsp;        AudioFormat.Encoding sourceEncoding = sourceFormat.getEncoding();
+<b class="nc"><i>133</i>&nbsp;</b>
+<b class="nc"><i>134</i>&nbsp;        if( !isConversionSupported(targetEncoding,sourceStream.getFormat()) ) {</b>
+<i>135</i>&nbsp;            throw new IllegalArgumentException(&quot;Unsupported conversion: &quot; + sourceStream.getFormat().toString() + &quot; to &quot; + targetEncoding.toString());
+<b class="nc"><i>136</i>&nbsp;        }</b>
+<b class="nc"><i>137</i>&nbsp;        if( sourceEncoding.equals( targetEncoding ) ) {</b>
+<i>138</i>&nbsp;            return sourceStream;
+<b class="nc"><i>139</i>&nbsp;        }</b>
+<b class="nc"><i>140</i>&nbsp;        AudioFormat targetFormat = null;</b>
+<b class="nc"><i>141</i>&nbsp;        if( sourceEncoding.equals( AudioFormat.Encoding.ALAW ) &amp;&amp;</b>
+<i>142</i>&nbsp;            targetEncoding.equals( AudioFormat.Encoding.PCM_SIGNED ) ) {
+<b class="nc"><i>143</i>&nbsp;</b>
+<b class="nc"><i>144</i>&nbsp;            targetFormat = new AudioFormat( targetEncoding,</b>
+<i>145</i>&nbsp;                                            sourceFormat.getSampleRate(),
+<b class="nc"><i>146</i>&nbsp;                                            16,</b>
+<b class="nc"><i>147</i>&nbsp;                                            sourceFormat.getChannels(),</b>
+<i>148</i>&nbsp;                                            2*sourceFormat.getChannels(),
+<b class="nc"><i>149</i>&nbsp;                                            sourceFormat.getSampleRate(),</b>
+<b class="nc"><i>150</i>&nbsp;                                            sourceFormat.isBigEndian());</b>
+<b class="nc"><i>151</i>&nbsp;</b>
+<b class="nc"><i>152</i>&nbsp;        } else if( sourceEncoding.equals( AudioFormat.Encoding.PCM_SIGNED ) &amp;&amp;</b>
+<i>153</i>&nbsp;                   targetEncoding.equals( AudioFormat.Encoding.ALAW ) ) {
+<b class="nc"><i>154</i>&nbsp;</b>
+<b class="nc"><i>155</i>&nbsp;            targetFormat = new AudioFormat( targetEncoding,</b>
+<i>156</i>&nbsp;                                            sourceFormat.getSampleRate(),
+<b class="nc"><i>157</i>&nbsp;                                            8,</b>
+<b class="nc"><i>158</i>&nbsp;                                            sourceFormat.getChannels(),</b>
+<i>159</i>&nbsp;                                            sourceFormat.getChannels(),
+<b class="nc"><i>160</i>&nbsp;                                            sourceFormat.getSampleRate(),</b>
+<b class="nc"><i>161</i>&nbsp;                                            false);</b>
+<b class="nc"><i>162</i>&nbsp;        } else {</b>
+<i>163</i>&nbsp;            throw new IllegalArgumentException(&quot;Unsupported conversion: &quot; + sourceStream.getFormat().toString() + &quot; to &quot; + targetEncoding.toString());
+<i>164</i>&nbsp;        }
+<b class="nc"><i>165</i>&nbsp;        return getConvertedStream(targetFormat, sourceStream);</b>
+<i>166</i>&nbsp;    }
+<b class="nc"><i>167</i>&nbsp;</b>
+<i>168</i>&nbsp;    @Override
+<i>169</i>&nbsp;    public AudioInputStream getAudioInputStream(AudioFormat targetFormat, AudioInputStream sourceStream){
+<i>170</i>&nbsp;        if (!isConversionSupported(targetFormat, sourceStream.getFormat()))
+<i>171</i>&nbsp;            throw new IllegalArgumentException(&quot;Unsupported conversion: &quot;
+<i>172</i>&nbsp;                                               + sourceStream.getFormat().toString() + &quot; to &quot;
+<i>173</i>&nbsp;                                               + targetFormat.toString());
+<i>174</i>&nbsp;        return getConvertedStream( targetFormat, sourceStream );
+<b class="nc"><i>175</i>&nbsp;    }</b>
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * Opens the codec with the specified parameters.
+<i>179</i>&nbsp;     * @param stream stream from which data to be processed should be read
+<i>180</i>&nbsp;     * @param outputFormat desired data format of the stream after processing
+<i>181</i>&nbsp;     * @return stream from which processed data may be read
+<i>182</i>&nbsp;     * @throws IllegalArgumentException if the format combination supplied is
+<i>183</i>&nbsp;     * not supported.
+<i>184</i>&nbsp;     */
+<i>185</i>&nbsp;    private AudioInputStream getConvertedStream(AudioFormat outputFormat, AudioInputStream stream) {
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;        AudioInputStream cs = null;
+<i>188</i>&nbsp;        AudioFormat inputFormat = stream.getFormat();
+<i>189</i>&nbsp;
+<i>190</i>&nbsp;        if( inputFormat.matches(outputFormat) ) {
+<i>191</i>&nbsp;            cs = stream;
+<i>192</i>&nbsp;        } else {
+<b class="nc"><i>193</i>&nbsp;            cs = new AlawCodecStream(stream, outputFormat);</b>
+<b class="nc"><i>194</i>&nbsp;        }</b>
+<i>195</i>&nbsp;
+<b class="nc"><i>196</i>&nbsp;        return cs;</b>
+<b class="nc"><i>197</i>&nbsp;    }</b>
+<i>198</i>&nbsp;
+<b class="nc"><i>199</i>&nbsp;    /**</b>
+<i>200</i>&nbsp;     * Obtains the set of output formats supported by the codec
+<i>201</i>&nbsp;     * given a particular input format.
+<b class="nc"><i>202</i>&nbsp;     * If no output formats are supported for this input format,</b>
+<i>203</i>&nbsp;     * returns an array of length 0.
+<i>204</i>&nbsp;     * @return array of supported output formats.
+<i>205</i>&nbsp;     */
+<i>206</i>&nbsp;    private AudioFormat[] getOutputFormats(AudioFormat inputFormat) {
+<i>207</i>&nbsp;
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;        Vector&lt;AudioFormat&gt; formats = new Vector&lt;&gt;();
+<i>210</i>&nbsp;        AudioFormat format;
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;        if (inputFormat.getSampleSizeInBits() == 16
+<i>213</i>&nbsp;                &amp;&amp; AudioFormat.Encoding.PCM_SIGNED.equals(inputFormat.getEncoding())) {
+<i>214</i>&nbsp;            format = new AudioFormat(AudioFormat.Encoding.ALAW,
+<i>215</i>&nbsp;                                     inputFormat.getSampleRate(), 8,
+<b class="nc"><i>216</i>&nbsp;                                     inputFormat.getChannels(),</b>
+<i>217</i>&nbsp;                                     inputFormat.getChannels(),
+<i>218</i>&nbsp;                                     inputFormat.getSampleRate(), false);
+<b class="nc"><i>219</i>&nbsp;            formats.addElement(format);</b>
+<b class="nc"><i>220</i>&nbsp;        }</b>
+<b class="nc"><i>221</i>&nbsp;        if (inputFormat.getSampleSizeInBits() == 8</b>
+<i>222</i>&nbsp;                &amp;&amp; AudioFormat.Encoding.ALAW.equals(inputFormat.getEncoding())) {
+<b class="nc"><i>223</i>&nbsp;            format = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED,</b>
+<b class="nc"><i>224</i>&nbsp;                                     inputFormat.getSampleRate(), 16,</b>
+<b class="nc"><i>225</i>&nbsp;                                     inputFormat.getChannels(),</b>
+<i>226</i>&nbsp;                                     inputFormat.getChannels() * 2,
+<b class="nc"><i>227</i>&nbsp;                                     inputFormat.getSampleRate(), false);</b>
+<i>228</i>&nbsp;            formats.addElement(format);
+<i>229</i>&nbsp;            format = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED,
+<b class="nc"><i>230</i>&nbsp;                                     inputFormat.getSampleRate(), 16,</b>
+<b class="nc"><i>231</i>&nbsp;                                     inputFormat.getChannels(),</b>
+<b class="nc"><i>232</i>&nbsp;                                     inputFormat.getChannels() * 2,</b>
+<i>233</i>&nbsp;                                     inputFormat.getSampleRate(), true);
+<b class="nc"><i>234</i>&nbsp;            formats.addElement(format);</b>
+<b class="nc"><i>235</i>&nbsp;        }</b>
+<b class="nc"><i>236</i>&nbsp;</b>
+<i>237</i>&nbsp;        AudioFormat[] formatArray = new AudioFormat[formats.size()];
+<b class="nc"><i>238</i>&nbsp;        for (int i = 0; i &lt; formatArray.length; i++) {</b>
+<b class="nc"><i>239</i>&nbsp;            formatArray[i] = formats.elementAt(i);</b>
+<b class="nc"><i>240</i>&nbsp;        }</b>
+<i>241</i>&nbsp;        return formatArray;
+<b class="nc"><i>242</i>&nbsp;    }</b>
+<b class="nc"><i>243</i>&nbsp;</b>
+<b class="nc"><i>244</i>&nbsp;</b>
+<i>245</i>&nbsp;    private final class AlawCodecStream extends AudioInputStream {
+<b class="nc"><i>246</i>&nbsp;</b>
+<i>247</i>&nbsp;        // tempBuffer required only for encoding (when encode is true)
+<i>248</i>&nbsp;        private static final int tempBufferSize = 64;
+<b class="nc"><i>249</i>&nbsp;        private byte tempBuffer [] = null;</b>
+<b class="nc"><i>250</i>&nbsp;</b>
+<b class="nc"><i>251</i>&nbsp;        /**</b>
+<i>252</i>&nbsp;         * True to encode to a-law, false to decode to linear
+<b class="nc"><i>253</i>&nbsp;         */</b>
+<i>254</i>&nbsp;        boolean encode = false;
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;        AudioFormat encodeFormat;
+<i>257</i>&nbsp;        AudioFormat decodeFormat;
+<i>258</i>&nbsp;
+<i>259</i>&nbsp;        byte tabByte1[] = null;
+<i>260</i>&nbsp;        byte tabByte2[] = null;
+<b class="nc"><i>261</i>&nbsp;        int highByte = 0;</b>
+<i>262</i>&nbsp;        int lowByte  = 1;
+<i>263</i>&nbsp;
+<i>264</i>&nbsp;        AlawCodecStream(AudioInputStream stream, AudioFormat outputFormat) {
+<i>265</i>&nbsp;
+<b class="nc"><i>266</i>&nbsp;            super(stream, outputFormat, -1);</b>
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;            AudioFormat inputFormat = stream.getFormat();
+<i>269</i>&nbsp;
+<i>270</i>&nbsp;            // throw an IllegalArgumentException if not ok
+<b class="nc"><i>271</i>&nbsp;            if ( ! (isConversionSupported(outputFormat, inputFormat)) ) {</b>
+<b class="nc"><i>272</i>&nbsp;</b>
+<b class="nc"><i>273</i>&nbsp;                throw new IllegalArgumentException(&quot;Unsupported conversion: &quot; + inputFormat.toString() + &quot; to &quot; + outputFormat.toString());</b>
+<b class="nc"><i>274</i>&nbsp;            }</b>
+<i>275</i>&nbsp;
+<b class="nc"><i>276</i>&nbsp;            //$$fb 2002-07-18: fix for 4714846: JavaSound ULAW (8-bit) encoder erroneously depends on endian-ness</b>
+<i>277</i>&nbsp;            boolean PCMIsBigEndian;
+<b class="nc"><i>278</i>&nbsp;</b>
+<i>279</i>&nbsp;            // determine whether we are encoding or decoding
+<b class="nc"><i>280</i>&nbsp;            if (AudioFormat.Encoding.ALAW.equals(inputFormat.getEncoding())) {</b>
+<i>281</i>&nbsp;                encode = false;
+<i>282</i>&nbsp;                encodeFormat = inputFormat;
+<b class="nc"><i>283</i>&nbsp;                decodeFormat = outputFormat;</b>
+<i>284</i>&nbsp;                PCMIsBigEndian = outputFormat.isBigEndian();
+<b class="nc"><i>285</i>&nbsp;            } else {</b>
+<i>286</i>&nbsp;                encode = true;
+<i>287</i>&nbsp;                encodeFormat = outputFormat;
+<i>288</i>&nbsp;                decodeFormat = inputFormat;
+<i>289</i>&nbsp;                PCMIsBigEndian = inputFormat.isBigEndian();
+<i>290</i>&nbsp;                tempBuffer = new byte[tempBufferSize];
+<i>291</i>&nbsp;            }
+<b class="nc"><i>292</i>&nbsp;</b>
+<b class="nc"><i>293</i>&nbsp;            if (PCMIsBigEndian) {</b>
+<b class="nc"><i>294</i>&nbsp;                tabByte1 = ALAW_TABH;</b>
+<b class="nc"><i>295</i>&nbsp;                tabByte2 = ALAW_TABL;</b>
+<b class="nc"><i>296</i>&nbsp;                highByte = 0;</b>
+<i>297</i>&nbsp;                lowByte  = 1;
+<b class="nc"><i>298</i>&nbsp;            } else {</b>
+<b class="nc"><i>299</i>&nbsp;                tabByte1 = ALAW_TABL;</b>
+<b class="nc"><i>300</i>&nbsp;                tabByte2 = ALAW_TABH;</b>
+<b class="nc"><i>301</i>&nbsp;                highByte = 1;</b>
+<b class="nc"><i>302</i>&nbsp;                lowByte  = 0;</b>
+<i>303</i>&nbsp;            }
+<i>304</i>&nbsp;
+<b class="nc"><i>305</i>&nbsp;            // set the AudioInputStream length in frames if we know it</b>
+<b class="nc"><i>306</i>&nbsp;            if (stream instanceof AudioInputStream) {</b>
+<b class="nc"><i>307</i>&nbsp;                frameLength = stream.getFrameLength();</b>
+<b class="nc"><i>308</i>&nbsp;            }</b>
+<b class="nc"><i>309</i>&nbsp;</b>
+<i>310</i>&nbsp;            // set framePos to zero
+<b class="nc"><i>311</i>&nbsp;            framePos = 0;</b>
+<b class="nc"><i>312</i>&nbsp;            frameSize = inputFormat.getFrameSize();</b>
+<b class="nc"><i>313</i>&nbsp;            if( frameSize==AudioSystem.NOT_SPECIFIED ) {</b>
+<b class="nc"><i>314</i>&nbsp;                frameSize=1;</b>
+<i>315</i>&nbsp;            }
+<i>316</i>&nbsp;        }
+<i>317</i>&nbsp;
+<b class="nc"><i>318</i>&nbsp;</b>
+<b class="nc"><i>319</i>&nbsp;        /*</b>
+<i>320</i>&nbsp;         * $$jb 2/23/99
+<i>321</i>&nbsp;         * Used to determine segment number in aLaw encoding
+<i>322</i>&nbsp;         */
+<b class="nc"><i>323</i>&nbsp;        private short search(short val, short table[], short size) {</b>
+<b class="nc"><i>324</i>&nbsp;            for(short i = 0; i &lt; size; i++) {</b>
+<b class="nc"><i>325</i>&nbsp;                if (val &lt;= table[i]) { return i; }</b>
+<b class="nc"><i>326</i>&nbsp;            }</b>
+<i>327</i>&nbsp;            return size;
+<i>328</i>&nbsp;        }
+<i>329</i>&nbsp;
+<i>330</i>&nbsp;        /**
+<i>331</i>&nbsp;         * Note that this won&#39;t actually read anything; must read in
+<i>332</i>&nbsp;         * two-byte units.
+<i>333</i>&nbsp;         */
+<i>334</i>&nbsp;        @Override
+<i>335</i>&nbsp;        public int read() throws IOException {
+<b class="nc"><i>336</i>&nbsp;</b>
+<b class="nc"><i>337</i>&nbsp;            byte[] b = new byte[1];</b>
+<i>338</i>&nbsp;            return read(b, 0, b.length);
+<b class="nc"><i>339</i>&nbsp;        }</b>
+<i>340</i>&nbsp;
+<i>341</i>&nbsp;        @Override
+<i>342</i>&nbsp;        public int read(byte[] b) throws IOException {
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;            return read(b, 0, b.length);
+<i>345</i>&nbsp;        }
+<i>346</i>&nbsp;
+<i>347</i>&nbsp;        @Override
+<b class="nc"><i>348</i>&nbsp;        public int read(byte[] b, int off, int len) throws IOException {</b>
+<b class="nc"><i>349</i>&nbsp;</b>
+<i>350</i>&nbsp;            // don&#39;t read fractional frames
+<i>351</i>&nbsp;            if( len%frameSize != 0 ) {
+<i>352</i>&nbsp;                len -= (len%frameSize);
+<i>353</i>&nbsp;            }
+<i>354</i>&nbsp;
+<b class="nc"><i>355</i>&nbsp;            if (encode) {</b>
+<i>356</i>&nbsp;
+<i>357</i>&nbsp;                short QUANT_MASK = 0xF;
+<i>358</i>&nbsp;                short SEG_SHIFT = 4;
+<i>359</i>&nbsp;                short mask;
+<i>360</i>&nbsp;                short seg;
+<b class="nc"><i>361</i>&nbsp;                int adj;</b>
+<b class="nc"><i>362</i>&nbsp;                int i;</b>
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;                short sample;
+<b class="nc"><i>365</i>&nbsp;                byte enc;</b>
+<i>366</i>&nbsp;
+<b class="nc"><i>367</i>&nbsp;                int readCount = 0;</b>
+<b class="nc"><i>368</i>&nbsp;                int currentPos = off;</b>
+<i>369</i>&nbsp;                int readLeft = len*2;
+<i>370</i>&nbsp;                int readLen = ( (readLeft&gt;tempBufferSize) ? tempBufferSize : readLeft );
+<i>371</i>&nbsp;
+<i>372</i>&nbsp;                while ((readCount = super.read(tempBuffer,0,readLen))&gt;0) {
+<i>373</i>&nbsp;
+<i>374</i>&nbsp;                    for (i = 0; i &lt; readCount; i+=2) {
+<i>375</i>&nbsp;
+<i>376</i>&nbsp;                        /* Get the sample from the tempBuffer */
+<b class="nc"><i>377</i>&nbsp;                        sample = (short)(( (tempBuffer[i + highByte]) &lt;&lt; 8) &amp; 0xFF00);</b>
+<b class="nc"><i>378</i>&nbsp;                        sample |= (short)( (tempBuffer[i + lowByte]) &amp; 0xFF);</b>
+<b class="nc"><i>379</i>&nbsp;</b>
+<b class="nc"><i>380</i>&nbsp;                        if(sample &gt;= 0) {</b>
+<i>381</i>&nbsp;                            mask = 0xD5;
+<b class="nc"><i>382</i>&nbsp;                        } else {</b>
+<i>383</i>&nbsp;                            mask = 0x55;
+<b class="nc"><i>384</i>&nbsp;                            sample = (short)(-sample - 8);</b>
+<i>385</i>&nbsp;                        }
+<i>386</i>&nbsp;                        /* Convert the scaled magnitude to segment number. */
+<b class="nc"><i>387</i>&nbsp;                        seg = search(sample, seg_end, (short) 8);</b>
+<b class="nc"><i>388</i>&nbsp;                        /*</b>
+<i>389</i>&nbsp;                         * Combine the sign, segment, quantization bits
+<b class="nc"><i>390</i>&nbsp;                         */</b>
+<b class="nc"><i>391</i>&nbsp;                        if (seg &gt;= 8) {  /* out of range, return maximum value. */</b>
+<i>392</i>&nbsp;                            enc = (byte) (0x7F ^ mask);
+<b class="nc"><i>393</i>&nbsp;                        } else {</b>
+<b class="nc"><i>394</i>&nbsp;                            enc = (byte) (seg &lt;&lt; SEG_SHIFT);</b>
+<i>395</i>&nbsp;                            if(seg &lt; 2) {
+<i>396</i>&nbsp;                                enc |= (byte) ( (sample &gt;&gt; 4) &amp; QUANT_MASK);
+<b class="nc"><i>397</i>&nbsp;                            } else {</b>
+<i>398</i>&nbsp;                                enc |= (byte) ( (sample &gt;&gt; (seg + 3)) &amp; QUANT_MASK );
+<i>399</i>&nbsp;                            }
+<i>400</i>&nbsp;                            enc ^= mask;
+<b class="nc"><i>401</i>&nbsp;                        }</b>
+<b class="nc"><i>402</i>&nbsp;                        /* Now put the encoded sample where it belongs */</b>
+<i>403</i>&nbsp;                        b[currentPos] = enc;
+<b class="nc"><i>404</i>&nbsp;                        currentPos++;</b>
+<b class="nc"><i>405</i>&nbsp;                    }</b>
+<b class="nc"><i>406</i>&nbsp;                    /* And update pointers and counters for next iteration */</b>
+<i>407</i>&nbsp;                    readLeft -= readCount;
+<b class="nc"><i>408</i>&nbsp;                    readLen = ( (readLeft&gt;tempBufferSize) ? tempBufferSize : readLeft );</b>
+<i>409</i>&nbsp;                }
+<b class="nc"><i>410</i>&nbsp;</b>
+<i>411</i>&nbsp;                if( currentPos==off &amp;&amp; readCount&lt;0 ) {  // EOF or error
+<i>412</i>&nbsp;                    return readCount;
+<b class="nc"><i>413</i>&nbsp;                }</b>
+<b class="nc"><i>414</i>&nbsp;</b>
+<i>415</i>&nbsp;                return (currentPos - off);  /* Number of bytes written to new buffer */
+<i>416</i>&nbsp;
+<b class="nc"><i>417</i>&nbsp;            } else {</b>
+<b class="nc"><i>418</i>&nbsp;</b>
+<i>419</i>&nbsp;                int i;
+<i>420</i>&nbsp;                int readLen = len/2;
+<b class="nc"><i>421</i>&nbsp;                int readOffset = off + len/2;</b>
+<b class="nc"><i>422</i>&nbsp;                int readCount = super.read(b, readOffset, readLen);</b>
+<i>423</i>&nbsp;
+<i>424</i>&nbsp;                for (i = off; i &lt; (off + (readCount*2)); i+=2) {
+<b class="nc"><i>425</i>&nbsp;                    b[i]        = tabByte1[b[readOffset] &amp; 0xFF];</b>
+<i>426</i>&nbsp;                    b[i+1]      = tabByte2[b[readOffset] &amp; 0xFF];
+<i>427</i>&nbsp;                    readOffset++;
+<i>428</i>&nbsp;                }
+<i>429</i>&nbsp;
+<b class="nc"><i>430</i>&nbsp;                if( readCount&lt;0 ) {             // EOF or error</b>
+<b class="nc"><i>431</i>&nbsp;                    return readCount;</b>
+<b class="nc"><i>432</i>&nbsp;                }</b>
+<i>433</i>&nbsp;
+<b class="nc"><i>434</i>&nbsp;                return (i - off);</b>
+<b class="nc"><i>435</i>&nbsp;            }</b>
+<b class="nc"><i>436</i>&nbsp;        }</b>
+<b class="nc"><i>437</i>&nbsp;</b>
+<i>438</i>&nbsp;        @Override
+<i>439</i>&nbsp;        public long skip(final long n) throws IOException {
+<b class="nc"><i>440</i>&nbsp;            // Implementation of this method assumes that we support</b>
+<b class="nc"><i>441</i>&nbsp;            // encoding/decoding from/to 8/16 bits only</b>
+<i>442</i>&nbsp;            return encode ? super.skip(n * 2) / 2 : super.skip(n / 2) * 2;
+<i>443</i>&nbsp;        }
+<b class="nc"><i>444</i>&nbsp;    } // end class AlawCodecStream</b>
+<i>445</i>&nbsp;} // end class ALAW
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

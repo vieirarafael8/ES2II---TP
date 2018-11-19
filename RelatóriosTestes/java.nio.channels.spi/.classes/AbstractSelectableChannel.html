@@ -1,0 +1,416 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AbstractSelectableChannel</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.nio.channels.spi</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AbstractSelectableChannel (java.nio.channels.spi)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AbstractSelectableChannel</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 95)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.nio.channels.spi;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.nio.channels.CancelledKeyException;
+<i>30</i>&nbsp;import java.nio.channels.ClosedChannelException;
+<i>31</i>&nbsp;import java.nio.channels.ClosedSelectorException;
+<i>32</i>&nbsp;import java.nio.channels.IllegalBlockingModeException;
+<i>33</i>&nbsp;import java.nio.channels.IllegalSelectorException;
+<i>34</i>&nbsp;import java.nio.channels.SelectableChannel;
+<i>35</i>&nbsp;import java.nio.channels.SelectionKey;
+<i>36</i>&nbsp;import java.nio.channels.Selector;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp; * Base implementation class for selectable channels.
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * &lt;p&gt; This class defines methods that handle the mechanics of channel
+<i>43</i>&nbsp; * registration, deregistration, and closing.  It maintains the current
+<i>44</i>&nbsp; * blocking mode of this channel as well as its current set of selection keys.
+<i>45</i>&nbsp; * It performs all of the synchronization required to implement the {@link
+<i>46</i>&nbsp; * java.nio.channels.SelectableChannel} specification.  Implementations of the
+<i>47</i>&nbsp; * abstract protected methods defined in this class need not synchronize
+<i>48</i>&nbsp; * against other threads that might be engaged in the same operations.  &lt;/p&gt;
+<i>49</i>&nbsp; *
+<b class="nc"><i>50</i>&nbsp; *</b>
+<i>51</i>&nbsp; * @author Mark Reinhold
+<i>52</i>&nbsp; * @author Mike McCloskey
+<i>53</i>&nbsp; * @author JSR-51 Expert Group
+<i>54</i>&nbsp; * @since 1.4
+<i>55</i>&nbsp; */
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;public abstract class AbstractSelectableChannel
+<i>58</i>&nbsp;    extends SelectableChannel
+<i>59</i>&nbsp;{
+<i>60</i>&nbsp;
+<b class="nc"><i>61</i>&nbsp;    // The provider that created this channel</b>
+<b class="nc"><i>62</i>&nbsp;    private final SelectorProvider provider;</b>
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    // Keys that have been created by registering this channel with selectors.
+<b class="nc"><i>65</i>&nbsp;    // They are saved because if this channel is closed the keys must be</b>
+<i>66</i>&nbsp;    // deregistered.  Protected by keyLock.
+<i>67</i>&nbsp;    //
+<b class="nc"><i>68</i>&nbsp;    private SelectionKey[] keys = null;</b>
+<i>69</i>&nbsp;    private int keyCount = 0;
+<i>70</i>&nbsp;
+<b class="nc"><i>71</i>&nbsp;    // Lock for key set and count</b>
+<i>72</i>&nbsp;    private final Object keyLock = new Object();
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    // Lock for registration and configureBlocking operations
+<i>75</i>&nbsp;    private final Object regLock = new Object();
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    // True when non-blocking, need regLock to change;
+<i>78</i>&nbsp;    private volatile boolean nonBlocking;
+<b class="nc"><i>79</i>&nbsp;</b>
+<b class="nc"><i>80</i>&nbsp;    /**</b>
+<i>81</i>&nbsp;     * Initializes a new instance of this class.
+<i>82</i>&nbsp;     *
+<i>83</i>&nbsp;     * @param  provider
+<i>84</i>&nbsp;     *         The provider that created this channel
+<i>85</i>&nbsp;     */
+<i>86</i>&nbsp;    protected AbstractSelectableChannel(SelectorProvider provider) {
+<i>87</i>&nbsp;        this.provider = provider;
+<i>88</i>&nbsp;    }
+<b class="nc"><i>89</i>&nbsp;</b>
+<i>90</i>&nbsp;    /**
+<i>91</i>&nbsp;     * Returns the provider that created this channel.
+<i>92</i>&nbsp;     *
+<i>93</i>&nbsp;     * @return  The provider that created this channel
+<i>94</i>&nbsp;     */
+<i>95</i>&nbsp;    public final SelectorProvider provider() {
+<b class="nc"><i>96</i>&nbsp;        return provider;</b>
+<b class="nc"><i>97</i>&nbsp;    }</b>
+<b class="nc"><i>98</i>&nbsp;</b>
+<i>99</i>&nbsp;
+<b class="nc"><i>100</i>&nbsp;    // -- Utility methods for the key set --</b>
+<b class="nc"><i>101</i>&nbsp;</b>
+<b class="nc"><i>102</i>&nbsp;    private void addKey(SelectionKey k) {</b>
+<b class="nc"><i>103</i>&nbsp;        assert Thread.holdsLock(keyLock);</b>
+<b class="nc"><i>104</i>&nbsp;        int i = 0;</b>
+<i>105</i>&nbsp;        if ((keys != null) &amp;&amp; (keyCount &lt; keys.length)) {
+<i>106</i>&nbsp;            // Find empty element of key array
+<b class="nc"><i>107</i>&nbsp;            for (i = 0; i &lt; keys.length; i++)</b>
+<b class="nc"><i>108</i>&nbsp;                if (keys[i] == null)</b>
+<b class="nc"><i>109</i>&nbsp;                    break;</b>
+<b class="nc"><i>110</i>&nbsp;        } else if (keys == null) {</b>
+<b class="nc"><i>111</i>&nbsp;            keys = new SelectionKey[2];</b>
+<b class="nc"><i>112</i>&nbsp;        } else {</b>
+<i>113</i>&nbsp;            // Grow key array
+<b class="nc"><i>114</i>&nbsp;            int n = keys.length * 2;</b>
+<b class="nc"><i>115</i>&nbsp;            SelectionKey[] ks =  new SelectionKey[n];</b>
+<i>116</i>&nbsp;            for (i = 0; i &lt; keys.length; i++)
+<i>117</i>&nbsp;                ks[i] = keys[i];
+<i>118</i>&nbsp;            keys = ks;
+<b class="nc"><i>119</i>&nbsp;            i = keyCount;</b>
+<b class="nc"><i>120</i>&nbsp;        }</b>
+<b class="nc"><i>121</i>&nbsp;        keys[i] = k;</b>
+<b class="nc"><i>122</i>&nbsp;        keyCount++;</b>
+<b class="nc"><i>123</i>&nbsp;    }</b>
+<b class="nc"><i>124</i>&nbsp;</b>
+<b class="nc"><i>125</i>&nbsp;    private SelectionKey findKey(Selector sel) {</b>
+<b class="nc"><i>126</i>&nbsp;        assert Thread.holdsLock(keyLock);</b>
+<i>127</i>&nbsp;        if (keys == null)
+<i>128</i>&nbsp;            return null;
+<i>129</i>&nbsp;        for (int i = 0; i &lt; keys.length; i++)
+<b class="nc"><i>130</i>&nbsp;            if ((keys[i] != null) &amp;&amp; (keys[i].selector() == sel))</b>
+<b class="nc"><i>131</i>&nbsp;                return keys[i];</b>
+<b class="nc"><i>132</i>&nbsp;        return null;</b>
+<b class="nc"><i>133</i>&nbsp;</b>
+<b class="nc"><i>134</i>&nbsp;    }</b>
+<i>135</i>&nbsp;
+<b class="nc"><i>136</i>&nbsp;    void removeKey(SelectionKey k) {                    // package-private</b>
+<b class="nc"><i>137</i>&nbsp;        synchronized (keyLock) {</b>
+<i>138</i>&nbsp;            for (int i = 0; i &lt; keys.length; i++)
+<i>139</i>&nbsp;                if (keys[i] == k) {
+<i>140</i>&nbsp;                    keys[i] = null;
+<b class="nc"><i>141</i>&nbsp;                    keyCount--;</b>
+<b class="nc"><i>142</i>&nbsp;                }</b>
+<b class="nc"><i>143</i>&nbsp;            ((AbstractSelectionKey)k).invalidate();</b>
+<b class="nc"><i>144</i>&nbsp;        }</b>
+<b class="nc"><i>145</i>&nbsp;    }</b>
+<b class="nc"><i>146</i>&nbsp;</b>
+<i>147</i>&nbsp;    private boolean haveValidKeys() {
+<b class="nc"><i>148</i>&nbsp;        synchronized (keyLock) {</b>
+<b class="nc"><i>149</i>&nbsp;            if (keyCount == 0)</b>
+<i>150</i>&nbsp;                return false;
+<i>151</i>&nbsp;            for (int i = 0; i &lt; keys.length; i++) {
+<i>152</i>&nbsp;                if ((keys[i] != null) &amp;&amp; keys[i].isValid())
+<i>153</i>&nbsp;                    return true;
+<i>154</i>&nbsp;            }
+<i>155</i>&nbsp;            return false;
+<b class="nc"><i>156</i>&nbsp;        }</b>
+<b class="nc"><i>157</i>&nbsp;    }</b>
+<b class="nc"><i>158</i>&nbsp;</b>
+<i>159</i>&nbsp;
+<i>160</i>&nbsp;    // -- Registration --
+<i>161</i>&nbsp;
+<b class="nc"><i>162</i>&nbsp;    public final boolean isRegistered() {</b>
+<i>163</i>&nbsp;        synchronized (keyLock) {
+<i>164</i>&nbsp;            return keyCount != 0;
+<i>165</i>&nbsp;        }
+<i>166</i>&nbsp;    }
+<i>167</i>&nbsp;
+<i>168</i>&nbsp;    public final SelectionKey keyFor(Selector sel) {
+<i>169</i>&nbsp;        synchronized (keyLock) {
+<i>170</i>&nbsp;            return findKey(sel);
+<i>171</i>&nbsp;        }
+<i>172</i>&nbsp;    }
+<i>173</i>&nbsp;
+<i>174</i>&nbsp;    /**
+<i>175</i>&nbsp;     * Registers this channel with the given selector, returning a selection key.
+<i>176</i>&nbsp;     *
+<i>177</i>&nbsp;     * &lt;p&gt;  This method first verifies that this channel is open and that the
+<i>178</i>&nbsp;     * given initial interest set is valid.
+<i>179</i>&nbsp;     *
+<i>180</i>&nbsp;     * &lt;p&gt; If this channel is already registered with the given selector then
+<i>181</i>&nbsp;     * the selection key representing that registration is returned after
+<i>182</i>&nbsp;     * setting its interest set to the given value.
+<i>183</i>&nbsp;     *
+<i>184</i>&nbsp;     * &lt;p&gt; Otherwise this channel has not yet been registered with the given
+<i>185</i>&nbsp;     * selector, so the {@link AbstractSelector#register register} method of
+<i>186</i>&nbsp;     * the selector is invoked while holding the appropriate locks.  The
+<i>187</i>&nbsp;     * resulting key is added to this channel&#39;s key set before being returned.
+<i>188</i>&nbsp;     * &lt;/p&gt;
+<i>189</i>&nbsp;     *
+<i>190</i>&nbsp;     * @throws  ClosedSelectorException {@inheritDoc}
+<i>191</i>&nbsp;     *
+<i>192</i>&nbsp;     * @throws  IllegalBlockingModeException {@inheritDoc}
+<i>193</i>&nbsp;     *
+<i>194</i>&nbsp;     * @throws  IllegalSelectorException {@inheritDoc}
+<b class="nc"><i>195</i>&nbsp;     *</b>
+<b class="nc"><i>196</i>&nbsp;     * @throws  CancelledKeyException {@inheritDoc}</b>
+<b class="nc"><i>197</i>&nbsp;     *</b>
+<b class="nc"><i>198</i>&nbsp;     * @throws  IllegalArgumentException {@inheritDoc}</b>
+<b class="nc"><i>199</i>&nbsp;     */</b>
+<b class="nc"><i>200</i>&nbsp;    public final SelectionKey register(Selector sel, int ops, Object att)</b>
+<b class="nc"><i>201</i>&nbsp;        throws ClosedChannelException</b>
+<b class="nc"><i>202</i>&nbsp;    {</b>
+<b class="nc"><i>203</i>&nbsp;        if ((ops &amp; ~validOps()) != 0)</b>
+<b class="nc"><i>204</i>&nbsp;            throw new IllegalArgumentException();</b>
+<b class="nc"><i>205</i>&nbsp;        if (!isOpen())</b>
+<i>206</i>&nbsp;            throw new ClosedChannelException();
+<b class="nc"><i>207</i>&nbsp;        synchronized (regLock) {</b>
+<i>208</i>&nbsp;            if (isBlocking())
+<b class="nc"><i>209</i>&nbsp;                throw new IllegalBlockingModeException();</b>
+<b class="nc"><i>210</i>&nbsp;            synchronized (keyLock) {</b>
+<b class="nc"><i>211</i>&nbsp;                // re-check if channel has been closed</b>
+<b class="nc"><i>212</i>&nbsp;                if (!isOpen())</b>
+<b class="nc"><i>213</i>&nbsp;                    throw new ClosedChannelException();</b>
+<b class="nc"><i>214</i>&nbsp;                SelectionKey k = findKey(sel);</b>
+<i>215</i>&nbsp;                if (k != null) {
+<b class="nc"><i>216</i>&nbsp;                    k.attach(att);</b>
+<b class="nc"><i>217</i>&nbsp;                    k.interestOps(ops);</b>
+<i>218</i>&nbsp;                } else {
+<i>219</i>&nbsp;                    // New registration
+<i>220</i>&nbsp;                    k = ((AbstractSelector)sel).register(this, ops, att);
+<i>221</i>&nbsp;                    addKey(k);
+<i>222</i>&nbsp;                }
+<i>223</i>&nbsp;                return k;
+<i>224</i>&nbsp;            }
+<i>225</i>&nbsp;        }
+<i>226</i>&nbsp;    }
+<i>227</i>&nbsp;
+<i>228</i>&nbsp;
+<i>229</i>&nbsp;    // -- Closing --
+<i>230</i>&nbsp;
+<i>231</i>&nbsp;    /**
+<i>232</i>&nbsp;     * Closes this channel.
+<i>233</i>&nbsp;     *
+<b class="nc"><i>234</i>&nbsp;     * &lt;p&gt; This method, which is specified in the {@link</b>
+<b class="nc"><i>235</i>&nbsp;     * AbstractInterruptibleChannel} class and is invoked by the {@link</b>
+<b class="nc"><i>236</i>&nbsp;     * java.nio.channels.Channel#close close} method, in turn invokes the</b>
+<b class="nc"><i>237</i>&nbsp;     * {@link #implCloseSelectableChannel implCloseSelectableChannel} method in</b>
+<b class="nc"><i>238</i>&nbsp;     * order to perform the actual work of closing this channel.  It then</b>
+<b class="nc"><i>239</i>&nbsp;     * cancels all of this channel&#39;s keys.  &lt;/p&gt;</b>
+<b class="nc"><i>240</i>&nbsp;     */</b>
+<i>241</i>&nbsp;    protected final void implCloseChannel() throws IOException {
+<b class="nc"><i>242</i>&nbsp;        implCloseSelectableChannel();</b>
+<i>243</i>&nbsp;
+<i>244</i>&nbsp;        // clone keys to avoid calling cancel when holding keyLock
+<i>245</i>&nbsp;        SelectionKey[] copyOfKeys = null;
+<i>246</i>&nbsp;        synchronized (keyLock) {
+<i>247</i>&nbsp;            if (keys != null) {
+<i>248</i>&nbsp;                copyOfKeys = keys.clone();
+<i>249</i>&nbsp;            }
+<i>250</i>&nbsp;        }
+<i>251</i>&nbsp;
+<i>252</i>&nbsp;        if (copyOfKeys != null) {
+<i>253</i>&nbsp;            for (SelectionKey k : copyOfKeys) {
+<i>254</i>&nbsp;                if (k != null) {
+<i>255</i>&nbsp;                    k.cancel();   // invalidate and adds key to cancelledKey set
+<i>256</i>&nbsp;                }
+<i>257</i>&nbsp;            }
+<i>258</i>&nbsp;        }
+<i>259</i>&nbsp;    }
+<i>260</i>&nbsp;
+<i>261</i>&nbsp;    /**
+<i>262</i>&nbsp;     * Closes this selectable channel.
+<i>263</i>&nbsp;     *
+<i>264</i>&nbsp;     * &lt;p&gt; This method is invoked by the {@link java.nio.channels.Channel#close
+<i>265</i>&nbsp;     * close} method in order to perform the actual work of closing the
+<i>266</i>&nbsp;     * channel.  This method is only invoked if the channel has not yet been
+<b class="nc"><i>267</i>&nbsp;     * closed, and it is never invoked more than once.</b>
+<b class="nc"><i>268</i>&nbsp;     *</b>
+<b class="nc"><i>269</i>&nbsp;     * &lt;p&gt; An implementation of this method must arrange for any other thread</b>
+<i>270</i>&nbsp;     * that is blocked in an I/O operation upon this channel to return
+<i>271</i>&nbsp;     * immediately, either by throwing an exception or by returning normally.
+<i>272</i>&nbsp;     * &lt;/p&gt;
+<b class="nc"><i>273</i>&nbsp;     *</b>
+<i>274</i>&nbsp;     * @throws  IOException
+<i>275</i>&nbsp;     *          If an I/O error occurs
+<i>276</i>&nbsp;     */
+<i>277</i>&nbsp;    protected abstract void implCloseSelectableChannel() throws IOException;
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;
+<i>280</i>&nbsp;    // -- Blocking --
+<i>281</i>&nbsp;
+<i>282</i>&nbsp;    public final boolean isBlocking() {
+<i>283</i>&nbsp;        return !nonBlocking;
+<i>284</i>&nbsp;    }
+<i>285</i>&nbsp;
+<i>286</i>&nbsp;    public final Object blockingLock() {
+<b class="nc"><i>287</i>&nbsp;        return regLock;</b>
+<b class="nc"><i>288</i>&nbsp;    }</b>
+<b class="nc"><i>289</i>&nbsp;</b>
+<b class="nc"><i>290</i>&nbsp;    /**</b>
+<b class="nc"><i>291</i>&nbsp;     * Adjusts this channel&#39;s blocking mode.</b>
+<b class="nc"><i>292</i>&nbsp;     *</b>
+<b class="nc"><i>293</i>&nbsp;     * &lt;p&gt; If the given blocking mode is different from the current blocking</b>
+<b class="nc"><i>294</i>&nbsp;     * mode then this method invokes the {@link #implConfigureBlocking</b>
+<b class="nc"><i>295</i>&nbsp;     * implConfigureBlocking} method, while holding the appropriate locks, in</b>
+<b class="nc"><i>296</i>&nbsp;     * order to change the mode.  &lt;/p&gt;</b>
+<b class="nc"><i>297</i>&nbsp;     */</b>
+<i>298</i>&nbsp;    public final SelectableChannel configureBlocking(boolean block)
+<i>299</i>&nbsp;        throws IOException
+<i>300</i>&nbsp;    {
+<i>301</i>&nbsp;        synchronized (regLock) {
+<i>302</i>&nbsp;            if (!isOpen())
+<i>303</i>&nbsp;                throw new ClosedChannelException();
+<i>304</i>&nbsp;            boolean blocking = !nonBlocking;
+<i>305</i>&nbsp;            if (block != blocking) {
+<i>306</i>&nbsp;                if (block &amp;&amp; haveValidKeys())
+<i>307</i>&nbsp;                    throw new IllegalBlockingModeException();
+<i>308</i>&nbsp;                implConfigureBlocking(block);
+<i>309</i>&nbsp;                nonBlocking = !block;
+<i>310</i>&nbsp;            }
+<i>311</i>&nbsp;        }
+<i>312</i>&nbsp;        return this;
+<i>313</i>&nbsp;    }
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;    /**
+<i>316</i>&nbsp;     * Adjusts this channel&#39;s blocking mode.
+<i>317</i>&nbsp;     *
+<i>318</i>&nbsp;     * &lt;p&gt; This method is invoked by the {@link #configureBlocking
+<i>319</i>&nbsp;     * configureBlocking} method in order to perform the actual work of
+<i>320</i>&nbsp;     * changing the blocking mode.  This method is only invoked if the new mode
+<i>321</i>&nbsp;     * is different from the current mode.  &lt;/p&gt;
+<i>322</i>&nbsp;     *
+<i>323</i>&nbsp;     * @param  block  If {@code true} then this channel will be placed in
+<i>324</i>&nbsp;     *                blocking mode; if {@code false} then it will be placed
+<i>325</i>&nbsp;     *                non-blocking mode
+<i>326</i>&nbsp;     *
+<i>327</i>&nbsp;     * @throws IOException
+<i>328</i>&nbsp;     *         If an I/O error occurs
+<i>329</i>&nbsp;     */
+<i>330</i>&nbsp;    protected abstract void implConfigureBlocking(boolean block)
+<i>331</i>&nbsp;        throws IOException;
+<i>332</i>&nbsp;
+<i>333</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,940 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: SignatureFileVerifier</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.util</a> ]
+</div>
+
+<h1>Coverage Summary for Class: SignatureFileVerifier (sun.security.util)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SignatureFileVerifier</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 21)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 317)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.util;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.ByteArrayInputStream;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import java.security.CodeSigner;
+<i>31</i>&nbsp;import java.security.GeneralSecurityException;
+<i>32</i>&nbsp;import java.security.MessageDigest;
+<i>33</i>&nbsp;import java.security.NoSuchAlgorithmException;
+<i>34</i>&nbsp;import java.security.SignatureException;
+<i>35</i>&nbsp;import java.security.Timestamp;
+<i>36</i>&nbsp;import java.security.cert.CertPath;
+<i>37</i>&nbsp;import java.security.cert.X509Certificate;
+<i>38</i>&nbsp;import java.security.cert.CertificateException;
+<i>39</i>&nbsp;import java.security.cert.CertificateFactory;
+<i>40</i>&nbsp;import java.util.ArrayList;
+<i>41</i>&nbsp;import java.util.Base64;
+<i>42</i>&nbsp;import java.util.HashMap;
+<i>43</i>&nbsp;import java.util.Hashtable;
+<i>44</i>&nbsp;import java.util.Iterator;
+<i>45</i>&nbsp;import java.util.List;
+<i>46</i>&nbsp;import java.util.Locale;
+<i>47</i>&nbsp;import java.util.Map;
+<i>48</i>&nbsp;import java.util.jar.Attributes;
+<i>49</i>&nbsp;import java.util.jar.JarException;
+<i>50</i>&nbsp;import java.util.jar.JarFile;
+<i>51</i>&nbsp;import java.util.jar.Manifest;
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;import sun.security.jca.Providers;
+<i>54</i>&nbsp;import sun.security.pkcs.PKCS7;
+<i>55</i>&nbsp;import sun.security.pkcs.SignerInfo;
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;public class SignatureFileVerifier {
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    /* Are we debugging ? */
+<b class="nc"><i>60</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;jar&quot;);</b>
+<i>61</i>&nbsp;
+<b class="nc"><i>62</i>&nbsp;    /**</b>
+<i>63</i>&nbsp;     * Holder class to delay initialization of DisabledAlgorithmConstraints
+<i>64</i>&nbsp;     * until needed.
+<i>65</i>&nbsp;     */
+<i>66</i>&nbsp;    private static class ConfigurationHolder {
+<i>67</i>&nbsp;        static final DisabledAlgorithmConstraints JAR_DISABLED_CHECK =
+<b class="nc"><i>68</i>&nbsp;            new DisabledAlgorithmConstraints(</b>
+<i>69</i>&nbsp;                    DisabledAlgorithmConstraints.PROPERTY_JAR_DISABLED_ALGS);
+<b class="nc"><i>70</i>&nbsp;    }</b>
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    private ArrayList&lt;CodeSigner[]&gt; signerCache;
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    private static final String ATTR_DIGEST =
+<i>75</i>&nbsp;        (&quot;-DIGEST-&quot; + ManifestDigester.MF_MAIN_ATTRS).toUpperCase
+<i>76</i>&nbsp;        (Locale.ENGLISH);
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    /** the PKCS7 block for this .DSA/.RSA/.EC file */
+<i>79</i>&nbsp;    private PKCS7 block;
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    /** the raw bytes of the .SF file */
+<i>82</i>&nbsp;    private byte[] sfBytes;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    /** the name of the signature block file, uppercased and without
+<i>85</i>&nbsp;     *  the extension (.DSA/.RSA/.EC)
+<i>86</i>&nbsp;     */
+<i>87</i>&nbsp;    private String name;
+<i>88</i>&nbsp;
+<i>89</i>&nbsp;    /** the ManifestDigester */
+<b class="nc"><i>90</i>&nbsp;    private ManifestDigester md;</b>
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    /** cache of created MessageDigest objects */
+<b class="nc"><i>93</i>&nbsp;    private HashMap&lt;String, MessageDigest&gt; createdDigests;</b>
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;    /* workaround for parsing Netscape jars  */
+<b class="nc"><i>96</i>&nbsp;    private boolean workaround = false;</b>
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    /* for generating certpath objects */
+<i>99</i>&nbsp;    private CertificateFactory certificateFactory = null;
+<i>100</i>&nbsp;
+<b class="nc"><i>101</i>&nbsp;    /** Algorithms that have been checked if they are weak. */</b>
+<i>102</i>&nbsp;    private Map&lt;String, Boolean&gt; permittedAlgs= new HashMap&lt;&gt;();
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;    /** TSA timestamp of signed jar.  The newest timestamp is used.  If there
+<i>105</i>&nbsp;     *  was no TSA timestamp used when signed, current time is used (&quot;null&quot;).
+<i>106</i>&nbsp;     */
+<i>107</i>&nbsp;    private Timestamp timestamp = null;
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    /**
+<i>110</i>&nbsp;     * Create the named SignatureFileVerifier.
+<i>111</i>&nbsp;     *
+<i>112</i>&nbsp;     * @param name the name of the signature block file (.DSA/.RSA/.EC)
+<i>113</i>&nbsp;     *
+<i>114</i>&nbsp;     * @param rawBytes the raw bytes of the signature block file
+<b class="nc"><i>115</i>&nbsp;     */</b>
+<i>116</i>&nbsp;    public SignatureFileVerifier(ArrayList&lt;CodeSigner[]&gt; signerCache,
+<i>117</i>&nbsp;                                 ManifestDigester md,
+<b class="nc"><i>118</i>&nbsp;                                 String name,</b>
+<i>119</i>&nbsp;                                 byte[] rawBytes)
+<b class="nc"><i>120</i>&nbsp;        throws IOException, CertificateException</b>
+<b class="nc"><i>121</i>&nbsp;    {</b>
+<b class="nc"><i>122</i>&nbsp;        // new PKCS7() calls CertificateFactory.getInstance()</b>
+<b class="nc"><i>123</i>&nbsp;        // need to use local providers here, see Providers class</b>
+<i>124</i>&nbsp;        Object obj = null;
+<b class="nc"><i>125</i>&nbsp;        try {</b>
+<b class="nc"><i>126</i>&nbsp;            obj = Providers.startJarVerification();</b>
+<b class="nc"><i>127</i>&nbsp;            block = new PKCS7(rawBytes);</b>
+<b class="nc"><i>128</i>&nbsp;            sfBytes = block.getContentInfo().getData();</b>
+<b class="nc"><i>129</i>&nbsp;            certificateFactory = CertificateFactory.getInstance(&quot;X509&quot;);</b>
+<b class="nc"><i>130</i>&nbsp;        } finally {</b>
+<i>131</i>&nbsp;            Providers.stopJarVerification(obj);
+<i>132</i>&nbsp;        }
+<i>133</i>&nbsp;        this.name = name.substring(0, name.lastIndexOf(&#39;.&#39;))
+<i>134</i>&nbsp;                                                   .toUpperCase(Locale.ENGLISH);
+<i>135</i>&nbsp;        this.md = md;
+<i>136</i>&nbsp;        this.signerCache = signerCache;
+<i>137</i>&nbsp;    }
+<i>138</i>&nbsp;
+<b class="nc"><i>139</i>&nbsp;    /**</b>
+<i>140</i>&nbsp;     * returns true if we need the .SF file
+<i>141</i>&nbsp;     */
+<i>142</i>&nbsp;    public boolean needSignatureFileBytes()
+<i>143</i>&nbsp;    {
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;        return sfBytes == null;
+<i>146</i>&nbsp;    }
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;    /**
+<i>150</i>&nbsp;     * returns true if we need this .SF file.
+<b class="nc"><i>151</i>&nbsp;     *</b>
+<i>152</i>&nbsp;     * @param name the name of the .SF file without the extension
+<i>153</i>&nbsp;     *
+<i>154</i>&nbsp;     */
+<i>155</i>&nbsp;    public boolean needSignatureFile(String name)
+<i>156</i>&nbsp;    {
+<i>157</i>&nbsp;        return this.name.equalsIgnoreCase(name);
+<i>158</i>&nbsp;    }
+<i>159</i>&nbsp;
+<b class="nc"><i>160</i>&nbsp;    /**</b>
+<i>161</i>&nbsp;     * used to set the raw bytes of the .SF file when it
+<i>162</i>&nbsp;     * is external to the signature block file.
+<i>163</i>&nbsp;     */
+<i>164</i>&nbsp;    public void setSignatureFile(byte[] sfBytes)
+<i>165</i>&nbsp;    {
+<i>166</i>&nbsp;        this.sfBytes = sfBytes;
+<i>167</i>&nbsp;    }
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;    /**
+<i>170</i>&nbsp;     * Utility method used by JarVerifier and JarSigner
+<i>171</i>&nbsp;     * to determine the signature file names and PKCS7 block
+<i>172</i>&nbsp;     * files names that are supported
+<i>173</i>&nbsp;     *
+<b class="nc"><i>174</i>&nbsp;     * @param s file name</b>
+<b class="nc"><i>175</i>&nbsp;     * @return true if the input file name is a supported</b>
+<b class="nc"><i>176</i>&nbsp;     *          Signature File or PKCS7 block file name</b>
+<b class="nc"><i>177</i>&nbsp;     */</b>
+<i>178</i>&nbsp;    public static boolean isBlockOrSF(String s) {
+<i>179</i>&nbsp;        // we currently only support DSA and RSA PKCS7 blocks
+<i>180</i>&nbsp;        return s.endsWith(&quot;.SF&quot;)
+<i>181</i>&nbsp;            || s.endsWith(&quot;.DSA&quot;)
+<i>182</i>&nbsp;            || s.endsWith(&quot;.RSA&quot;)
+<i>183</i>&nbsp;            || s.endsWith(&quot;.EC&quot;);
+<i>184</i>&nbsp;    }
+<i>185</i>&nbsp;
+<i>186</i>&nbsp;    /**
+<i>187</i>&nbsp;     * Yet another utility method used by JarVerifier and JarSigner
+<i>188</i>&nbsp;     * to determine what files are signature related, which includes
+<i>189</i>&nbsp;     * the MANIFEST, SF files, known signature block files, and other
+<i>190</i>&nbsp;     * unknown signature related files (those starting with SIG- with
+<b class="nc"><i>191</i>&nbsp;     * an optional [A-Z0-9]{1,3} extension right inside META-INF).</b>
+<b class="nc"><i>192</i>&nbsp;     *</b>
+<b class="nc"><i>193</i>&nbsp;     * @param name file name</b>
+<i>194</i>&nbsp;     * @return true if the input file name is signature related
+<b class="nc"><i>195</i>&nbsp;     */</b>
+<b class="nc"><i>196</i>&nbsp;    public static boolean isSigningRelated(String name) {</b>
+<b class="nc"><i>197</i>&nbsp;        name = name.toUpperCase(Locale.ENGLISH);</b>
+<i>198</i>&nbsp;        if (!name.startsWith(&quot;META-INF/&quot;)) {
+<b class="nc"><i>199</i>&nbsp;            return false;</b>
+<b class="nc"><i>200</i>&nbsp;        }</b>
+<b class="nc"><i>201</i>&nbsp;        name = name.substring(9);</b>
+<i>202</i>&nbsp;        if (name.indexOf(&#39;/&#39;) != -1) {
+<i>203</i>&nbsp;            return false;
+<i>204</i>&nbsp;        }
+<b class="nc"><i>205</i>&nbsp;        if (isBlockOrSF(name) || name.equals(&quot;MANIFEST.MF&quot;)) {</b>
+<b class="nc"><i>206</i>&nbsp;            return true;</b>
+<b class="nc"><i>207</i>&nbsp;        } else if (name.startsWith(&quot;SIG-&quot;)) {</b>
+<i>208</i>&nbsp;            // check filename extension
+<b class="nc"><i>209</i>&nbsp;            // see http://docs.oracle.com/javase/7/docs/technotes/guides/jar/jar.html#Digital_Signatures</b>
+<b class="nc"><i>210</i>&nbsp;            // for what filename extensions are legal</b>
+<i>211</i>&nbsp;            int extIndex = name.lastIndexOf(&#39;.&#39;);
+<i>212</i>&nbsp;            if (extIndex != -1) {
+<b class="nc"><i>213</i>&nbsp;                String ext = name.substring(extIndex + 1);</b>
+<b class="nc"><i>214</i>&nbsp;                // validate length first</b>
+<i>215</i>&nbsp;                if (ext.length() &gt; 3 || ext.length() &lt; 1) {
+<b class="nc"><i>216</i>&nbsp;                    return false;</b>
+<b class="nc"><i>217</i>&nbsp;                }</b>
+<i>218</i>&nbsp;                // then check chars, must be in [a-zA-Z0-9] per the jar spec
+<i>219</i>&nbsp;                for (int index = 0; index &lt; ext.length(); index++) {
+<i>220</i>&nbsp;                    char cc = ext.charAt(index);
+<b class="nc"><i>221</i>&nbsp;                    // chars are promoted to uppercase so skip lowercase checks</b>
+<i>222</i>&nbsp;                    if ((cc &lt; &#39;A&#39; || cc &gt; &#39;Z&#39;) &amp;&amp; (cc &lt; &#39;0&#39; || cc &gt; &#39;9&#39;)) {
+<b class="nc"><i>223</i>&nbsp;                        return false;</b>
+<i>224</i>&nbsp;                    }
+<i>225</i>&nbsp;                }
+<i>226</i>&nbsp;            }
+<i>227</i>&nbsp;            return true; // no extension is OK
+<i>228</i>&nbsp;        }
+<i>229</i>&nbsp;        return false;
+<b class="nc"><i>230</i>&nbsp;    }</b>
+<b class="nc"><i>231</i>&nbsp;</b>
+<i>232</i>&nbsp;    /** get digest from cache */
+<b class="nc"><i>233</i>&nbsp;</b>
+<i>234</i>&nbsp;    private MessageDigest getDigest(String algorithm)
+<b class="nc"><i>235</i>&nbsp;            throws SignatureException {</b>
+<i>236</i>&nbsp;        if (createdDigests == null)
+<b class="nc"><i>237</i>&nbsp;            createdDigests = new HashMap&lt;&gt;();</b>
+<b class="nc"><i>238</i>&nbsp;</b>
+<b class="nc"><i>239</i>&nbsp;        MessageDigest digest = createdDigests.get(algorithm);</b>
+<i>240</i>&nbsp;
+<b class="nc"><i>241</i>&nbsp;        if (digest == null) {</b>
+<i>242</i>&nbsp;            try {
+<b class="nc"><i>243</i>&nbsp;                digest = MessageDigest.getInstance(algorithm);</b>
+<i>244</i>&nbsp;                createdDigests.put(algorithm, digest);
+<i>245</i>&nbsp;            } catch (NoSuchAlgorithmException nsae) {
+<i>246</i>&nbsp;                // ignore
+<i>247</i>&nbsp;            }
+<i>248</i>&nbsp;        }
+<i>249</i>&nbsp;        return digest;
+<i>250</i>&nbsp;    }
+<i>251</i>&nbsp;
+<i>252</i>&nbsp;    /**
+<i>253</i>&nbsp;     * process the signature block file. Goes through the .SF file
+<i>254</i>&nbsp;     * and adds code signers for each section where the .SF section
+<i>255</i>&nbsp;     * hash was verified against the Manifest section.
+<i>256</i>&nbsp;     *
+<i>257</i>&nbsp;     *
+<i>258</i>&nbsp;     */
+<i>259</i>&nbsp;    public void process(Hashtable&lt;String, CodeSigner[]&gt; signers,
+<b class="nc"><i>260</i>&nbsp;            List&lt;Object&gt; manifestDigests)</b>
+<i>261</i>&nbsp;        throws IOException, SignatureException, NoSuchAlgorithmException,
+<b class="nc"><i>262</i>&nbsp;            JarException, CertificateException</b>
+<b class="nc"><i>263</i>&nbsp;    {</b>
+<i>264</i>&nbsp;        // calls Signature.getInstance() and MessageDigest.getInstance()
+<b class="nc"><i>265</i>&nbsp;        // need to use local providers here, see Providers class</b>
+<b class="nc"><i>266</i>&nbsp;        Object obj = null;</b>
+<i>267</i>&nbsp;        try {
+<i>268</i>&nbsp;            obj = Providers.startJarVerification();
+<i>269</i>&nbsp;            processImpl(signers, manifestDigests);
+<i>270</i>&nbsp;        } finally {
+<i>271</i>&nbsp;            Providers.stopJarVerification(obj);
+<i>272</i>&nbsp;        }
+<i>273</i>&nbsp;
+<i>274</i>&nbsp;    }
+<b class="nc"><i>275</i>&nbsp;</b>
+<b class="nc"><i>276</i>&nbsp;    private void processImpl(Hashtable&lt;String, CodeSigner[]&gt; signers,</b>
+<i>277</i>&nbsp;            List&lt;Object&gt; manifestDigests)
+<b class="nc"><i>278</i>&nbsp;        throws IOException, SignatureException, NoSuchAlgorithmException,</b>
+<b class="nc"><i>279</i>&nbsp;            JarException, CertificateException</b>
+<i>280</i>&nbsp;    {
+<b class="nc"><i>281</i>&nbsp;        Manifest sf = new Manifest();</b>
+<i>282</i>&nbsp;        sf.read(new ByteArrayInputStream(sfBytes));
+<i>283</i>&nbsp;
+<i>284</i>&nbsp;        String version =
+<i>285</i>&nbsp;            sf.getMainAttributes().getValue(Attributes.Name.SIGNATURE_VERSION);
+<i>286</i>&nbsp;
+<b class="nc"><i>287</i>&nbsp;        if ((version == null) || !(version.equalsIgnoreCase(&quot;1.0&quot;))) {</b>
+<i>288</i>&nbsp;            // XXX: should this be an exception?
+<b class="nc"><i>289</i>&nbsp;            // for now we just ignore this signature file</b>
+<b class="nc"><i>290</i>&nbsp;            return;</b>
+<i>291</i>&nbsp;        }
+<i>292</i>&nbsp;
+<i>293</i>&nbsp;        SignerInfo[] infos = block.verify(sfBytes);
+<i>294</i>&nbsp;
+<b class="nc"><i>295</i>&nbsp;        if (infos == null) {</b>
+<i>296</i>&nbsp;            throw new SecurityException(&quot;cannot verify signature block file &quot; +
+<i>297</i>&nbsp;                                        name);
+<b class="nc"><i>298</i>&nbsp;        }</b>
+<i>299</i>&nbsp;
+<i>300</i>&nbsp;
+<i>301</i>&nbsp;        CodeSigner[] newSigners = getSigners(infos, block);
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;        // make sure we have something to do all this work for...
+<i>304</i>&nbsp;        if (newSigners == null)
+<b class="nc"><i>305</i>&nbsp;            return;</b>
+<b class="nc"><i>306</i>&nbsp;</b>
+<b class="nc"><i>307</i>&nbsp;        /*</b>
+<i>308</i>&nbsp;         * Look for the latest timestamp in the signature block.  If an entry
+<b class="nc"><i>309</i>&nbsp;         * has no timestamp, use current time (aka null).</b>
+<b class="nc"><i>310</i>&nbsp;         */</b>
+<b class="nc"><i>311</i>&nbsp;        for (CodeSigner s: newSigners) {</b>
+<b class="nc"><i>312</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>313</i>&nbsp;                debug.println(&quot;Gathering timestamp for:  &quot; + s.toString());</b>
+<i>314</i>&nbsp;            }
+<b class="nc"><i>315</i>&nbsp;            if (s.getTimestamp() == null) {</b>
+<b class="nc"><i>316</i>&nbsp;                timestamp = null;</b>
+<b class="nc"><i>317</i>&nbsp;                break;</b>
+<i>318</i>&nbsp;            } else if (timestamp == null) {
+<i>319</i>&nbsp;                timestamp = s.getTimestamp();
+<i>320</i>&nbsp;            } else {
+<i>321</i>&nbsp;                if (timestamp.getTimestamp().before(
+<b class="nc"><i>322</i>&nbsp;                        s.getTimestamp().getTimestamp())) {</b>
+<b class="nc"><i>323</i>&nbsp;                    timestamp = s.getTimestamp();</b>
+<i>324</i>&nbsp;                }
+<i>325</i>&nbsp;            }
+<b class="nc"><i>326</i>&nbsp;        }</b>
+<i>327</i>&nbsp;
+<i>328</i>&nbsp;        Iterator&lt;Map.Entry&lt;String,Attributes&gt;&gt; entries =
+<b class="nc"><i>329</i>&nbsp;                                sf.getEntries().entrySet().iterator();</b>
+<b class="nc"><i>330</i>&nbsp;</b>
+<i>331</i>&nbsp;        // see if we can verify the whole manifest first
+<i>332</i>&nbsp;        boolean manifestSigned = verifyManifestHash(sf, md, manifestDigests);
+<i>333</i>&nbsp;
+<i>334</i>&nbsp;        // verify manifest main attributes
+<b class="nc"><i>335</i>&nbsp;        if (!manifestSigned &amp;&amp; !verifyManifestMainAttrs(sf, md)) {</b>
+<i>336</i>&nbsp;            throw new SecurityException
+<b class="nc"><i>337</i>&nbsp;                (&quot;Invalid signature file digest for Manifest main attributes&quot;);</b>
+<b class="nc"><i>338</i>&nbsp;        }</b>
+<i>339</i>&nbsp;
+<b class="nc"><i>340</i>&nbsp;        // go through each section in the signature file</b>
+<b class="nc"><i>341</i>&nbsp;        while(entries.hasNext()) {</b>
+<i>342</i>&nbsp;
+<b class="nc"><i>343</i>&nbsp;            Map.Entry&lt;String,Attributes&gt; e = entries.next();</b>
+<b class="nc"><i>344</i>&nbsp;            String name = e.getKey();</b>
+<i>345</i>&nbsp;
+<b class="nc"><i>346</i>&nbsp;            if (manifestSigned ||</b>
+<b class="nc"><i>347</i>&nbsp;                (verifySection(e.getValue(), name, md))) {</b>
+<i>348</i>&nbsp;
+<b class="nc"><i>349</i>&nbsp;                if (name.startsWith(&quot;./&quot;))</b>
+<i>350</i>&nbsp;                    name = name.substring(2);
+<b class="nc"><i>351</i>&nbsp;</b>
+<b class="nc"><i>352</i>&nbsp;                if (name.startsWith(&quot;/&quot;))</b>
+<i>353</i>&nbsp;                    name = name.substring(1);
+<i>354</i>&nbsp;
+<b class="nc"><i>355</i>&nbsp;                updateSigners(newSigners, signers, name);</b>
+<b class="nc"><i>356</i>&nbsp;</b>
+<i>357</i>&nbsp;                if (debug != null) {
+<b class="nc"><i>358</i>&nbsp;                    debug.println(&quot;processSignature signed name = &quot;+name);</b>
+<i>359</i>&nbsp;                }
+<i>360</i>&nbsp;
+<b class="nc"><i>361</i>&nbsp;            } else if (debug != null) {</b>
+<i>362</i>&nbsp;                debug.println(&quot;processSignature unsigned name = &quot;+name);
+<i>363</i>&nbsp;            }
+<i>364</i>&nbsp;        }
+<i>365</i>&nbsp;
+<i>366</i>&nbsp;        // MANIFEST.MF is always regarded as signed
+<i>367</i>&nbsp;        updateSigners(newSigners, signers, JarFile.MANIFEST_NAME);
+<i>368</i>&nbsp;    }
+<i>369</i>&nbsp;
+<i>370</i>&nbsp;    /**
+<b class="nc"><i>371</i>&nbsp;     * Check if algorithm is permitted using the permittedAlgs Map.</b>
+<b class="nc"><i>372</i>&nbsp;     * If the algorithm is not in the map, check against disabled algorithms and</b>
+<i>373</i>&nbsp;     * store the result. If the algorithm is in the map use that result.
+<b class="nc"><i>374</i>&nbsp;     * False is returned for weak algorithm, true for good algorithms.</b>
+<i>375</i>&nbsp;     */
+<b class="nc"><i>376</i>&nbsp;    boolean permittedCheck(String key, String algorithm) {</b>
+<b class="nc"><i>377</i>&nbsp;        Boolean permitted = permittedAlgs.get(algorithm);</b>
+<b class="nc"><i>378</i>&nbsp;        if (permitted == null) {</b>
+<b class="nc"><i>379</i>&nbsp;            try {</b>
+<b class="nc"><i>380</i>&nbsp;                ConfigurationHolder.JAR_DISABLED_CHECK.permits(algorithm,</b>
+<b class="nc"><i>381</i>&nbsp;                        new ConstraintsParameters(timestamp));</b>
+<i>382</i>&nbsp;            } catch(GeneralSecurityException e) {
+<b class="nc"><i>383</i>&nbsp;                permittedAlgs.put(algorithm, Boolean.FALSE);</b>
+<i>384</i>&nbsp;                permittedAlgs.put(key.toUpperCase(), Boolean.FALSE);
+<b class="nc"><i>385</i>&nbsp;                if (debug != null) {</b>
+<i>386</i>&nbsp;                    if (e.getMessage() != null) {
+<i>387</i>&nbsp;                        debug.println(key + &quot;:  &quot; + e.getMessage());
+<b class="nc"><i>388</i>&nbsp;                    } else {</b>
+<b class="nc"><i>389</i>&nbsp;                        debug.println(&quot;Debug info only. &quot; +  key + &quot;:  &quot; +</b>
+<i>390</i>&nbsp;                            algorithm +
+<b class="nc"><i>391</i>&nbsp;                            &quot; was disabled, no exception msg given.&quot;);</b>
+<b class="nc"><i>392</i>&nbsp;                        e.printStackTrace();</b>
+<i>393</i>&nbsp;                    }
+<i>394</i>&nbsp;                }
+<i>395</i>&nbsp;                return false;
+<b class="nc"><i>396</i>&nbsp;            }</b>
+<i>397</i>&nbsp;
+<i>398</i>&nbsp;            permittedAlgs.put(algorithm, Boolean.TRUE);
+<i>399</i>&nbsp;            return true;
+<i>400</i>&nbsp;        }
+<i>401</i>&nbsp;
+<i>402</i>&nbsp;        // Algorithm has already been checked, return the value from map.
+<i>403</i>&nbsp;        return permitted.booleanValue();
+<i>404</i>&nbsp;    }
+<b class="nc"><i>405</i>&nbsp;</b>
+<i>406</i>&nbsp;    /**
+<b class="nc"><i>407</i>&nbsp;     * With a given header (*-DIGEST*), return a string that lists all the</b>
+<b class="nc"><i>408</i>&nbsp;     * algorithms associated with the header.</b>
+<b class="nc"><i>409</i>&nbsp;     * If there are none, return &quot;Unknown Algorithm&quot;.</b>
+<i>410</i>&nbsp;     */
+<b class="nc"><i>411</i>&nbsp;    String getWeakAlgorithms(String header) {</b>
+<b class="nc"><i>412</i>&nbsp;        String w = &quot;&quot;;</b>
+<b class="nc"><i>413</i>&nbsp;        try {</b>
+<b class="nc"><i>414</i>&nbsp;            for (String key : permittedAlgs.keySet()) {</b>
+<b class="nc"><i>415</i>&nbsp;                if (key.endsWith(header)) {</b>
+<i>416</i>&nbsp;                    w += key.substring(0, key.length() - header.length()) + &quot; &quot;;
+<i>417</i>&nbsp;                }
+<i>418</i>&nbsp;            }
+<b class="nc"><i>419</i>&nbsp;        } catch (RuntimeException e) {</b>
+<b class="nc"><i>420</i>&nbsp;            w = &quot;Unknown Algorithm(s).  Error processing &quot; + header + &quot;.  &quot; +</b>
+<i>421</i>&nbsp;                    e.getMessage();
+<i>422</i>&nbsp;        }
+<b class="nc"><i>423</i>&nbsp;</b>
+<i>424</i>&nbsp;        // This means we have an error in finding weak algorithms, run in
+<i>425</i>&nbsp;        // debug mode to see permittedAlgs map&#39;s values.
+<i>426</i>&nbsp;        if (w.length() == 0) {
+<i>427</i>&nbsp;            return &quot;Unknown Algorithm(s)&quot;;
+<i>428</i>&nbsp;        }
+<i>429</i>&nbsp;
+<i>430</i>&nbsp;        return w;
+<i>431</i>&nbsp;    }
+<i>432</i>&nbsp;
+<i>433</i>&nbsp;    /**
+<b class="nc"><i>434</i>&nbsp;     * See if the whole manifest was signed.</b>
+<b class="nc"><i>435</i>&nbsp;     */</b>
+<i>436</i>&nbsp;    private boolean verifyManifestHash(Manifest sf,
+<b class="nc"><i>437</i>&nbsp;                                       ManifestDigester md,</b>
+<i>438</i>&nbsp;                                       List&lt;Object&gt; manifestDigests)
+<b class="nc"><i>439</i>&nbsp;         throws IOException, SignatureException</b>
+<i>440</i>&nbsp;    {
+<i>441</i>&nbsp;        Attributes mattr = sf.getMainAttributes();
+<b class="nc"><i>442</i>&nbsp;        boolean manifestSigned = false;</b>
+<i>443</i>&nbsp;        // If only weak algorithms are used.
+<b class="nc"><i>444</i>&nbsp;        boolean weakAlgs = true;</b>
+<i>445</i>&nbsp;        // If a &quot;*-DIGEST-MANIFEST&quot; entry is found.
+<b class="nc"><i>446</i>&nbsp;        boolean validEntry = false;</b>
+<i>447</i>&nbsp;
+<b class="nc"><i>448</i>&nbsp;        // go through all the attributes and process *-Digest-Manifest entries</b>
+<b class="nc"><i>449</i>&nbsp;        for (Map.Entry&lt;Object,Object&gt; se : mattr.entrySet()) {</b>
+<i>450</i>&nbsp;
+<i>451</i>&nbsp;            String key = se.getKey().toString();
+<b class="nc"><i>452</i>&nbsp;</b>
+<b class="nc"><i>453</i>&nbsp;            if (key.toUpperCase(Locale.ENGLISH).endsWith(&quot;-DIGEST-MANIFEST&quot;)) {</b>
+<i>454</i>&nbsp;                // 16 is length of &quot;-Digest-Manifest&quot;
+<i>455</i>&nbsp;                String algorithm = key.substring(0, key.length()-16);
+<i>456</i>&nbsp;                validEntry = true;
+<i>457</i>&nbsp;
+<b class="nc"><i>458</i>&nbsp;                // Check if this algorithm is permitted, skip if false.</b>
+<i>459</i>&nbsp;                if (!permittedCheck(key, algorithm)) {
+<b class="nc"><i>460</i>&nbsp;                    continue;</b>
+<b class="nc"><i>461</i>&nbsp;                }</b>
+<b class="nc"><i>462</i>&nbsp;</b>
+<b class="nc"><i>463</i>&nbsp;                // A non-weak algorithm was used, any weak algorithms found do</b>
+<b class="nc"><i>464</i>&nbsp;                // not need to be reported.</b>
+<i>465</i>&nbsp;                weakAlgs = false;
+<b class="nc"><i>466</i>&nbsp;</b>
+<i>467</i>&nbsp;                manifestDigests.add(key);
+<b class="nc"><i>468</i>&nbsp;                manifestDigests.add(se.getValue());</b>
+<b class="nc"><i>469</i>&nbsp;                MessageDigest digest = getDigest(algorithm);</b>
+<i>470</i>&nbsp;                if (digest != null) {
+<b class="nc"><i>471</i>&nbsp;                    byte[] computedHash = md.manifestDigest(digest);</b>
+<b class="nc"><i>472</i>&nbsp;                    byte[] expectedHash =</b>
+<b class="nc"><i>473</i>&nbsp;                        Base64.getMimeDecoder().decode((String)se.getValue());</b>
+<i>474</i>&nbsp;
+<i>475</i>&nbsp;                    if (debug != null) {
+<b class="nc"><i>476</i>&nbsp;                        debug.println(&quot;Signature File: Manifest digest &quot; +</b>
+<b class="nc"><i>477</i>&nbsp;                                algorithm);</b>
+<i>478</i>&nbsp;                        debug.println( &quot;  sigfile  &quot; + toHex(expectedHash));
+<i>479</i>&nbsp;                        debug.println( &quot;  computed &quot; + toHex(computedHash));
+<i>480</i>&nbsp;                        debug.println();
+<i>481</i>&nbsp;                    }
+<i>482</i>&nbsp;
+<b class="nc"><i>483</i>&nbsp;                    if (MessageDigest.isEqual(computedHash, expectedHash)) {</b>
+<i>484</i>&nbsp;                        manifestSigned = true;
+<b class="nc"><i>485</i>&nbsp;                    } else {</b>
+<b class="nc"><i>486</i>&nbsp;                        //XXX: we will continue and verify each section</b>
+<b class="nc"><i>487</i>&nbsp;                    }</b>
+<b class="nc"><i>488</i>&nbsp;                }</b>
+<b class="nc"><i>489</i>&nbsp;            }</b>
+<b class="nc"><i>490</i>&nbsp;        }</b>
+<i>491</i>&nbsp;
+<i>492</i>&nbsp;        if (debug != null) {
+<i>493</i>&nbsp;            debug.println(&quot;PermittedAlgs mapping: &quot;);
+<b class="nc"><i>494</i>&nbsp;            for (String key : permittedAlgs.keySet()) {</b>
+<b class="nc"><i>495</i>&nbsp;                debug.println(key + &quot; : &quot; +</b>
+<i>496</i>&nbsp;                        permittedAlgs.get(key).toString());
+<b class="nc"><i>497</i>&nbsp;            }</b>
+<i>498</i>&nbsp;        }
+<b class="nc"><i>499</i>&nbsp;</b>
+<i>500</i>&nbsp;        // If there were only weak algorithms entries used, throw an exception.
+<i>501</i>&nbsp;        if (validEntry &amp;&amp; weakAlgs) {
+<i>502</i>&nbsp;            throw new SignatureException(&quot;Manifest hash check failed &quot; +
+<i>503</i>&nbsp;                    &quot;(DIGEST-MANIFEST). Disabled algorithm(s) used: &quot; +
+<i>504</i>&nbsp;                    getWeakAlgorithms(&quot;-DIGEST-MANIFEST&quot;));
+<b class="nc"><i>505</i>&nbsp;        }</b>
+<b class="nc"><i>506</i>&nbsp;        return manifestSigned;</b>
+<i>507</i>&nbsp;    }
+<b class="nc"><i>508</i>&nbsp;</b>
+<i>509</i>&nbsp;    private boolean verifyManifestMainAttrs(Manifest sf, ManifestDigester md)
+<b class="nc"><i>510</i>&nbsp;         throws IOException, SignatureException</b>
+<i>511</i>&nbsp;    {
+<i>512</i>&nbsp;        Attributes mattr = sf.getMainAttributes();
+<i>513</i>&nbsp;        boolean attrsVerified = true;
+<b class="nc"><i>514</i>&nbsp;        // If only weak algorithms are used.</b>
+<b class="nc"><i>515</i>&nbsp;        boolean weakAlgs = true;</b>
+<i>516</i>&nbsp;        // If a ATTR_DIGEST entry is found.
+<b class="nc"><i>517</i>&nbsp;        boolean validEntry = false;</b>
+<b class="nc"><i>518</i>&nbsp;</b>
+<b class="nc"><i>519</i>&nbsp;        // go through all the attributes and process</b>
+<b class="nc"><i>520</i>&nbsp;        // digest entries for the manifest main attributes</b>
+<i>521</i>&nbsp;        for (Map.Entry&lt;Object,Object&gt; se : mattr.entrySet()) {
+<i>522</i>&nbsp;            String key = se.getKey().toString();
+<b class="nc"><i>523</i>&nbsp;</b>
+<b class="nc"><i>524</i>&nbsp;            if (key.toUpperCase(Locale.ENGLISH).endsWith(ATTR_DIGEST)) {</b>
+<i>525</i>&nbsp;                String algorithm =
+<i>526</i>&nbsp;                        key.substring(0, key.length() - ATTR_DIGEST.length());
+<i>527</i>&nbsp;                validEntry = true;
+<i>528</i>&nbsp;
+<b class="nc"><i>529</i>&nbsp;                // Check if this algorithm is permitted, skip if false.</b>
+<i>530</i>&nbsp;                if (!permittedCheck(key, algorithm)) {
+<b class="nc"><i>531</i>&nbsp;                    continue;</b>
+<b class="nc"><i>532</i>&nbsp;                }</b>
+<b class="nc"><i>533</i>&nbsp;</b>
+<b class="nc"><i>534</i>&nbsp;                // A non-weak algorithm was used, any weak algorithms found do</b>
+<b class="nc"><i>535</i>&nbsp;                // not need to be reported.</b>
+<i>536</i>&nbsp;                weakAlgs = false;
+<b class="nc"><i>537</i>&nbsp;</b>
+<i>538</i>&nbsp;                MessageDigest digest = getDigest(algorithm);
+<b class="nc"><i>539</i>&nbsp;                if (digest != null) {</b>
+<b class="nc"><i>540</i>&nbsp;                    ManifestDigester.Entry mde =</b>
+<i>541</i>&nbsp;                        md.get(ManifestDigester.MF_MAIN_ATTRS, false);
+<b class="nc"><i>542</i>&nbsp;                    byte[] computedHash = mde.digest(digest);</b>
+<b class="nc"><i>543</i>&nbsp;                    byte[] expectedHash =</b>
+<b class="nc"><i>544</i>&nbsp;                        Base64.getMimeDecoder().decode((String)se.getValue());</b>
+<b class="nc"><i>545</i>&nbsp;</b>
+<i>546</i>&nbsp;                    if (debug != null) {
+<i>547</i>&nbsp;                     debug.println(&quot;Signature File: &quot; +
+<b class="nc"><i>548</i>&nbsp;                                        &quot;Manifest Main Attributes digest &quot; +</b>
+<i>549</i>&nbsp;                                        digest.getAlgorithm());
+<i>550</i>&nbsp;                     debug.println( &quot;  sigfile  &quot; + toHex(expectedHash));
+<i>551</i>&nbsp;                     debug.println( &quot;  computed &quot; + toHex(computedHash));
+<b class="nc"><i>552</i>&nbsp;                     debug.println();</b>
+<b class="nc"><i>553</i>&nbsp;                    }</b>
+<b class="nc"><i>554</i>&nbsp;</b>
+<i>555</i>&nbsp;                    if (MessageDigest.isEqual(computedHash, expectedHash)) {
+<b class="nc"><i>556</i>&nbsp;                        // good</b>
+<i>557</i>&nbsp;                    } else {
+<i>558</i>&nbsp;                        // we will *not* continue and verify each section
+<i>559</i>&nbsp;                        attrsVerified = false;
+<i>560</i>&nbsp;                        if (debug != null) {
+<i>561</i>&nbsp;                            debug.println(&quot;Verification of &quot; +
+<b class="nc"><i>562</i>&nbsp;                                        &quot;Manifest main attributes failed&quot;);</b>
+<i>563</i>&nbsp;                            debug.println();
+<b class="nc"><i>564</i>&nbsp;                        }</b>
+<b class="nc"><i>565</i>&nbsp;                        break;</b>
+<b class="nc"><i>566</i>&nbsp;                    }</b>
+<b class="nc"><i>567</i>&nbsp;                }</b>
+<b class="nc"><i>568</i>&nbsp;            }</b>
+<b class="nc"><i>569</i>&nbsp;        }</b>
+<i>570</i>&nbsp;
+<i>571</i>&nbsp;        if (debug != null) {
+<i>572</i>&nbsp;            debug.println(&quot;PermittedAlgs mapping: &quot;);
+<b class="nc"><i>573</i>&nbsp;            for (String key : permittedAlgs.keySet()) {</b>
+<b class="nc"><i>574</i>&nbsp;                debug.println(key + &quot; : &quot; +</b>
+<i>575</i>&nbsp;                        permittedAlgs.get(key).toString());
+<i>576</i>&nbsp;            }
+<b class="nc"><i>577</i>&nbsp;        }</b>
+<i>578</i>&nbsp;
+<i>579</i>&nbsp;        // If there were only weak algorithms entries used, throw an exception.
+<i>580</i>&nbsp;        if (validEntry &amp;&amp; weakAlgs) {
+<i>581</i>&nbsp;            throw new SignatureException(&quot;Manifest Main Attribute check &quot; +
+<i>582</i>&nbsp;                    &quot;failed (&quot; + ATTR_DIGEST + &quot;).  &quot; +
+<b class="nc"><i>583</i>&nbsp;                    &quot;Disabled algorithm(s) used: &quot; +</b>
+<i>584</i>&nbsp;                    getWeakAlgorithms(ATTR_DIGEST));
+<i>585</i>&nbsp;        }
+<i>586</i>&nbsp;
+<i>587</i>&nbsp;        // this method returns &#39;true&#39; if either:
+<i>588</i>&nbsp;        //      . manifest main attributes were not signed, or
+<i>589</i>&nbsp;        //      . manifest main attributes were signed and verified
+<i>590</i>&nbsp;        return attrsVerified;
+<i>591</i>&nbsp;    }
+<i>592</i>&nbsp;
+<i>593</i>&nbsp;    /**
+<i>594</i>&nbsp;     * given the .SF digest header, and the data from the
+<i>595</i>&nbsp;     * section in the manifest, see if the hashes match.
+<i>596</i>&nbsp;     * if not, throw a SecurityException.
+<i>597</i>&nbsp;     *
+<i>598</i>&nbsp;     * @return true if all the -Digest headers verified
+<i>599</i>&nbsp;     * @exception SecurityException if the hash was not equal
+<b class="nc"><i>600</i>&nbsp;     */</b>
+<b class="nc"><i>601</i>&nbsp;</b>
+<i>602</i>&nbsp;    private boolean verifySection(Attributes sfAttr,
+<b class="nc"><i>603</i>&nbsp;                                  String name,</b>
+<i>604</i>&nbsp;                                  ManifestDigester md)
+<b class="nc"><i>605</i>&nbsp;         throws IOException, SignatureException</b>
+<i>606</i>&nbsp;    {
+<b class="nc"><i>607</i>&nbsp;        boolean oneDigestVerified = false;</b>
+<b class="nc"><i>608</i>&nbsp;        ManifestDigester.Entry mde = md.get(name,block.isOldStyle());</b>
+<i>609</i>&nbsp;        // If only weak algorithms are used.
+<i>610</i>&nbsp;        boolean weakAlgs = true;
+<i>611</i>&nbsp;        // If a &quot;*-DIGEST&quot; entry is found.
+<b class="nc"><i>612</i>&nbsp;        boolean validEntry = false;</b>
+<i>613</i>&nbsp;
+<i>614</i>&nbsp;        if (mde == null) {
+<i>615</i>&nbsp;            throw new SecurityException(
+<i>616</i>&nbsp;                  &quot;no manifest section for signature file entry &quot;+name);
+<b class="nc"><i>617</i>&nbsp;        }</b>
+<b class="nc"><i>618</i>&nbsp;</b>
+<i>619</i>&nbsp;        if (sfAttr != null) {
+<b class="nc"><i>620</i>&nbsp;            //sun.security.util.HexDumpEncoder hex = new sun.security.util.HexDumpEncoder();</b>
+<i>621</i>&nbsp;            //hex.encodeBuffer(data, System.out);
+<b class="nc"><i>622</i>&nbsp;</b>
+<b class="nc"><i>623</i>&nbsp;            // go through all the attributes and process *-Digest entries</b>
+<i>624</i>&nbsp;            for (Map.Entry&lt;Object,Object&gt; se : sfAttr.entrySet()) {
+<i>625</i>&nbsp;                String key = se.getKey().toString();
+<b class="nc"><i>626</i>&nbsp;</b>
+<b class="nc"><i>627</i>&nbsp;                if (key.toUpperCase(Locale.ENGLISH).endsWith(&quot;-DIGEST&quot;)) {</b>
+<i>628</i>&nbsp;                    // 7 is length of &quot;-Digest&quot;
+<i>629</i>&nbsp;                    String algorithm = key.substring(0, key.length()-7);
+<i>630</i>&nbsp;                    validEntry = true;
+<i>631</i>&nbsp;
+<b class="nc"><i>632</i>&nbsp;                    // Check if this algorithm is permitted, skip if false.</b>
+<i>633</i>&nbsp;                    if (!permittedCheck(key, algorithm)) {
+<b class="nc"><i>634</i>&nbsp;                        continue;</b>
+<i>635</i>&nbsp;                    }
+<b class="nc"><i>636</i>&nbsp;</b>
+<b class="nc"><i>637</i>&nbsp;                    // A non-weak algorithm was used, any weak algorithms found do</b>
+<i>638</i>&nbsp;                    // not need to be reported.
+<i>639</i>&nbsp;                    weakAlgs = false;
+<b class="nc"><i>640</i>&nbsp;</b>
+<i>641</i>&nbsp;                    MessageDigest digest = getDigest(algorithm);
+<b class="nc"><i>642</i>&nbsp;</b>
+<b class="nc"><i>643</i>&nbsp;                    if (digest != null) {</b>
+<i>644</i>&nbsp;                        boolean ok = false;
+<b class="nc"><i>645</i>&nbsp;</b>
+<i>646</i>&nbsp;                        byte[] expected =
+<i>647</i>&nbsp;                            Base64.getMimeDecoder().decode((String)se.getValue());
+<b class="nc"><i>648</i>&nbsp;                        byte[] computed;</b>
+<b class="nc"><i>649</i>&nbsp;                        if (workaround) {</b>
+<b class="nc"><i>650</i>&nbsp;                            computed = mde.digestWorkaround(digest);</b>
+<b class="nc"><i>651</i>&nbsp;                        } else {</b>
+<b class="nc"><i>652</i>&nbsp;                            computed = mde.digest(digest);</b>
+<b class="nc"><i>653</i>&nbsp;                        }</b>
+<i>654</i>&nbsp;
+<i>655</i>&nbsp;                        if (debug != null) {
+<b class="nc"><i>656</i>&nbsp;                          debug.println(&quot;Signature Block File: &quot; +</b>
+<b class="nc"><i>657</i>&nbsp;                                   name + &quot; digest=&quot; + digest.getAlgorithm());</b>
+<b class="nc"><i>658</i>&nbsp;                          debug.println(&quot;  expected &quot; + toHex(expected));</b>
+<i>659</i>&nbsp;                          debug.println(&quot;  computed &quot; + toHex(computed));
+<i>660</i>&nbsp;                          debug.println();
+<b class="nc"><i>661</i>&nbsp;                        }</b>
+<b class="nc"><i>662</i>&nbsp;</b>
+<b class="nc"><i>663</i>&nbsp;                        if (MessageDigest.isEqual(computed, expected)) {</b>
+<b class="nc"><i>664</i>&nbsp;                            oneDigestVerified = true;</b>
+<b class="nc"><i>665</i>&nbsp;                            ok = true;</b>
+<b class="nc"><i>666</i>&nbsp;                        } else {</b>
+<i>667</i>&nbsp;                            // attempt to fallback to the workaround
+<b class="nc"><i>668</i>&nbsp;                            if (!workaround) {</b>
+<b class="nc"><i>669</i>&nbsp;                               computed = mde.digestWorkaround(digest);</b>
+<b class="nc"><i>670</i>&nbsp;                               if (MessageDigest.isEqual(computed, expected)) {</b>
+<i>671</i>&nbsp;                                   if (debug != null) {
+<i>672</i>&nbsp;                                       debug.println(&quot;  re-computed &quot; + toHex(computed));
+<i>673</i>&nbsp;                                       debug.println();
+<b class="nc"><i>674</i>&nbsp;                                   }</b>
+<b class="nc"><i>675</i>&nbsp;                                   workaround = true;</b>
+<b class="nc"><i>676</i>&nbsp;                                   oneDigestVerified = true;</b>
+<i>677</i>&nbsp;                                   ok = true;
+<i>678</i>&nbsp;                               }
+<i>679</i>&nbsp;                            }
+<i>680</i>&nbsp;                        }
+<b class="nc"><i>681</i>&nbsp;                        if (!ok){</b>
+<i>682</i>&nbsp;                            throw new SecurityException(&quot;invalid &quot; +
+<i>683</i>&nbsp;                                       digest.getAlgorithm() +
+<b class="nc"><i>684</i>&nbsp;                                       &quot; signature file digest for &quot; + name);</b>
+<b class="nc"><i>685</i>&nbsp;                        }</b>
+<b class="nc"><i>686</i>&nbsp;                    }</b>
+<b class="nc"><i>687</i>&nbsp;                }</b>
+<b class="nc"><i>688</i>&nbsp;            }</b>
+<b class="nc"><i>689</i>&nbsp;        }</b>
+<i>690</i>&nbsp;
+<i>691</i>&nbsp;        if (debug != null) {
+<i>692</i>&nbsp;            debug.println(&quot;PermittedAlgs mapping: &quot;);
+<b class="nc"><i>693</i>&nbsp;            for (String key : permittedAlgs.keySet()) {</b>
+<b class="nc"><i>694</i>&nbsp;                debug.println(key + &quot; : &quot; +</b>
+<i>695</i>&nbsp;                        permittedAlgs.get(key).toString());
+<b class="nc"><i>696</i>&nbsp;            }</b>
+<i>697</i>&nbsp;        }
+<i>698</i>&nbsp;
+<b class="nc"><i>699</i>&nbsp;        // If there were only weak algorithms entries used, throw an exception.</b>
+<i>700</i>&nbsp;        if (validEntry &amp;&amp; weakAlgs) {
+<i>701</i>&nbsp;            throw new SignatureException(&quot;Manifest Main Attribute check &quot; +
+<i>702</i>&nbsp;                    &quot;failed (DIGEST).  Disabled algorithm(s) used: &quot; +
+<i>703</i>&nbsp;                    getWeakAlgorithms(&quot;DIGEST&quot;));
+<i>704</i>&nbsp;        }
+<i>705</i>&nbsp;
+<i>706</i>&nbsp;        return oneDigestVerified;
+<i>707</i>&nbsp;    }
+<i>708</i>&nbsp;
+<i>709</i>&nbsp;    /**
+<i>710</i>&nbsp;     * Given the PKCS7 block and SignerInfo[], create an array of
+<b class="nc"><i>711</i>&nbsp;     * CodeSigner objects. We do this only *once* for a given</b>
+<i>712</i>&nbsp;     * signature block file.
+<b class="nc"><i>713</i>&nbsp;     */</b>
+<i>714</i>&nbsp;    private CodeSigner[] getSigners(SignerInfo[] infos, PKCS7 block)
+<b class="nc"><i>715</i>&nbsp;        throws IOException, NoSuchAlgorithmException, SignatureException,</b>
+<b class="nc"><i>716</i>&nbsp;            CertificateException {</b>
+<b class="nc"><i>717</i>&nbsp;</b>
+<b class="nc"><i>718</i>&nbsp;        ArrayList&lt;CodeSigner&gt; signers = null;</b>
+<b class="nc"><i>719</i>&nbsp;</b>
+<i>720</i>&nbsp;        for (int i = 0; i &lt; infos.length; i++) {
+<i>721</i>&nbsp;
+<b class="nc"><i>722</i>&nbsp;            SignerInfo info = infos[i];</b>
+<i>723</i>&nbsp;            ArrayList&lt;X509Certificate&gt; chain = info.getCertificateChain(block);
+<b class="nc"><i>724</i>&nbsp;            CertPath certChain = certificateFactory.generateCertPath(chain);</b>
+<b class="nc"><i>725</i>&nbsp;            if (signers == null) {</b>
+<b class="nc"><i>726</i>&nbsp;                signers = new ArrayList&lt;&gt;();</b>
+<i>727</i>&nbsp;            }
+<i>728</i>&nbsp;            // Append the new code signer. If timestamp is invalid, this
+<i>729</i>&nbsp;            // jar will be treated as unsigned.
+<b class="nc"><i>730</i>&nbsp;            signers.add(new CodeSigner(certChain, info.getTimestamp()));</b>
+<b class="nc"><i>731</i>&nbsp;</b>
+<i>732</i>&nbsp;            if (debug != null) {
+<b class="nc"><i>733</i>&nbsp;                debug.println(&quot;Signature Block Certificate: &quot; +</b>
+<i>734</i>&nbsp;                    chain.get(0));
+<i>735</i>&nbsp;            }
+<i>736</i>&nbsp;        }
+<i>737</i>&nbsp;
+<b class="nc"><i>738</i>&nbsp;        if (signers != null) {</b>
+<i>739</i>&nbsp;            return signers.toArray(new CodeSigner[signers.size()]);
+<i>740</i>&nbsp;        } else {
+<i>741</i>&nbsp;            return null;
+<i>742</i>&nbsp;        }
+<i>743</i>&nbsp;    }
+<i>744</i>&nbsp;
+<i>745</i>&nbsp;    // for the toHex function
+<i>746</i>&nbsp;    private static final char[] hexc =
+<i>747</i>&nbsp;            {&#39;0&#39;,&#39;1&#39;,&#39;2&#39;,&#39;3&#39;,&#39;4&#39;,&#39;5&#39;,&#39;6&#39;,&#39;7&#39;,&#39;8&#39;,&#39;9&#39;,&#39;a&#39;,&#39;b&#39;,&#39;c&#39;,&#39;d&#39;,&#39;e&#39;,&#39;f&#39;};
+<b class="nc"><i>748</i>&nbsp;    /**</b>
+<i>749</i>&nbsp;     * convert a byte array to a hex string for debugging purposes
+<b class="nc"><i>750</i>&nbsp;     * @param data the binary data to be converted to a hex string</b>
+<b class="nc"><i>751</i>&nbsp;     * @return an ASCII hex string</b>
+<b class="nc"><i>752</i>&nbsp;     */</b>
+<i>753</i>&nbsp;
+<b class="nc"><i>754</i>&nbsp;    static String toHex(byte[] data) {</b>
+<i>755</i>&nbsp;
+<i>756</i>&nbsp;        StringBuilder sb = new StringBuilder(data.length*2);
+<i>757</i>&nbsp;
+<i>758</i>&nbsp;        for (int i=0; i&lt;data.length; i++) {
+<i>759</i>&nbsp;            sb.append(hexc[(data[i] &gt;&gt;4) &amp; 0x0f]);
+<b class="nc"><i>760</i>&nbsp;            sb.append(hexc[data[i] &amp; 0x0f]);</b>
+<b class="nc"><i>761</i>&nbsp;        }</b>
+<b class="nc"><i>762</i>&nbsp;        return sb.toString();</b>
+<i>763</i>&nbsp;    }
+<b class="nc"><i>764</i>&nbsp;</b>
+<i>765</i>&nbsp;    // returns true if set contains signer
+<i>766</i>&nbsp;    static boolean contains(CodeSigner[] set, CodeSigner signer)
+<i>767</i>&nbsp;    {
+<i>768</i>&nbsp;        for (int i = 0; i &lt; set.length; i++) {
+<i>769</i>&nbsp;            if (set[i].equals(signer))
+<i>770</i>&nbsp;                return true;
+<b class="nc"><i>771</i>&nbsp;        }</b>
+<b class="nc"><i>772</i>&nbsp;        return false;</b>
+<i>773</i>&nbsp;    }
+<i>774</i>&nbsp;
+<b class="nc"><i>775</i>&nbsp;    // returns true if subset is a subset of set</b>
+<b class="nc"><i>776</i>&nbsp;    static boolean isSubSet(CodeSigner[] subset, CodeSigner[] set)</b>
+<b class="nc"><i>777</i>&nbsp;    {</b>
+<i>778</i>&nbsp;        // check for the same object
+<b class="nc"><i>779</i>&nbsp;        if (set == subset)</b>
+<i>780</i>&nbsp;            return true;
+<i>781</i>&nbsp;
+<i>782</i>&nbsp;        boolean match;
+<i>783</i>&nbsp;        for (int i = 0; i &lt; subset.length; i++) {
+<i>784</i>&nbsp;            if (!contains(set, subset[i]))
+<i>785</i>&nbsp;                return false;
+<i>786</i>&nbsp;        }
+<i>787</i>&nbsp;        return true;
+<i>788</i>&nbsp;    }
+<i>789</i>&nbsp;
+<i>790</i>&nbsp;    /**
+<b class="nc"><i>791</i>&nbsp;     * returns true if signer contains exactly the same code signers as</b>
+<b class="nc"><i>792</i>&nbsp;     * oldSigner and newSigner, false otherwise. oldSigner</b>
+<i>793</i>&nbsp;     * is allowed to be null.
+<i>794</i>&nbsp;     */
+<i>795</i>&nbsp;    static boolean matches(CodeSigner[] signers, CodeSigner[] oldSigners,
+<i>796</i>&nbsp;        CodeSigner[] newSigners) {
+<b class="nc"><i>797</i>&nbsp;</b>
+<b class="nc"><i>798</i>&nbsp;        // special case</b>
+<i>799</i>&nbsp;        if ((oldSigners == null) &amp;&amp; (signers == newSigners))
+<i>800</i>&nbsp;            return true;
+<b class="nc"><i>801</i>&nbsp;</b>
+<b class="nc"><i>802</i>&nbsp;        boolean match;</b>
+<i>803</i>&nbsp;
+<i>804</i>&nbsp;        // make sure all oldSigners are in signers
+<i>805</i>&nbsp;        if ((oldSigners != null) &amp;&amp; !isSubSet(oldSigners, signers))
+<i>806</i>&nbsp;            return false;
+<i>807</i>&nbsp;
+<b class="nc"><i>808</i>&nbsp;        // make sure all newSigners are in signers</b>
+<b class="nc"><i>809</i>&nbsp;        if (!isSubSet(newSigners, signers)) {</b>
+<b class="nc"><i>810</i>&nbsp;            return false;</b>
+<b class="nc"><i>811</i>&nbsp;        }</b>
+<b class="nc"><i>812</i>&nbsp;</b>
+<b class="nc"><i>813</i>&nbsp;        // now make sure all the code signers in signers are</b>
+<i>814</i>&nbsp;        // also in oldSigners or newSigners
+<b class="nc"><i>815</i>&nbsp;</b>
+<i>816</i>&nbsp;        for (int i = 0; i &lt; signers.length; i++) {
+<i>817</i>&nbsp;            boolean found =
+<i>818</i>&nbsp;                ((oldSigners != null) &amp;&amp; contains(oldSigners, signers[i])) ||
+<i>819</i>&nbsp;                contains(newSigners, signers[i]);
+<i>820</i>&nbsp;            if (!found)
+<b class="nc"><i>821</i>&nbsp;                return false;</b>
+<i>822</i>&nbsp;        }
+<i>823</i>&nbsp;        return true;
+<i>824</i>&nbsp;    }
+<i>825</i>&nbsp;
+<i>826</i>&nbsp;    void updateSigners(CodeSigner[] newSigners,
+<i>827</i>&nbsp;        Hashtable&lt;String, CodeSigner[]&gt; signers, String name) {
+<b class="nc"><i>828</i>&nbsp;</b>
+<b class="nc"><i>829</i>&nbsp;        CodeSigner[] oldSigners = signers.get(name);</b>
+<b class="nc"><i>830</i>&nbsp;</b>
+<b class="nc"><i>831</i>&nbsp;        // search through the cache for a match, go in reverse order</b>
+<i>832</i>&nbsp;        // as we are more likely to find a match with the last one
+<i>833</i>&nbsp;        // added to the cache
+<i>834</i>&nbsp;
+<i>835</i>&nbsp;        CodeSigner[] cachedSigners;
+<b class="nc"><i>836</i>&nbsp;        for (int i = signerCache.size() - 1; i != -1; i--) {</b>
+<b class="nc"><i>837</i>&nbsp;            cachedSigners = signerCache.get(i);</b>
+<i>838</i>&nbsp;            if (matches(cachedSigners, oldSigners, newSigners)) {
+<b class="nc"><i>839</i>&nbsp;                signers.put(name, cachedSigners);</b>
+<i>840</i>&nbsp;                return;
+<b class="nc"><i>841</i>&nbsp;            }</b>
+<i>842</i>&nbsp;        }
+<b class="nc"><i>843</i>&nbsp;</b>
+<i>844</i>&nbsp;        if (oldSigners == null) {
+<i>845</i>&nbsp;            cachedSigners = newSigners;
+<b class="nc"><i>846</i>&nbsp;        } else {</b>
+<b class="nc"><i>847</i>&nbsp;            cachedSigners =</b>
+<i>848</i>&nbsp;                new CodeSigner[oldSigners.length + newSigners.length];
+<i>849</i>&nbsp;            System.arraycopy(oldSigners, 0, cachedSigners, 0,
+<i>850</i>&nbsp;                oldSigners.length);
+<i>851</i>&nbsp;            System.arraycopy(newSigners, 0, cachedSigners, oldSigners.length,
+<i>852</i>&nbsp;                newSigners.length);
+<i>853</i>&nbsp;        }
+<i>854</i>&nbsp;        signerCache.add(cachedSigners);
+<i>855</i>&nbsp;        signers.put(name, cachedSigners);
+<i>856</i>&nbsp;    }
+<i>857</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

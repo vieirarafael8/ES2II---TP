@@ -1,0 +1,701 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: RBTableBuilder</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.text</a> ]
+</div>
+
+<h1>Coverage Summary for Class: RBTableBuilder (java.text)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">RBTableBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 16)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 199)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1999, 2012, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;/*
+<i>27</i>&nbsp; * (C) Copyright Taligent, Inc. 1996, 1997 - All Rights Reserved
+<i>28</i>&nbsp; * (C) Copyright IBM Corp. 1996-1998 - All Rights Reserved
+<i>29</i>&nbsp; *
+<i>30</i>&nbsp; *   The original version of this source code and documentation is copyrighted
+<i>31</i>&nbsp; * and owned by Taligent, Inc., a wholly-owned subsidiary of IBM. These
+<i>32</i>&nbsp; * materials are provided under terms of a License Agreement between Taligent
+<i>33</i>&nbsp; * and Sun. This technology is protected by multiple US and International
+<i>34</i>&nbsp; * patents. This notice and attribution to Taligent may not be removed.
+<i>35</i>&nbsp; *   Taligent is a registered trademark of Taligent, Inc.
+<i>36</i>&nbsp; *
+<i>37</i>&nbsp; */
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;package java.text;
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;import java.util.Vector;
+<i>42</i>&nbsp;import sun.text.UCompactIntArray;
+<i>43</i>&nbsp;import sun.text.IntHashtable;
+<i>44</i>&nbsp;import sun.text.ComposedCharIter;
+<i>45</i>&nbsp;import sun.text.CollatorUtilities;
+<i>46</i>&nbsp;import sun.text.normalizer.NormalizerImpl;
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;/**
+<i>49</i>&nbsp; * This class contains all the code to parse a RuleBasedCollator pattern
+<i>50</i>&nbsp; * and build a RBCollationTables object from it.  A particular instance
+<i>51</i>&nbsp; * of tis class exists only during the actual build process-- once an
+<i>52</i>&nbsp; * RBCollationTables object has been built, the RBTableBuilder object
+<i>53</i>&nbsp; * goes away.  This object carries all of the state which is only needed
+<i>54</i>&nbsp; * during the build process, plus a &quot;shadow&quot; copy of all of the state
+<i>55</i>&nbsp; * that will go into the tables object itself.  This object communicates
+<i>56</i>&nbsp; * with RBCollationTables through a separate class, RBCollationTables.BuildAPI,
+<i>57</i>&nbsp; * this is an inner class of RBCollationTables and provides a separate
+<i>58</i>&nbsp; * private API for communication with RBTableBuilder.
+<i>59</i>&nbsp; * This class isn&#39;t just an inner class of RBCollationTables itself because
+<i>60</i>&nbsp; * of its large size.  For source-code readability, it seemed better for the
+<i>61</i>&nbsp; * builder to have its own source file.
+<i>62</i>&nbsp; */
+<i>63</i>&nbsp;final class RBTableBuilder {
+<i>64</i>&nbsp;
+<b class="nc"><i>65</i>&nbsp;    public RBTableBuilder(RBCollationTables.BuildAPI tables) {</b>
+<b class="nc"><i>66</i>&nbsp;        this.tables = tables;</b>
+<i>67</i>&nbsp;    }
+<i>68</i>&nbsp;
+<i>69</i>&nbsp;    /**
+<i>70</i>&nbsp;     * Create a table-based collation object with the given rules.
+<i>71</i>&nbsp;     * This is the main function that actually builds the tables and
+<i>72</i>&nbsp;     * stores them back in the RBCollationTables object.  It is called
+<i>73</i>&nbsp;     * ONLY by the RBCollationTables constructor.
+<i>74</i>&nbsp;     * @see RuleBasedCollator#RuleBasedCollator
+<i>75</i>&nbsp;     * @exception ParseException If the rules format is incorrect.
+<i>76</i>&nbsp;     */
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    public void build(String pattern, int decmp) throws ParseException
+<i>79</i>&nbsp;    {
+<b class="nc"><i>80</i>&nbsp;        boolean isSource = true;</b>
+<b class="nc"><i>81</i>&nbsp;        int i = 0;</b>
+<i>82</i>&nbsp;        String expChars;
+<i>83</i>&nbsp;        String groupChars;
+<b class="nc"><i>84</i>&nbsp;        if (pattern.length() == 0)</b>
+<b class="nc"><i>85</i>&nbsp;            throw new ParseException(&quot;Build rules empty.&quot;, 0);</b>
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;        // This array maps Unicode characters to their collation ordering
+<b class="nc"><i>88</i>&nbsp;        mapping = new UCompactIntArray(RBCollationTables.UNMAPPED);</b>
+<i>89</i>&nbsp;        // Normalize the build rules.  Find occurances of all decomposed characters
+<i>90</i>&nbsp;        // and normalize the rules before feeding into the builder.  By &quot;normalize&quot;,
+<i>91</i>&nbsp;        // we mean that all precomposed Unicode characters must be converted into
+<i>92</i>&nbsp;        // a base character and one or more combining characters (such as accents).
+<i>93</i>&nbsp;        // When there are multiple combining characters attached to a base character,
+<i>94</i>&nbsp;        // the combining characters must be in their canonical order
+<i>95</i>&nbsp;        //
+<i>96</i>&nbsp;        // sherman/Note:
+<i>97</i>&nbsp;        //(1)decmp will be NO_DECOMPOSITION only in ko locale to prevent decompose
+<i>98</i>&nbsp;        //hangual syllables to jamos, so we can actually just call decompose with
+<i>99</i>&nbsp;        //normalizer&#39;s IGNORE_HANGUL option turned on
+<i>100</i>&nbsp;        //
+<i>101</i>&nbsp;        //(2)just call the &quot;special version&quot; in NormalizerImpl directly
+<i>102</i>&nbsp;        //pattern = Normalizer.decompose(pattern, false, Normalizer.IGNORE_HANGUL, true);
+<i>103</i>&nbsp;        //
+<i>104</i>&nbsp;        //Normalizer.Mode mode = CollatorUtilities.toNormalizerMode(decmp);
+<i>105</i>&nbsp;        //pattern = Normalizer.normalize(pattern, mode, 0, true);
+<i>106</i>&nbsp;
+<b class="nc"><i>107</i>&nbsp;        pattern = NormalizerImpl.canonicalDecomposeWithSingleQuotation(pattern);</b>
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;        // Build the merged collation entries
+<i>110</i>&nbsp;        // Since rules can be specified in any order in the string
+<i>111</i>&nbsp;        // (e.g. &quot;c , C &lt; d , D &lt; e , E .... C &lt; CH&quot;)
+<i>112</i>&nbsp;        // this splits all of the rules in the string out into separate
+<i>113</i>&nbsp;        // objects and then sorts them.  In the above example, it merges the
+<i>114</i>&nbsp;        // &quot;C &lt; CH&quot; rule in just before the &quot;C &lt; D&quot; rule.
+<i>115</i>&nbsp;        //
+<i>116</i>&nbsp;
+<b class="nc"><i>117</i>&nbsp;        mPattern = new MergeCollation(pattern);</b>
+<i>118</i>&nbsp;
+<b class="nc"><i>119</i>&nbsp;        int order = 0;</b>
+<i>120</i>&nbsp;
+<i>121</i>&nbsp;        // Now walk though each entry and add it to my own tables
+<b class="nc"><i>122</i>&nbsp;        for (i = 0; i &lt; mPattern.getCount(); ++i)</b>
+<i>123</i>&nbsp;        {
+<b class="nc"><i>124</i>&nbsp;            PatternEntry entry = mPattern.getItemAt(i);</b>
+<b class="nc"><i>125</i>&nbsp;            if (entry != null) {</b>
+<b class="nc"><i>126</i>&nbsp;                groupChars = entry.getChars();</b>
+<b class="nc"><i>127</i>&nbsp;                if (groupChars.length() &gt; 1) {</b>
+<b class="nc"><i>128</i>&nbsp;                    switch(groupChars.charAt(groupChars.length()-1)) {</b>
+<i>129</i>&nbsp;                    case &#39;@&#39;:
+<b class="nc"><i>130</i>&nbsp;                        frenchSec = true;</b>
+<b class="nc"><i>131</i>&nbsp;                        groupChars = groupChars.substring(0, groupChars.length()-1);</b>
+<b class="nc"><i>132</i>&nbsp;                        break;</b>
+<i>133</i>&nbsp;                    case &#39;!&#39;:
+<b class="nc"><i>134</i>&nbsp;                        seAsianSwapping = true;</b>
+<b class="nc"><i>135</i>&nbsp;                        groupChars = groupChars.substring(0, groupChars.length()-1);</b>
+<i>136</i>&nbsp;                        break;
+<i>137</i>&nbsp;                    }
+<i>138</i>&nbsp;                }
+<i>139</i>&nbsp;
+<b class="nc"><i>140</i>&nbsp;                order = increment(entry.getStrength(), order);</b>
+<b class="nc"><i>141</i>&nbsp;                expChars = entry.getExtension();</b>
+<i>142</i>&nbsp;
+<b class="nc"><i>143</i>&nbsp;                if (expChars.length() != 0) {</b>
+<b class="nc"><i>144</i>&nbsp;                    addExpandOrder(groupChars, expChars, order);</b>
+<b class="nc"><i>145</i>&nbsp;                } else if (groupChars.length() &gt; 1) {</b>
+<b class="nc"><i>146</i>&nbsp;                    char ch = groupChars.charAt(0);</b>
+<b class="nc"><i>147</i>&nbsp;                    if (Character.isHighSurrogate(ch) &amp;&amp; groupChars.length() == 2) {</b>
+<b class="nc"><i>148</i>&nbsp;                        addOrder(Character.toCodePoint(ch, groupChars.charAt(1)), order);</b>
+<i>149</i>&nbsp;                    } else {
+<b class="nc"><i>150</i>&nbsp;                        addContractOrder(groupChars, order);</b>
+<i>151</i>&nbsp;                    }
+<b class="nc"><i>152</i>&nbsp;                } else {</b>
+<b class="nc"><i>153</i>&nbsp;                    char ch = groupChars.charAt(0);</b>
+<b class="nc"><i>154</i>&nbsp;                    addOrder(ch, order);</b>
+<i>155</i>&nbsp;                }
+<i>156</i>&nbsp;            }
+<i>157</i>&nbsp;        }
+<b class="nc"><i>158</i>&nbsp;        addComposedChars();</b>
+<i>159</i>&nbsp;
+<b class="nc"><i>160</i>&nbsp;        commit();</b>
+<b class="nc"><i>161</i>&nbsp;        mapping.compact();</b>
+<i>162</i>&nbsp;        /*
+<i>163</i>&nbsp;        System.out.println(&quot;mappingSize=&quot; + mapping.getKSize());
+<i>164</i>&nbsp;        for (int j = 0; j &lt; 0xffff; j++) {
+<i>165</i>&nbsp;            int value = mapping.elementAt(j);
+<i>166</i>&nbsp;            if (value != RBCollationTables.UNMAPPED)
+<i>167</i>&nbsp;                System.out.println(&quot;index=&quot; + Integer.toString(j, 16)
+<i>168</i>&nbsp;                           + &quot;, value=&quot; + Integer.toString(value, 16));
+<i>169</i>&nbsp;        }
+<i>170</i>&nbsp;        */
+<b class="nc"><i>171</i>&nbsp;        tables.fillInTables(frenchSec, seAsianSwapping, mapping, contractTable, expandTable,</b>
+<i>172</i>&nbsp;                    contractFlags, maxSecOrder, maxTerOrder);
+<i>173</i>&nbsp;    }
+<i>174</i>&nbsp;
+<i>175</i>&nbsp;    /** Add expanding entries for pre-composed unicode characters so that this
+<i>176</i>&nbsp;     * collator can be used reasonably well with decomposition turned off.
+<i>177</i>&nbsp;     */
+<i>178</i>&nbsp;    private void addComposedChars() throws ParseException {
+<i>179</i>&nbsp;        // Iterate through all of the pre-composed characters in Unicode
+<b class="nc"><i>180</i>&nbsp;        ComposedCharIter iter = new ComposedCharIter();</b>
+<i>181</i>&nbsp;        int c;
+<b class="nc"><i>182</i>&nbsp;        while ((c = iter.next()) != ComposedCharIter.DONE) {</b>
+<b class="nc"><i>183</i>&nbsp;            if (getCharOrder(c) == RBCollationTables.UNMAPPED) {</b>
+<i>184</i>&nbsp;                //
+<i>185</i>&nbsp;                // We don&#39;t already have an ordering for this pre-composed character.
+<i>186</i>&nbsp;                //
+<i>187</i>&nbsp;                // First, see if the decomposed string is already in our
+<i>188</i>&nbsp;                // tables as a single contracting-string ordering.
+<i>189</i>&nbsp;                // If so, just map the precomposed character to that order.
+<i>190</i>&nbsp;                //
+<i>191</i>&nbsp;                // TODO: What we should really be doing here is trying to find the
+<i>192</i>&nbsp;                // longest initial substring of the decomposition that is present
+<i>193</i>&nbsp;                // in the tables as a contracting character sequence, and find its
+<i>194</i>&nbsp;                // ordering.  Then do this recursively with the remaining chars
+<i>195</i>&nbsp;                // so that we build a list of orderings, and add that list to
+<i>196</i>&nbsp;                // the expansion table.
+<i>197</i>&nbsp;                // That would be more correct but also significantly slower, so
+<i>198</i>&nbsp;                // I&#39;m not totally sure it&#39;s worth doing.
+<i>199</i>&nbsp;                //
+<b class="nc"><i>200</i>&nbsp;                String s = iter.decomposition();</b>
+<i>201</i>&nbsp;
+<i>202</i>&nbsp;                //sherman/Note: if this is 1 character decomposed string, the
+<i>203</i>&nbsp;                //only thing need to do is to check if this decomposed character
+<i>204</i>&nbsp;                //has an entry in our order table, this order is not necessary
+<i>205</i>&nbsp;                //to be a contraction order, if it does have one, add an entry
+<i>206</i>&nbsp;                //for the precomposed character by using the same order, the
+<i>207</i>&nbsp;                //previous impl unnecessarily adds a single character expansion
+<i>208</i>&nbsp;                //entry.
+<b class="nc"><i>209</i>&nbsp;                if (s.length() == 1) {</b>
+<b class="nc"><i>210</i>&nbsp;                    int order = getCharOrder(s.charAt(0));</b>
+<b class="nc"><i>211</i>&nbsp;                    if (order != RBCollationTables.UNMAPPED) {</b>
+<b class="nc"><i>212</i>&nbsp;                        addOrder(c, order);</b>
+<i>213</i>&nbsp;                    }
+<i>214</i>&nbsp;                    continue;
+<b class="nc"><i>215</i>&nbsp;                } else if (s.length() == 2) {</b>
+<b class="nc"><i>216</i>&nbsp;                    char ch0 = s.charAt(0);</b>
+<b class="nc"><i>217</i>&nbsp;                    if (Character.isHighSurrogate(ch0)) {</b>
+<b class="nc"><i>218</i>&nbsp;                        int order = getCharOrder(s.codePointAt(0));</b>
+<b class="nc"><i>219</i>&nbsp;                        if (order != RBCollationTables.UNMAPPED) {</b>
+<b class="nc"><i>220</i>&nbsp;                            addOrder(c, order);</b>
+<i>221</i>&nbsp;                        }
+<i>222</i>&nbsp;                        continue;
+<i>223</i>&nbsp;                    }
+<i>224</i>&nbsp;                }
+<b class="nc"><i>225</i>&nbsp;                int contractOrder = getContractOrder(s);</b>
+<b class="nc"><i>226</i>&nbsp;                if (contractOrder != RBCollationTables.UNMAPPED) {</b>
+<b class="nc"><i>227</i>&nbsp;                    addOrder(c, contractOrder);</b>
+<i>228</i>&nbsp;                } else {
+<i>229</i>&nbsp;                    //
+<i>230</i>&nbsp;                    // We don&#39;t have a contracting ordering for the entire string
+<i>231</i>&nbsp;                    // that results from the decomposition, but if we have orders
+<i>232</i>&nbsp;                    // for each individual character, we can add an expanding
+<i>233</i>&nbsp;                    // table entry for the pre-composed character
+<i>234</i>&nbsp;                    //
+<b class="nc"><i>235</i>&nbsp;                    boolean allThere = true;</b>
+<b class="nc"><i>236</i>&nbsp;                    for (int i = 0; i &lt; s.length(); i++) {</b>
+<b class="nc"><i>237</i>&nbsp;                        if (getCharOrder(s.charAt(i)) == RBCollationTables.UNMAPPED) {</b>
+<b class="nc"><i>238</i>&nbsp;                            allThere = false;</b>
+<b class="nc"><i>239</i>&nbsp;                            break;</b>
+<i>240</i>&nbsp;                        }
+<i>241</i>&nbsp;                    }
+<b class="nc"><i>242</i>&nbsp;                    if (allThere) {</b>
+<b class="nc"><i>243</i>&nbsp;                        addExpandOrder(c, s, RBCollationTables.UNMAPPED);</b>
+<i>244</i>&nbsp;                    }
+<i>245</i>&nbsp;                }
+<b class="nc"><i>246</i>&nbsp;            }</b>
+<i>247</i>&nbsp;        }
+<i>248</i>&nbsp;    }
+<i>249</i>&nbsp;
+<i>250</i>&nbsp;    /**
+<i>251</i>&nbsp;     * Look up for unmapped values in the expanded character table.
+<i>252</i>&nbsp;     *
+<i>253</i>&nbsp;     * When the expanding character tables are built by addExpandOrder,
+<i>254</i>&nbsp;     * it doesn&#39;t know what the final ordering of each character
+<i>255</i>&nbsp;     * in the expansion will be.  Instead, it just puts the raw character
+<i>256</i>&nbsp;     * code into the table, adding CHARINDEX as a flag.  Now that we&#39;ve
+<i>257</i>&nbsp;     * finished building the mapping table, we can go back and look up
+<i>258</i>&nbsp;     * that character to see what its real collation order is and
+<i>259</i>&nbsp;     * stick that into the expansion table.  That lets us avoid doing
+<i>260</i>&nbsp;     * a two-stage lookup later.
+<i>261</i>&nbsp;     */
+<i>262</i>&nbsp;    private final void commit()
+<i>263</i>&nbsp;    {
+<b class="nc"><i>264</i>&nbsp;        if (expandTable != null) {</b>
+<b class="nc"><i>265</i>&nbsp;            for (int i = 0; i &lt; expandTable.size(); i++) {</b>
+<b class="nc"><i>266</i>&nbsp;                int[] valueList = expandTable.elementAt(i);</b>
+<b class="nc"><i>267</i>&nbsp;                for (int j = 0; j &lt; valueList.length; j++) {</b>
+<b class="nc"><i>268</i>&nbsp;                    int order = valueList[j];</b>
+<b class="nc"><i>269</i>&nbsp;                    if (order &lt; RBCollationTables.EXPANDCHARINDEX &amp;&amp; order &gt; CHARINDEX) {</b>
+<i>270</i>&nbsp;                        // found a expanding character that isn&#39;t filled in yet
+<b class="nc"><i>271</i>&nbsp;                        int ch = order - CHARINDEX;</b>
+<i>272</i>&nbsp;
+<i>273</i>&nbsp;                        // Get the real values for the non-filled entry
+<b class="nc"><i>274</i>&nbsp;                        int realValue = getCharOrder(ch);</b>
+<i>275</i>&nbsp;
+<b class="nc"><i>276</i>&nbsp;                        if (realValue == RBCollationTables.UNMAPPED) {</b>
+<i>277</i>&nbsp;                            // The real value is still unmapped, maybe it&#39;s ignorable
+<b class="nc"><i>278</i>&nbsp;                            valueList[j] = IGNORABLEMASK &amp; ch;</b>
+<i>279</i>&nbsp;                        } else {
+<i>280</i>&nbsp;                            // just fill in the value
+<b class="nc"><i>281</i>&nbsp;                            valueList[j] = realValue;</b>
+<i>282</i>&nbsp;                        }
+<i>283</i>&nbsp;                    }
+<i>284</i>&nbsp;                }
+<i>285</i>&nbsp;            }
+<i>286</i>&nbsp;        }
+<i>287</i>&nbsp;    }
+<i>288</i>&nbsp;    /**
+<i>289</i>&nbsp;     *  Increment of the last order based on the comparison level.
+<i>290</i>&nbsp;     */
+<i>291</i>&nbsp;    private final int increment(int aStrength, int lastValue)
+<i>292</i>&nbsp;    {
+<b class="nc"><i>293</i>&nbsp;        switch(aStrength)</b>
+<i>294</i>&nbsp;        {
+<i>295</i>&nbsp;        case Collator.PRIMARY:
+<i>296</i>&nbsp;            // increment priamry order  and mask off secondary and tertiary difference
+<b class="nc"><i>297</i>&nbsp;            lastValue += PRIMARYORDERINCREMENT;</b>
+<b class="nc"><i>298</i>&nbsp;            lastValue &amp;= RBCollationTables.PRIMARYORDERMASK;</b>
+<b class="nc"><i>299</i>&nbsp;            isOverIgnore = true;</b>
+<b class="nc"><i>300</i>&nbsp;            break;</b>
+<i>301</i>&nbsp;        case Collator.SECONDARY:
+<i>302</i>&nbsp;            // increment secondary order and mask off tertiary difference
+<b class="nc"><i>303</i>&nbsp;            lastValue += SECONDARYORDERINCREMENT;</b>
+<b class="nc"><i>304</i>&nbsp;            lastValue &amp;= RBCollationTables.SECONDARYDIFFERENCEONLY;</b>
+<i>305</i>&nbsp;            // record max # of ignorable chars with secondary difference
+<b class="nc"><i>306</i>&nbsp;            if (!isOverIgnore)</b>
+<b class="nc"><i>307</i>&nbsp;                maxSecOrder++;</b>
+<i>308</i>&nbsp;            break;
+<i>309</i>&nbsp;        case Collator.TERTIARY:
+<i>310</i>&nbsp;            // increment tertiary order
+<b class="nc"><i>311</i>&nbsp;            lastValue += TERTIARYORDERINCREMENT;</b>
+<i>312</i>&nbsp;            // record max # of ignorable chars with tertiary difference
+<b class="nc"><i>313</i>&nbsp;            if (!isOverIgnore)</b>
+<b class="nc"><i>314</i>&nbsp;                maxTerOrder++;</b>
+<i>315</i>&nbsp;            break;
+<i>316</i>&nbsp;        }
+<b class="nc"><i>317</i>&nbsp;        return lastValue;</b>
+<i>318</i>&nbsp;    }
+<i>319</i>&nbsp;
+<i>320</i>&nbsp;    /**
+<i>321</i>&nbsp;     *  Adds a character and its designated order into the collation table.
+<i>322</i>&nbsp;     */
+<i>323</i>&nbsp;    private final void addOrder(int ch, int anOrder)
+<i>324</i>&nbsp;    {
+<i>325</i>&nbsp;        // See if the char already has an order in the mapping table
+<b class="nc"><i>326</i>&nbsp;        int order = mapping.elementAt(ch);</b>
+<i>327</i>&nbsp;
+<b class="nc"><i>328</i>&nbsp;        if (order &gt;= RBCollationTables.CONTRACTCHARINDEX) {</b>
+<i>329</i>&nbsp;            // There&#39;s already an entry for this character that points to a contracting
+<i>330</i>&nbsp;            // character table.  Instead of adding the character directly to the mapping
+<i>331</i>&nbsp;            // table, we must add it to the contract table instead.
+<b class="nc"><i>332</i>&nbsp;            int length = 1;</b>
+<b class="nc"><i>333</i>&nbsp;            if (Character.isSupplementaryCodePoint(ch)) {</b>
+<b class="nc"><i>334</i>&nbsp;                length = Character.toChars(ch, keyBuf, 0);</b>
+<i>335</i>&nbsp;            } else {
+<b class="nc"><i>336</i>&nbsp;                keyBuf[0] = (char)ch;</b>
+<i>337</i>&nbsp;            }
+<b class="nc"><i>338</i>&nbsp;            addContractOrder(new String(keyBuf, 0, length), anOrder);</b>
+<b class="nc"><i>339</i>&nbsp;        } else {</b>
+<i>340</i>&nbsp;            // add the entry to the mapping table,
+<i>341</i>&nbsp;            // the same later entry replaces the previous one
+<b class="nc"><i>342</i>&nbsp;            mapping.setElementAt(ch, anOrder);</b>
+<i>343</i>&nbsp;        }
+<i>344</i>&nbsp;    }
+<i>345</i>&nbsp;
+<i>346</i>&nbsp;    private final void addContractOrder(String groupChars, int anOrder) {
+<b class="nc"><i>347</i>&nbsp;        addContractOrder(groupChars, anOrder, true);</b>
+<i>348</i>&nbsp;    }
+<i>349</i>&nbsp;
+<i>350</i>&nbsp;    /**
+<i>351</i>&nbsp;     *  Adds the contracting string into the collation table.
+<i>352</i>&nbsp;     */
+<i>353</i>&nbsp;    private final void addContractOrder(String groupChars, int anOrder,
+<i>354</i>&nbsp;                                          boolean fwd)
+<i>355</i>&nbsp;    {
+<b class="nc"><i>356</i>&nbsp;        if (contractTable == null) {</b>
+<b class="nc"><i>357</i>&nbsp;            contractTable = new Vector&lt;&gt;(INITIALTABLESIZE);</b>
+<i>358</i>&nbsp;        }
+<i>359</i>&nbsp;
+<i>360</i>&nbsp;        //initial character
+<b class="nc"><i>361</i>&nbsp;        int ch = groupChars.codePointAt(0);</b>
+<i>362</i>&nbsp;        /*
+<i>363</i>&nbsp;        char ch0 = groupChars.charAt(0);
+<i>364</i>&nbsp;        int ch = Character.isHighSurrogate(ch0)?
+<i>365</i>&nbsp;          Character.toCodePoint(ch0, groupChars.charAt(1)):ch0;
+<i>366</i>&nbsp;          */
+<i>367</i>&nbsp;        // See if the initial character of the string already has a contract table.
+<b class="nc"><i>368</i>&nbsp;        int entry = mapping.elementAt(ch);</b>
+<b class="nc"><i>369</i>&nbsp;        Vector&lt;EntryPair&gt; entryTable = getContractValuesImpl(entry - RBCollationTables.CONTRACTCHARINDEX);</b>
+<i>370</i>&nbsp;
+<b class="nc"><i>371</i>&nbsp;        if (entryTable == null) {</b>
+<i>372</i>&nbsp;            // We need to create a new table of contract entries for this base char
+<b class="nc"><i>373</i>&nbsp;            int tableIndex = RBCollationTables.CONTRACTCHARINDEX + contractTable.size();</b>
+<b class="nc"><i>374</i>&nbsp;            entryTable = new Vector&lt;&gt;(INITIALTABLESIZE);</b>
+<b class="nc"><i>375</i>&nbsp;            contractTable.addElement(entryTable);</b>
+<i>376</i>&nbsp;
+<i>377</i>&nbsp;            // Add the initial character&#39;s current ordering first. then
+<i>378</i>&nbsp;            // update its mapping to point to this contract table
+<b class="nc"><i>379</i>&nbsp;            entryTable.addElement(new EntryPair(groupChars.substring(0,Character.charCount(ch)), entry));</b>
+<b class="nc"><i>380</i>&nbsp;            mapping.setElementAt(ch, tableIndex);</b>
+<i>381</i>&nbsp;        }
+<i>382</i>&nbsp;
+<i>383</i>&nbsp;        // Now add (or replace) this string in the table
+<b class="nc"><i>384</i>&nbsp;        int index = RBCollationTables.getEntry(entryTable, groupChars, fwd);</b>
+<b class="nc"><i>385</i>&nbsp;        if (index != RBCollationTables.UNMAPPED) {</b>
+<b class="nc"><i>386</i>&nbsp;            EntryPair pair = entryTable.elementAt(index);</b>
+<b class="nc"><i>387</i>&nbsp;            pair.value = anOrder;</b>
+<b class="nc"><i>388</i>&nbsp;        } else {</b>
+<b class="nc"><i>389</i>&nbsp;            EntryPair pair = entryTable.lastElement();</b>
+<i>390</i>&nbsp;
+<i>391</i>&nbsp;            // NOTE:  This little bit of logic is here to speed CollationElementIterator
+<i>392</i>&nbsp;            // .nextContractChar().  This code ensures that the longest sequence in
+<i>393</i>&nbsp;            // this list is always the _last_ one in the list.  This keeps
+<i>394</i>&nbsp;            // nextContractChar() from having to search the entire list for the longest
+<i>395</i>&nbsp;            // sequence.
+<b class="nc"><i>396</i>&nbsp;            if (groupChars.length() &gt; pair.entryName.length()) {</b>
+<b class="nc"><i>397</i>&nbsp;                entryTable.addElement(new EntryPair(groupChars, anOrder, fwd));</b>
+<i>398</i>&nbsp;            } else {
+<b class="nc"><i>399</i>&nbsp;                entryTable.insertElementAt(new EntryPair(groupChars, anOrder,</b>
+<b class="nc"><i>400</i>&nbsp;                        fwd), entryTable.size() - 1);</b>
+<i>401</i>&nbsp;            }
+<i>402</i>&nbsp;        }
+<i>403</i>&nbsp;
+<i>404</i>&nbsp;        // If this was a forward mapping for a contracting string, also add a
+<i>405</i>&nbsp;        // reverse mapping for it, so that CollationElementIterator.previous
+<i>406</i>&nbsp;        // can work right
+<b class="nc"><i>407</i>&nbsp;        if (fwd &amp;&amp; groupChars.length() &gt; 1) {</b>
+<b class="nc"><i>408</i>&nbsp;            addContractFlags(groupChars);</b>
+<b class="nc"><i>409</i>&nbsp;            addContractOrder(new StringBuffer(groupChars).reverse().toString(),</b>
+<i>410</i>&nbsp;                             anOrder, false);
+<i>411</i>&nbsp;        }
+<i>412</i>&nbsp;    }
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;    /**
+<i>415</i>&nbsp;     * If the given string has been specified as a contracting string
+<i>416</i>&nbsp;     * in this collation table, return its ordering.
+<i>417</i>&nbsp;     * Otherwise return UNMAPPED.
+<i>418</i>&nbsp;     */
+<i>419</i>&nbsp;    private int getContractOrder(String groupChars)
+<i>420</i>&nbsp;    {
+<b class="nc"><i>421</i>&nbsp;        int result = RBCollationTables.UNMAPPED;</b>
+<b class="nc"><i>422</i>&nbsp;        if (contractTable != null) {</b>
+<b class="nc"><i>423</i>&nbsp;            int ch = groupChars.codePointAt(0);</b>
+<i>424</i>&nbsp;            /*
+<i>425</i>&nbsp;            char ch0 = groupChars.charAt(0);
+<i>426</i>&nbsp;            int ch = Character.isHighSurrogate(ch0)?
+<i>427</i>&nbsp;              Character.toCodePoint(ch0, groupChars.charAt(1)):ch0;
+<i>428</i>&nbsp;              */
+<b class="nc"><i>429</i>&nbsp;            Vector&lt;EntryPair&gt; entryTable = getContractValues(ch);</b>
+<b class="nc"><i>430</i>&nbsp;            if (entryTable != null) {</b>
+<b class="nc"><i>431</i>&nbsp;                int index = RBCollationTables.getEntry(entryTable, groupChars, true);</b>
+<b class="nc"><i>432</i>&nbsp;                if (index != RBCollationTables.UNMAPPED) {</b>
+<b class="nc"><i>433</i>&nbsp;                    EntryPair pair = entryTable.elementAt(index);</b>
+<b class="nc"><i>434</i>&nbsp;                    result = pair.value;</b>
+<i>435</i>&nbsp;                }
+<i>436</i>&nbsp;            }
+<i>437</i>&nbsp;        }
+<b class="nc"><i>438</i>&nbsp;        return result;</b>
+<i>439</i>&nbsp;    }
+<i>440</i>&nbsp;
+<i>441</i>&nbsp;    private final int getCharOrder(int ch) {
+<b class="nc"><i>442</i>&nbsp;        int order = mapping.elementAt(ch);</b>
+<i>443</i>&nbsp;
+<b class="nc"><i>444</i>&nbsp;        if (order &gt;= RBCollationTables.CONTRACTCHARINDEX) {</b>
+<b class="nc"><i>445</i>&nbsp;            Vector&lt;EntryPair&gt; groupList = getContractValuesImpl(order - RBCollationTables.CONTRACTCHARINDEX);</b>
+<b class="nc"><i>446</i>&nbsp;            EntryPair pair = groupList.firstElement();</b>
+<b class="nc"><i>447</i>&nbsp;            order = pair.value;</b>
+<i>448</i>&nbsp;        }
+<b class="nc"><i>449</i>&nbsp;        return order;</b>
+<i>450</i>&nbsp;    }
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;    /**
+<i>453</i>&nbsp;     *  Get the entry of hash table of the contracting string in the collation
+<i>454</i>&nbsp;     *  table.
+<i>455</i>&nbsp;     *  @param ch the starting character of the contracting string
+<i>456</i>&nbsp;     */
+<i>457</i>&nbsp;    private Vector&lt;EntryPair&gt; getContractValues(int ch)
+<i>458</i>&nbsp;    {
+<b class="nc"><i>459</i>&nbsp;        int index = mapping.elementAt(ch);</b>
+<b class="nc"><i>460</i>&nbsp;        return getContractValuesImpl(index - RBCollationTables.CONTRACTCHARINDEX);</b>
+<i>461</i>&nbsp;    }
+<i>462</i>&nbsp;
+<i>463</i>&nbsp;    private Vector&lt;EntryPair&gt; getContractValuesImpl(int index)
+<i>464</i>&nbsp;    {
+<b class="nc"><i>465</i>&nbsp;        if (index &gt;= 0)</b>
+<i>466</i>&nbsp;        {
+<b class="nc"><i>467</i>&nbsp;            return contractTable.elementAt(index);</b>
+<i>468</i>&nbsp;        }
+<i>469</i>&nbsp;        else // not found
+<i>470</i>&nbsp;        {
+<b class="nc"><i>471</i>&nbsp;            return null;</b>
+<i>472</i>&nbsp;        }
+<i>473</i>&nbsp;    }
+<i>474</i>&nbsp;
+<i>475</i>&nbsp;    /**
+<i>476</i>&nbsp;     *  Adds the expanding string into the collation table.
+<i>477</i>&nbsp;     */
+<i>478</i>&nbsp;    private final void addExpandOrder(String contractChars,
+<i>479</i>&nbsp;                                String expandChars,
+<i>480</i>&nbsp;                                int anOrder) throws ParseException
+<i>481</i>&nbsp;    {
+<i>482</i>&nbsp;        // Create an expansion table entry
+<b class="nc"><i>483</i>&nbsp;        int tableIndex = addExpansion(anOrder, expandChars);</b>
+<i>484</i>&nbsp;
+<i>485</i>&nbsp;        // And add its index into the main mapping table
+<b class="nc"><i>486</i>&nbsp;        if (contractChars.length() &gt; 1) {</b>
+<b class="nc"><i>487</i>&nbsp;            char ch = contractChars.charAt(0);</b>
+<b class="nc"><i>488</i>&nbsp;            if (Character.isHighSurrogate(ch) &amp;&amp; contractChars.length() == 2) {</b>
+<b class="nc"><i>489</i>&nbsp;                char ch2 = contractChars.charAt(1);</b>
+<b class="nc"><i>490</i>&nbsp;                if (Character.isLowSurrogate(ch2)) {</b>
+<i>491</i>&nbsp;                    //only add into table when it is a legal surrogate
+<b class="nc"><i>492</i>&nbsp;                    addOrder(Character.toCodePoint(ch, ch2), tableIndex);</b>
+<i>493</i>&nbsp;                }
+<b class="nc"><i>494</i>&nbsp;            } else {</b>
+<b class="nc"><i>495</i>&nbsp;                addContractOrder(contractChars, tableIndex);</b>
+<i>496</i>&nbsp;            }
+<b class="nc"><i>497</i>&nbsp;        } else {</b>
+<b class="nc"><i>498</i>&nbsp;            addOrder(contractChars.charAt(0), tableIndex);</b>
+<i>499</i>&nbsp;        }
+<i>500</i>&nbsp;    }
+<i>501</i>&nbsp;
+<i>502</i>&nbsp;    private final void addExpandOrder(int ch, String expandChars, int anOrder)
+<i>503</i>&nbsp;      throws ParseException
+<i>504</i>&nbsp;    {
+<b class="nc"><i>505</i>&nbsp;        int tableIndex = addExpansion(anOrder, expandChars);</b>
+<b class="nc"><i>506</i>&nbsp;        addOrder(ch, tableIndex);</b>
+<i>507</i>&nbsp;    }
+<i>508</i>&nbsp;
+<i>509</i>&nbsp;    /**
+<i>510</i>&nbsp;     * Create a new entry in the expansion table that contains the orderings
+<i>511</i>&nbsp;     * for the given characers.  If anOrder is valid, it is added to the
+<i>512</i>&nbsp;     * beginning of the expanded list of orders.
+<i>513</i>&nbsp;     */
+<i>514</i>&nbsp;    private int addExpansion(int anOrder, String expandChars) {
+<b class="nc"><i>515</i>&nbsp;        if (expandTable == null) {</b>
+<b class="nc"><i>516</i>&nbsp;            expandTable = new Vector&lt;&gt;(INITIALTABLESIZE);</b>
+<i>517</i>&nbsp;        }
+<i>518</i>&nbsp;
+<i>519</i>&nbsp;        // If anOrder is valid, we want to add it at the beginning of the list
+<b class="nc"><i>520</i>&nbsp;        int offset = (anOrder == RBCollationTables.UNMAPPED) ? 0 : 1;</b>
+<i>521</i>&nbsp;
+<b class="nc"><i>522</i>&nbsp;        int[] valueList = new int[expandChars.length() + offset];</b>
+<b class="nc"><i>523</i>&nbsp;        if (offset == 1) {</b>
+<b class="nc"><i>524</i>&nbsp;            valueList[0] = anOrder;</b>
+<i>525</i>&nbsp;        }
+<i>526</i>&nbsp;
+<b class="nc"><i>527</i>&nbsp;        int j = offset;</b>
+<b class="nc"><i>528</i>&nbsp;        for (int i = 0; i &lt; expandChars.length(); i++) {</b>
+<b class="nc"><i>529</i>&nbsp;            char ch0 = expandChars.charAt(i);</b>
+<i>530</i>&nbsp;            char ch1;
+<i>531</i>&nbsp;            int ch;
+<b class="nc"><i>532</i>&nbsp;            if (Character.isHighSurrogate(ch0)) {</b>
+<b class="nc"><i>533</i>&nbsp;                if (++i == expandChars.length() ||</b>
+<b class="nc"><i>534</i>&nbsp;                    !Character.isLowSurrogate(ch1=expandChars.charAt(i))) {</b>
+<i>535</i>&nbsp;                    //ether we are missing the low surrogate or the next char
+<i>536</i>&nbsp;                    //is not a legal low surrogate, so stop loop
+<b class="nc"><i>537</i>&nbsp;                    break;</b>
+<i>538</i>&nbsp;                }
+<b class="nc"><i>539</i>&nbsp;                ch = Character.toCodePoint(ch0, ch1);</b>
+<i>540</i>&nbsp;
+<i>541</i>&nbsp;            } else {
+<b class="nc"><i>542</i>&nbsp;                ch = ch0;</b>
+<i>543</i>&nbsp;            }
+<i>544</i>&nbsp;
+<b class="nc"><i>545</i>&nbsp;            int mapValue = getCharOrder(ch);</b>
+<i>546</i>&nbsp;
+<b class="nc"><i>547</i>&nbsp;            if (mapValue != RBCollationTables.UNMAPPED) {</b>
+<b class="nc"><i>548</i>&nbsp;                valueList[j++] = mapValue;</b>
+<i>549</i>&nbsp;            } else {
+<i>550</i>&nbsp;                // can&#39;t find it in the table, will be filled in by commit().
+<b class="nc"><i>551</i>&nbsp;                valueList[j++] = CHARINDEX + ch;</b>
+<i>552</i>&nbsp;            }
+<i>553</i>&nbsp;        }
+<b class="nc"><i>554</i>&nbsp;        if (j &lt; valueList.length) {</b>
+<i>555</i>&nbsp;            //we had at least one supplementary character, the size of valueList
+<i>556</i>&nbsp;            //is bigger than it really needs...
+<b class="nc"><i>557</i>&nbsp;            int[] tmpBuf = new int[j];</b>
+<b class="nc"><i>558</i>&nbsp;            while (--j &gt;= 0) {</b>
+<b class="nc"><i>559</i>&nbsp;                tmpBuf[j] = valueList[j];</b>
+<i>560</i>&nbsp;            }
+<b class="nc"><i>561</i>&nbsp;            valueList = tmpBuf;</b>
+<i>562</i>&nbsp;        }
+<i>563</i>&nbsp;        // Add the expanding char list into the expansion table.
+<b class="nc"><i>564</i>&nbsp;        int tableIndex = RBCollationTables.EXPANDCHARINDEX + expandTable.size();</b>
+<b class="nc"><i>565</i>&nbsp;        expandTable.addElement(valueList);</b>
+<i>566</i>&nbsp;
+<b class="nc"><i>567</i>&nbsp;        return tableIndex;</b>
+<i>568</i>&nbsp;    }
+<i>569</i>&nbsp;
+<i>570</i>&nbsp;    private void addContractFlags(String chars) {
+<i>571</i>&nbsp;        char c0;
+<i>572</i>&nbsp;        int c;
+<b class="nc"><i>573</i>&nbsp;        int len = chars.length();</b>
+<b class="nc"><i>574</i>&nbsp;        for (int i = 0; i &lt; len; i++) {</b>
+<b class="nc"><i>575</i>&nbsp;            c0 = chars.charAt(i);</b>
+<b class="nc"><i>576</i>&nbsp;            c = Character.isHighSurrogate(c0)</b>
+<b class="nc"><i>577</i>&nbsp;                          ?Character.toCodePoint(c0, chars.charAt(++i))</b>
+<i>578</i>&nbsp;                          :c0;
+<b class="nc"><i>579</i>&nbsp;            contractFlags.put(c, 1);</b>
+<i>580</i>&nbsp;        }
+<i>581</i>&nbsp;    }
+<i>582</i>&nbsp;
+<i>583</i>&nbsp;    // ==============================================================
+<i>584</i>&nbsp;    // constants
+<i>585</i>&nbsp;    // ==============================================================
+<i>586</i>&nbsp;    static final int CHARINDEX = 0x70000000;  // need look up in .commit()
+<i>587</i>&nbsp;
+<i>588</i>&nbsp;    private static final int IGNORABLEMASK = 0x0000ffff;
+<i>589</i>&nbsp;    private static final int PRIMARYORDERINCREMENT = 0x00010000;
+<i>590</i>&nbsp;    private static final int SECONDARYORDERINCREMENT = 0x00000100;
+<i>591</i>&nbsp;    private static final int TERTIARYORDERINCREMENT = 0x00000001;
+<i>592</i>&nbsp;    private static final int INITIALTABLESIZE = 20;
+<i>593</i>&nbsp;    private static final int MAXKEYSIZE = 5;
+<i>594</i>&nbsp;
+<i>595</i>&nbsp;    // ==============================================================
+<i>596</i>&nbsp;    // instance variables
+<i>597</i>&nbsp;    // ==============================================================
+<i>598</i>&nbsp;
+<i>599</i>&nbsp;    // variables used by the build process
+<b class="nc"><i>600</i>&nbsp;    private RBCollationTables.BuildAPI tables = null;</b>
+<b class="nc"><i>601</i>&nbsp;    private MergeCollation mPattern = null;</b>
+<b class="nc"><i>602</i>&nbsp;    private boolean isOverIgnore = false;</b>
+<b class="nc"><i>603</i>&nbsp;    private char[] keyBuf = new char[MAXKEYSIZE];</b>
+<b class="nc"><i>604</i>&nbsp;    private IntHashtable contractFlags = new IntHashtable(100);</b>
+<i>605</i>&nbsp;
+<i>606</i>&nbsp;    // &quot;shadow&quot; copies of the instance variables in RBCollationTables
+<i>607</i>&nbsp;    // (the values in these variables are copied back into RBCollationTables
+<i>608</i>&nbsp;    // at the end of the build process)
+<b class="nc"><i>609</i>&nbsp;    private boolean frenchSec = false;</b>
+<b class="nc"><i>610</i>&nbsp;    private boolean seAsianSwapping = false;</b>
+<i>611</i>&nbsp;
+<b class="nc"><i>612</i>&nbsp;    private UCompactIntArray mapping = null;</b>
+<b class="nc"><i>613</i>&nbsp;    private Vector&lt;Vector&lt;EntryPair&gt;&gt;   contractTable = null;</b>
+<b class="nc"><i>614</i>&nbsp;    private Vector&lt;int[]&gt;   expandTable = null;</b>
+<i>615</i>&nbsp;
+<b class="nc"><i>616</i>&nbsp;    private short maxSecOrder = 0;</b>
+<b class="nc"><i>617</i>&nbsp;    private short maxTerOrder = 0;</b>
+<i>618</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

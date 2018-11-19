@@ -1,0 +1,1368 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: FileChannelImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.ch</a> ]
+</div>
+
+<h1>Coverage Summary for Class: FileChannelImpl (sun.nio.ch)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FileChannelImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 35)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 595)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">FileChannelImpl$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 5)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">FileChannelImpl$SimpleFileLockTable</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 24)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">FileChannelImpl$Unmapper</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 25)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 50)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 649)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.ch;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.FileDescriptor;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import java.io.UncheckedIOException;
+<i>31</i>&nbsp;import java.lang.ref.Cleaner.Cleanable;
+<i>32</i>&nbsp;import java.nio.ByteBuffer;
+<i>33</i>&nbsp;import java.nio.MappedByteBuffer;
+<i>34</i>&nbsp;import java.nio.channels.AsynchronousCloseException;
+<i>35</i>&nbsp;import java.nio.channels.ClosedByInterruptException;
+<i>36</i>&nbsp;import java.nio.channels.ClosedChannelException;
+<i>37</i>&nbsp;import java.nio.channels.FileChannel;
+<i>38</i>&nbsp;import java.nio.channels.FileLock;
+<i>39</i>&nbsp;import java.nio.channels.FileLockInterruptionException;
+<i>40</i>&nbsp;import java.nio.channels.NonReadableChannelException;
+<i>41</i>&nbsp;import java.nio.channels.NonWritableChannelException;
+<i>42</i>&nbsp;import java.nio.channels.ReadableByteChannel;
+<i>43</i>&nbsp;import java.nio.channels.SelectableChannel;
+<i>44</i>&nbsp;import java.nio.channels.WritableByteChannel;
+<i>45</i>&nbsp;
+<i>46</i>&nbsp;import jdk.internal.misc.JavaIOFileDescriptorAccess;
+<i>47</i>&nbsp;import jdk.internal.misc.JavaNioAccess;
+<i>48</i>&nbsp;import jdk.internal.misc.SharedSecrets;
+<i>49</i>&nbsp;import jdk.internal.ref.Cleaner;
+<b class="nc"><i>50</i>&nbsp;import jdk.internal.ref.CleanerFactory;</b>
+<i>51</i>&nbsp;
+<i>52</i>&nbsp;public class FileChannelImpl
+<i>53</i>&nbsp;    extends FileChannel
+<i>54</i>&nbsp;{
+<i>55</i>&nbsp;    // Memory allocation size for mapping buffers
+<i>56</i>&nbsp;    private static final long allocationGranularity;
+<i>57</i>&nbsp;
+<i>58</i>&nbsp;    // Access to FileDescriptor internals
+<i>59</i>&nbsp;    private static final JavaIOFileDescriptorAccess fdAccess =
+<i>60</i>&nbsp;        SharedSecrets.getJavaIOFileDescriptorAccess();
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    // Used to make native read and write calls
+<i>63</i>&nbsp;    private final FileDispatcher nd;
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    // File descriptor
+<i>66</i>&nbsp;    private final FileDescriptor fd;
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    // File access mode (immutable)
+<i>69</i>&nbsp;    private final boolean writable;
+<i>70</i>&nbsp;    private final boolean readable;
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    // Required to prevent finalization of creating stream (immutable)
+<i>73</i>&nbsp;    private final Object parent;
+<i>74</i>&nbsp;
+<b class="nc"><i>75</i>&nbsp;    // The path of the referenced file</b>
+<i>76</i>&nbsp;    // (null if the parent stream is created with a file descriptor)
+<i>77</i>&nbsp;    private final String path;
+<b class="nc"><i>78</i>&nbsp;</b>
+<i>79</i>&nbsp;    // Thread-safe set of IDs of native threads, for signalling
+<i>80</i>&nbsp;    private final NativeThreadSet threads = new NativeThreadSet(2);
+<i>81</i>&nbsp;
+<b class="nc"><i>82</i>&nbsp;    // Lock for operations involving position and size</b>
+<b class="nc"><i>83</i>&nbsp;    private final Object positionLock = new Object();</b>
+<b class="nc"><i>84</i>&nbsp;</b>
+<b class="nc"><i>85</i>&nbsp;    // blocking operations are not interruptible</b>
+<b class="nc"><i>86</i>&nbsp;    private volatile boolean uninterruptible;</b>
+<b class="nc"><i>87</i>&nbsp;</b>
+<b class="nc"><i>88</i>&nbsp;    // DirectIO flag</b>
+<b class="nc"><i>89</i>&nbsp;    private final boolean direct;</b>
+<i>90</i>&nbsp;
+<i>91</i>&nbsp;    // IO alignment value for DirectIO
+<i>92</i>&nbsp;    private final int alignment;
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;    // Cleanable with an action which closes this channel&#39;s file descriptor
+<i>95</i>&nbsp;    private final Cleanable closer;
+<i>96</i>&nbsp;
+<b class="nc"><i>97</i>&nbsp;    private static class Closer implements Runnable {</b>
+<i>98</i>&nbsp;        private final FileDescriptor fd;
+<i>99</i>&nbsp;
+<i>100</i>&nbsp;        Closer(FileDescriptor fd) {
+<i>101</i>&nbsp;            this.fd = fd;
+<i>102</i>&nbsp;        }
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;        public void run() {
+<b class="nc"><i>105</i>&nbsp;            try {</b>
+<i>106</i>&nbsp;                fdAccess.close(fd);
+<i>107</i>&nbsp;            } catch (IOException ioe) {
+<i>108</i>&nbsp;                // Rethrow as unchecked so the exception can be propagated as needed
+<b class="nc"><i>109</i>&nbsp;                throw new UncheckedIOException(&quot;close&quot;, ioe);</b>
+<b class="nc"><i>110</i>&nbsp;            }</b>
+<i>111</i>&nbsp;        }
+<i>112</i>&nbsp;    }
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    private FileChannelImpl(FileDescriptor fd, String path, boolean readable,
+<i>115</i>&nbsp;                            boolean writable, boolean direct, Object parent)
+<i>116</i>&nbsp;    {
+<i>117</i>&nbsp;        this.fd = fd;
+<b class="nc"><i>118</i>&nbsp;        this.readable = readable;</b>
+<b class="nc"><i>119</i>&nbsp;        this.writable = writable;</b>
+<b class="nc"><i>120</i>&nbsp;        this.parent = parent;</b>
+<b class="nc"><i>121</i>&nbsp;        this.path = path;</b>
+<b class="nc"><i>122</i>&nbsp;        this.direct = direct;</b>
+<b class="nc"><i>123</i>&nbsp;        this.nd = new FileDispatcherImpl();</b>
+<i>124</i>&nbsp;        if (direct) {
+<b class="nc"><i>125</i>&nbsp;            assert path != null;</b>
+<b class="nc"><i>126</i>&nbsp;            this.alignment = nd.setDirectIO(fd, path);</b>
+<i>127</i>&nbsp;        } else {
+<i>128</i>&nbsp;            this.alignment = -1;
+<i>129</i>&nbsp;        }
+<b class="nc"><i>130</i>&nbsp;</b>
+<i>131</i>&nbsp;        // Register a cleaning action if and only if there is no parent
+<b class="nc"><i>132</i>&nbsp;        // as the parent will take care of closing the file descriptor.</b>
+<i>133</i>&nbsp;        // FileChannel is used by the LambdaMetaFactory so a lambda cannot
+<i>134</i>&nbsp;        // be used here hence we use a nested class instead.
+<i>135</i>&nbsp;        this.closer = parent != null ? null :
+<i>136</i>&nbsp;            CleanerFactory.cleaner().register(this, new Closer(fd));
+<i>137</i>&nbsp;    }
+<i>138</i>&nbsp;
+<b class="nc"><i>139</i>&nbsp;    // Used by FileInputStream.getChannel(), FileOutputStream.getChannel</b>
+<i>140</i>&nbsp;    // and RandomAccessFile.getChannel()
+<b class="nc"><i>141</i>&nbsp;    public static FileChannel open(FileDescriptor fd, String path,</b>
+<i>142</i>&nbsp;                                   boolean readable, boolean writable,
+<i>143</i>&nbsp;                                   boolean direct, Object parent)
+<i>144</i>&nbsp;    {
+<i>145</i>&nbsp;        return new FileChannelImpl(fd, path, readable, writable, direct, parent);
+<i>146</i>&nbsp;    }
+<b class="nc"><i>147</i>&nbsp;</b>
+<b class="nc"><i>148</i>&nbsp;    private void ensureOpen() throws IOException {</b>
+<b class="nc"><i>149</i>&nbsp;        if (!isOpen())</b>
+<b class="nc"><i>150</i>&nbsp;            throw new ClosedChannelException();</b>
+<b class="nc"><i>151</i>&nbsp;    }</b>
+<b class="nc"><i>152</i>&nbsp;</b>
+<i>153</i>&nbsp;    public void setUninterruptible() {
+<b class="nc"><i>154</i>&nbsp;        uninterruptible = true;</b>
+<b class="nc"><i>155</i>&nbsp;    }</b>
+<b class="nc"><i>156</i>&nbsp;</b>
+<b class="nc"><i>157</i>&nbsp;    private void beginBlocking() {</b>
+<i>158</i>&nbsp;        if (!uninterruptible) begin();
+<b class="nc"><i>159</i>&nbsp;    }</b>
+<b class="nc"><i>160</i>&nbsp;</b>
+<b class="nc"><i>161</i>&nbsp;    private void endBlocking(boolean completed) throws AsynchronousCloseException {</b>
+<i>162</i>&nbsp;        if (!uninterruptible) end(completed);
+<b class="nc"><i>163</i>&nbsp;    }</b>
+<b class="nc"><i>164</i>&nbsp;</b>
+<b class="nc"><i>165</i>&nbsp;    // -- Standard channel operations --</b>
+<i>166</i>&nbsp;
+<b class="nc"><i>167</i>&nbsp;    protected void implCloseChannel() throws IOException {</b>
+<i>168</i>&nbsp;        if (!fd.valid())
+<i>169</i>&nbsp;            return; // nothing to do
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;        // Release and invalidate any locks that we still hold
+<i>172</i>&nbsp;        if (fileLockTable != null) {
+<b class="nc"><i>173</i>&nbsp;            for (FileLock fl: fileLockTable.removeAll()) {</b>
+<b class="nc"><i>174</i>&nbsp;                synchronized (fl) {</b>
+<b class="nc"><i>175</i>&nbsp;                    if (fl.isValid()) {</b>
+<b class="nc"><i>176</i>&nbsp;                        nd.release(fd, fl.position(), fl.size());</b>
+<b class="nc"><i>177</i>&nbsp;                        ((FileLockImpl)fl).invalidate();</b>
+<b class="nc"><i>178</i>&nbsp;                    }</b>
+<b class="nc"><i>179</i>&nbsp;                }</b>
+<b class="nc"><i>180</i>&nbsp;            }</b>
+<i>181</i>&nbsp;        }
+<b class="nc"><i>182</i>&nbsp;</b>
+<b class="nc"><i>183</i>&nbsp;        // signal any threads blocked on this channel</b>
+<b class="nc"><i>184</i>&nbsp;        threads.signalAndWait();</b>
+<b class="nc"><i>185</i>&nbsp;</b>
+<i>186</i>&nbsp;        if (parent != null) {
+<b class="nc"><i>187</i>&nbsp;</b>
+<b class="nc"><i>188</i>&nbsp;            // Close the fd via the parent stream&#39;s close method.  The parent</b>
+<b class="nc"><i>189</i>&nbsp;            // will reinvoke our close method, which is defined in the</b>
+<i>190</i>&nbsp;            // superclass AbstractInterruptibleChannel, but the isOpen logic in
+<b class="nc"><i>191</i>&nbsp;            // that method will prevent this method from being reinvoked.</b>
+<b class="nc"><i>192</i>&nbsp;            //</b>
+<b class="nc"><i>193</i>&nbsp;            ((java.io.Closeable)parent).close();</b>
+<i>194</i>&nbsp;        } else if (closer != null) {
+<b class="nc"><i>195</i>&nbsp;            // Perform the cleaning action so it is not redone when</b>
+<i>196</i>&nbsp;            // this channel becomes phantom reachable.
+<i>197</i>&nbsp;            try {
+<i>198</i>&nbsp;                closer.clean();
+<b class="nc"><i>199</i>&nbsp;            } catch (UncheckedIOException uioe) {</b>
+<b class="nc"><i>200</i>&nbsp;                throw uioe.getCause();</b>
+<b class="nc"><i>201</i>&nbsp;            }</b>
+<b class="nc"><i>202</i>&nbsp;        } else {</b>
+<b class="nc"><i>203</i>&nbsp;            fdAccess.close(fd);</b>
+<b class="nc"><i>204</i>&nbsp;        }</b>
+<i>205</i>&nbsp;
+<b class="nc"><i>206</i>&nbsp;    }</b>
+<b class="nc"><i>207</i>&nbsp;</b>
+<b class="nc"><i>208</i>&nbsp;    public int read(ByteBuffer dst) throws IOException {</b>
+<b class="nc"><i>209</i>&nbsp;        ensureOpen();</b>
+<i>210</i>&nbsp;        if (!readable)
+<b class="nc"><i>211</i>&nbsp;            throw new NonReadableChannelException();</b>
+<b class="nc"><i>212</i>&nbsp;        synchronized (positionLock) {</b>
+<b class="nc"><i>213</i>&nbsp;            if (direct)</b>
+<i>214</i>&nbsp;                Util.checkChannelPositionAligned(position(), alignment);
+<b class="nc"><i>215</i>&nbsp;            int n = 0;</b>
+<b class="nc"><i>216</i>&nbsp;            int ti = -1;</b>
+<b class="nc"><i>217</i>&nbsp;            try {</b>
+<i>218</i>&nbsp;                beginBlocking();
+<b class="nc"><i>219</i>&nbsp;                ti = threads.add();</b>
+<i>220</i>&nbsp;                if (!isOpen())
+<i>221</i>&nbsp;                    return 0;
+<i>222</i>&nbsp;                do {
+<i>223</i>&nbsp;                    n = IOUtil.read(fd, dst, -1, direct, alignment, nd);
+<i>224</i>&nbsp;                } while ((n == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<b class="nc"><i>225</i>&nbsp;                return IOStatus.normalize(n);</b>
+<b class="nc"><i>226</i>&nbsp;            } finally {</b>
+<b class="nc"><i>227</i>&nbsp;                threads.remove(ti);</b>
+<b class="nc"><i>228</i>&nbsp;                endBlocking(n &gt; 0);</b>
+<b class="nc"><i>229</i>&nbsp;                assert IOStatus.check(n);</b>
+<b class="nc"><i>230</i>&nbsp;            }</b>
+<b class="nc"><i>231</i>&nbsp;        }</b>
+<b class="nc"><i>232</i>&nbsp;    }</b>
+<i>233</i>&nbsp;
+<b class="nc"><i>234</i>&nbsp;    public long read(ByteBuffer[] dsts, int offset, int length)</b>
+<b class="nc"><i>235</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>236</i>&nbsp;    {</b>
+<b class="nc"><i>237</i>&nbsp;        if ((offset &lt; 0) || (length &lt; 0) || (offset &gt; dsts.length - length))</b>
+<i>238</i>&nbsp;            throw new IndexOutOfBoundsException();
+<b class="nc"><i>239</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>240</i>&nbsp;        if (!readable)</b>
+<b class="nc"><i>241</i>&nbsp;            throw new NonReadableChannelException();</b>
+<i>242</i>&nbsp;        synchronized (positionLock) {
+<b class="nc"><i>243</i>&nbsp;            if (direct)</b>
+<b class="nc"><i>244</i>&nbsp;                Util.checkChannelPositionAligned(position(), alignment);</b>
+<b class="nc"><i>245</i>&nbsp;            long n = 0;</b>
+<i>246</i>&nbsp;            int ti = -1;
+<b class="nc"><i>247</i>&nbsp;            try {</b>
+<i>248</i>&nbsp;                beginBlocking();
+<i>249</i>&nbsp;                ti = threads.add();
+<i>250</i>&nbsp;                if (!isOpen())
+<i>251</i>&nbsp;                    return 0;
+<i>252</i>&nbsp;                do {
+<b class="nc"><i>253</i>&nbsp;                    n = IOUtil.read(fd, dsts, offset, length,</b>
+<b class="nc"><i>254</i>&nbsp;                            direct, alignment, nd);</b>
+<b class="nc"><i>255</i>&nbsp;                } while ((n == IOStatus.INTERRUPTED) &amp;&amp; isOpen());</b>
+<b class="nc"><i>256</i>&nbsp;                return IOStatus.normalize(n);</b>
+<i>257</i>&nbsp;            } finally {
+<b class="nc"><i>258</i>&nbsp;                threads.remove(ti);</b>
+<b class="nc"><i>259</i>&nbsp;                endBlocking(n &gt; 0);</b>
+<b class="nc"><i>260</i>&nbsp;                assert IOStatus.check(n);</b>
+<b class="nc"><i>261</i>&nbsp;            }</b>
+<i>262</i>&nbsp;        }
+<i>263</i>&nbsp;    }
+<b class="nc"><i>264</i>&nbsp;</b>
+<b class="nc"><i>265</i>&nbsp;    public int write(ByteBuffer src) throws IOException {</b>
+<b class="nc"><i>266</i>&nbsp;        ensureOpen();</b>
+<i>267</i>&nbsp;        if (!writable)
+<b class="nc"><i>268</i>&nbsp;            throw new NonWritableChannelException();</b>
+<b class="nc"><i>269</i>&nbsp;        synchronized (positionLock) {</b>
+<b class="nc"><i>270</i>&nbsp;            if (direct)</b>
+<i>271</i>&nbsp;                Util.checkChannelPositionAligned(position(), alignment);
+<b class="nc"><i>272</i>&nbsp;            int n = 0;</b>
+<i>273</i>&nbsp;            int ti = -1;
+<i>274</i>&nbsp;            try {
+<i>275</i>&nbsp;                beginBlocking();
+<b class="nc"><i>276</i>&nbsp;                ti = threads.add();</b>
+<b class="nc"><i>277</i>&nbsp;                if (!isOpen())</b>
+<b class="nc"><i>278</i>&nbsp;                    return 0;</b>
+<b class="nc"><i>279</i>&nbsp;                do {</b>
+<b class="nc"><i>280</i>&nbsp;                    n = IOUtil.write(fd, src, -1, direct, alignment, nd);</b>
+<b class="nc"><i>281</i>&nbsp;                } while ((n == IOStatus.INTERRUPTED) &amp;&amp; isOpen());</b>
+<i>282</i>&nbsp;                return IOStatus.normalize(n);
+<b class="nc"><i>283</i>&nbsp;            } finally {</b>
+<b class="nc"><i>284</i>&nbsp;                threads.remove(ti);</b>
+<b class="nc"><i>285</i>&nbsp;                endBlocking(n &gt; 0);</b>
+<b class="nc"><i>286</i>&nbsp;                assert IOStatus.check(n);</b>
+<i>287</i>&nbsp;            }
+<b class="nc"><i>288</i>&nbsp;        }</b>
+<b class="nc"><i>289</i>&nbsp;    }</b>
+<b class="nc"><i>290</i>&nbsp;</b>
+<i>291</i>&nbsp;    public long write(ByteBuffer[] srcs, int offset, int length)
+<b class="nc"><i>292</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>293</i>&nbsp;    {</b>
+<b class="nc"><i>294</i>&nbsp;        if ((offset &lt; 0) || (length &lt; 0) || (offset &gt; srcs.length - length))</b>
+<i>295</i>&nbsp;            throw new IndexOutOfBoundsException();
+<b class="nc"><i>296</i>&nbsp;        ensureOpen();</b>
+<i>297</i>&nbsp;        if (!writable)
+<i>298</i>&nbsp;            throw new NonWritableChannelException();
+<i>299</i>&nbsp;        synchronized (positionLock) {
+<b class="nc"><i>300</i>&nbsp;            if (direct)</b>
+<b class="nc"><i>301</i>&nbsp;                Util.checkChannelPositionAligned(position(), alignment);</b>
+<b class="nc"><i>302</i>&nbsp;            long n = 0;</b>
+<b class="nc"><i>303</i>&nbsp;            int ti = -1;</b>
+<i>304</i>&nbsp;            try {
+<b class="nc"><i>305</i>&nbsp;                beginBlocking();</b>
+<b class="nc"><i>306</i>&nbsp;                ti = threads.add();</b>
+<b class="nc"><i>307</i>&nbsp;                if (!isOpen())</b>
+<b class="nc"><i>308</i>&nbsp;                    return 0;</b>
+<i>309</i>&nbsp;                do {
+<b class="nc"><i>310</i>&nbsp;                    n = IOUtil.write(fd, srcs, offset, length,</b>
+<b class="nc"><i>311</i>&nbsp;                            direct, alignment, nd);</b>
+<b class="nc"><i>312</i>&nbsp;                } while ((n == IOStatus.INTERRUPTED) &amp;&amp; isOpen());</b>
+<i>313</i>&nbsp;                return IOStatus.normalize(n);
+<b class="nc"><i>314</i>&nbsp;            } finally {</b>
+<b class="nc"><i>315</i>&nbsp;                threads.remove(ti);</b>
+<b class="nc"><i>316</i>&nbsp;                endBlocking(n &gt; 0);</b>
+<i>317</i>&nbsp;                assert IOStatus.check(n);
+<b class="nc"><i>318</i>&nbsp;            }</b>
+<i>319</i>&nbsp;        }
+<i>320</i>&nbsp;    }
+<i>321</i>&nbsp;
+<b class="nc"><i>322</i>&nbsp;    // -- Other operations --</b>
+<b class="nc"><i>323</i>&nbsp;</b>
+<b class="nc"><i>324</i>&nbsp;    public long position() throws IOException {</b>
+<b class="nc"><i>325</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>326</i>&nbsp;        synchronized (positionLock) {</b>
+<b class="nc"><i>327</i>&nbsp;            long p = -1;</b>
+<b class="nc"><i>328</i>&nbsp;            int ti = -1;</b>
+<b class="nc"><i>329</i>&nbsp;            try {</b>
+<b class="nc"><i>330</i>&nbsp;                beginBlocking();</b>
+<b class="nc"><i>331</i>&nbsp;                ti = threads.add();</b>
+<i>332</i>&nbsp;                if (!isOpen())
+<b class="nc"><i>333</i>&nbsp;                    return 0;</b>
+<b class="nc"><i>334</i>&nbsp;                boolean append = fdAccess.getAppend(fd);</b>
+<b class="nc"><i>335</i>&nbsp;                do {</b>
+<b class="nc"><i>336</i>&nbsp;                    // in append-mode then position is advanced to end before writing</b>
+<i>337</i>&nbsp;                    p = (append) ? nd.size(fd) : nd.seek(fd, -1);
+<i>338</i>&nbsp;                } while ((p == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<i>339</i>&nbsp;                return IOStatus.normalize(p);
+<i>340</i>&nbsp;            } finally {
+<b class="nc"><i>341</i>&nbsp;                threads.remove(ti);</b>
+<b class="nc"><i>342</i>&nbsp;                endBlocking(p &gt; -1);</b>
+<b class="nc"><i>343</i>&nbsp;                assert IOStatus.check(p);</b>
+<b class="nc"><i>344</i>&nbsp;            }</b>
+<i>345</i>&nbsp;        }
+<i>346</i>&nbsp;    }
+<i>347</i>&nbsp;
+<b class="nc"><i>348</i>&nbsp;    public FileChannel position(long newPosition) throws IOException {</b>
+<b class="nc"><i>349</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>350</i>&nbsp;        if (newPosition &lt; 0)</b>
+<b class="nc"><i>351</i>&nbsp;            throw new IllegalArgumentException();</b>
+<b class="nc"><i>352</i>&nbsp;        synchronized (positionLock) {</b>
+<i>353</i>&nbsp;            long p = -1;
+<i>354</i>&nbsp;            int ti = -1;
+<b class="nc"><i>355</i>&nbsp;            try {</b>
+<i>356</i>&nbsp;                beginBlocking();
+<b class="nc"><i>357</i>&nbsp;                ti = threads.add();</b>
+<b class="nc"><i>358</i>&nbsp;                if (!isOpen())</b>
+<b class="nc"><i>359</i>&nbsp;                    return null;</b>
+<b class="nc"><i>360</i>&nbsp;                do {</b>
+<i>361</i>&nbsp;                    p = nd.seek(fd, newPosition);
+<i>362</i>&nbsp;                } while ((p == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<i>363</i>&nbsp;                return this;
+<b class="nc"><i>364</i>&nbsp;            } finally {</b>
+<b class="nc"><i>365</i>&nbsp;                threads.remove(ti);</b>
+<i>366</i>&nbsp;                endBlocking(p &gt; -1);
+<b class="nc"><i>367</i>&nbsp;                assert IOStatus.check(p);</b>
+<b class="nc"><i>368</i>&nbsp;            }</b>
+<b class="nc"><i>369</i>&nbsp;        }</b>
+<i>370</i>&nbsp;    }
+<b class="nc"><i>371</i>&nbsp;</b>
+<b class="nc"><i>372</i>&nbsp;    public long size() throws IOException {</b>
+<b class="nc"><i>373</i>&nbsp;        ensureOpen();</b>
+<i>374</i>&nbsp;        synchronized (positionLock) {
+<b class="nc"><i>375</i>&nbsp;            long s = -1;</b>
+<i>376</i>&nbsp;            int ti = -1;
+<i>377</i>&nbsp;            try {
+<i>378</i>&nbsp;                beginBlocking();
+<b class="nc"><i>379</i>&nbsp;                ti = threads.add();</b>
+<b class="nc"><i>380</i>&nbsp;                if (!isOpen())</b>
+<b class="nc"><i>381</i>&nbsp;                    return -1;</b>
+<i>382</i>&nbsp;                do {
+<b class="nc"><i>383</i>&nbsp;                    s = nd.size(fd);</b>
+<b class="nc"><i>384</i>&nbsp;                } while ((s == IOStatus.INTERRUPTED) &amp;&amp; isOpen());</b>
+<b class="nc"><i>385</i>&nbsp;                return IOStatus.normalize(s);</b>
+<i>386</i>&nbsp;            } finally {
+<i>387</i>&nbsp;                threads.remove(ti);
+<b class="nc"><i>388</i>&nbsp;                endBlocking(s &gt; -1);</b>
+<b class="nc"><i>389</i>&nbsp;                assert IOStatus.check(s);</b>
+<i>390</i>&nbsp;            }
+<b class="nc"><i>391</i>&nbsp;        }</b>
+<b class="nc"><i>392</i>&nbsp;    }</b>
+<b class="nc"><i>393</i>&nbsp;</b>
+<i>394</i>&nbsp;    public FileChannel truncate(long newSize) throws IOException {
+<i>395</i>&nbsp;        ensureOpen();
+<i>396</i>&nbsp;        if (newSize &lt; 0)
+<i>397</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative size&quot;);
+<i>398</i>&nbsp;        if (!writable)
+<i>399</i>&nbsp;            throw new NonWritableChannelException();
+<b class="nc"><i>400</i>&nbsp;        synchronized (positionLock) {</b>
+<i>401</i>&nbsp;            int rv = -1;
+<i>402</i>&nbsp;            long p = -1;
+<i>403</i>&nbsp;            int ti = -1;
+<i>404</i>&nbsp;            long rp = -1;
+<b class="nc"><i>405</i>&nbsp;            try {</b>
+<i>406</i>&nbsp;                beginBlocking();
+<i>407</i>&nbsp;                ti = threads.add();
+<i>408</i>&nbsp;                if (!isOpen())
+<i>409</i>&nbsp;                    return null;
+<b class="nc"><i>410</i>&nbsp;</b>
+<i>411</i>&nbsp;                // get current size
+<i>412</i>&nbsp;                long size;
+<i>413</i>&nbsp;                do {
+<i>414</i>&nbsp;                    size = nd.size(fd);
+<i>415</i>&nbsp;                } while ((size == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<i>416</i>&nbsp;                if (!isOpen())
+<b class="nc"><i>417</i>&nbsp;                    return null;</b>
+<b class="nc"><i>418</i>&nbsp;</b>
+<i>419</i>&nbsp;                // get current position
+<b class="nc"><i>420</i>&nbsp;                do {</b>
+<b class="nc"><i>421</i>&nbsp;                    p = nd.seek(fd, -1);</b>
+<i>422</i>&nbsp;                } while ((p == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<b class="nc"><i>423</i>&nbsp;                if (!isOpen())</b>
+<b class="nc"><i>424</i>&nbsp;                    return null;</b>
+<b class="nc"><i>425</i>&nbsp;                assert p &gt;= 0;</b>
+<b class="nc"><i>426</i>&nbsp;</b>
+<i>427</i>&nbsp;                // truncate file if given size is less than the current size
+<b class="nc"><i>428</i>&nbsp;                if (newSize &lt; size) {</b>
+<b class="nc"><i>429</i>&nbsp;                    do {</b>
+<b class="nc"><i>430</i>&nbsp;                        rv = nd.truncate(fd, newSize);</b>
+<b class="nc"><i>431</i>&nbsp;                    } while ((rv == IOStatus.INTERRUPTED) &amp;&amp; isOpen());</b>
+<b class="nc"><i>432</i>&nbsp;                    if (!isOpen())</b>
+<b class="nc"><i>433</i>&nbsp;                        return null;</b>
+<b class="nc"><i>434</i>&nbsp;                }</b>
+<b class="nc"><i>435</i>&nbsp;</b>
+<i>436</i>&nbsp;                // if position is beyond new size then adjust it
+<b class="nc"><i>437</i>&nbsp;                if (p &gt; newSize)</b>
+<i>438</i>&nbsp;                    p = newSize;
+<b class="nc"><i>439</i>&nbsp;                do {</b>
+<b class="nc"><i>440</i>&nbsp;                    rp = nd.seek(fd, p);</b>
+<i>441</i>&nbsp;                } while ((rp == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<b class="nc"><i>442</i>&nbsp;                return this;</b>
+<i>443</i>&nbsp;            } finally {
+<b class="nc"><i>444</i>&nbsp;                threads.remove(ti);</b>
+<b class="nc"><i>445</i>&nbsp;                endBlocking(rv &gt; -1);</b>
+<i>446</i>&nbsp;                assert IOStatus.check(rv);
+<i>447</i>&nbsp;            }
+<i>448</i>&nbsp;        }
+<i>449</i>&nbsp;    }
+<i>450</i>&nbsp;
+<i>451</i>&nbsp;    public void force(boolean metaData) throws IOException {
+<i>452</i>&nbsp;        ensureOpen();
+<b class="nc"><i>453</i>&nbsp;        int rv = -1;</b>
+<b class="nc"><i>454</i>&nbsp;        int ti = -1;</b>
+<i>455</i>&nbsp;        try {
+<b class="nc"><i>456</i>&nbsp;            beginBlocking();</b>
+<b class="nc"><i>457</i>&nbsp;            ti = threads.add();</b>
+<b class="nc"><i>458</i>&nbsp;            if (!isOpen())</b>
+<b class="nc"><i>459</i>&nbsp;                return;</b>
+<b class="nc"><i>460</i>&nbsp;            do {</b>
+<b class="nc"><i>461</i>&nbsp;                rv = nd.force(fd, metaData);</b>
+<i>462</i>&nbsp;            } while ((rv == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<b class="nc"><i>463</i>&nbsp;        } finally {</b>
+<b class="nc"><i>464</i>&nbsp;            threads.remove(ti);</b>
+<i>465</i>&nbsp;            endBlocking(rv &gt; -1);
+<i>466</i>&nbsp;            assert IOStatus.check(rv);
+<i>467</i>&nbsp;        }
+<b class="nc"><i>468</i>&nbsp;    }</b>
+<b class="nc"><i>469</i>&nbsp;</b>
+<b class="nc"><i>470</i>&nbsp;    // Assume at first that the underlying kernel supports sendfile();</b>
+<i>471</i>&nbsp;    // set this to false if we find out later that it doesn&#39;t
+<b class="nc"><i>472</i>&nbsp;    //</b>
+<i>473</i>&nbsp;    private static volatile boolean transferSupported = true;
+<i>474</i>&nbsp;
+<b class="nc"><i>475</i>&nbsp;    // Assume that the underlying kernel sendfile() will work if the target</b>
+<b class="nc"><i>476</i>&nbsp;    // fd is a pipe; set this to false if we find out later that it doesn&#39;t</b>
+<b class="nc"><i>477</i>&nbsp;    //</b>
+<b class="nc"><i>478</i>&nbsp;    private static volatile boolean pipeSupported = true;</b>
+<b class="nc"><i>479</i>&nbsp;</b>
+<b class="nc"><i>480</i>&nbsp;    // Assume that the underlying kernel sendfile() will work if the target</b>
+<i>481</i>&nbsp;    // fd is a file; set this to false if we find out later that it doesn&#39;t
+<b class="nc"><i>482</i>&nbsp;    //</b>
+<b class="nc"><i>483</i>&nbsp;    private static volatile boolean fileSupported = true;</b>
+<b class="nc"><i>484</i>&nbsp;</b>
+<i>485</i>&nbsp;    private long transferToDirectlyInternal(long position, int icount,
+<b class="nc"><i>486</i>&nbsp;                                            WritableByteChannel target,</b>
+<i>487</i>&nbsp;                                            FileDescriptor targetFD)
+<i>488</i>&nbsp;        throws IOException
+<b class="nc"><i>489</i>&nbsp;    {</b>
+<i>490</i>&nbsp;        assert !nd.transferToDirectlyNeedsPositionLock() ||
+<b class="nc"><i>491</i>&nbsp;               Thread.holdsLock(positionLock);</b>
+<i>492</i>&nbsp;
+<b class="nc"><i>493</i>&nbsp;        long n = -1;</b>
+<i>494</i>&nbsp;        int ti = -1;
+<i>495</i>&nbsp;        try {
+<i>496</i>&nbsp;            beginBlocking();
+<i>497</i>&nbsp;            ti = threads.add();
+<i>498</i>&nbsp;            if (!isOpen())
+<i>499</i>&nbsp;                return -1;
+<i>500</i>&nbsp;            do {
+<i>501</i>&nbsp;                n = transferTo0(fd, position, icount, targetFD);
+<i>502</i>&nbsp;            } while ((n == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<i>503</i>&nbsp;            if (n == IOStatus.UNSUPPORTED_CASE) {
+<b class="nc"><i>504</i>&nbsp;                if (target instanceof SinkChannelImpl)</b>
+<b class="nc"><i>505</i>&nbsp;                    pipeSupported = false;</b>
+<b class="nc"><i>506</i>&nbsp;                if (target instanceof FileChannelImpl)</b>
+<i>507</i>&nbsp;                    fileSupported = false;
+<i>508</i>&nbsp;                return IOStatus.UNSUPPORTED_CASE;
+<b class="nc"><i>509</i>&nbsp;            }</b>
+<b class="nc"><i>510</i>&nbsp;            if (n == IOStatus.UNSUPPORTED) {</b>
+<b class="nc"><i>511</i>&nbsp;                // Don&#39;t bother trying again</b>
+<i>512</i>&nbsp;                transferSupported = false;
+<b class="nc"><i>513</i>&nbsp;                return IOStatus.UNSUPPORTED;</b>
+<i>514</i>&nbsp;            }
+<i>515</i>&nbsp;            return IOStatus.normalize(n);
+<b class="nc"><i>516</i>&nbsp;        } finally {</b>
+<b class="nc"><i>517</i>&nbsp;            threads.remove(ti);</b>
+<b class="nc"><i>518</i>&nbsp;            end (n &gt; -1);</b>
+<b class="nc"><i>519</i>&nbsp;        }</b>
+<i>520</i>&nbsp;    }
+<i>521</i>&nbsp;
+<i>522</i>&nbsp;    private long transferToDirectly(long position, int icount,
+<b class="nc"><i>523</i>&nbsp;                                    WritableByteChannel target)</b>
+<b class="nc"><i>524</i>&nbsp;        throws IOException</b>
+<i>525</i>&nbsp;    {
+<b class="nc"><i>526</i>&nbsp;        if (!transferSupported)</b>
+<b class="nc"><i>527</i>&nbsp;            return IOStatus.UNSUPPORTED;</b>
+<b class="nc"><i>528</i>&nbsp;</b>
+<i>529</i>&nbsp;        FileDescriptor targetFD = null;
+<i>530</i>&nbsp;        if (target instanceof FileChannelImpl) {
+<b class="nc"><i>531</i>&nbsp;            if (!fileSupported)</b>
+<i>532</i>&nbsp;                return IOStatus.UNSUPPORTED_CASE;
+<b class="nc"><i>533</i>&nbsp;            targetFD = ((FileChannelImpl)target).fd;</b>
+<b class="nc"><i>534</i>&nbsp;        } else if (target instanceof SelChImpl) {</b>
+<b class="nc"><i>535</i>&nbsp;            // Direct transfer to pipe causes EINVAL on some configurations</b>
+<b class="nc"><i>536</i>&nbsp;            if ((target instanceof SinkChannelImpl) &amp;&amp; !pipeSupported)</b>
+<b class="nc"><i>537</i>&nbsp;                return IOStatus.UNSUPPORTED_CASE;</b>
+<b class="nc"><i>538</i>&nbsp;</b>
+<i>539</i>&nbsp;            // Platform-specific restrictions. Now there is only one:
+<b class="nc"><i>540</i>&nbsp;            // Direct transfer to non-blocking channel could be forbidden</b>
+<b class="nc"><i>541</i>&nbsp;            SelectableChannel sc = (SelectableChannel)target;</b>
+<b class="nc"><i>542</i>&nbsp;            if (!nd.canTransferToDirectly(sc))</b>
+<b class="nc"><i>543</i>&nbsp;                return IOStatus.UNSUPPORTED_CASE;</b>
+<b class="nc"><i>544</i>&nbsp;</b>
+<b class="nc"><i>545</i>&nbsp;            targetFD = ((SelChImpl)target).getFD();</b>
+<i>546</i>&nbsp;        }
+<i>547</i>&nbsp;
+<i>548</i>&nbsp;        if (targetFD == null)
+<i>549</i>&nbsp;            return IOStatus.UNSUPPORTED;
+<i>550</i>&nbsp;        int thisFDVal = IOUtil.fdVal(fd);
+<i>551</i>&nbsp;        int targetFDVal = IOUtil.fdVal(targetFD);
+<i>552</i>&nbsp;        if (thisFDVal == targetFDVal) // Not supported on some configurations
+<b class="nc"><i>553</i>&nbsp;            return IOStatus.UNSUPPORTED;</b>
+<b class="nc"><i>554</i>&nbsp;</b>
+<b class="nc"><i>555</i>&nbsp;        if (nd.transferToDirectlyNeedsPositionLock()) {</b>
+<b class="nc"><i>556</i>&nbsp;            synchronized (positionLock) {</b>
+<i>557</i>&nbsp;                long pos = position();
+<b class="nc"><i>558</i>&nbsp;                try {</b>
+<b class="nc"><i>559</i>&nbsp;                    return transferToDirectlyInternal(position, icount,</b>
+<b class="nc"><i>560</i>&nbsp;                                                      target, targetFD);</b>
+<b class="nc"><i>561</i>&nbsp;                } finally {</b>
+<b class="nc"><i>562</i>&nbsp;                    position(pos);</b>
+<b class="nc"><i>563</i>&nbsp;                }</b>
+<b class="nc"><i>564</i>&nbsp;            }</b>
+<i>565</i>&nbsp;        } else {
+<i>566</i>&nbsp;            return transferToDirectlyInternal(position, icount, target, targetFD);
+<b class="nc"><i>567</i>&nbsp;        }</b>
+<b class="nc"><i>568</i>&nbsp;    }</b>
+<b class="nc"><i>569</i>&nbsp;</b>
+<b class="nc"><i>570</i>&nbsp;    // Maximum size to map when using a mapped buffer</b>
+<b class="nc"><i>571</i>&nbsp;    private static final long MAPPED_TRANSFER_SIZE = 8L*1024L*1024L;</b>
+<b class="nc"><i>572</i>&nbsp;</b>
+<b class="nc"><i>573</i>&nbsp;    private long transferToTrustedChannel(long position, long count,</b>
+<b class="nc"><i>574</i>&nbsp;                                          WritableByteChannel target)</b>
+<b class="nc"><i>575</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>576</i>&nbsp;    {</b>
+<b class="nc"><i>577</i>&nbsp;        boolean isSelChImpl = (target instanceof SelChImpl);</b>
+<b class="nc"><i>578</i>&nbsp;        if (!((target instanceof FileChannelImpl) || isSelChImpl))</b>
+<i>579</i>&nbsp;            return IOStatus.UNSUPPORTED;
+<b class="nc"><i>580</i>&nbsp;</b>
+<i>581</i>&nbsp;        // Trusted target: Use a mapped buffer
+<i>582</i>&nbsp;        long remaining = count;
+<i>583</i>&nbsp;        while (remaining &gt; 0L) {
+<i>584</i>&nbsp;            long size = Math.min(remaining, MAPPED_TRANSFER_SIZE);
+<i>585</i>&nbsp;            try {
+<i>586</i>&nbsp;                MappedByteBuffer dbb = map(MapMode.READ_ONLY, position, size);
+<i>587</i>&nbsp;                try {
+<b class="nc"><i>588</i>&nbsp;                    // ## Bug: Closing this channel will not terminate the write</b>
+<b class="nc"><i>589</i>&nbsp;                    int n = target.write(dbb);</b>
+<b class="nc"><i>590</i>&nbsp;                    assert n &gt;= 0;</b>
+<b class="nc"><i>591</i>&nbsp;                    remaining -= n;</b>
+<b class="nc"><i>592</i>&nbsp;                    if (isSelChImpl) {</b>
+<b class="nc"><i>593</i>&nbsp;                        // one attempt to write to selectable channel</b>
+<i>594</i>&nbsp;                        break;
+<b class="nc"><i>595</i>&nbsp;                    }</b>
+<b class="nc"><i>596</i>&nbsp;                    assert n &gt; 0;</b>
+<b class="nc"><i>597</i>&nbsp;                    position += n;</b>
+<b class="nc"><i>598</i>&nbsp;                } finally {</b>
+<b class="nc"><i>599</i>&nbsp;                    unmap(dbb);</b>
+<b class="nc"><i>600</i>&nbsp;                }</b>
+<b class="nc"><i>601</i>&nbsp;            } catch (ClosedByInterruptException e) {</b>
+<b class="nc"><i>602</i>&nbsp;                // target closed by interrupt as ClosedByInterruptException needs</b>
+<b class="nc"><i>603</i>&nbsp;                // to be thrown after closing this channel.</b>
+<i>604</i>&nbsp;                assert !target.isOpen();
+<i>605</i>&nbsp;                try {
+<i>606</i>&nbsp;                    close();
+<i>607</i>&nbsp;                } catch (Throwable suppressed) {
+<b class="nc"><i>608</i>&nbsp;                    e.addSuppressed(suppressed);</b>
+<b class="nc"><i>609</i>&nbsp;                }</b>
+<i>610</i>&nbsp;                throw e;
+<i>611</i>&nbsp;            } catch (IOException ioe) {
+<b class="nc"><i>612</i>&nbsp;                // Only throw exception if no bytes have been written</b>
+<b class="nc"><i>613</i>&nbsp;                if (remaining == count)</b>
+<i>614</i>&nbsp;                    throw ioe;
+<i>615</i>&nbsp;                break;
+<b class="nc"><i>616</i>&nbsp;            }</b>
+<i>617</i>&nbsp;        }
+<i>618</i>&nbsp;        return count - remaining;
+<i>619</i>&nbsp;    }
+<i>620</i>&nbsp;
+<i>621</i>&nbsp;    private long transferToArbitraryChannel(long position, int icount,
+<i>622</i>&nbsp;                                            WritableByteChannel target)
+<b class="nc"><i>623</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>624</i>&nbsp;    {</b>
+<b class="nc"><i>625</i>&nbsp;        // Untrusted target: Use a newly-erased buffer</b>
+<b class="nc"><i>626</i>&nbsp;        int c = Math.min(icount, TRANSFER_SIZE);</b>
+<b class="nc"><i>627</i>&nbsp;        ByteBuffer bb = Util.getTemporaryDirectBuffer(c);</b>
+<i>628</i>&nbsp;        long tw = 0;                    // Total bytes written
+<b class="nc"><i>629</i>&nbsp;        long pos = position;</b>
+<b class="nc"><i>630</i>&nbsp;        try {</b>
+<b class="nc"><i>631</i>&nbsp;            Util.erase(bb);</b>
+<b class="nc"><i>632</i>&nbsp;            while (tw &lt; icount) {</b>
+<i>633</i>&nbsp;                bb.limit(Math.min((int)(icount - tw), TRANSFER_SIZE));
+<b class="nc"><i>634</i>&nbsp;                int nr = read(bb, pos);</b>
+<i>635</i>&nbsp;                if (nr &lt;= 0)
+<b class="nc"><i>636</i>&nbsp;                    break;</b>
+<b class="nc"><i>637</i>&nbsp;                bb.flip();</b>
+<b class="nc"><i>638</i>&nbsp;                // ## Bug: Will block writing target if this channel</b>
+<b class="nc"><i>639</i>&nbsp;                // ##      is asynchronously closed</b>
+<b class="nc"><i>640</i>&nbsp;                int nw = target.write(bb);</b>
+<b class="nc"><i>641</i>&nbsp;                tw += nw;</b>
+<i>642</i>&nbsp;                if (nw != nr)
+<b class="nc"><i>643</i>&nbsp;                    break;</b>
+<b class="nc"><i>644</i>&nbsp;                pos += nw;</b>
+<i>645</i>&nbsp;                bb.clear();
+<i>646</i>&nbsp;            }
+<b class="nc"><i>647</i>&nbsp;            return tw;</b>
+<b class="nc"><i>648</i>&nbsp;        } catch (IOException x) {</b>
+<b class="nc"><i>649</i>&nbsp;            if (tw &gt; 0)</b>
+<b class="nc"><i>650</i>&nbsp;                return tw;</b>
+<b class="nc"><i>651</i>&nbsp;            throw x;</b>
+<b class="nc"><i>652</i>&nbsp;        } finally {</b>
+<b class="nc"><i>653</i>&nbsp;            Util.releaseTemporaryDirectBuffer(bb);</b>
+<i>654</i>&nbsp;        }
+<i>655</i>&nbsp;    }
+<i>656</i>&nbsp;
+<i>657</i>&nbsp;    public long transferTo(long position, long count,
+<i>658</i>&nbsp;                           WritableByteChannel target)
+<i>659</i>&nbsp;        throws IOException
+<i>660</i>&nbsp;    {
+<i>661</i>&nbsp;        ensureOpen();
+<i>662</i>&nbsp;        if (!target.isOpen())
+<b class="nc"><i>663</i>&nbsp;            throw new ClosedChannelException();</b>
+<b class="nc"><i>664</i>&nbsp;        if (!readable)</b>
+<b class="nc"><i>665</i>&nbsp;            throw new NonReadableChannelException();</b>
+<b class="nc"><i>666</i>&nbsp;        if (target instanceof FileChannelImpl &amp;&amp;</b>
+<i>667</i>&nbsp;            !((FileChannelImpl)target).writable)
+<b class="nc"><i>668</i>&nbsp;            throw new NonWritableChannelException();</b>
+<b class="nc"><i>669</i>&nbsp;        if ((position &lt; 0) || (count &lt; 0))</b>
+<b class="nc"><i>670</i>&nbsp;            throw new IllegalArgumentException();</b>
+<i>671</i>&nbsp;        long sz = size();
+<i>672</i>&nbsp;        if (position &gt; sz)
+<b class="nc"><i>673</i>&nbsp;            return 0;</b>
+<b class="nc"><i>674</i>&nbsp;        int icount = (int)Math.min(count, Integer.MAX_VALUE);</b>
+<b class="nc"><i>675</i>&nbsp;        if ((sz - position) &lt; icount)</b>
+<b class="nc"><i>676</i>&nbsp;            icount = (int)(sz - position);</b>
+<b class="nc"><i>677</i>&nbsp;</b>
+<b class="nc"><i>678</i>&nbsp;        long n;</b>
+<b class="nc"><i>679</i>&nbsp;</b>
+<b class="nc"><i>680</i>&nbsp;        // Attempt a direct transfer, if the kernel supports it</b>
+<b class="nc"><i>681</i>&nbsp;        if ((n = transferToDirectly(position, icount, target)) &gt;= 0)</b>
+<b class="nc"><i>682</i>&nbsp;            return n;</b>
+<b class="nc"><i>683</i>&nbsp;</b>
+<b class="nc"><i>684</i>&nbsp;        // Attempt a mapped transfer, but only to trusted channel types</b>
+<b class="nc"><i>685</i>&nbsp;        if ((n = transferToTrustedChannel(position, icount, target)) &gt;= 0)</b>
+<b class="nc"><i>686</i>&nbsp;            return n;</b>
+<b class="nc"><i>687</i>&nbsp;</b>
+<b class="nc"><i>688</i>&nbsp;        // Slow path for untrusted targets</b>
+<i>689</i>&nbsp;        return transferToArbitraryChannel(position, icount, target);
+<b class="nc"><i>690</i>&nbsp;    }</b>
+<i>691</i>&nbsp;
+<i>692</i>&nbsp;    private long transferFromFileChannel(FileChannelImpl src,
+<i>693</i>&nbsp;                                         long position, long count)
+<i>694</i>&nbsp;        throws IOException
+<i>695</i>&nbsp;    {
+<i>696</i>&nbsp;        if (!src.readable)
+<i>697</i>&nbsp;            throw new NonReadableChannelException();
+<b class="nc"><i>698</i>&nbsp;        synchronized (src.positionLock) {</b>
+<b class="nc"><i>699</i>&nbsp;            long pos = src.position();</b>
+<b class="nc"><i>700</i>&nbsp;            long max = Math.min(count, src.size() - pos);</b>
+<b class="nc"><i>701</i>&nbsp;</b>
+<b class="nc"><i>702</i>&nbsp;            long remaining = max;</b>
+<b class="nc"><i>703</i>&nbsp;            long p = pos;</b>
+<b class="nc"><i>704</i>&nbsp;            while (remaining &gt; 0L) {</b>
+<b class="nc"><i>705</i>&nbsp;                long size = Math.min(remaining, MAPPED_TRANSFER_SIZE);</b>
+<b class="nc"><i>706</i>&nbsp;                // ## Bug: Closing this channel will not terminate the write</b>
+<b class="nc"><i>707</i>&nbsp;                MappedByteBuffer bb = src.map(MapMode.READ_ONLY, p, size);</b>
+<b class="nc"><i>708</i>&nbsp;                try {</b>
+<i>709</i>&nbsp;                    long n = write(bb, position);
+<i>710</i>&nbsp;                    assert n &gt; 0;
+<b class="nc"><i>711</i>&nbsp;                    p += n;</b>
+<i>712</i>&nbsp;                    position += n;
+<i>713</i>&nbsp;                    remaining -= n;
+<i>714</i>&nbsp;                } catch (IOException ioe) {
+<b class="nc"><i>715</i>&nbsp;                    // Only throw exception if no bytes have been written</b>
+<b class="nc"><i>716</i>&nbsp;                    if (remaining == max)</b>
+<b class="nc"><i>717</i>&nbsp;                        throw ioe;</b>
+<b class="nc"><i>718</i>&nbsp;                    break;</b>
+<b class="nc"><i>719</i>&nbsp;                } finally {</b>
+<b class="nc"><i>720</i>&nbsp;                    unmap(bb);</b>
+<b class="nc"><i>721</i>&nbsp;                }</b>
+<b class="nc"><i>722</i>&nbsp;            }</b>
+<b class="nc"><i>723</i>&nbsp;            long nwritten = max - remaining;</b>
+<b class="nc"><i>724</i>&nbsp;            src.position(pos + nwritten);</b>
+<b class="nc"><i>725</i>&nbsp;            return nwritten;</b>
+<i>726</i>&nbsp;        }
+<b class="nc"><i>727</i>&nbsp;    }</b>
+<i>728</i>&nbsp;
+<i>729</i>&nbsp;    private static final int TRANSFER_SIZE = 8192;
+<i>730</i>&nbsp;
+<i>731</i>&nbsp;    private long transferFromArbitraryChannel(ReadableByteChannel src,
+<b class="nc"><i>732</i>&nbsp;                                              long position, long count)</b>
+<b class="nc"><i>733</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>734</i>&nbsp;    {</b>
+<i>735</i>&nbsp;        // Untrusted target: Use a newly-erased buffer
+<b class="nc"><i>736</i>&nbsp;        int c = (int)Math.min(count, TRANSFER_SIZE);</b>
+<b class="nc"><i>737</i>&nbsp;        ByteBuffer bb = Util.getTemporaryDirectBuffer(c);</b>
+<b class="nc"><i>738</i>&nbsp;        long tw = 0;                    // Total bytes written</b>
+<b class="nc"><i>739</i>&nbsp;        long pos = position;</b>
+<i>740</i>&nbsp;        try {
+<b class="nc"><i>741</i>&nbsp;            Util.erase(bb);</b>
+<b class="nc"><i>742</i>&nbsp;            while (tw &lt; count) {</b>
+<b class="nc"><i>743</i>&nbsp;                bb.limit((int)Math.min((count - tw), (long)TRANSFER_SIZE));</b>
+<i>744</i>&nbsp;                // ## Bug: Will block reading src if this channel
+<b class="nc"><i>745</i>&nbsp;                // ##      is asynchronously closed</b>
+<b class="nc"><i>746</i>&nbsp;                int nr = src.read(bb);</b>
+<b class="nc"><i>747</i>&nbsp;                if (nr &lt;= 0)</b>
+<i>748</i>&nbsp;                    break;
+<i>749</i>&nbsp;                bb.flip();
+<i>750</i>&nbsp;                int nw = write(bb, pos);
+<i>751</i>&nbsp;                tw += nw;
+<b class="nc"><i>752</i>&nbsp;                if (nw != nr)</b>
+<b class="nc"><i>753</i>&nbsp;                    break;</b>
+<b class="nc"><i>754</i>&nbsp;                pos += nw;</b>
+<b class="nc"><i>755</i>&nbsp;                bb.clear();</b>
+<b class="nc"><i>756</i>&nbsp;            }</b>
+<b class="nc"><i>757</i>&nbsp;            return tw;</b>
+<b class="nc"><i>758</i>&nbsp;        } catch (IOException x) {</b>
+<b class="nc"><i>759</i>&nbsp;            if (tw &gt; 0)</b>
+<b class="nc"><i>760</i>&nbsp;                return tw;</b>
+<b class="nc"><i>761</i>&nbsp;            throw x;</b>
+<b class="nc"><i>762</i>&nbsp;        } finally {</b>
+<i>763</i>&nbsp;            Util.releaseTemporaryDirectBuffer(bb);
+<b class="nc"><i>764</i>&nbsp;        }</b>
+<i>765</i>&nbsp;    }
+<i>766</i>&nbsp;
+<i>767</i>&nbsp;    public long transferFrom(ReadableByteChannel src,
+<i>768</i>&nbsp;                             long position, long count)
+<b class="nc"><i>769</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>770</i>&nbsp;    {</b>
+<b class="nc"><i>771</i>&nbsp;        ensureOpen();</b>
+<i>772</i>&nbsp;        if (!src.isOpen())
+<b class="nc"><i>773</i>&nbsp;            throw new ClosedChannelException();</b>
+<b class="nc"><i>774</i>&nbsp;        if (!writable)</b>
+<b class="nc"><i>775</i>&nbsp;            throw new NonWritableChannelException();</b>
+<b class="nc"><i>776</i>&nbsp;        if ((position &lt; 0) || (count &lt; 0))</b>
+<i>777</i>&nbsp;            throw new IllegalArgumentException();
+<b class="nc"><i>778</i>&nbsp;        if (position &gt; size())</b>
+<b class="nc"><i>779</i>&nbsp;            return 0;</b>
+<b class="nc"><i>780</i>&nbsp;        if (src instanceof FileChannelImpl)</b>
+<i>781</i>&nbsp;           return transferFromFileChannel((FileChannelImpl)src,
+<b class="nc"><i>782</i>&nbsp;                                          position, count);</b>
+<b class="nc"><i>783</i>&nbsp;</b>
+<b class="nc"><i>784</i>&nbsp;        return transferFromArbitraryChannel(src, position, count);</b>
+<i>785</i>&nbsp;    }
+<i>786</i>&nbsp;
+<i>787</i>&nbsp;    public int read(ByteBuffer dst, long position) throws IOException {
+<i>788</i>&nbsp;        if (dst == null)
+<i>789</i>&nbsp;            throw new NullPointerException();
+<i>790</i>&nbsp;        if (position &lt; 0)
+<b class="nc"><i>791</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative position&quot;);</b>
+<i>792</i>&nbsp;        if (!readable)
+<i>793</i>&nbsp;            throw new NonReadableChannelException();
+<i>794</i>&nbsp;        if (direct)
+<b class="nc"><i>795</i>&nbsp;            Util.checkChannelPositionAligned(position, alignment);</b>
+<i>796</i>&nbsp;        ensureOpen();
+<i>797</i>&nbsp;        if (nd.needsPositionLock()) {
+<i>798</i>&nbsp;            synchronized (positionLock) {
+<i>799</i>&nbsp;                return readInternal(dst, position);
+<i>800</i>&nbsp;            }
+<i>801</i>&nbsp;        } else {
+<i>802</i>&nbsp;            return readInternal(dst, position);
+<i>803</i>&nbsp;        }
+<i>804</i>&nbsp;    }
+<i>805</i>&nbsp;
+<i>806</i>&nbsp;    private int readInternal(ByteBuffer dst, long position) throws IOException {
+<i>807</i>&nbsp;        assert !nd.needsPositionLock() || Thread.holdsLock(positionLock);
+<i>808</i>&nbsp;        int n = 0;
+<b class="nc"><i>809</i>&nbsp;        int ti = -1;</b>
+<b class="nc"><i>810</i>&nbsp;</b>
+<b class="nc"><i>811</i>&nbsp;        try {</b>
+<b class="nc"><i>812</i>&nbsp;            beginBlocking();</b>
+<b class="nc"><i>813</i>&nbsp;            ti = threads.add();</b>
+<b class="nc"><i>814</i>&nbsp;            if (!isOpen())</b>
+<i>815</i>&nbsp;                return -1;
+<b class="nc"><i>816</i>&nbsp;            do {</b>
+<b class="nc"><i>817</i>&nbsp;                n = IOUtil.read(fd, dst, position, direct, alignment, nd);</b>
+<b class="nc"><i>818</i>&nbsp;            } while ((n == IOStatus.INTERRUPTED) &amp;&amp; isOpen());</b>
+<b class="nc"><i>819</i>&nbsp;            return IOStatus.normalize(n);</b>
+<b class="nc"><i>820</i>&nbsp;        } finally {</b>
+<i>821</i>&nbsp;            threads.remove(ti);
+<i>822</i>&nbsp;            endBlocking(n &gt; 0);
+<i>823</i>&nbsp;            assert IOStatus.check(n);
+<b class="nc"><i>824</i>&nbsp;        }</b>
+<i>825</i>&nbsp;    }
+<b class="nc"><i>826</i>&nbsp;</b>
+<b class="nc"><i>827</i>&nbsp;    public int write(ByteBuffer src, long position) throws IOException {</b>
+<i>828</i>&nbsp;        if (src == null)
+<i>829</i>&nbsp;            throw new NullPointerException();
+<b class="nc"><i>830</i>&nbsp;        if (position &lt; 0)</b>
+<i>831</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative position&quot;);
+<b class="nc"><i>832</i>&nbsp;        if (!writable)</b>
+<b class="nc"><i>833</i>&nbsp;            throw new NonWritableChannelException();</b>
+<i>834</i>&nbsp;        if (direct)
+<b class="nc"><i>835</i>&nbsp;            Util.checkChannelPositionAligned(position, alignment);</b>
+<i>836</i>&nbsp;        ensureOpen();
+<i>837</i>&nbsp;        if (nd.needsPositionLock()) {
+<b class="nc"><i>838</i>&nbsp;            synchronized (positionLock) {</b>
+<b class="nc"><i>839</i>&nbsp;                return writeInternal(src, position);</b>
+<b class="nc"><i>840</i>&nbsp;            }</b>
+<b class="nc"><i>841</i>&nbsp;        } else {</b>
+<b class="nc"><i>842</i>&nbsp;            return writeInternal(src, position);</b>
+<i>843</i>&nbsp;        }
+<i>844</i>&nbsp;    }
+<i>845</i>&nbsp;
+<i>846</i>&nbsp;    private int writeInternal(ByteBuffer src, long position) throws IOException {
+<b class="nc"><i>847</i>&nbsp;        assert !nd.needsPositionLock() || Thread.holdsLock(positionLock);</b>
+<b class="nc"><i>848</i>&nbsp;        int n = 0;</b>
+<b class="nc"><i>849</i>&nbsp;        int ti = -1;</b>
+<i>850</i>&nbsp;        try {
+<i>851</i>&nbsp;            beginBlocking();
+<i>852</i>&nbsp;            ti = threads.add();
+<i>853</i>&nbsp;            if (!isOpen())
+<i>854</i>&nbsp;                return -1;
+<i>855</i>&nbsp;            do {
+<i>856</i>&nbsp;                n = IOUtil.write(fd, src, position, direct, alignment, nd);
+<i>857</i>&nbsp;            } while ((n == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<i>858</i>&nbsp;            return IOStatus.normalize(n);
+<b class="nc"><i>859</i>&nbsp;        } finally {</b>
+<b class="nc"><i>860</i>&nbsp;            threads.remove(ti);</b>
+<b class="nc"><i>861</i>&nbsp;            endBlocking(n &gt; 0);</b>
+<b class="nc"><i>862</i>&nbsp;            assert IOStatus.check(n);</b>
+<b class="nc"><i>863</i>&nbsp;        }</b>
+<b class="nc"><i>864</i>&nbsp;    }</b>
+<b class="nc"><i>865</i>&nbsp;</b>
+<b class="nc"><i>866</i>&nbsp;</b>
+<b class="nc"><i>867</i>&nbsp;    // -- Memory-mapped buffers --</b>
+<b class="nc"><i>868</i>&nbsp;</b>
+<b class="nc"><i>869</i>&nbsp;    private static class Unmapper</b>
+<i>870</i>&nbsp;        implements Runnable
+<b class="nc"><i>871</i>&nbsp;    {</b>
+<b class="nc"><i>872</i>&nbsp;        // may be required to close file</b>
+<b class="nc"><i>873</i>&nbsp;        private static final NativeDispatcher nd = new FileDispatcherImpl();</b>
+<b class="nc"><i>874</i>&nbsp;</b>
+<b class="nc"><i>875</i>&nbsp;        // keep track of mapped buffer usage</b>
+<b class="nc"><i>876</i>&nbsp;        static volatile int count;</b>
+<b class="nc"><i>877</i>&nbsp;        static volatile long totalSize;</b>
+<b class="nc"><i>878</i>&nbsp;        static volatile long totalCapacity;</b>
+<b class="nc"><i>879</i>&nbsp;</b>
+<b class="nc"><i>880</i>&nbsp;        private volatile long address;</b>
+<b class="nc"><i>881</i>&nbsp;        private final long size;</b>
+<b class="nc"><i>882</i>&nbsp;        private final int cap;</b>
+<i>883</i>&nbsp;        private final FileDescriptor fd;
+<b class="nc"><i>884</i>&nbsp;</b>
+<b class="nc"><i>885</i>&nbsp;        private Unmapper(long address, long size, int cap,</b>
+<i>886</i>&nbsp;                         FileDescriptor fd)
+<b class="nc"><i>887</i>&nbsp;        {</b>
+<b class="nc"><i>888</i>&nbsp;            assert (address != 0);</b>
+<b class="nc"><i>889</i>&nbsp;            this.address = address;</b>
+<b class="nc"><i>890</i>&nbsp;            this.size = size;</b>
+<i>891</i>&nbsp;            this.cap = cap;
+<i>892</i>&nbsp;            this.fd = fd;
+<i>893</i>&nbsp;
+<b class="nc"><i>894</i>&nbsp;            synchronized (Unmapper.class) {</b>
+<b class="nc"><i>895</i>&nbsp;                count++;</b>
+<b class="nc"><i>896</i>&nbsp;                totalSize += size;</b>
+<b class="nc"><i>897</i>&nbsp;                totalCapacity += cap;</b>
+<i>898</i>&nbsp;            }
+<b class="nc"><i>899</i>&nbsp;        }</b>
+<b class="nc"><i>900</i>&nbsp;</b>
+<b class="nc"><i>901</i>&nbsp;        public void run() {</b>
+<i>902</i>&nbsp;            if (address == 0)
+<i>903</i>&nbsp;                return;
+<i>904</i>&nbsp;            unmap0(address, size);
+<i>905</i>&nbsp;            address = 0;
+<b class="nc"><i>906</i>&nbsp;</b>
+<b class="nc"><i>907</i>&nbsp;            // if this mapping has a valid file descriptor then we close it</b>
+<b class="nc"><i>908</i>&nbsp;            if (fd.valid()) {</b>
+<b class="nc"><i>909</i>&nbsp;                try {</b>
+<i>910</i>&nbsp;                    nd.close(fd);
+<b class="nc"><i>911</i>&nbsp;                } catch (IOException ignore) {</b>
+<b class="nc"><i>912</i>&nbsp;                    // nothing we can do</b>
+<i>913</i>&nbsp;                }
+<b class="nc"><i>914</i>&nbsp;            }</b>
+<b class="nc"><i>915</i>&nbsp;</b>
+<b class="nc"><i>916</i>&nbsp;            synchronized (Unmapper.class) {</b>
+<i>917</i>&nbsp;                count--;
+<b class="nc"><i>918</i>&nbsp;                totalSize -= size;</b>
+<i>919</i>&nbsp;                totalCapacity -= cap;
+<i>920</i>&nbsp;            }
+<b class="nc"><i>921</i>&nbsp;        }</b>
+<b class="nc"><i>922</i>&nbsp;    }</b>
+<b class="nc"><i>923</i>&nbsp;</b>
+<i>924</i>&nbsp;    private static void unmap(MappedByteBuffer bb) {
+<i>925</i>&nbsp;        Cleaner cl = ((DirectBuffer)bb).cleaner();
+<b class="nc"><i>926</i>&nbsp;        if (cl != null)</b>
+<b class="nc"><i>927</i>&nbsp;            cl.clean();</b>
+<i>928</i>&nbsp;    }
+<i>929</i>&nbsp;
+<b class="nc"><i>930</i>&nbsp;    private static final int MAP_RO = 0;</b>
+<i>931</i>&nbsp;    private static final int MAP_RW = 1;
+<b class="nc"><i>932</i>&nbsp;    private static final int MAP_PV = 2;</b>
+<b class="nc"><i>933</i>&nbsp;</b>
+<b class="nc"><i>934</i>&nbsp;    public MappedByteBuffer map(MapMode mode, long position, long size)</b>
+<b class="nc"><i>935</i>&nbsp;        throws IOException</b>
+<i>936</i>&nbsp;    {
+<b class="nc"><i>937</i>&nbsp;        ensureOpen();</b>
+<b class="nc"><i>938</i>&nbsp;        if (mode == null)</b>
+<i>939</i>&nbsp;            throw new NullPointerException(&quot;Mode is null&quot;);
+<b class="nc"><i>940</i>&nbsp;        if (position &lt; 0L)</b>
+<b class="nc"><i>941</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative position&quot;);</b>
+<b class="nc"><i>942</i>&nbsp;        if (size &lt; 0L)</b>
+<i>943</i>&nbsp;            throw new IllegalArgumentException(&quot;Negative size&quot;);
+<i>944</i>&nbsp;        if (position + size &lt; 0)
+<i>945</i>&nbsp;            throw new IllegalArgumentException(&quot;Position + size overflow&quot;);
+<i>946</i>&nbsp;        if (size &gt; Integer.MAX_VALUE)
+<i>947</i>&nbsp;            throw new IllegalArgumentException(&quot;Size exceeds Integer.MAX_VALUE&quot;);
+<b class="nc"><i>948</i>&nbsp;</b>
+<b class="nc"><i>949</i>&nbsp;        int imode = -1;</b>
+<b class="nc"><i>950</i>&nbsp;        if (mode == MapMode.READ_ONLY)</b>
+<b class="nc"><i>951</i>&nbsp;            imode = MAP_RO;</b>
+<b class="nc"><i>952</i>&nbsp;        else if (mode == MapMode.READ_WRITE)</b>
+<i>953</i>&nbsp;            imode = MAP_RW;
+<b class="nc"><i>954</i>&nbsp;        else if (mode == MapMode.PRIVATE)</b>
+<b class="nc"><i>955</i>&nbsp;            imode = MAP_PV;</b>
+<b class="nc"><i>956</i>&nbsp;        assert (imode &gt;= 0);</b>
+<b class="nc"><i>957</i>&nbsp;        if ((mode != MapMode.READ_ONLY) &amp;&amp; !writable)</b>
+<b class="nc"><i>958</i>&nbsp;            throw new NonWritableChannelException();</b>
+<b class="nc"><i>959</i>&nbsp;        if (!readable)</b>
+<i>960</i>&nbsp;            throw new NonReadableChannelException();
+<i>961</i>&nbsp;
+<i>962</i>&nbsp;        long addr = -1;
+<i>963</i>&nbsp;        int ti = -1;
+<b class="nc"><i>964</i>&nbsp;        try {</b>
+<i>965</i>&nbsp;            beginBlocking();
+<i>966</i>&nbsp;            ti = threads.add();
+<i>967</i>&nbsp;            if (!isOpen())
+<i>968</i>&nbsp;                return null;
+<i>969</i>&nbsp;
+<b class="nc"><i>970</i>&nbsp;            long mapSize;</b>
+<b class="nc"><i>971</i>&nbsp;            int pagePosition;</b>
+<i>972</i>&nbsp;            synchronized (positionLock) {
+<i>973</i>&nbsp;                long filesize;
+<i>974</i>&nbsp;                do {
+<i>975</i>&nbsp;                    filesize = nd.size(fd);
+<i>976</i>&nbsp;                } while ((filesize == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<i>977</i>&nbsp;                if (!isOpen())
+<i>978</i>&nbsp;                    return null;
+<i>979</i>&nbsp;
+<b class="nc"><i>980</i>&nbsp;                if (filesize &lt; position + size) { // Extend file size</b>
+<i>981</i>&nbsp;                    if (!writable) {
+<i>982</i>&nbsp;                        throw new IOException(&quot;Channel not open for writing &quot; +
+<b class="nc"><i>983</i>&nbsp;                            &quot;- cannot extend file to required size&quot;);</b>
+<i>984</i>&nbsp;                    }
+<i>985</i>&nbsp;                    int rv;
+<i>986</i>&nbsp;                    do {
+<b class="nc"><i>987</i>&nbsp;                        rv = nd.truncate(fd, position + size);</b>
+<i>988</i>&nbsp;                    } while ((rv == IOStatus.INTERRUPTED) &amp;&amp; isOpen());
+<i>989</i>&nbsp;                    if (!isOpen())
+<i>990</i>&nbsp;                        return null;
+<b class="nc"><i>991</i>&nbsp;                }</b>
+<i>992</i>&nbsp;
+<i>993</i>&nbsp;                if (size == 0) {
+<i>994</i>&nbsp;                    addr = 0;
+<b class="nc"><i>995</i>&nbsp;                    // a valid file descriptor is not required</b>
+<i>996</i>&nbsp;                    FileDescriptor dummy = new FileDescriptor();
+<i>997</i>&nbsp;                    if ((!writable) || (imode == MAP_RO))
+<i>998</i>&nbsp;                        return Util.newMappedByteBufferR(0, 0, dummy, null);
+<i>999</i>&nbsp;                    else
+<i>1000</i>&nbsp;                        return Util.newMappedByteBuffer(0, 0, dummy, null);
+<i>1001</i>&nbsp;                }
+<i>1002</i>&nbsp;
+<i>1003</i>&nbsp;                pagePosition = (int)(position % allocationGranularity);
+<i>1004</i>&nbsp;                long mapPosition = position - pagePosition;
+<i>1005</i>&nbsp;                mapSize = size + pagePosition;
+<i>1006</i>&nbsp;                try {
+<i>1007</i>&nbsp;                    // If map0 did not throw an exception, the address is valid
+<i>1008</i>&nbsp;                    addr = map0(imode, mapPosition, mapSize);
+<i>1009</i>&nbsp;                } catch (OutOfMemoryError x) {
+<i>1010</i>&nbsp;                    // An OutOfMemoryError may indicate that we&#39;ve exhausted
+<i>1011</i>&nbsp;                    // memory so force gc and re-attempt map
+<i>1012</i>&nbsp;                    System.gc();
+<i>1013</i>&nbsp;                    try {
+<i>1014</i>&nbsp;                        Thread.sleep(100);
+<i>1015</i>&nbsp;                    } catch (InterruptedException y) {
+<i>1016</i>&nbsp;                        Thread.currentThread().interrupt();
+<i>1017</i>&nbsp;                    }
+<b class="nc"><i>1018</i>&nbsp;                    try {</b>
+<b class="nc"><i>1019</i>&nbsp;                        addr = map0(imode, mapPosition, mapSize);</b>
+<b class="nc"><i>1020</i>&nbsp;                    } catch (OutOfMemoryError y) {</b>
+<b class="nc"><i>1021</i>&nbsp;                        // After a second OOME, fail</b>
+<i>1022</i>&nbsp;                        throw new IOException(&quot;Map failed&quot;, y);
+<i>1023</i>&nbsp;                    }
+<b class="nc"><i>1024</i>&nbsp;                }</b>
+<b class="nc"><i>1025</i>&nbsp;            } // synchronized</b>
+<i>1026</i>&nbsp;
+<b class="nc"><i>1027</i>&nbsp;            // On Windows, and potentially other platforms, we need an open</b>
+<i>1028</i>&nbsp;            // file descriptor for some mapping operations.
+<b class="nc"><i>1029</i>&nbsp;            FileDescriptor mfd;</b>
+<i>1030</i>&nbsp;            try {
+<i>1031</i>&nbsp;                mfd = nd.duplicateForMapping(fd);
+<i>1032</i>&nbsp;            } catch (IOException ioe) {
+<b class="nc"><i>1033</i>&nbsp;                unmap0(addr, mapSize);</b>
+<b class="nc"><i>1034</i>&nbsp;                throw ioe;</b>
+<b class="nc"><i>1035</i>&nbsp;            }</b>
+<b class="nc"><i>1036</i>&nbsp;</b>
+<b class="nc"><i>1037</i>&nbsp;            assert (IOStatus.checkAll(addr));</b>
+<i>1038</i>&nbsp;            assert (addr % allocationGranularity == 0);
+<b class="nc"><i>1039</i>&nbsp;            int isize = (int)size;</b>
+<b class="nc"><i>1040</i>&nbsp;            Unmapper um = new Unmapper(addr, mapSize, isize, mfd);</b>
+<i>1041</i>&nbsp;            if ((!writable) || (imode == MAP_RO)) {
+<b class="nc"><i>1042</i>&nbsp;                return Util.newMappedByteBufferR(isize,</b>
+<b class="nc"><i>1043</i>&nbsp;                                                 addr + pagePosition,</b>
+<b class="nc"><i>1044</i>&nbsp;                                                 mfd,</b>
+<b class="nc"><i>1045</i>&nbsp;                                                 um);</b>
+<i>1046</i>&nbsp;            } else {
+<i>1047</i>&nbsp;                return Util.newMappedByteBuffer(isize,
+<b class="nc"><i>1048</i>&nbsp;                                                addr + pagePosition,</b>
+<i>1049</i>&nbsp;                                                mfd,
+<b class="nc"><i>1050</i>&nbsp;                                                um);</b>
+<i>1051</i>&nbsp;            }
+<i>1052</i>&nbsp;        } finally {
+<i>1053</i>&nbsp;            threads.remove(ti);
+<i>1054</i>&nbsp;            endBlocking(IOStatus.checkAll(addr));
+<i>1055</i>&nbsp;        }
+<b class="nc"><i>1056</i>&nbsp;    }</b>
+<b class="nc"><i>1057</i>&nbsp;</b>
+<b class="nc"><i>1058</i>&nbsp;    /**</b>
+<b class="nc"><i>1059</i>&nbsp;     * Invoked by sun.management.ManagementFactoryHelper to create the management</b>
+<b class="nc"><i>1060</i>&nbsp;     * interface for mapped buffers.</b>
+<b class="nc"><i>1061</i>&nbsp;     */</b>
+<b class="nc"><i>1062</i>&nbsp;    public static JavaNioAccess.BufferPool getMappedBufferPool() {</b>
+<b class="nc"><i>1063</i>&nbsp;        return new JavaNioAccess.BufferPool() {</b>
+<b class="nc"><i>1064</i>&nbsp;            @Override</b>
+<b class="nc"><i>1065</i>&nbsp;            public String getName() {</b>
+<i>1066</i>&nbsp;                return &quot;mapped&quot;;
+<b class="nc"><i>1067</i>&nbsp;            }</b>
+<b class="nc"><i>1068</i>&nbsp;            @Override</b>
+<b class="nc"><i>1069</i>&nbsp;            public long getCount() {</b>
+<b class="nc"><i>1070</i>&nbsp;                return Unmapper.count;</b>
+<i>1071</i>&nbsp;            }
+<i>1072</i>&nbsp;            @Override
+<b class="nc"><i>1073</i>&nbsp;            public long getTotalCapacity() {</b>
+<b class="nc"><i>1074</i>&nbsp;                return Unmapper.totalCapacity;</b>
+<b class="nc"><i>1075</i>&nbsp;            }</b>
+<b class="nc"><i>1076</i>&nbsp;            @Override</b>
+<b class="nc"><i>1077</i>&nbsp;            public long getMemoryUsed() {</b>
+<b class="nc"><i>1078</i>&nbsp;                return Unmapper.totalSize;</b>
+<i>1079</i>&nbsp;            }
+<b class="nc"><i>1080</i>&nbsp;        };</b>
+<b class="nc"><i>1081</i>&nbsp;    }</b>
+<i>1082</i>&nbsp;
+<b class="nc"><i>1083</i>&nbsp;    // -- Locks --</b>
+<i>1084</i>&nbsp;
+<i>1085</i>&nbsp;    // keeps track of locks on this file
+<b class="nc"><i>1086</i>&nbsp;    private volatile FileLockTable fileLockTable;</b>
+<b class="nc"><i>1087</i>&nbsp;</b>
+<b class="nc"><i>1088</i>&nbsp;    private FileLockTable fileLockTable() throws IOException {</b>
+<i>1089</i>&nbsp;        if (fileLockTable == null) {
+<b class="nc"><i>1090</i>&nbsp;            synchronized (this) {</b>
+<b class="nc"><i>1091</i>&nbsp;                if (fileLockTable == null) {</b>
+<b class="nc"><i>1092</i>&nbsp;                    int ti = threads.add();</b>
+<b class="nc"><i>1093</i>&nbsp;                    try {</b>
+<i>1094</i>&nbsp;                        ensureOpen();
+<b class="nc"><i>1095</i>&nbsp;                        fileLockTable = new FileLockTable(this, fd);</b>
+<i>1096</i>&nbsp;                    } finally {
+<i>1097</i>&nbsp;                        threads.remove(ti);
+<i>1098</i>&nbsp;                    }
+<i>1099</i>&nbsp;                }
+<i>1100</i>&nbsp;            }
+<b class="nc"><i>1101</i>&nbsp;        }</b>
+<b class="nc"><i>1102</i>&nbsp;        return fileLockTable;</b>
+<b class="nc"><i>1103</i>&nbsp;    }</b>
+<b class="nc"><i>1104</i>&nbsp;</b>
+<b class="nc"><i>1105</i>&nbsp;    public FileLock lock(long position, long size, boolean shared)</b>
+<b class="nc"><i>1106</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>1107</i>&nbsp;    {</b>
+<b class="nc"><i>1108</i>&nbsp;        ensureOpen();</b>
+<i>1109</i>&nbsp;        if (shared &amp;&amp; !readable)
+<i>1110</i>&nbsp;            throw new NonReadableChannelException();
+<b class="nc"><i>1111</i>&nbsp;        if (!shared &amp;&amp; !writable)</b>
+<i>1112</i>&nbsp;            throw new NonWritableChannelException();
+<i>1113</i>&nbsp;        FileLockImpl fli = new FileLockImpl(this, position, size, shared);
+<b class="nc"><i>1114</i>&nbsp;        FileLockTable flt = fileLockTable();</b>
+<b class="nc"><i>1115</i>&nbsp;        flt.add(fli);</b>
+<b class="nc"><i>1116</i>&nbsp;        boolean completed = false;</b>
+<b class="nc"><i>1117</i>&nbsp;        int ti = -1;</b>
+<b class="nc"><i>1118</i>&nbsp;        try {</b>
+<b class="nc"><i>1119</i>&nbsp;            beginBlocking();</b>
+<b class="nc"><i>1120</i>&nbsp;            ti = threads.add();</b>
+<b class="nc"><i>1121</i>&nbsp;            if (!isOpen())</b>
+<b class="nc"><i>1122</i>&nbsp;                return null;</b>
+<i>1123</i>&nbsp;            int n;
+<b class="nc"><i>1124</i>&nbsp;            do {</b>
+<b class="nc"><i>1125</i>&nbsp;                n = nd.lock(fd, true, position, size, shared);</b>
+<b class="nc"><i>1126</i>&nbsp;            } while ((n == FileDispatcher.INTERRUPTED) &amp;&amp; isOpen());</b>
+<i>1127</i>&nbsp;            if (isOpen()) {
+<b class="nc"><i>1128</i>&nbsp;                if (n == FileDispatcher.RET_EX_LOCK) {</b>
+<b class="nc"><i>1129</i>&nbsp;                    assert shared;</b>
+<i>1130</i>&nbsp;                    FileLockImpl fli2 = new FileLockImpl(this, position, size,
+<b class="nc"><i>1131</i>&nbsp;                                                         false);</b>
+<i>1132</i>&nbsp;                    flt.replace(fli, fli2);
+<b class="nc"><i>1133</i>&nbsp;                    fli = fli2;</b>
+<i>1134</i>&nbsp;                }
+<i>1135</i>&nbsp;                completed = true;
+<i>1136</i>&nbsp;            }
+<i>1137</i>&nbsp;        } finally {
+<b class="nc"><i>1138</i>&nbsp;            if (!completed)</b>
+<i>1139</i>&nbsp;                flt.remove(fli);
+<b class="nc"><i>1140</i>&nbsp;            threads.remove(ti);</b>
+<b class="nc"><i>1141</i>&nbsp;            try {</b>
+<i>1142</i>&nbsp;                endBlocking(completed);
+<b class="nc"><i>1143</i>&nbsp;            } catch (ClosedByInterruptException e) {</b>
+<b class="nc"><i>1144</i>&nbsp;                throw new FileLockInterruptionException();</b>
+<b class="nc"><i>1145</i>&nbsp;            }</b>
+<b class="nc"><i>1146</i>&nbsp;        }</b>
+<i>1147</i>&nbsp;        return fli;
+<i>1148</i>&nbsp;    }
+<i>1149</i>&nbsp;
+<i>1150</i>&nbsp;    public FileLock tryLock(long position, long size, boolean shared)
+<i>1151</i>&nbsp;        throws IOException
+<i>1152</i>&nbsp;    {
+<i>1153</i>&nbsp;        ensureOpen();
+<i>1154</i>&nbsp;        if (shared &amp;&amp; !readable)
+<b class="nc"><i>1155</i>&nbsp;            throw new NonReadableChannelException();</b>
+<i>1156</i>&nbsp;        if (!shared &amp;&amp; !writable)
+<b class="nc"><i>1157</i>&nbsp;            throw new NonWritableChannelException();</b>
+<i>1158</i>&nbsp;        FileLockImpl fli = new FileLockImpl(this, position, size, shared);
+<b class="nc"><i>1159</i>&nbsp;        FileLockTable flt = fileLockTable();</b>
+<i>1160</i>&nbsp;        flt.add(fli);
+<i>1161</i>&nbsp;        int result;
+<i>1162</i>&nbsp;
+<i>1163</i>&nbsp;        int ti = threads.add();
+<i>1164</i>&nbsp;        try {
+<b class="nc"><i>1165</i>&nbsp;            try {</b>
+<b class="nc"><i>1166</i>&nbsp;                ensureOpen();</b>
+<b class="nc"><i>1167</i>&nbsp;                result = nd.lock(fd, false, position, size, shared);</b>
+<b class="nc"><i>1168</i>&nbsp;            } catch (IOException e) {</b>
+<i>1169</i>&nbsp;                flt.remove(fli);
+<b class="nc"><i>1170</i>&nbsp;                throw e;</b>
+<i>1171</i>&nbsp;            }
+<i>1172</i>&nbsp;            if (result == FileDispatcher.NO_LOCK) {
+<i>1173</i>&nbsp;                flt.remove(fli);
+<b class="nc"><i>1174</i>&nbsp;                return null;</b>
+<b class="nc"><i>1175</i>&nbsp;            }</b>
+<b class="nc"><i>1176</i>&nbsp;            if (result == FileDispatcher.RET_EX_LOCK) {</b>
+<b class="nc"><i>1177</i>&nbsp;                assert shared;</b>
+<i>1178</i>&nbsp;                FileLockImpl fli2 = new FileLockImpl(this, position, size,
+<i>1179</i>&nbsp;                                                     false);
+<i>1180</i>&nbsp;                flt.replace(fli, fli2);
+<b class="nc"><i>1181</i>&nbsp;                return fli2;</b>
+<b class="nc"><i>1182</i>&nbsp;            }</b>
+<b class="nc"><i>1183</i>&nbsp;            return fli;</b>
+<i>1184</i>&nbsp;        } finally {
+<i>1185</i>&nbsp;            threads.remove(ti);
+<i>1186</i>&nbsp;        }
+<b class="nc"><i>1187</i>&nbsp;    }</b>
+<b class="nc"><i>1188</i>&nbsp;</b>
+<b class="nc"><i>1189</i>&nbsp;    void release(FileLockImpl fli) throws IOException {</b>
+<b class="nc"><i>1190</i>&nbsp;        int ti = threads.add();</b>
+<b class="nc"><i>1191</i>&nbsp;        try {</b>
+<i>1192</i>&nbsp;            ensureOpen();
+<i>1193</i>&nbsp;            nd.release(fd, fli.position(), fli.size());
+<i>1194</i>&nbsp;        } finally {
+<b class="nc"><i>1195</i>&nbsp;            threads.remove(ti);</b>
+<b class="nc"><i>1196</i>&nbsp;        }</b>
+<b class="nc"><i>1197</i>&nbsp;        assert fileLockTable != null;</b>
+<b class="nc"><i>1198</i>&nbsp;        fileLockTable.remove(fli);</b>
+<i>1199</i>&nbsp;    }
+<i>1200</i>&nbsp;
+<i>1201</i>&nbsp;    // -- Native methods --
+<i>1202</i>&nbsp;
+<i>1203</i>&nbsp;    // Creates a new mapping
+<i>1204</i>&nbsp;    private native long map0(int prot, long position, long length)
+<i>1205</i>&nbsp;        throws IOException;
+<i>1206</i>&nbsp;
+<i>1207</i>&nbsp;    // Removes an existing mapping
+<i>1208</i>&nbsp;    private static native int unmap0(long address, long length);
+<i>1209</i>&nbsp;
+<i>1210</i>&nbsp;    // Transfers from src to dst, or returns -2 if kernel can&#39;t do that
+<i>1211</i>&nbsp;    private native long transferTo0(FileDescriptor src, long position,
+<i>1212</i>&nbsp;                                    long count, FileDescriptor dst);
+<i>1213</i>&nbsp;
+<i>1214</i>&nbsp;    // Caches fieldIDs
+<i>1215</i>&nbsp;    private static native long initIDs();
+<i>1216</i>&nbsp;
+<i>1217</i>&nbsp;    static {
+<i>1218</i>&nbsp;        IOUtil.load();
+<i>1219</i>&nbsp;        allocationGranularity = initIDs();
+<i>1220</i>&nbsp;    }
+<i>1221</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

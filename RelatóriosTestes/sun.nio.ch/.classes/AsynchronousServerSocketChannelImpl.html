@@ -1,0 +1,375 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AsynchronousServerSocketChannelImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.ch</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AsynchronousServerSocketChannelImpl (sun.nio.ch)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AsynchronousServerSocketChannelImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 15)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 75)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">AsynchronousServerSocketChannelImpl$DefaultOptionsHolder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 18)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 81)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2008, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.ch;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.channels.*;
+<i>29</i>&nbsp;import java.net.SocketAddress;
+<i>30</i>&nbsp;import java.net.SocketOption;
+<i>31</i>&nbsp;import java.net.StandardSocketOptions;
+<i>32</i>&nbsp;import java.net.InetSocketAddress;
+<i>33</i>&nbsp;import java.io.FileDescriptor;
+<i>34</i>&nbsp;import java.io.IOException;
+<i>35</i>&nbsp;import java.util.Set;
+<i>36</i>&nbsp;import java.util.HashSet;
+<i>37</i>&nbsp;import java.util.Collections;
+<i>38</i>&nbsp;import java.util.concurrent.Future;
+<i>39</i>&nbsp;import java.util.concurrent.locks.ReadWriteLock;
+<i>40</i>&nbsp;import java.util.concurrent.locks.ReentrantReadWriteLock;
+<i>41</i>&nbsp;import sun.net.NetHooks;
+<i>42</i>&nbsp;import sun.net.ext.ExtendedSocketOptions;
+<i>43</i>&nbsp;import static sun.net.ext.ExtendedSocketOptions.SOCK_STREAM;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;/**
+<i>46</i>&nbsp; * Base implementation of AsynchronousServerSocketChannel.
+<i>47</i>&nbsp; */
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;abstract class AsynchronousServerSocketChannelImpl
+<i>50</i>&nbsp;    extends AsynchronousServerSocketChannel
+<i>51</i>&nbsp;    implements Cancellable, Groupable
+<i>52</i>&nbsp;{
+<i>53</i>&nbsp;    protected final FileDescriptor fd;
+<b class="nc"><i>54</i>&nbsp;</b>
+<i>55</i>&nbsp;    // the local address to which the channel&#39;s socket is bound
+<i>56</i>&nbsp;    protected volatile InetSocketAddress localAddress;
+<b class="nc"><i>57</i>&nbsp;</b>
+<i>58</i>&nbsp;    // need this lock to set local address
+<i>59</i>&nbsp;    private final Object stateLock = new Object();
+<b class="nc"><i>60</i>&nbsp;</b>
+<b class="nc"><i>61</i>&nbsp;    // close support</b>
+<i>62</i>&nbsp;    private ReadWriteLock closeLock = new ReentrantReadWriteLock();
+<i>63</i>&nbsp;    private volatile boolean closed;
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    // set true when accept operation is cancelled
+<i>66</i>&nbsp;    private volatile boolean acceptKilled;
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    // set true when exclusive binding is on and SO_REUSEADDR is emulated
+<i>69</i>&nbsp;    private boolean isReuseAddress;
+<b class="nc"><i>70</i>&nbsp;</b>
+<b class="nc"><i>71</i>&nbsp;    AsynchronousServerSocketChannelImpl(AsynchronousChannelGroupImpl group) {</b>
+<i>72</i>&nbsp;        super(group.provider());
+<i>73</i>&nbsp;        this.fd = Net.serverSocket(true);
+<i>74</i>&nbsp;    }
+<i>75</i>&nbsp;
+<b class="nc"><i>76</i>&nbsp;    @Override</b>
+<i>77</i>&nbsp;    public final boolean isOpen() {
+<i>78</i>&nbsp;        return !closed;
+<i>79</i>&nbsp;    }
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    /**
+<i>82</i>&nbsp;     * Marks beginning of access to file descriptor/handle
+<b class="nc"><i>83</i>&nbsp;     */</b>
+<b class="nc"><i>84</i>&nbsp;    final void begin() throws IOException {</b>
+<b class="nc"><i>85</i>&nbsp;        closeLock.readLock().lock();</b>
+<i>86</i>&nbsp;        if (!isOpen())
+<i>87</i>&nbsp;            throw new ClosedChannelException();
+<i>88</i>&nbsp;    }
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    /**
+<i>91</i>&nbsp;     * Marks end of access to file descriptor/handle
+<b class="nc"><i>92</i>&nbsp;     */</b>
+<i>93</i>&nbsp;    final void end() {
+<i>94</i>&nbsp;        closeLock.readLock().unlock();
+<i>95</i>&nbsp;    }
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    /**
+<i>98</i>&nbsp;     * Invoked to close file descriptor/handle.
+<i>99</i>&nbsp;     */
+<i>100</i>&nbsp;    abstract void implClose() throws IOException;
+<i>101</i>&nbsp;
+<i>102</i>&nbsp;    @Override
+<b class="nc"><i>103</i>&nbsp;    public final void close() throws IOException {</b>
+<i>104</i>&nbsp;        // synchronize with any threads using file descriptor/handle
+<b class="nc"><i>105</i>&nbsp;        closeLock.writeLock().lock();</b>
+<i>106</i>&nbsp;        try {
+<b class="nc"><i>107</i>&nbsp;            if (closed)</b>
+<i>108</i>&nbsp;                return;     // already closed
+<b class="nc"><i>109</i>&nbsp;            closed = true;</b>
+<b class="nc"><i>110</i>&nbsp;        } finally {</b>
+<b class="nc"><i>111</i>&nbsp;            closeLock.writeLock().unlock();</b>
+<i>112</i>&nbsp;        }
+<i>113</i>&nbsp;        implClose();
+<i>114</i>&nbsp;    }
+<i>115</i>&nbsp;
+<i>116</i>&nbsp;    /**
+<i>117</i>&nbsp;     * Invoked by accept to accept connection
+<i>118</i>&nbsp;     */
+<i>119</i>&nbsp;    abstract Future&lt;AsynchronousSocketChannel&gt;
+<i>120</i>&nbsp;        implAccept(Object attachment,
+<i>121</i>&nbsp;                   CompletionHandler&lt;AsynchronousSocketChannel,Object&gt; handler);
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;
+<b class="nc"><i>124</i>&nbsp;    @Override</b>
+<i>125</i>&nbsp;    public final Future&lt;AsynchronousSocketChannel&gt; accept() {
+<i>126</i>&nbsp;        return implAccept(null, null);
+<i>127</i>&nbsp;    }
+<i>128</i>&nbsp;
+<i>129</i>&nbsp;    @Override
+<i>130</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)
+<i>131</i>&nbsp;    public final &lt;A&gt; void accept(A attachment,
+<b class="nc"><i>132</i>&nbsp;                                 CompletionHandler&lt;AsynchronousSocketChannel,? super A&gt; handler)</b>
+<b class="nc"><i>133</i>&nbsp;    {</b>
+<b class="nc"><i>134</i>&nbsp;        if (handler == null)</b>
+<i>135</i>&nbsp;            throw new NullPointerException(&quot;&#39;handler&#39; is null&quot;);
+<i>136</i>&nbsp;        implAccept(attachment, (CompletionHandler&lt;AsynchronousSocketChannel,Object&gt;)handler);
+<i>137</i>&nbsp;    }
+<b class="nc"><i>138</i>&nbsp;</b>
+<i>139</i>&nbsp;    final boolean isAcceptKilled() {
+<i>140</i>&nbsp;        return acceptKilled;
+<i>141</i>&nbsp;    }
+<i>142</i>&nbsp;
+<b class="nc"><i>143</i>&nbsp;    @Override</b>
+<i>144</i>&nbsp;    public final void onCancel(PendingFuture&lt;?,?&gt; task) {
+<i>145</i>&nbsp;        acceptKilled = true;
+<i>146</i>&nbsp;    }
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;    @Override
+<i>149</i>&nbsp;    public final AsynchronousServerSocketChannel bind(SocketAddress local, int backlog)
+<b class="nc"><i>150</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>151</i>&nbsp;    {</b>
+<b class="nc"><i>152</i>&nbsp;        InetSocketAddress isa = (local == null) ? new InetSocketAddress(0) :</b>
+<b class="nc"><i>153</i>&nbsp;            Net.checkAddress(local);</b>
+<b class="nc"><i>154</i>&nbsp;        SecurityManager sm = System.getSecurityManager();</b>
+<i>155</i>&nbsp;        if (sm != null)
+<i>156</i>&nbsp;            sm.checkListen(isa.getPort());
+<b class="nc"><i>157</i>&nbsp;</b>
+<b class="nc"><i>158</i>&nbsp;        try {</b>
+<b class="nc"><i>159</i>&nbsp;            begin();</b>
+<b class="nc"><i>160</i>&nbsp;            synchronized (stateLock) {</b>
+<b class="nc"><i>161</i>&nbsp;                if (localAddress != null)</b>
+<b class="nc"><i>162</i>&nbsp;                    throw new AlreadyBoundException();</b>
+<b class="nc"><i>163</i>&nbsp;                NetHooks.beforeTcpBind(fd, isa.getAddress(), isa.getPort());</b>
+<b class="nc"><i>164</i>&nbsp;                Net.bind(fd, isa.getAddress(), isa.getPort());</b>
+<b class="nc"><i>165</i>&nbsp;                Net.listen(fd, backlog &lt; 1 ? 50 : backlog);</b>
+<i>166</i>&nbsp;                localAddress = Net.localAddress(fd);
+<b class="nc"><i>167</i>&nbsp;            }</b>
+<b class="nc"><i>168</i>&nbsp;        } finally {</b>
+<b class="nc"><i>169</i>&nbsp;            end();</b>
+<i>170</i>&nbsp;        }
+<i>171</i>&nbsp;        return this;
+<i>172</i>&nbsp;    }
+<i>173</i>&nbsp;
+<b class="nc"><i>174</i>&nbsp;    @Override</b>
+<b class="nc"><i>175</i>&nbsp;    public final SocketAddress getLocalAddress() throws IOException {</b>
+<b class="nc"><i>176</i>&nbsp;        if (!isOpen())</b>
+<i>177</i>&nbsp;            throw new ClosedChannelException();
+<i>178</i>&nbsp;        return Net.getRevealedLocalAddress(localAddress);
+<i>179</i>&nbsp;    }
+<i>180</i>&nbsp;
+<i>181</i>&nbsp;    @Override
+<i>182</i>&nbsp;    public final &lt;T&gt; AsynchronousServerSocketChannel setOption(SocketOption&lt;T&gt; name,
+<i>183</i>&nbsp;                                                               T value)
+<b class="nc"><i>184</i>&nbsp;        throws IOException</b>
+<b class="nc"><i>185</i>&nbsp;    {</b>
+<b class="nc"><i>186</i>&nbsp;        if (name == null)</b>
+<b class="nc"><i>187</i>&nbsp;            throw new NullPointerException();</b>
+<i>188</i>&nbsp;        if (!supportedOptions().contains(name))
+<i>189</i>&nbsp;            throw new UnsupportedOperationException(&quot;&#39;&quot; + name + &quot;&#39; not supported&quot;);
+<b class="nc"><i>190</i>&nbsp;</b>
+<b class="nc"><i>191</i>&nbsp;        try {</b>
+<b class="nc"><i>192</i>&nbsp;            begin();</b>
+<i>193</i>&nbsp;            if (name == StandardSocketOptions.SO_REUSEADDR &amp;&amp;
+<i>194</i>&nbsp;                    Net.useExclusiveBind())
+<b class="nc"><i>195</i>&nbsp;            {</b>
+<i>196</i>&nbsp;                // SO_REUSEADDR emulated when using exclusive bind
+<b class="nc"><i>197</i>&nbsp;                isReuseAddress = (Boolean)value;</b>
+<i>198</i>&nbsp;            } else {
+<b class="nc"><i>199</i>&nbsp;                Net.setSocketOption(fd, Net.UNSPEC, name, value);</b>
+<i>200</i>&nbsp;            }
+<b class="nc"><i>201</i>&nbsp;            return this;</b>
+<i>202</i>&nbsp;        } finally {
+<i>203</i>&nbsp;            end();
+<i>204</i>&nbsp;        }
+<i>205</i>&nbsp;    }
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;    @Override
+<b class="nc"><i>208</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;)</b>
+<b class="nc"><i>209</i>&nbsp;    public final &lt;T&gt; T getOption(SocketOption&lt;T&gt; name) throws IOException {</b>
+<b class="nc"><i>210</i>&nbsp;        if (name == null)</b>
+<b class="nc"><i>211</i>&nbsp;            throw new NullPointerException();</b>
+<i>212</i>&nbsp;        if (!supportedOptions().contains(name))
+<i>213</i>&nbsp;            throw new UnsupportedOperationException(&quot;&#39;&quot; + name + &quot;&#39; not supported&quot;);
+<b class="nc"><i>214</i>&nbsp;</b>
+<b class="nc"><i>215</i>&nbsp;        try {</b>
+<b class="nc"><i>216</i>&nbsp;            begin();</b>
+<i>217</i>&nbsp;            if (name == StandardSocketOptions.SO_REUSEADDR &amp;&amp;
+<i>218</i>&nbsp;                    Net.useExclusiveBind())
+<b class="nc"><i>219</i>&nbsp;            {</b>
+<i>220</i>&nbsp;                // SO_REUSEADDR emulated when using exclusive bind
+<b class="nc"><i>221</i>&nbsp;                return (T)Boolean.valueOf(isReuseAddress);</b>
+<i>222</i>&nbsp;            }
+<b class="nc"><i>223</i>&nbsp;            return (T) Net.getSocketOption(fd, Net.UNSPEC, name);</b>
+<i>224</i>&nbsp;        } finally {
+<i>225</i>&nbsp;            end();
+<i>226</i>&nbsp;        }
+<b class="nc"><i>227</i>&nbsp;    }</b>
+<b class="nc"><i>228</i>&nbsp;</b>
+<i>229</i>&nbsp;    private static class DefaultOptionsHolder {
+<i>230</i>&nbsp;        static final Set&lt;SocketOption&lt;?&gt;&gt; defaultOptions = defaultOptions();
+<b class="nc"><i>231</i>&nbsp;</b>
+<b class="nc"><i>232</i>&nbsp;        private static Set&lt;SocketOption&lt;?&gt;&gt; defaultOptions() {</b>
+<b class="nc"><i>233</i>&nbsp;            HashSet&lt;SocketOption&lt;?&gt;&gt; set = new HashSet&lt;&gt;(2);</b>
+<b class="nc"><i>234</i>&nbsp;            set.add(StandardSocketOptions.SO_RCVBUF);</b>
+<i>235</i>&nbsp;            set.add(StandardSocketOptions.SO_REUSEADDR);
+<i>236</i>&nbsp;            if (Net.isReusePortAvailable()) {
+<i>237</i>&nbsp;                set.add(StandardSocketOptions.SO_REUSEPORT);
+<i>238</i>&nbsp;            }
+<i>239</i>&nbsp;            set.addAll(ExtendedSocketOptions.options(SOCK_STREAM));
+<b class="nc"><i>240</i>&nbsp;            return Collections.unmodifiableSet(set);</b>
+<i>241</i>&nbsp;        }
+<i>242</i>&nbsp;    }
+<i>243</i>&nbsp;
+<i>244</i>&nbsp;    @Override
+<b class="nc"><i>245</i>&nbsp;    public final Set&lt;SocketOption&lt;?&gt;&gt; supportedOptions() {</b>
+<b class="nc"><i>246</i>&nbsp;        return DefaultOptionsHolder.defaultOptions;</b>
+<b class="nc"><i>247</i>&nbsp;    }</b>
+<b class="nc"><i>248</i>&nbsp;</b>
+<b class="nc"><i>249</i>&nbsp;    @Override</b>
+<i>250</i>&nbsp;    public final String toString() {
+<b class="nc"><i>251</i>&nbsp;        StringBuilder sb = new StringBuilder();</b>
+<b class="nc"><i>252</i>&nbsp;        sb.append(this.getClass().getName());</b>
+<i>253</i>&nbsp;        sb.append(&#39;[&#39;);
+<b class="nc"><i>254</i>&nbsp;        if (!isOpen())</b>
+<i>255</i>&nbsp;            sb.append(&quot;closed&quot;);
+<i>256</i>&nbsp;        else {
+<b class="nc"><i>257</i>&nbsp;            if (localAddress == null) {</b>
+<b class="nc"><i>258</i>&nbsp;                sb.append(&quot;unbound&quot;);</b>
+<i>259</i>&nbsp;            } else {
+<i>260</i>&nbsp;                sb.append(Net.getRevealedLocalAddressAsString(localAddress));
+<i>261</i>&nbsp;            }
+<i>262</i>&nbsp;        }
+<i>263</i>&nbsp;        sb.append(&#39;]&#39;);
+<i>264</i>&nbsp;        return sb.toString();
+<i>265</i>&nbsp;    }
+<i>266</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

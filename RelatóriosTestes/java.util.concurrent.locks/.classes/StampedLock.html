@@ -1,0 +1,1786 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: StampedLock</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.concurrent.locks</a> ]
+</div>
+
+<h1>Coverage Summary for Class: StampedLock (java.util.concurrent.locks)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">StampedLock</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 37)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 458)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">StampedLock$ReadLockView</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">StampedLock$ReadWriteLockView</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">StampedLock$WNode</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">StampedLock$WriteLockView</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 55)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 476)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; */
+<i>24</i>&nbsp;
+<i>25</i>&nbsp;/*
+<i>26</i>&nbsp; *
+<i>27</i>&nbsp; *
+<i>28</i>&nbsp; *
+<i>29</i>&nbsp; *
+<i>30</i>&nbsp; *
+<i>31</i>&nbsp; * Written by Doug Lea with assistance from members of JCP JSR-166
+<i>32</i>&nbsp; * Expert Group and released to the public domain, as explained at
+<i>33</i>&nbsp; * http://creativecommons.org/publicdomain/zero/1.0/
+<i>34</i>&nbsp; */
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;package java.util.concurrent.locks;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import java.lang.invoke.MethodHandles;
+<i>39</i>&nbsp;import java.lang.invoke.VarHandle;
+<i>40</i>&nbsp;import java.util.concurrent.TimeUnit;
+<i>41</i>&nbsp;import jdk.internal.vm.annotation.ReservedStackAccess;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;/**
+<i>44</i>&nbsp; * A capability-based lock with three modes for controlling read/write
+<i>45</i>&nbsp; * access.  The state of a StampedLock consists of a version and mode.
+<i>46</i>&nbsp; * Lock acquisition methods return a stamp that represents and
+<i>47</i>&nbsp; * controls access with respect to a lock state; &quot;try&quot; versions of
+<i>48</i>&nbsp; * these methods may instead return the special value zero to
+<i>49</i>&nbsp; * represent failure to acquire access. Lock release and conversion
+<i>50</i>&nbsp; * methods require stamps as arguments, and fail if they do not match
+<i>51</i>&nbsp; * the state of the lock. The three modes are:
+<i>52</i>&nbsp; *
+<i>53</i>&nbsp; * &lt;ul&gt;
+<i>54</i>&nbsp; *
+<i>55</i>&nbsp; *  &lt;li&gt;&lt;b&gt;Writing.&lt;/b&gt; Method {@link #writeLock} possibly blocks
+<i>56</i>&nbsp; *   waiting for exclusive access, returning a stamp that can be used
+<i>57</i>&nbsp; *   in method {@link #unlockWrite} to release the lock. Untimed and
+<i>58</i>&nbsp; *   timed versions of {@code tryWriteLock} are also provided. When
+<i>59</i>&nbsp; *   the lock is held in write mode, no read locks may be obtained,
+<i>60</i>&nbsp; *   and all optimistic read validations will fail.
+<i>61</i>&nbsp; *
+<i>62</i>&nbsp; *  &lt;li&gt;&lt;b&gt;Reading.&lt;/b&gt; Method {@link #readLock} possibly blocks
+<i>63</i>&nbsp; *   waiting for non-exclusive access, returning a stamp that can be
+<i>64</i>&nbsp; *   used in method {@link #unlockRead} to release the lock. Untimed
+<i>65</i>&nbsp; *   and timed versions of {@code tryReadLock} are also provided.
+<i>66</i>&nbsp; *
+<i>67</i>&nbsp; *  &lt;li&gt;&lt;b&gt;Optimistic Reading.&lt;/b&gt; Method {@link #tryOptimisticRead}
+<i>68</i>&nbsp; *   returns a non-zero stamp only if the lock is not currently held
+<i>69</i>&nbsp; *   in write mode. Method {@link #validate} returns true if the lock
+<i>70</i>&nbsp; *   has not been acquired in write mode since obtaining a given
+<i>71</i>&nbsp; *   stamp.  This mode can be thought of as an extremely weak version
+<i>72</i>&nbsp; *   of a read-lock, that can be broken by a writer at any time.  The
+<i>73</i>&nbsp; *   use of optimistic mode for short read-only code segments often
+<i>74</i>&nbsp; *   reduces contention and improves throughput.  However, its use is
+<i>75</i>&nbsp; *   inherently fragile.  Optimistic read sections should only read
+<i>76</i>&nbsp; *   fields and hold them in local variables for later use after
+<i>77</i>&nbsp; *   validation. Fields read while in optimistic mode may be wildly
+<i>78</i>&nbsp; *   inconsistent, so usage applies only when you are familiar enough
+<i>79</i>&nbsp; *   with data representations to check consistency and/or repeatedly
+<i>80</i>&nbsp; *   invoke method {@code validate()}.  For example, such steps are
+<i>81</i>&nbsp; *   typically required when first reading an object or array
+<i>82</i>&nbsp; *   reference, and then accessing one of its fields, elements or
+<i>83</i>&nbsp; *   methods.
+<i>84</i>&nbsp; *
+<i>85</i>&nbsp; * &lt;/ul&gt;
+<i>86</i>&nbsp; *
+<i>87</i>&nbsp; * &lt;p&gt;This class also supports methods that conditionally provide
+<i>88</i>&nbsp; * conversions across the three modes. For example, method {@link
+<i>89</i>&nbsp; * #tryConvertToWriteLock} attempts to &quot;upgrade&quot; a mode, returning
+<i>90</i>&nbsp; * a valid write stamp if (1) already in writing mode (2) in reading
+<i>91</i>&nbsp; * mode and there are no other readers or (3) in optimistic mode and
+<i>92</i>&nbsp; * the lock is available. The forms of these methods are designed to
+<i>93</i>&nbsp; * help reduce some of the code bloat that otherwise occurs in
+<i>94</i>&nbsp; * retry-based designs.
+<i>95</i>&nbsp; *
+<i>96</i>&nbsp; * &lt;p&gt;StampedLocks are designed for use as internal utilities in the
+<i>97</i>&nbsp; * development of thread-safe components. Their use relies on
+<i>98</i>&nbsp; * knowledge of the internal properties of the data, objects, and
+<i>99</i>&nbsp; * methods they are protecting.  They are not reentrant, so locked
+<i>100</i>&nbsp; * bodies should not call other unknown methods that may try to
+<i>101</i>&nbsp; * re-acquire locks (although you may pass a stamp to other methods
+<i>102</i>&nbsp; * that can use or convert it).  The use of read lock modes relies on
+<i>103</i>&nbsp; * the associated code sections being side-effect-free.  Unvalidated
+<i>104</i>&nbsp; * optimistic read sections cannot call methods that are not known to
+<i>105</i>&nbsp; * tolerate potential inconsistencies.  Stamps use finite
+<i>106</i>&nbsp; * representations, and are not cryptographically secure (i.e., a
+<i>107</i>&nbsp; * valid stamp may be guessable). Stamp values may recycle after (no
+<i>108</i>&nbsp; * sooner than) one year of continuous operation. A stamp held without
+<i>109</i>&nbsp; * use or validation for longer than this period may fail to validate
+<i>110</i>&nbsp; * correctly.  StampedLocks are serializable, but always deserialize
+<i>111</i>&nbsp; * into initial unlocked state, so they are not useful for remote
+<i>112</i>&nbsp; * locking.
+<i>113</i>&nbsp; *
+<i>114</i>&nbsp; * &lt;p&gt;Like {@link java.util.concurrent.Semaphore Semaphore}, but unlike most
+<i>115</i>&nbsp; * {@link Lock} implementations, StampedLocks have no notion of ownership.
+<i>116</i>&nbsp; * Locks acquired in one thread can be released or converted in another.
+<i>117</i>&nbsp; *
+<i>118</i>&nbsp; * &lt;p&gt;The scheduling policy of StampedLock does not consistently
+<i>119</i>&nbsp; * prefer readers over writers or vice versa.  All &quot;try&quot; methods are
+<i>120</i>&nbsp; * best-effort and do not necessarily conform to any scheduling or
+<i>121</i>&nbsp; * fairness policy. A zero return from any &quot;try&quot; method for acquiring
+<i>122</i>&nbsp; * or converting locks does not carry any information about the state
+<i>123</i>&nbsp; * of the lock; a subsequent invocation may succeed.
+<i>124</i>&nbsp; *
+<i>125</i>&nbsp; * &lt;p&gt;Because it supports coordinated usage across multiple lock
+<i>126</i>&nbsp; * modes, this class does not directly implement the {@link Lock} or
+<i>127</i>&nbsp; * {@link ReadWriteLock} interfaces. However, a StampedLock may be
+<i>128</i>&nbsp; * viewed {@link #asReadLock()}, {@link #asWriteLock()}, or {@link
+<i>129</i>&nbsp; * #asReadWriteLock()} in applications requiring only the associated
+<i>130</i>&nbsp; * set of functionality.
+<i>131</i>&nbsp; *
+<i>132</i>&nbsp; * &lt;p&gt;&lt;b&gt;Sample Usage.&lt;/b&gt; The following illustrates some usage idioms
+<i>133</i>&nbsp; * in a class that maintains simple two-dimensional points. The sample
+<i>134</i>&nbsp; * code illustrates some try/catch conventions even though they are
+<i>135</i>&nbsp; * not strictly needed here because no exceptions can occur in their
+<i>136</i>&nbsp; * bodies.
+<i>137</i>&nbsp; *
+<i>138</i>&nbsp; * &lt;pre&gt; {@code
+<i>139</i>&nbsp; * class Point {
+<i>140</i>&nbsp; *   private double x, y;
+<i>141</i>&nbsp; *   private final StampedLock sl = new StampedLock();
+<i>142</i>&nbsp; *
+<i>143</i>&nbsp; *   // an exclusively locked method
+<i>144</i>&nbsp; *   void move(double deltaX, double deltaY) {
+<i>145</i>&nbsp; *     long stamp = sl.writeLock();
+<i>146</i>&nbsp; *     try {
+<i>147</i>&nbsp; *       x += deltaX;
+<i>148</i>&nbsp; *       y += deltaY;
+<i>149</i>&nbsp; *     } finally {
+<i>150</i>&nbsp; *       sl.unlockWrite(stamp);
+<i>151</i>&nbsp; *     }
+<i>152</i>&nbsp; *   }
+<i>153</i>&nbsp; *
+<i>154</i>&nbsp; *   // a read-only method
+<i>155</i>&nbsp; *   // upgrade from optimistic read to read lock
+<i>156</i>&nbsp; *   double distanceFromOrigin() {
+<i>157</i>&nbsp; *     long stamp = sl.tryOptimisticRead();
+<i>158</i>&nbsp; *     try {
+<i>159</i>&nbsp; *       retryHoldingLock: for (;; stamp = sl.readLock()) {
+<i>160</i>&nbsp; *         if (stamp == 0L)
+<i>161</i>&nbsp; *           continue retryHoldingLock;
+<i>162</i>&nbsp; *         // possibly racy reads
+<i>163</i>&nbsp; *         double currentX = x;
+<i>164</i>&nbsp; *         double currentY = y;
+<i>165</i>&nbsp; *         if (!sl.validate(stamp))
+<i>166</i>&nbsp; *           continue retryHoldingLock;
+<i>167</i>&nbsp; *         return Math.hypot(currentX, currentY);
+<i>168</i>&nbsp; *       }
+<i>169</i>&nbsp; *     } finally {
+<i>170</i>&nbsp; *       if (StampedLock.isReadLockStamp(stamp))
+<i>171</i>&nbsp; *         sl.unlockRead(stamp);
+<i>172</i>&nbsp; *     }
+<i>173</i>&nbsp; *   }
+<i>174</i>&nbsp; *
+<i>175</i>&nbsp; *   // upgrade from optimistic read to write lock
+<i>176</i>&nbsp; *   void moveIfAtOrigin(double newX, double newY) {
+<i>177</i>&nbsp; *     long stamp = sl.tryOptimisticRead();
+<i>178</i>&nbsp; *     try {
+<i>179</i>&nbsp; *       retryHoldingLock: for (;; stamp = sl.writeLock()) {
+<i>180</i>&nbsp; *         if (stamp == 0L)
+<i>181</i>&nbsp; *           continue retryHoldingLock;
+<i>182</i>&nbsp; *         // possibly racy reads
+<i>183</i>&nbsp; *         double currentX = x;
+<i>184</i>&nbsp; *         double currentY = y;
+<i>185</i>&nbsp; *         if (!sl.validate(stamp))
+<i>186</i>&nbsp; *           continue retryHoldingLock;
+<i>187</i>&nbsp; *         if (currentX != 0.0 || currentY != 0.0)
+<i>188</i>&nbsp; *           break;
+<i>189</i>&nbsp; *         stamp = sl.tryConvertToWriteLock(stamp);
+<i>190</i>&nbsp; *         if (stamp == 0L)
+<i>191</i>&nbsp; *           continue retryHoldingLock;
+<i>192</i>&nbsp; *         // exclusive access
+<i>193</i>&nbsp; *         x = newX;
+<i>194</i>&nbsp; *         y = newY;
+<i>195</i>&nbsp; *         return;
+<i>196</i>&nbsp; *       }
+<i>197</i>&nbsp; *     } finally {
+<i>198</i>&nbsp; *       if (StampedLock.isWriteLockStamp(stamp))
+<i>199</i>&nbsp; *         sl.unlockWrite(stamp);
+<i>200</i>&nbsp; *     }
+<i>201</i>&nbsp; *   }
+<i>202</i>&nbsp; *
+<i>203</i>&nbsp; *   // Upgrade read lock to write lock
+<i>204</i>&nbsp; *   void moveIfAtOrigin(double newX, double newY) {
+<i>205</i>&nbsp; *     long stamp = sl.readLock();
+<i>206</i>&nbsp; *     try {
+<i>207</i>&nbsp; *       while (x == 0.0 &amp;&amp; y == 0.0) {
+<i>208</i>&nbsp; *         long ws = sl.tryConvertToWriteLock(stamp);
+<i>209</i>&nbsp; *         if (ws != 0L) {
+<i>210</i>&nbsp; *           stamp = ws;
+<i>211</i>&nbsp; *           x = newX;
+<i>212</i>&nbsp; *           y = newY;
+<i>213</i>&nbsp; *           break;
+<i>214</i>&nbsp; *         }
+<i>215</i>&nbsp; *         else {
+<i>216</i>&nbsp; *           sl.unlockRead(stamp);
+<i>217</i>&nbsp; *           stamp = sl.writeLock();
+<i>218</i>&nbsp; *         }
+<i>219</i>&nbsp; *       }
+<i>220</i>&nbsp; *     } finally {
+<i>221</i>&nbsp; *       sl.unlock(stamp);
+<i>222</i>&nbsp; *     }
+<i>223</i>&nbsp; *   }
+<i>224</i>&nbsp; * }}&lt;/pre&gt;
+<i>225</i>&nbsp; *
+<i>226</i>&nbsp; * @since 1.8
+<i>227</i>&nbsp; * @author Doug Lea
+<i>228</i>&nbsp; */
+<i>229</i>&nbsp;public class StampedLock implements java.io.Serializable {
+<i>230</i>&nbsp;    /*
+<i>231</i>&nbsp;     * Algorithmic notes:
+<i>232</i>&nbsp;     *
+<i>233</i>&nbsp;     * The design employs elements of Sequence locks
+<i>234</i>&nbsp;     * (as used in linux kernels; see Lameter&#39;s
+<i>235</i>&nbsp;     * http://www.lameter.com/gelato2005.pdf
+<i>236</i>&nbsp;     * and elsewhere; see
+<i>237</i>&nbsp;     * Boehm&#39;s http://www.hpl.hp.com/techreports/2012/HPL-2012-68.html)
+<i>238</i>&nbsp;     * and Ordered RW locks (see Shirako et al
+<i>239</i>&nbsp;     * http://dl.acm.org/citation.cfm?id=2312015)
+<i>240</i>&nbsp;     *
+<i>241</i>&nbsp;     * Conceptually, the primary state of the lock includes a sequence
+<i>242</i>&nbsp;     * number that is odd when write-locked and even otherwise.
+<i>243</i>&nbsp;     * However, this is offset by a reader count that is non-zero when
+<i>244</i>&nbsp;     * read-locked.  The read count is ignored when validating
+<i>245</i>&nbsp;     * &quot;optimistic&quot; seqlock-reader-style stamps.  Because we must use
+<i>246</i>&nbsp;     * a small finite number of bits (currently 7) for readers, a
+<i>247</i>&nbsp;     * supplementary reader overflow word is used when the number of
+<i>248</i>&nbsp;     * readers exceeds the count field. We do this by treating the max
+<i>249</i>&nbsp;     * reader count value (RBITS) as a spinlock protecting overflow
+<i>250</i>&nbsp;     * updates.
+<i>251</i>&nbsp;     *
+<i>252</i>&nbsp;     * Waiters use a modified form of CLH lock used in
+<i>253</i>&nbsp;     * AbstractQueuedSynchronizer (see its internal documentation for
+<i>254</i>&nbsp;     * a fuller account), where each node is tagged (field mode) as
+<i>255</i>&nbsp;     * either a reader or writer. Sets of waiting readers are grouped
+<i>256</i>&nbsp;     * (linked) under a common node (field cowait) so act as a single
+<i>257</i>&nbsp;     * node with respect to most CLH mechanics.  By virtue of the
+<i>258</i>&nbsp;     * queue structure, wait nodes need not actually carry sequence
+<i>259</i>&nbsp;     * numbers; we know each is greater than its predecessor.  This
+<i>260</i>&nbsp;     * simplifies the scheduling policy to a mainly-FIFO scheme that
+<i>261</i>&nbsp;     * incorporates elements of Phase-Fair locks (see Brandenburg &amp;
+<i>262</i>&nbsp;     * Anderson, especially http://www.cs.unc.edu/~bbb/diss/).  In
+<i>263</i>&nbsp;     * particular, we use the phase-fair anti-barging rule: If an
+<i>264</i>&nbsp;     * incoming reader arrives while read lock is held but there is a
+<i>265</i>&nbsp;     * queued writer, this incoming reader is queued.  (This rule is
+<i>266</i>&nbsp;     * responsible for some of the complexity of method acquireRead,
+<i>267</i>&nbsp;     * but without it, the lock becomes highly unfair.) Method release
+<i>268</i>&nbsp;     * does not (and sometimes cannot) itself wake up cowaiters. This
+<i>269</i>&nbsp;     * is done by the primary thread, but helped by any other threads
+<i>270</i>&nbsp;     * with nothing better to do in methods acquireRead and
+<i>271</i>&nbsp;     * acquireWrite.
+<b class="nc"><i>272</i>&nbsp;     *</b>
+<i>273</i>&nbsp;     * These rules apply to threads actually queued. All tryLock forms
+<i>274</i>&nbsp;     * opportunistically try to acquire locks regardless of preference
+<b class="nc"><i>275</i>&nbsp;     * rules, and so may &quot;barge&quot; their way in.  Randomized spinning is</b>
+<i>276</i>&nbsp;     * used in the acquire methods to reduce (increasingly expensive)
+<i>277</i>&nbsp;     * context switching while also avoiding sustained memory
+<b class="nc"><i>278</i>&nbsp;     * thrashing among many threads.  We limit spins to the head of</b>
+<i>279</i>&nbsp;     * queue. If, upon wakening, a thread fails to obtain lock, and is
+<i>280</i>&nbsp;     * still (or becomes) the first waiting thread (which indicates
+<b class="nc"><i>281</i>&nbsp;     * that some other thread barged and obtained lock), it escalates</b>
+<i>282</i>&nbsp;     * spins (up to MAX_HEAD_SPINS) to reduce the likelihood of
+<i>283</i>&nbsp;     * continually losing to barging threads.
+<i>284</i>&nbsp;     *
+<i>285</i>&nbsp;     * Nearly all of these mechanics are carried out in methods
+<i>286</i>&nbsp;     * acquireWrite and acquireRead, that, as typical of such code,
+<i>287</i>&nbsp;     * sprawl out because actions and retries rely on consistent sets
+<i>288</i>&nbsp;     * of locally cached reads.
+<i>289</i>&nbsp;     *
+<i>290</i>&nbsp;     * As noted in Boehm&#39;s paper (above), sequence validation (mainly
+<i>291</i>&nbsp;     * method validate()) requires stricter ordering rules than apply
+<i>292</i>&nbsp;     * to normal volatile reads (of &quot;state&quot;).  To force orderings of
+<i>293</i>&nbsp;     * reads before a validation and the validation itself in those
+<i>294</i>&nbsp;     * cases where this is not already forced, we use acquireFence.
+<i>295</i>&nbsp;     * Unlike in that paper, we allow writers to use plain writes.
+<i>296</i>&nbsp;     * One would not expect reorderings of such writes with the lock
+<i>297</i>&nbsp;     * acquisition CAS because there is a &quot;control dependency&quot;, but it
+<i>298</i>&nbsp;     * is theoretically possible, so we additionally add a
+<i>299</i>&nbsp;     * storeStoreFence after lock acquisition CAS.
+<i>300</i>&nbsp;     *
+<i>301</i>&nbsp;     * ----------------------------------------------------------------
+<i>302</i>&nbsp;     * Here&#39;s an informal proof that plain reads by _successful_
+<i>303</i>&nbsp;     * readers see plain writes from preceding but not following
+<i>304</i>&nbsp;     * writers (following Boehm and the C++ standard [atomics.fences]):
+<i>305</i>&nbsp;     *
+<i>306</i>&nbsp;     * Because of the total synchronization order of accesses to
+<i>307</i>&nbsp;     * volatile long state containing the sequence number, writers and
+<i>308</i>&nbsp;     * _successful_ readers can be globally sequenced.
+<i>309</i>&nbsp;     *
+<i>310</i>&nbsp;     * int x, y;
+<i>311</i>&nbsp;     *
+<i>312</i>&nbsp;     * Writer 1:
+<i>313</i>&nbsp;     * inc sequence (odd - &quot;locked&quot;)
+<i>314</i>&nbsp;     * storeStoreFence();
+<i>315</i>&nbsp;     * x = 1; y = 2;
+<i>316</i>&nbsp;     * inc sequence (even - &quot;unlocked&quot;)
+<i>317</i>&nbsp;     *
+<i>318</i>&nbsp;     * Successful Reader:
+<b class="nc"><i>319</i>&nbsp;     * read sequence (even)</b>
+<i>320</i>&nbsp;     * // must see writes from Writer 1 but not Writer 2
+<i>321</i>&nbsp;     * r1 = x; r2 = y;
+<i>322</i>&nbsp;     * acquireFence();
+<i>323</i>&nbsp;     * read sequence (even - validated unchanged)
+<i>324</i>&nbsp;     * // use r1 and r2
+<i>325</i>&nbsp;     *
+<i>326</i>&nbsp;     * Writer 2:
+<i>327</i>&nbsp;     * inc sequence (odd - &quot;locked&quot;)
+<i>328</i>&nbsp;     * storeStoreFence();
+<i>329</i>&nbsp;     * x = 3; y = 4;
+<i>330</i>&nbsp;     * inc sequence (even - &quot;unlocked&quot;)
+<i>331</i>&nbsp;     *
+<i>332</i>&nbsp;     * Visibility of writer 1&#39;s stores is normal - reader&#39;s initial
+<i>333</i>&nbsp;     * read of state synchronizes with writer 1&#39;s final write to state.
+<i>334</i>&nbsp;     * Lack of visibility of writer 2&#39;s plain writes is less obvious.
+<i>335</i>&nbsp;     * If reader&#39;s read of x or y saw writer 2&#39;s write, then (assuming
+<i>336</i>&nbsp;     * semantics of C++ fences) the storeStoreFence would &quot;synchronize&quot;
+<i>337</i>&nbsp;     * with reader&#39;s acquireFence and reader&#39;s validation read must see
+<i>338</i>&nbsp;     * writer 2&#39;s initial write to state and so validation must fail.
+<i>339</i>&nbsp;     * But making this &quot;proof&quot; formal and rigorous is an open problem!
+<b class="nc"><i>340</i>&nbsp;     * ----------------------------------------------------------------</b>
+<b class="nc"><i>341</i>&nbsp;     *</b>
+<i>342</i>&nbsp;     * The memory layout keeps lock state and queue pointers together
+<i>343</i>&nbsp;     * (normally on the same cache line). This usually works well for
+<i>344</i>&nbsp;     * read-mostly loads. In most other cases, the natural tendency of
+<i>345</i>&nbsp;     * adaptive-spin CLH locks to reduce memory contention lessens
+<i>346</i>&nbsp;     * motivation to further spread out contended locations, but might
+<i>347</i>&nbsp;     * be subject to future improvements.
+<i>348</i>&nbsp;     */
+<i>349</i>&nbsp;
+<i>350</i>&nbsp;    private static final long serialVersionUID = -6001602636862214147L;
+<i>351</i>&nbsp;
+<b class="nc"><i>352</i>&nbsp;    /** Number of processors, for spin control */</b>
+<b class="nc"><i>353</i>&nbsp;    private static final int NCPU = Runtime.getRuntime().availableProcessors();</b>
+<b class="nc"><i>354</i>&nbsp;</b>
+<i>355</i>&nbsp;    /** Maximum number of retries before enqueuing on acquisition; at least 1 */
+<i>356</i>&nbsp;    private static final int SPINS = (NCPU &gt; 1) ? 1 &lt;&lt; 6 : 1;
+<i>357</i>&nbsp;
+<i>358</i>&nbsp;    /** Maximum number of tries before blocking at head on acquisition */
+<i>359</i>&nbsp;    private static final int HEAD_SPINS = (NCPU &gt; 1) ? 1 &lt;&lt; 10 : 1;
+<i>360</i>&nbsp;
+<i>361</i>&nbsp;    /** Maximum number of retries before re-blocking */
+<i>362</i>&nbsp;    private static final int MAX_HEAD_SPINS = (NCPU &gt; 1) ? 1 &lt;&lt; 16 : 1;
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;    /** The period for yielding when waiting for overflow spinlock */
+<b class="nc"><i>365</i>&nbsp;    private static final int OVERFLOW_YIELD_RATE = 7; // must be power 2 - 1</b>
+<b class="nc"><i>366</i>&nbsp;</b>
+<i>367</i>&nbsp;    /** The number of bits to use for reader count before overflowing */
+<i>368</i>&nbsp;    private static final int LG_READERS = 7;
+<i>369</i>&nbsp;
+<i>370</i>&nbsp;    // Values for lock state and stamp operations
+<i>371</i>&nbsp;    private static final long RUNIT = 1L;
+<i>372</i>&nbsp;    private static final long WBIT  = 1L &lt;&lt; LG_READERS;
+<i>373</i>&nbsp;    private static final long RBITS = WBIT - 1L;
+<i>374</i>&nbsp;    private static final long RFULL = RBITS - 1L;
+<i>375</i>&nbsp;    private static final long ABITS = RBITS | WBIT;
+<i>376</i>&nbsp;    private static final long SBITS = ~RBITS; // note overlap with ABITS
+<i>377</i>&nbsp;
+<i>378</i>&nbsp;    /*
+<i>379</i>&nbsp;     * 3 stamp modes can be distinguished by examining (m = stamp &amp; ABITS):
+<i>380</i>&nbsp;     * write mode: m == WBIT
+<i>381</i>&nbsp;     * optimistic read mode: m == 0L (even when read lock is held)
+<i>382</i>&nbsp;     * read mode: m &gt; 0L &amp;&amp; m &lt;= RFULL (the stamp is a copy of state, but the
+<i>383</i>&nbsp;     * read hold count in the stamp is unused other than to determine mode)
+<i>384</i>&nbsp;     *
+<b class="nc"><i>385</i>&nbsp;     * This differs slightly from the encoding of state:</b>
+<b class="nc"><i>386</i>&nbsp;     * (state &amp; ABITS) == 0L indicates the lock is currently unlocked.</b>
+<i>387</i>&nbsp;     * (state &amp; ABITS) == RBITS is a special transient value
+<b class="nc"><i>388</i>&nbsp;     * indicating spin-locked to manipulate reader bits overflow.</b>
+<b class="nc"><i>389</i>&nbsp;     */</b>
+<b class="nc"><i>390</i>&nbsp;</b>
+<b class="nc"><i>391</i>&nbsp;    /** Initial value for lock state; avoids failure value zero. */</b>
+<b class="nc"><i>392</i>&nbsp;    private static final long ORIGIN = WBIT &lt;&lt; 1;</b>
+<b class="nc"><i>393</i>&nbsp;</b>
+<b class="nc"><i>394</i>&nbsp;    // Special value from cancelled acquire methods so caller can throw IE</b>
+<b class="nc"><i>395</i>&nbsp;    private static final long INTERRUPTED = 1L;</b>
+<i>396</i>&nbsp;
+<b class="nc"><i>397</i>&nbsp;    // Values for node status; order matters</b>
+<i>398</i>&nbsp;    private static final int WAITING   = -1;
+<i>399</i>&nbsp;    private static final int CANCELLED =  1;
+<i>400</i>&nbsp;
+<i>401</i>&nbsp;    // Modes for nodes (int not boolean to allow arithmetic)
+<i>402</i>&nbsp;    private static final int RMODE = 0;
+<i>403</i>&nbsp;    private static final int WMODE = 1;
+<i>404</i>&nbsp;
+<i>405</i>&nbsp;    /** Wait nodes */
+<i>406</i>&nbsp;    static final class WNode {
+<i>407</i>&nbsp;        volatile WNode prev;
+<i>408</i>&nbsp;        volatile WNode next;
+<i>409</i>&nbsp;        volatile WNode cowait;    // list of linked readers
+<i>410</i>&nbsp;        volatile Thread thread;   // non-null while possibly parked
+<i>411</i>&nbsp;        volatile int status;      // 0, WAITING, or CANCELLED
+<b class="nc"><i>412</i>&nbsp;        final int mode;           // RMODE or WMODE</b>
+<b class="nc"><i>413</i>&nbsp;        WNode(int m, WNode p) { mode = m; prev = p; }</b>
+<b class="nc"><i>414</i>&nbsp;    }</b>
+<b class="nc"><i>415</i>&nbsp;</b>
+<i>416</i>&nbsp;    /** Head of CLH queue */
+<i>417</i>&nbsp;    private transient volatile WNode whead;
+<i>418</i>&nbsp;    /** Tail (last) of CLH queue */
+<i>419</i>&nbsp;    private transient volatile WNode wtail;
+<i>420</i>&nbsp;
+<i>421</i>&nbsp;    // views
+<i>422</i>&nbsp;    transient ReadLockView readLockView;
+<i>423</i>&nbsp;    transient WriteLockView writeLockView;
+<i>424</i>&nbsp;    transient ReadWriteLockView readWriteLockView;
+<b class="nc"><i>425</i>&nbsp;</b>
+<b class="nc"><i>426</i>&nbsp;    /** Lock sequence/state */</b>
+<b class="nc"><i>427</i>&nbsp;    private transient volatile long state;</b>
+<b class="nc"><i>428</i>&nbsp;    /** extra reader count when state read count saturated */</b>
+<i>429</i>&nbsp;    private transient int readerOverflow;
+<i>430</i>&nbsp;
+<i>431</i>&nbsp;    /**
+<i>432</i>&nbsp;     * Creates a new lock, initially in unlocked state.
+<i>433</i>&nbsp;     */
+<i>434</i>&nbsp;    public StampedLock() {
+<i>435</i>&nbsp;        state = ORIGIN;
+<i>436</i>&nbsp;    }
+<i>437</i>&nbsp;
+<i>438</i>&nbsp;    private boolean casState(long expectedValue, long newValue) {
+<i>439</i>&nbsp;        return STATE.compareAndSet(this, expectedValue, newValue);
+<b class="nc"><i>440</i>&nbsp;    }</b>
+<b class="nc"><i>441</i>&nbsp;</b>
+<b class="nc"><i>442</i>&nbsp;    private long tryWriteLock(long s) {</b>
+<b class="nc"><i>443</i>&nbsp;        // assert (s &amp; ABITS) == 0L;</b>
+<b class="nc"><i>444</i>&nbsp;        long next;</b>
+<i>445</i>&nbsp;        if (casState(s, next = s | WBIT)) {
+<b class="nc"><i>446</i>&nbsp;            VarHandle.storeStoreFence();</b>
+<b class="nc"><i>447</i>&nbsp;            return next;</b>
+<b class="nc"><i>448</i>&nbsp;        }</b>
+<i>449</i>&nbsp;        return 0L;
+<i>450</i>&nbsp;    }
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;    /**
+<i>453</i>&nbsp;     * Exclusively acquires the lock, blocking if necessary
+<i>454</i>&nbsp;     * until available.
+<i>455</i>&nbsp;     *
+<i>456</i>&nbsp;     * @return a write stamp that can be used to unlock or convert mode
+<i>457</i>&nbsp;     */
+<i>458</i>&nbsp;    @ReservedStackAccess
+<i>459</i>&nbsp;    public long writeLock() {
+<i>460</i>&nbsp;        long next;
+<i>461</i>&nbsp;        return ((next = tryWriteLock()) != 0L) ? next : acquireWrite(false, 0L);
+<i>462</i>&nbsp;    }
+<i>463</i>&nbsp;
+<i>464</i>&nbsp;    /**
+<i>465</i>&nbsp;     * Exclusively acquires the lock if it is immediately available.
+<i>466</i>&nbsp;     *
+<b class="nc"><i>467</i>&nbsp;     * @return a write stamp that can be used to unlock or convert mode,</b>
+<b class="nc"><i>468</i>&nbsp;     * or zero if the lock is not available</b>
+<b class="nc"><i>469</i>&nbsp;     */</b>
+<b class="nc"><i>470</i>&nbsp;    @ReservedStackAccess</b>
+<b class="nc"><i>471</i>&nbsp;    public long tryWriteLock() {</b>
+<b class="nc"><i>472</i>&nbsp;        long s;</b>
+<i>473</i>&nbsp;        return (((s = state) &amp; ABITS) == 0L) ? tryWriteLock(s) : 0L;
+<b class="nc"><i>474</i>&nbsp;    }</b>
+<b class="nc"><i>475</i>&nbsp;</b>
+<i>476</i>&nbsp;    /**
+<b class="nc"><i>477</i>&nbsp;     * Exclusively acquires the lock if it is available within the</b>
+<b class="nc"><i>478</i>&nbsp;     * given time and the current thread has not been interrupted.</b>
+<b class="nc"><i>479</i>&nbsp;     * Behavior under timeout and interruption matches that specified</b>
+<b class="nc"><i>480</i>&nbsp;     * for method {@link Lock#tryLock(long,TimeUnit)}.</b>
+<b class="nc"><i>481</i>&nbsp;     *</b>
+<b class="nc"><i>482</i>&nbsp;     * @param time the maximum time to wait for the lock</b>
+<i>483</i>&nbsp;     * @param unit the time unit of the {@code time} argument
+<b class="nc"><i>484</i>&nbsp;     * @return a write stamp that can be used to unlock or convert mode,</b>
+<i>485</i>&nbsp;     * or zero if the lock is not available
+<i>486</i>&nbsp;     * @throws InterruptedException if the current thread is interrupted
+<i>487</i>&nbsp;     * before acquiring the lock
+<i>488</i>&nbsp;     */
+<i>489</i>&nbsp;    public long tryWriteLock(long time, TimeUnit unit)
+<i>490</i>&nbsp;        throws InterruptedException {
+<i>491</i>&nbsp;        long nanos = unit.toNanos(time);
+<i>492</i>&nbsp;        if (!Thread.interrupted()) {
+<i>493</i>&nbsp;            long next, deadline;
+<i>494</i>&nbsp;            if ((next = tryWriteLock()) != 0L)
+<i>495</i>&nbsp;                return next;
+<i>496</i>&nbsp;            if (nanos &lt;= 0L)
+<i>497</i>&nbsp;                return 0L;
+<i>498</i>&nbsp;            if ((deadline = System.nanoTime() + nanos) == 0L)
+<b class="nc"><i>499</i>&nbsp;                deadline = 1L;</b>
+<b class="nc"><i>500</i>&nbsp;            if ((next = acquireWrite(true, deadline)) != INTERRUPTED)</b>
+<b class="nc"><i>501</i>&nbsp;                return next;</b>
+<b class="nc"><i>502</i>&nbsp;        }</b>
+<i>503</i>&nbsp;        throw new InterruptedException();
+<i>504</i>&nbsp;    }
+<i>505</i>&nbsp;
+<i>506</i>&nbsp;    /**
+<i>507</i>&nbsp;     * Exclusively acquires the lock, blocking if necessary
+<i>508</i>&nbsp;     * until available or the current thread is interrupted.
+<i>509</i>&nbsp;     * Behavior under interruption matches that specified
+<i>510</i>&nbsp;     * for method {@link Lock#lockInterruptibly()}.
+<i>511</i>&nbsp;     *
+<i>512</i>&nbsp;     * @return a write stamp that can be used to unlock or convert mode
+<b class="nc"><i>513</i>&nbsp;     * @throws InterruptedException if the current thread is interrupted</b>
+<i>514</i>&nbsp;     * before acquiring the lock
+<i>515</i>&nbsp;     */
+<i>516</i>&nbsp;    @ReservedStackAccess
+<i>517</i>&nbsp;    public long writeLockInterruptibly() throws InterruptedException {
+<i>518</i>&nbsp;        long next;
+<i>519</i>&nbsp;        if (!Thread.interrupted() &amp;&amp;
+<i>520</i>&nbsp;            (next = acquireWrite(true, 0L)) != INTERRUPTED)
+<i>521</i>&nbsp;            return next;
+<i>522</i>&nbsp;        throw new InterruptedException();
+<i>523</i>&nbsp;    }
+<i>524</i>&nbsp;
+<i>525</i>&nbsp;    /**
+<i>526</i>&nbsp;     * Non-exclusively acquires the lock, blocking if necessary
+<i>527</i>&nbsp;     * until available.
+<i>528</i>&nbsp;     *
+<b class="nc"><i>529</i>&nbsp;     * @return a read stamp that can be used to unlock or convert mode</b>
+<b class="nc"><i>530</i>&nbsp;     */</b>
+<i>531</i>&nbsp;    @ReservedStackAccess
+<i>532</i>&nbsp;    public long readLock() {
+<i>533</i>&nbsp;        long s, next;
+<i>534</i>&nbsp;        // bypass acquireRead on common uncontended case
+<i>535</i>&nbsp;        return (whead == wtail
+<i>536</i>&nbsp;                &amp;&amp; ((s = state) &amp; ABITS) &lt; RFULL
+<i>537</i>&nbsp;                &amp;&amp; casState(s, next = s + RUNIT))
+<i>538</i>&nbsp;            ? next
+<i>539</i>&nbsp;            : acquireRead(false, 0L);
+<i>540</i>&nbsp;    }
+<i>541</i>&nbsp;
+<i>542</i>&nbsp;    /**
+<b class="nc"><i>543</i>&nbsp;     * Non-exclusively acquires the lock if it is immediately available.</b>
+<b class="nc"><i>544</i>&nbsp;     *</b>
+<b class="nc"><i>545</i>&nbsp;     * @return a read stamp that can be used to unlock or convert mode,</b>
+<b class="nc"><i>546</i>&nbsp;     * or zero if the lock is not available</b>
+<b class="nc"><i>547</i>&nbsp;     */</b>
+<i>548</i>&nbsp;    @ReservedStackAccess
+<i>549</i>&nbsp;    public long tryReadLock() {
+<i>550</i>&nbsp;        long s, m, next;
+<i>551</i>&nbsp;        while ((m = (s = state) &amp; ABITS) != WBIT) {
+<i>552</i>&nbsp;            if (m &lt; RFULL) {
+<i>553</i>&nbsp;                if (casState(s, next = s + RUNIT))
+<i>554</i>&nbsp;                    return next;
+<i>555</i>&nbsp;            }
+<i>556</i>&nbsp;            else if ((next = tryIncReaderOverflow(s)) != 0L)
+<i>557</i>&nbsp;                return next;
+<i>558</i>&nbsp;        }
+<i>559</i>&nbsp;        return 0L;
+<i>560</i>&nbsp;    }
+<b class="nc"><i>561</i>&nbsp;</b>
+<i>562</i>&nbsp;    /**
+<b class="nc"><i>563</i>&nbsp;     * Non-exclusively acquires the lock if it is available within the</b>
+<b class="nc"><i>564</i>&nbsp;     * given time and the current thread has not been interrupted.</b>
+<b class="nc"><i>565</i>&nbsp;     * Behavior under timeout and interruption matches that specified</b>
+<b class="nc"><i>566</i>&nbsp;     * for method {@link Lock#tryLock(long,TimeUnit)}.</b>
+<b class="nc"><i>567</i>&nbsp;     *</b>
+<i>568</i>&nbsp;     * @param time the maximum time to wait for the lock
+<i>569</i>&nbsp;     * @param unit the time unit of the {@code time} argument
+<i>570</i>&nbsp;     * @return a read stamp that can be used to unlock or convert mode,
+<b class="nc"><i>571</i>&nbsp;     * or zero if the lock is not available</b>
+<b class="nc"><i>572</i>&nbsp;     * @throws InterruptedException if the current thread is interrupted</b>
+<i>573</i>&nbsp;     * before acquiring the lock
+<i>574</i>&nbsp;     */
+<i>575</i>&nbsp;    @ReservedStackAccess
+<i>576</i>&nbsp;    public long tryReadLock(long time, TimeUnit unit)
+<i>577</i>&nbsp;        throws InterruptedException {
+<i>578</i>&nbsp;        long s, m, next, deadline;
+<i>579</i>&nbsp;        long nanos = unit.toNanos(time);
+<i>580</i>&nbsp;        if (!Thread.interrupted()) {
+<i>581</i>&nbsp;            if ((m = (s = state) &amp; ABITS) != WBIT) {
+<i>582</i>&nbsp;                if (m &lt; RFULL) {
+<i>583</i>&nbsp;                    if (casState(s, next = s + RUNIT))
+<i>584</i>&nbsp;                        return next;
+<b class="nc"><i>585</i>&nbsp;                }</b>
+<b class="nc"><i>586</i>&nbsp;                else if ((next = tryIncReaderOverflow(s)) != 0L)</b>
+<b class="nc"><i>587</i>&nbsp;                    return next;</b>
+<b class="nc"><i>588</i>&nbsp;            }</b>
+<b class="nc"><i>589</i>&nbsp;            if (nanos &lt;= 0L)</b>
+<b class="nc"><i>590</i>&nbsp;                return 0L;</b>
+<b class="nc"><i>591</i>&nbsp;            if ((deadline = System.nanoTime() + nanos) == 0L)</b>
+<b class="nc"><i>592</i>&nbsp;                deadline = 1L;</b>
+<b class="nc"><i>593</i>&nbsp;            if ((next = acquireRead(true, deadline)) != INTERRUPTED)</b>
+<b class="nc"><i>594</i>&nbsp;                return next;</b>
+<i>595</i>&nbsp;        }
+<i>596</i>&nbsp;        throw new InterruptedException();
+<b class="nc"><i>597</i>&nbsp;    }</b>
+<b class="nc"><i>598</i>&nbsp;</b>
+<b class="nc"><i>599</i>&nbsp;    /**</b>
+<b class="nc"><i>600</i>&nbsp;     * Non-exclusively acquires the lock, blocking if necessary</b>
+<b class="nc"><i>601</i>&nbsp;     * until available or the current thread is interrupted.</b>
+<b class="nc"><i>602</i>&nbsp;     * Behavior under interruption matches that specified</b>
+<i>603</i>&nbsp;     * for method {@link Lock#lockInterruptibly()}.
+<i>604</i>&nbsp;     *
+<i>605</i>&nbsp;     * @return a read stamp that can be used to unlock or convert mode
+<b class="nc"><i>606</i>&nbsp;     * @throws InterruptedException if the current thread is interrupted</b>
+<i>607</i>&nbsp;     * before acquiring the lock
+<i>608</i>&nbsp;     */
+<b class="nc"><i>609</i>&nbsp;    @ReservedStackAccess</b>
+<i>610</i>&nbsp;    public long readLockInterruptibly() throws InterruptedException {
+<i>611</i>&nbsp;        long s, next;
+<i>612</i>&nbsp;        if (!Thread.interrupted()
+<i>613</i>&nbsp;            // bypass acquireRead on common uncontended case
+<i>614</i>&nbsp;            &amp;&amp; ((whead == wtail
+<i>615</i>&nbsp;                 &amp;&amp; ((s = state) &amp; ABITS) &lt; RFULL
+<i>616</i>&nbsp;                 &amp;&amp; casState(s, next = s + RUNIT))
+<i>617</i>&nbsp;                ||
+<i>618</i>&nbsp;                (next = acquireRead(true, 0L)) != INTERRUPTED))
+<i>619</i>&nbsp;            return next;
+<i>620</i>&nbsp;        throw new InterruptedException();
+<i>621</i>&nbsp;    }
+<i>622</i>&nbsp;
+<i>623</i>&nbsp;    /**
+<i>624</i>&nbsp;     * Returns a stamp that can later be validated, or zero
+<b class="nc"><i>625</i>&nbsp;     * if exclusively locked.</b>
+<b class="nc"><i>626</i>&nbsp;     *</b>
+<b class="nc"><i>627</i>&nbsp;     * @return a valid optimistic read stamp, or zero if exclusively locked</b>
+<b class="nc"><i>628</i>&nbsp;     */</b>
+<b class="nc"><i>629</i>&nbsp;    public long tryOptimisticRead() {</b>
+<b class="nc"><i>630</i>&nbsp;        long s;</b>
+<b class="nc"><i>631</i>&nbsp;        return (((s = state) &amp; WBIT) == 0L) ? (s &amp; SBITS) : 0L;</b>
+<i>632</i>&nbsp;    }
+<b class="nc"><i>633</i>&nbsp;</b>
+<b class="nc"><i>634</i>&nbsp;    /**</b>
+<b class="nc"><i>635</i>&nbsp;     * Returns true if the lock has not been exclusively acquired</b>
+<b class="nc"><i>636</i>&nbsp;     * since issuance of the given stamp. Always returns false if the</b>
+<i>637</i>&nbsp;     * stamp is zero. Always returns true if the stamp represents a
+<b class="nc"><i>638</i>&nbsp;     * currently held lock. Invoking this method with a value not</b>
+<b class="nc"><i>639</i>&nbsp;     * obtained from {@link #tryOptimisticRead} or a locking method</b>
+<i>640</i>&nbsp;     * for this lock has no defined effect or result.
+<b class="nc"><i>641</i>&nbsp;     *</b>
+<i>642</i>&nbsp;     * @param stamp a stamp
+<i>643</i>&nbsp;     * @return {@code true} if the lock has not been exclusively acquired
+<i>644</i>&nbsp;     * since issuance of the given stamp; else false
+<i>645</i>&nbsp;     */
+<b class="nc"><i>646</i>&nbsp;    public boolean validate(long stamp) {</b>
+<i>647</i>&nbsp;        VarHandle.acquireFence();
+<i>648</i>&nbsp;        return (stamp &amp; SBITS) == (state &amp; SBITS);
+<i>649</i>&nbsp;    }
+<i>650</i>&nbsp;
+<i>651</i>&nbsp;    /**
+<i>652</i>&nbsp;     * Returns an unlocked state, incrementing the version and
+<i>653</i>&nbsp;     * avoiding special failure value 0L.
+<i>654</i>&nbsp;     *
+<i>655</i>&nbsp;     * @param s a write-locked state (or stamp)
+<i>656</i>&nbsp;     */
+<i>657</i>&nbsp;    private static long unlockWriteState(long s) {
+<i>658</i>&nbsp;        return ((s += WBIT) == 0L) ? ORIGIN : s;
+<i>659</i>&nbsp;    }
+<i>660</i>&nbsp;
+<b class="nc"><i>661</i>&nbsp;    private long unlockWriteInternal(long s) {</b>
+<b class="nc"><i>662</i>&nbsp;        long next; WNode h;</b>
+<b class="nc"><i>663</i>&nbsp;        STATE.setVolatile(this, next = unlockWriteState(s));</b>
+<b class="nc"><i>664</i>&nbsp;        if ((h = whead) != null &amp;&amp; h.status != 0)</b>
+<b class="nc"><i>665</i>&nbsp;            release(h);</b>
+<b class="nc"><i>666</i>&nbsp;        return next;</b>
+<b class="nc"><i>667</i>&nbsp;    }</b>
+<b class="nc"><i>668</i>&nbsp;</b>
+<i>669</i>&nbsp;    /**
+<b class="nc"><i>670</i>&nbsp;     * If the lock state matches the given stamp, releases the</b>
+<b class="nc"><i>671</i>&nbsp;     * exclusive lock.</b>
+<i>672</i>&nbsp;     *
+<b class="nc"><i>673</i>&nbsp;     * @param stamp a stamp returned by a write-lock operation</b>
+<b class="nc"><i>674</i>&nbsp;     * @throws IllegalMonitorStateException if the stamp does</b>
+<b class="nc"><i>675</i>&nbsp;     * not match the current state of this lock</b>
+<b class="nc"><i>676</i>&nbsp;     */</b>
+<b class="nc"><i>677</i>&nbsp;    @ReservedStackAccess</b>
+<b class="nc"><i>678</i>&nbsp;    public void unlockWrite(long stamp) {</b>
+<b class="nc"><i>679</i>&nbsp;        if (state != stamp || (stamp &amp; WBIT) == 0L)</b>
+<i>680</i>&nbsp;            throw new IllegalMonitorStateException();
+<b class="nc"><i>681</i>&nbsp;        unlockWriteInternal(stamp);</b>
+<b class="nc"><i>682</i>&nbsp;    }</b>
+<i>683</i>&nbsp;
+<i>684</i>&nbsp;    /**
+<i>685</i>&nbsp;     * If the lock state matches the given stamp, releases the
+<b class="nc"><i>686</i>&nbsp;     * non-exclusive lock.</b>
+<i>687</i>&nbsp;     *
+<i>688</i>&nbsp;     * @param stamp a stamp returned by a read-lock operation
+<i>689</i>&nbsp;     * @throws IllegalMonitorStateException if the stamp does
+<i>690</i>&nbsp;     * not match the current state of this lock
+<i>691</i>&nbsp;     */
+<i>692</i>&nbsp;    @ReservedStackAccess
+<i>693</i>&nbsp;    public void unlockRead(long stamp) {
+<i>694</i>&nbsp;        long s, m; WNode h;
+<i>695</i>&nbsp;        while (((s = state) &amp; SBITS) == (stamp &amp; SBITS)
+<i>696</i>&nbsp;               &amp;&amp; (stamp &amp; RBITS) &gt; 0L
+<i>697</i>&nbsp;               &amp;&amp; ((m = s &amp; RBITS) &gt; 0L)) {
+<i>698</i>&nbsp;            if (m &lt; RFULL) {
+<i>699</i>&nbsp;                if (casState(s, s - RUNIT)) {
+<b class="nc"><i>700</i>&nbsp;                    if (m == RUNIT &amp;&amp; (h = whead) != null &amp;&amp; h.status != 0)</b>
+<b class="nc"><i>701</i>&nbsp;                        release(h);</b>
+<i>702</i>&nbsp;                    return;
+<b class="nc"><i>703</i>&nbsp;                }</b>
+<b class="nc"><i>704</i>&nbsp;            }</b>
+<b class="nc"><i>705</i>&nbsp;            else if (tryDecReaderOverflow(s) != 0L)</b>
+<b class="nc"><i>706</i>&nbsp;                return;</b>
+<b class="nc"><i>707</i>&nbsp;        }</b>
+<b class="nc"><i>708</i>&nbsp;        throw new IllegalMonitorStateException();</b>
+<i>709</i>&nbsp;    }
+<b class="nc"><i>710</i>&nbsp;</b>
+<b class="nc"><i>711</i>&nbsp;    /**</b>
+<b class="nc"><i>712</i>&nbsp;     * If the lock state matches the given stamp, releases the</b>
+<b class="nc"><i>713</i>&nbsp;     * corresponding mode of the lock.</b>
+<b class="nc"><i>714</i>&nbsp;     *</b>
+<b class="nc"><i>715</i>&nbsp;     * @param stamp a stamp returned by a lock operation</b>
+<b class="nc"><i>716</i>&nbsp;     * @throws IllegalMonitorStateException if the stamp does</b>
+<i>717</i>&nbsp;     * not match the current state of this lock
+<b class="nc"><i>718</i>&nbsp;     */</b>
+<b class="nc"><i>719</i>&nbsp;    @ReservedStackAccess</b>
+<b class="nc"><i>720</i>&nbsp;    public void unlock(long stamp) {</b>
+<b class="nc"><i>721</i>&nbsp;        if ((stamp &amp; WBIT) != 0L)</b>
+<b class="nc"><i>722</i>&nbsp;            unlockWrite(stamp);</b>
+<b class="nc"><i>723</i>&nbsp;        else</b>
+<b class="nc"><i>724</i>&nbsp;            unlockRead(stamp);</b>
+<i>725</i>&nbsp;    }
+<i>726</i>&nbsp;
+<b class="nc"><i>727</i>&nbsp;    /**</b>
+<b class="nc"><i>728</i>&nbsp;     * If the lock state matches the given stamp, atomically performs one of</b>
+<i>729</i>&nbsp;     * the following actions. If the stamp represents holding a write
+<b class="nc"><i>730</i>&nbsp;     * lock, returns it.  Or, if a read lock, if the write lock is</b>
+<i>731</i>&nbsp;     * available, releases the read lock and returns a write stamp.
+<i>732</i>&nbsp;     * Or, if an optimistic read, returns a write stamp only if
+<i>733</i>&nbsp;     * immediately available. This method returns zero in all other
+<i>734</i>&nbsp;     * cases.
+<i>735</i>&nbsp;     *
+<i>736</i>&nbsp;     * @param stamp a stamp
+<i>737</i>&nbsp;     * @return a valid write stamp, or zero on failure
+<i>738</i>&nbsp;     */
+<i>739</i>&nbsp;    public long tryConvertToWriteLock(long stamp) {
+<i>740</i>&nbsp;        long a = stamp &amp; ABITS, m, s, next;
+<i>741</i>&nbsp;        while (((s = state) &amp; SBITS) == (stamp &amp; SBITS)) {
+<b class="nc"><i>742</i>&nbsp;            if ((m = s &amp; ABITS) == 0L) {</b>
+<b class="nc"><i>743</i>&nbsp;                if (a != 0L)</b>
+<b class="nc"><i>744</i>&nbsp;                    break;</b>
+<b class="nc"><i>745</i>&nbsp;                if ((next = tryWriteLock(s)) != 0L)</b>
+<b class="nc"><i>746</i>&nbsp;                    return next;</b>
+<i>747</i>&nbsp;            }
+<b class="nc"><i>748</i>&nbsp;            else if (m == WBIT) {</b>
+<i>749</i>&nbsp;                if (a != m)
+<i>750</i>&nbsp;                    break;
+<i>751</i>&nbsp;                return stamp;
+<i>752</i>&nbsp;            }
+<i>753</i>&nbsp;            else if (m == RUNIT &amp;&amp; a != 0L) {
+<i>754</i>&nbsp;                if (casState(s, next = s - RUNIT + WBIT)) {
+<i>755</i>&nbsp;                    VarHandle.storeStoreFence();
+<i>756</i>&nbsp;                    return next;
+<i>757</i>&nbsp;                }
+<i>758</i>&nbsp;            }
+<i>759</i>&nbsp;            else
+<b class="nc"><i>760</i>&nbsp;                break;</b>
+<b class="nc"><i>761</i>&nbsp;        }</b>
+<b class="nc"><i>762</i>&nbsp;        return 0L;</b>
+<b class="nc"><i>763</i>&nbsp;    }</b>
+<b class="nc"><i>764</i>&nbsp;</b>
+<b class="nc"><i>765</i>&nbsp;    /**</b>
+<i>766</i>&nbsp;     * If the lock state matches the given stamp, atomically performs one of
+<i>767</i>&nbsp;     * the following actions. If the stamp represents holding a write
+<b class="nc"><i>768</i>&nbsp;     * lock, releases it and obtains a read lock.  Or, if a read lock,</b>
+<b class="nc"><i>769</i>&nbsp;     * returns it. Or, if an optimistic read, acquires a read lock and</b>
+<i>770</i>&nbsp;     * returns a read stamp only if immediately available. This method
+<b class="nc"><i>771</i>&nbsp;     * returns zero in all other cases.</b>
+<i>772</i>&nbsp;     *
+<i>773</i>&nbsp;     * @param stamp a stamp
+<i>774</i>&nbsp;     * @return a valid read stamp, or zero on failure
+<i>775</i>&nbsp;     */
+<i>776</i>&nbsp;    public long tryConvertToReadLock(long stamp) {
+<i>777</i>&nbsp;        long a, s, next; WNode h;
+<i>778</i>&nbsp;        while (((s = state) &amp; SBITS) == (stamp &amp; SBITS)) {
+<i>779</i>&nbsp;            if ((a = stamp &amp; ABITS) &gt;= WBIT) {
+<i>780</i>&nbsp;                // write stamp
+<i>781</i>&nbsp;                if (s != stamp)
+<b class="nc"><i>782</i>&nbsp;                    break;</b>
+<b class="nc"><i>783</i>&nbsp;                STATE.setVolatile(this, next = unlockWriteState(s) + RUNIT);</b>
+<b class="nc"><i>784</i>&nbsp;                if ((h = whead) != null &amp;&amp; h.status != 0)</b>
+<i>785</i>&nbsp;                    release(h);
+<i>786</i>&nbsp;                return next;
+<i>787</i>&nbsp;            }
+<i>788</i>&nbsp;            else if (a == 0L) {
+<i>789</i>&nbsp;                // optimistic read stamp
+<i>790</i>&nbsp;                if ((s &amp; ABITS) &lt; RFULL) {
+<i>791</i>&nbsp;                    if (casState(s, next = s + RUNIT))
+<i>792</i>&nbsp;                        return next;
+<b class="nc"><i>793</i>&nbsp;                }</b>
+<i>794</i>&nbsp;                else if ((next = tryIncReaderOverflow(s)) != 0L)
+<i>795</i>&nbsp;                    return next;
+<i>796</i>&nbsp;            }
+<i>797</i>&nbsp;            else {
+<i>798</i>&nbsp;                // already a read stamp
+<i>799</i>&nbsp;                if ((s &amp; ABITS) == 0L)
+<i>800</i>&nbsp;                    break;
+<i>801</i>&nbsp;                return stamp;
+<b class="nc"><i>802</i>&nbsp;            }</b>
+<i>803</i>&nbsp;        }
+<i>804</i>&nbsp;        return 0L;
+<i>805</i>&nbsp;    }
+<i>806</i>&nbsp;
+<i>807</i>&nbsp;    /**
+<i>808</i>&nbsp;     * If the lock state matches the given stamp then, atomically, if the stamp
+<i>809</i>&nbsp;     * represents holding a lock, releases it and returns an
+<i>810</i>&nbsp;     * observation stamp.  Or, if an optimistic read, returns it if
+<i>811</i>&nbsp;     * validated. This method returns zero in all other cases, and so
+<b class="nc"><i>812</i>&nbsp;     * may be useful as a form of &quot;tryUnlock&quot;.</b>
+<i>813</i>&nbsp;     *
+<i>814</i>&nbsp;     * @param stamp a stamp
+<i>815</i>&nbsp;     * @return a valid optimistic read stamp, or zero on failure
+<i>816</i>&nbsp;     */
+<i>817</i>&nbsp;    public long tryConvertToOptimisticRead(long stamp) {
+<i>818</i>&nbsp;        long a, m, s, next; WNode h;
+<i>819</i>&nbsp;        VarHandle.acquireFence();
+<i>820</i>&nbsp;        while (((s = state) &amp; SBITS) == (stamp &amp; SBITS)) {
+<i>821</i>&nbsp;            if ((a = stamp &amp; ABITS) &gt;= WBIT) {
+<i>822</i>&nbsp;                // write stamp
+<i>823</i>&nbsp;                if (s != stamp)
+<i>824</i>&nbsp;                    break;
+<b class="nc"><i>825</i>&nbsp;                return unlockWriteInternal(s);</b>
+<b class="nc"><i>826</i>&nbsp;            }</b>
+<i>827</i>&nbsp;            else if (a == 0L)
+<i>828</i>&nbsp;                // already an optimistic read stamp
+<b class="nc"><i>829</i>&nbsp;                return stamp;</b>
+<i>830</i>&nbsp;            else if ((m = s &amp; ABITS) == 0L) // invalid read stamp
+<i>831</i>&nbsp;                break;
+<i>832</i>&nbsp;            else if (m &lt; RFULL) {
+<i>833</i>&nbsp;                if (casState(s, next = s - RUNIT)) {
+<i>834</i>&nbsp;                    if (m == RUNIT &amp;&amp; (h = whead) != null &amp;&amp; h.status != 0)
+<i>835</i>&nbsp;                        release(h);
+<i>836</i>&nbsp;                    return next &amp; SBITS;
+<i>837</i>&nbsp;                }
+<i>838</i>&nbsp;            }
+<i>839</i>&nbsp;            else if ((next = tryDecReaderOverflow(s)) != 0L)
+<i>840</i>&nbsp;                return next &amp; SBITS;
+<i>841</i>&nbsp;        }
+<i>842</i>&nbsp;        return 0L;
+<i>843</i>&nbsp;    }
+<i>844</i>&nbsp;
+<i>845</i>&nbsp;    /**
+<b class="nc"><i>846</i>&nbsp;     * Releases the write lock if it is held, without requiring a</b>
+<i>847</i>&nbsp;     * stamp value. This method may be useful for recovery after
+<i>848</i>&nbsp;     * errors.
+<i>849</i>&nbsp;     *
+<i>850</i>&nbsp;     * @return {@code true} if the lock was held, else false
+<i>851</i>&nbsp;     */
+<i>852</i>&nbsp;    @ReservedStackAccess
+<i>853</i>&nbsp;    public boolean tryUnlockWrite() {
+<i>854</i>&nbsp;        long s;
+<i>855</i>&nbsp;        if (((s = state) &amp; WBIT) != 0L) {
+<i>856</i>&nbsp;            unlockWriteInternal(s);
+<i>857</i>&nbsp;            return true;
+<i>858</i>&nbsp;        }
+<i>859</i>&nbsp;        return false;
+<i>860</i>&nbsp;    }
+<i>861</i>&nbsp;
+<b class="nc"><i>862</i>&nbsp;    /**</b>
+<i>863</i>&nbsp;     * Releases one hold of the read lock if it is held, without
+<i>864</i>&nbsp;     * requiring a stamp value. This method may be useful for recovery
+<i>865</i>&nbsp;     * after errors.
+<i>866</i>&nbsp;     *
+<i>867</i>&nbsp;     * @return {@code true} if the read lock was held, else false
+<i>868</i>&nbsp;     */
+<i>869</i>&nbsp;    @ReservedStackAccess
+<i>870</i>&nbsp;    public boolean tryUnlockRead() {
+<i>871</i>&nbsp;        long s, m; WNode h;
+<i>872</i>&nbsp;        while ((m = (s = state) &amp; ABITS) != 0L &amp;&amp; m &lt; WBIT) {
+<i>873</i>&nbsp;            if (m &lt; RFULL) {
+<i>874</i>&nbsp;                if (casState(s, s - RUNIT)) {
+<i>875</i>&nbsp;                    if (m == RUNIT &amp;&amp; (h = whead) != null &amp;&amp; h.status != 0)
+<b class="nc"><i>876</i>&nbsp;                        release(h);</b>
+<i>877</i>&nbsp;                    return true;
+<i>878</i>&nbsp;                }
+<i>879</i>&nbsp;            }
+<i>880</i>&nbsp;            else if (tryDecReaderOverflow(s) != 0L)
+<i>881</i>&nbsp;                return true;
+<b class="nc"><i>882</i>&nbsp;        }</b>
+<b class="nc"><i>883</i>&nbsp;        return false;</b>
+<i>884</i>&nbsp;    }
+<b class="nc"><i>885</i>&nbsp;</b>
+<i>886</i>&nbsp;    // status monitoring methods
+<b class="nc"><i>887</i>&nbsp;</b>
+<i>888</i>&nbsp;    /**
+<i>889</i>&nbsp;     * Returns combined state-held and overflow read count for given
+<b class="nc"><i>890</i>&nbsp;     * state s.</b>
+<i>891</i>&nbsp;     */
+<b class="nc"><i>892</i>&nbsp;    private int getReadLockCount(long s) {</b>
+<i>893</i>&nbsp;        long readers;
+<b class="nc"><i>894</i>&nbsp;        if ((readers = s &amp; RBITS) &gt;= RFULL)</b>
+<i>895</i>&nbsp;            readers = RFULL + readerOverflow;
+<i>896</i>&nbsp;        return (int) readers;
+<i>897</i>&nbsp;    }
+<b class="nc"><i>898</i>&nbsp;</b>
+<b class="nc"><i>899</i>&nbsp;    /**</b>
+<i>900</i>&nbsp;     * Returns {@code true} if the lock is currently held exclusively.
+<b class="nc"><i>901</i>&nbsp;     *</b>
+<i>902</i>&nbsp;     * @return {@code true} if the lock is currently held exclusively
+<b class="nc"><i>903</i>&nbsp;     */</b>
+<i>904</i>&nbsp;    public boolean isWriteLocked() {
+<i>905</i>&nbsp;        return (state &amp; WBIT) != 0L;
+<b class="nc"><i>906</i>&nbsp;    }</b>
+<i>907</i>&nbsp;
+<b class="nc"><i>908</i>&nbsp;    /**</b>
+<i>909</i>&nbsp;     * Returns {@code true} if the lock is currently held non-exclusively.
+<b class="nc"><i>910</i>&nbsp;     *</b>
+<i>911</i>&nbsp;     * @return {@code true} if the lock is currently held non-exclusively
+<i>912</i>&nbsp;     */
+<i>913</i>&nbsp;    public boolean isReadLocked() {
+<b class="nc"><i>914</i>&nbsp;        return (state &amp; RBITS) != 0L;</b>
+<b class="nc"><i>915</i>&nbsp;    }</b>
+<b class="nc"><i>916</i>&nbsp;</b>
+<i>917</i>&nbsp;    /**
+<i>918</i>&nbsp;     * Tells whether a stamp represents holding a lock exclusively.
+<i>919</i>&nbsp;     * This method may be useful in conjunction with
+<i>920</i>&nbsp;     * {@link #tryConvertToWriteLock}, for example: &lt;pre&gt; {@code
+<i>921</i>&nbsp;     * long stamp = sl.tryOptimisticRead();
+<i>922</i>&nbsp;     * try {
+<i>923</i>&nbsp;     *   ...
+<b class="nc"><i>924</i>&nbsp;     *   stamp = sl.tryConvertToWriteLock(stamp);</b>
+<b class="nc"><i>925</i>&nbsp;     *   ...</b>
+<b class="nc"><i>926</i>&nbsp;     * } finally {</b>
+<b class="nc"><i>927</i>&nbsp;     *   if (StampedLock.isWriteLockStamp(stamp))</b>
+<b class="nc"><i>928</i>&nbsp;     *     sl.unlockWrite(stamp);</b>
+<i>929</i>&nbsp;     * }}&lt;/pre&gt;
+<i>930</i>&nbsp;     *
+<i>931</i>&nbsp;     * @param stamp a stamp returned by a previous StampedLock operation
+<i>932</i>&nbsp;     * @return {@code true} if the stamp was returned by a successful
+<i>933</i>&nbsp;     *   write-lock operation
+<b class="nc"><i>934</i>&nbsp;     * @since 10</b>
+<b class="nc"><i>935</i>&nbsp;     */</b>
+<b class="nc"><i>936</i>&nbsp;    public static boolean isWriteLockStamp(long stamp) {</b>
+<b class="nc"><i>937</i>&nbsp;        return (stamp &amp; ABITS) == WBIT;</b>
+<b class="nc"><i>938</i>&nbsp;    }</b>
+<b class="nc"><i>939</i>&nbsp;</b>
+<i>940</i>&nbsp;    /**
+<i>941</i>&nbsp;     * Tells whether a stamp represents holding a lock non-exclusively.
+<i>942</i>&nbsp;     * This method may be useful in conjunction with
+<b class="nc"><i>943</i>&nbsp;     * {@link #tryConvertToReadLock}, for example: &lt;pre&gt; {@code</b>
+<b class="nc"><i>944</i>&nbsp;     * long stamp = sl.tryOptimisticRead();</b>
+<b class="nc"><i>945</i>&nbsp;     * try {</b>
+<i>946</i>&nbsp;     *   ...
+<i>947</i>&nbsp;     *   stamp = sl.tryConvertToReadLock(stamp);
+<i>948</i>&nbsp;     *   ...
+<i>949</i>&nbsp;     * } finally {
+<b class="nc"><i>950</i>&nbsp;     *   if (StampedLock.isReadLockStamp(stamp))</b>
+<b class="nc"><i>951</i>&nbsp;     *     sl.unlockRead(stamp);</b>
+<i>952</i>&nbsp;     * }}&lt;/pre&gt;
+<i>953</i>&nbsp;     *
+<i>954</i>&nbsp;     * @param stamp a stamp returned by a previous StampedLock operation
+<i>955</i>&nbsp;     * @return {@code true} if the stamp was returned by a successful
+<i>956</i>&nbsp;     *   read-lock operation
+<i>957</i>&nbsp;     * @since 10
+<i>958</i>&nbsp;     */
+<i>959</i>&nbsp;    public static boolean isReadLockStamp(long stamp) {
+<i>960</i>&nbsp;        return (stamp &amp; RBITS) != 0L;
+<i>961</i>&nbsp;    }
+<i>962</i>&nbsp;
+<i>963</i>&nbsp;    /**
+<i>964</i>&nbsp;     * Tells whether a stamp represents holding a lock.
+<i>965</i>&nbsp;     * This method may be useful in conjunction with
+<b class="nc"><i>966</i>&nbsp;     * {@link #tryConvertToReadLock} and {@link #tryConvertToWriteLock},</b>
+<b class="nc"><i>967</i>&nbsp;     * for example: &lt;pre&gt; {@code</b>
+<b class="nc"><i>968</i>&nbsp;     * long stamp = sl.tryOptimisticRead();</b>
+<b class="nc"><i>969</i>&nbsp;     * try {</b>
+<b class="nc"><i>970</i>&nbsp;     *   ...</b>
+<i>971</i>&nbsp;     *   stamp = sl.tryConvertToReadLock(stamp);
+<i>972</i>&nbsp;     *   ...
+<b class="nc"><i>973</i>&nbsp;     *   stamp = sl.tryConvertToWriteLock(stamp);</b>
+<i>974</i>&nbsp;     *   ...
+<b class="nc"><i>975</i>&nbsp;     * } finally {</b>
+<b class="nc"><i>976</i>&nbsp;     *   if (StampedLock.isLockStamp(stamp))</b>
+<i>977</i>&nbsp;     *     sl.unlock(stamp);
+<i>978</i>&nbsp;     * }}&lt;/pre&gt;
+<i>979</i>&nbsp;     *
+<i>980</i>&nbsp;     * @param stamp a stamp returned by a previous StampedLock operation
+<i>981</i>&nbsp;     * @return {@code true} if the stamp was returned by a successful
+<i>982</i>&nbsp;     *   read-lock or write-lock operation
+<i>983</i>&nbsp;     * @since 10
+<i>984</i>&nbsp;     */
+<i>985</i>&nbsp;    public static boolean isLockStamp(long stamp) {
+<i>986</i>&nbsp;        return (stamp &amp; ABITS) != 0L;
+<b class="nc"><i>987</i>&nbsp;    }</b>
+<b class="nc"><i>988</i>&nbsp;</b>
+<i>989</i>&nbsp;    /**
+<b class="nc"><i>990</i>&nbsp;     * Tells whether a stamp represents a successful optimistic read.</b>
+<b class="nc"><i>991</i>&nbsp;     *</b>
+<b class="nc"><i>992</i>&nbsp;     * @param stamp a stamp returned by a previous StampedLock operation</b>
+<i>993</i>&nbsp;     * @return {@code true} if the stamp was returned by a successful
+<i>994</i>&nbsp;     *   optimistic read operation, that is, a non-zero return from
+<b class="nc"><i>995</i>&nbsp;     *   {@link #tryOptimisticRead()} or</b>
+<b class="nc"><i>996</i>&nbsp;     *   {@link #tryConvertToOptimisticRead(long)}</b>
+<b class="nc"><i>997</i>&nbsp;     * @since 10</b>
+<i>998</i>&nbsp;     */
+<i>999</i>&nbsp;    public static boolean isOptimisticReadStamp(long stamp) {
+<b class="nc"><i>1000</i>&nbsp;        return (stamp &amp; ABITS) == 0L &amp;&amp; stamp != 0L;</b>
+<i>1001</i>&nbsp;    }
+<b class="nc"><i>1002</i>&nbsp;</b>
+<b class="nc"><i>1003</i>&nbsp;    /**</b>
+<i>1004</i>&nbsp;     * Queries the number of read locks held for this lock. This
+<i>1005</i>&nbsp;     * method is designed for use in monitoring system state, not for
+<i>1006</i>&nbsp;     * synchronization control.
+<i>1007</i>&nbsp;     * @return the number of read locks held
+<i>1008</i>&nbsp;     */
+<i>1009</i>&nbsp;    public int getReadLockCount() {
+<i>1010</i>&nbsp;        return getReadLockCount(state);
+<i>1011</i>&nbsp;    }
+<i>1012</i>&nbsp;
+<i>1013</i>&nbsp;    /**
+<b class="nc"><i>1014</i>&nbsp;     * Returns a string identifying this lock, as well as its lock</b>
+<i>1015</i>&nbsp;     * state.  The state, in brackets, includes the String {@code
+<b class="nc"><i>1016</i>&nbsp;     * &quot;Unlocked&quot;} or the String {@code &quot;Write-locked&quot;} or the String</b>
+<b class="nc"><i>1017</i>&nbsp;     * {@code &quot;Read-locks:&quot;} followed by the current number of</b>
+<b class="nc"><i>1018</i>&nbsp;     * read-locks held.</b>
+<b class="nc"><i>1019</i>&nbsp;     *</b>
+<b class="nc"><i>1020</i>&nbsp;     * @return a string identifying this lock, as well as its lock state</b>
+<i>1021</i>&nbsp;     */
+<b class="nc"><i>1022</i>&nbsp;    public String toString() {</b>
+<b class="nc"><i>1023</i>&nbsp;        long s = state;</b>
+<i>1024</i>&nbsp;        return super.toString() +
+<i>1025</i>&nbsp;            ((s &amp; ABITS) == 0L ? &quot;[Unlocked]&quot; :
+<i>1026</i>&nbsp;             (s &amp; WBIT) != 0L ? &quot;[Write-locked]&quot; :
+<i>1027</i>&nbsp;             &quot;[Read-locks:&quot; + getReadLockCount(s) + &quot;]&quot;);
+<i>1028</i>&nbsp;    }
+<i>1029</i>&nbsp;
+<i>1030</i>&nbsp;    // views
+<i>1031</i>&nbsp;
+<i>1032</i>&nbsp;    /**
+<i>1033</i>&nbsp;     * Returns a plain {@link Lock} view of this StampedLock in which
+<i>1034</i>&nbsp;     * the {@link Lock#lock} method is mapped to {@link #readLock},
+<i>1035</i>&nbsp;     * and similarly for other methods. The returned Lock does not
+<i>1036</i>&nbsp;     * support a {@link Condition}; method {@link Lock#newCondition()}
+<b class="nc"><i>1037</i>&nbsp;     * throws {@code UnsupportedOperationException}.</b>
+<b class="nc"><i>1038</i>&nbsp;     *</b>
+<i>1039</i>&nbsp;     * @return the lock
+<b class="nc"><i>1040</i>&nbsp;     */</b>
+<b class="nc"><i>1041</i>&nbsp;    public Lock asReadLock() {</b>
+<b class="nc"><i>1042</i>&nbsp;        ReadLockView v;</b>
+<i>1043</i>&nbsp;        if ((v = readLockView) != null) return v;
+<b class="nc"><i>1044</i>&nbsp;        return readLockView = new ReadLockView();</b>
+<b class="nc"><i>1045</i>&nbsp;    }</b>
+<b class="nc"><i>1046</i>&nbsp;</b>
+<b class="nc"><i>1047</i>&nbsp;    /**</b>
+<b class="nc"><i>1048</i>&nbsp;     * Returns a plain {@link Lock} view of this StampedLock in which</b>
+<i>1049</i>&nbsp;     * the {@link Lock#lock} method is mapped to {@link #writeLock},
+<b class="nc"><i>1050</i>&nbsp;     * and similarly for other methods. The returned Lock does not</b>
+<b class="nc"><i>1051</i>&nbsp;     * support a {@link Condition}; method {@link Lock#newCondition()}</b>
+<b class="nc"><i>1052</i>&nbsp;     * throws {@code UnsupportedOperationException}.</b>
+<b class="nc"><i>1053</i>&nbsp;     *</b>
+<b class="nc"><i>1054</i>&nbsp;     * @return the lock</b>
+<b class="nc"><i>1055</i>&nbsp;     */</b>
+<b class="nc"><i>1056</i>&nbsp;    public Lock asWriteLock() {</b>
+<b class="nc"><i>1057</i>&nbsp;        WriteLockView v;</b>
+<b class="nc"><i>1058</i>&nbsp;        if ((v = writeLockView) != null) return v;</b>
+<b class="nc"><i>1059</i>&nbsp;        return writeLockView = new WriteLockView();</b>
+<b class="nc"><i>1060</i>&nbsp;    }</b>
+<b class="nc"><i>1061</i>&nbsp;</b>
+<i>1062</i>&nbsp;    /**
+<b class="nc"><i>1063</i>&nbsp;     * Returns a {@link ReadWriteLock} view of this StampedLock in</b>
+<i>1064</i>&nbsp;     * which the {@link ReadWriteLock#readLock()} method is mapped to
+<b class="nc"><i>1065</i>&nbsp;     * {@link #asReadLock()}, and {@link ReadWriteLock#writeLock()} to</b>
+<i>1066</i>&nbsp;     * {@link #asWriteLock()}.
+<b class="nc"><i>1067</i>&nbsp;     *</b>
+<b class="nc"><i>1068</i>&nbsp;     * @return the lock</b>
+<b class="nc"><i>1069</i>&nbsp;     */</b>
+<b class="nc"><i>1070</i>&nbsp;    public ReadWriteLock asReadWriteLock() {</b>
+<b class="nc"><i>1071</i>&nbsp;        ReadWriteLockView v;</b>
+<b class="nc"><i>1072</i>&nbsp;        if ((v = readWriteLockView) != null) return v;</b>
+<i>1073</i>&nbsp;        return readWriteLockView = new ReadWriteLockView();
+<b class="nc"><i>1074</i>&nbsp;    }</b>
+<b class="nc"><i>1075</i>&nbsp;</b>
+<i>1076</i>&nbsp;    // view classes
+<b class="nc"><i>1077</i>&nbsp;</b>
+<b class="nc"><i>1078</i>&nbsp;    final class ReadLockView implements Lock {</b>
+<b class="nc"><i>1079</i>&nbsp;        public void lock() { readLock(); }</b>
+<i>1080</i>&nbsp;        public void lockInterruptibly() throws InterruptedException {
+<i>1081</i>&nbsp;            readLockInterruptibly();
+<b class="nc"><i>1082</i>&nbsp;        }</b>
+<i>1083</i>&nbsp;        public boolean tryLock() { return tryReadLock() != 0L; }
+<b class="nc"><i>1084</i>&nbsp;        public boolean tryLock(long time, TimeUnit unit)</b>
+<b class="nc"><i>1085</i>&nbsp;            throws InterruptedException {</b>
+<i>1086</i>&nbsp;            return tryReadLock(time, unit) != 0L;
+<b class="nc"><i>1087</i>&nbsp;        }</b>
+<i>1088</i>&nbsp;        public void unlock() { unstampedUnlockRead(); }
+<b class="nc"><i>1089</i>&nbsp;        public Condition newCondition() {</b>
+<b class="nc"><i>1090</i>&nbsp;            throw new UnsupportedOperationException();</b>
+<i>1091</i>&nbsp;        }
+<b class="nc"><i>1092</i>&nbsp;    }</b>
+<i>1093</i>&nbsp;
+<i>1094</i>&nbsp;    final class WriteLockView implements Lock {
+<b class="nc"><i>1095</i>&nbsp;        public void lock() { writeLock(); }</b>
+<b class="nc"><i>1096</i>&nbsp;        public void lockInterruptibly() throws InterruptedException {</b>
+<b class="nc"><i>1097</i>&nbsp;            writeLockInterruptibly();</b>
+<b class="nc"><i>1098</i>&nbsp;        }</b>
+<i>1099</i>&nbsp;        public boolean tryLock() { return tryWriteLock() != 0L; }
+<b class="nc"><i>1100</i>&nbsp;        public boolean tryLock(long time, TimeUnit unit)</b>
+<b class="nc"><i>1101</i>&nbsp;            throws InterruptedException {</b>
+<b class="nc"><i>1102</i>&nbsp;            return tryWriteLock(time, unit) != 0L;</b>
+<b class="nc"><i>1103</i>&nbsp;        }</b>
+<b class="nc"><i>1104</i>&nbsp;        public void unlock() { unstampedUnlockWrite(); }</b>
+<b class="nc"><i>1105</i>&nbsp;        public Condition newCondition() {</b>
+<i>1106</i>&nbsp;            throw new UnsupportedOperationException();
+<i>1107</i>&nbsp;        }
+<i>1108</i>&nbsp;    }
+<i>1109</i>&nbsp;
+<b class="nc"><i>1110</i>&nbsp;    final class ReadWriteLockView implements ReadWriteLock {</b>
+<b class="nc"><i>1111</i>&nbsp;        public Lock readLock() { return asReadLock(); }</b>
+<b class="nc"><i>1112</i>&nbsp;        public Lock writeLock() { return asWriteLock(); }</b>
+<b class="nc"><i>1113</i>&nbsp;    }</b>
+<b class="nc"><i>1114</i>&nbsp;</b>
+<b class="nc"><i>1115</i>&nbsp;    // Unlock methods without stamp argument checks for view classes.</b>
+<b class="nc"><i>1116</i>&nbsp;    // Needed because view-class lock methods throw away stamps.</b>
+<b class="nc"><i>1117</i>&nbsp;</b>
+<i>1118</i>&nbsp;    final void unstampedUnlockWrite() {
+<b class="nc"><i>1119</i>&nbsp;        long s;</b>
+<b class="nc"><i>1120</i>&nbsp;        if (((s = state) &amp; WBIT) == 0L)</b>
+<b class="nc"><i>1121</i>&nbsp;            throw new IllegalMonitorStateException();</b>
+<b class="nc"><i>1122</i>&nbsp;        unlockWriteInternal(s);</b>
+<b class="nc"><i>1123</i>&nbsp;    }</b>
+<i>1124</i>&nbsp;
+<i>1125</i>&nbsp;    final void unstampedUnlockRead() {
+<b class="nc"><i>1126</i>&nbsp;        long s, m; WNode h;</b>
+<i>1127</i>&nbsp;        while ((m = (s = state) &amp; RBITS) &gt; 0L) {
+<i>1128</i>&nbsp;            if (m &lt; RFULL) {
+<i>1129</i>&nbsp;                if (casState(s, s - RUNIT)) {
+<i>1130</i>&nbsp;                    if (m == RUNIT &amp;&amp; (h = whead) != null &amp;&amp; h.status != 0)
+<i>1131</i>&nbsp;                        release(h);
+<i>1132</i>&nbsp;                    return;
+<i>1133</i>&nbsp;                }
+<i>1134</i>&nbsp;            }
+<i>1135</i>&nbsp;            else if (tryDecReaderOverflow(s) != 0L)
+<i>1136</i>&nbsp;                return;
+<i>1137</i>&nbsp;        }
+<i>1138</i>&nbsp;        throw new IllegalMonitorStateException();
+<b class="nc"><i>1139</i>&nbsp;    }</b>
+<b class="nc"><i>1140</i>&nbsp;</b>
+<i>1141</i>&nbsp;    private void readObject(java.io.ObjectInputStream s)
+<b class="nc"><i>1142</i>&nbsp;        throws java.io.IOException, ClassNotFoundException {</b>
+<i>1143</i>&nbsp;        s.defaultReadObject();
+<b class="nc"><i>1144</i>&nbsp;        STATE.setVolatile(this, ORIGIN); // reset to unlocked state</b>
+<b class="nc"><i>1145</i>&nbsp;    }</b>
+<b class="nc"><i>1146</i>&nbsp;</b>
+<b class="nc"><i>1147</i>&nbsp;    // internals</b>
+<b class="nc"><i>1148</i>&nbsp;</b>
+<b class="nc"><i>1149</i>&nbsp;    /**</b>
+<b class="nc"><i>1150</i>&nbsp;     * Tries to increment readerOverflow by first setting state</b>
+<b class="nc"><i>1151</i>&nbsp;     * access bits value to RBITS, indicating hold of spinlock,</b>
+<i>1152</i>&nbsp;     * then updating, then releasing.
+<i>1153</i>&nbsp;     *
+<b class="nc"><i>1154</i>&nbsp;     * @param s a reader overflow stamp: (s &amp; ABITS) &gt;= RFULL</b>
+<b class="nc"><i>1155</i>&nbsp;     * @return new stamp on success, else zero</b>
+<b class="nc"><i>1156</i>&nbsp;     */</b>
+<b class="nc"><i>1157</i>&nbsp;    private long tryIncReaderOverflow(long s) {</b>
+<i>1158</i>&nbsp;        // assert (s &amp; ABITS) &gt;= RFULL;
+<b class="nc"><i>1159</i>&nbsp;        if ((s &amp; ABITS) == RFULL) {</b>
+<i>1160</i>&nbsp;            if (casState(s, s | RBITS)) {
+<i>1161</i>&nbsp;                ++readerOverflow;
+<i>1162</i>&nbsp;                STATE.setVolatile(this, s);
+<i>1163</i>&nbsp;                return s;
+<b class="nc"><i>1164</i>&nbsp;            }</b>
+<b class="nc"><i>1165</i>&nbsp;        }</b>
+<b class="nc"><i>1166</i>&nbsp;        else if ((LockSupport.nextSecondarySeed() &amp; OVERFLOW_YIELD_RATE) == 0)</b>
+<b class="nc"><i>1167</i>&nbsp;            Thread.yield();</b>
+<b class="nc"><i>1168</i>&nbsp;        else</b>
+<b class="nc"><i>1169</i>&nbsp;            Thread.onSpinWait();</b>
+<b class="nc"><i>1170</i>&nbsp;        return 0L;</b>
+<b class="nc"><i>1171</i>&nbsp;    }</b>
+<b class="nc"><i>1172</i>&nbsp;</b>
+<b class="nc"><i>1173</i>&nbsp;    /**</b>
+<b class="nc"><i>1174</i>&nbsp;     * Tries to decrement readerOverflow.</b>
+<b class="nc"><i>1175</i>&nbsp;     *</b>
+<b class="nc"><i>1176</i>&nbsp;     * @param s a reader overflow stamp: (s &amp; ABITS) &gt;= RFULL</b>
+<i>1177</i>&nbsp;     * @return new stamp on success, else zero
+<i>1178</i>&nbsp;     */
+<b class="nc"><i>1179</i>&nbsp;    private long tryDecReaderOverflow(long s) {</b>
+<i>1180</i>&nbsp;        // assert (s &amp; ABITS) &gt;= RFULL;
+<b class="nc"><i>1181</i>&nbsp;        if ((s &amp; ABITS) == RFULL) {</b>
+<i>1182</i>&nbsp;            if (casState(s, s | RBITS)) {
+<i>1183</i>&nbsp;                int r; long next;
+<i>1184</i>&nbsp;                if ((r = readerOverflow) &gt; 0) {
+<b class="nc"><i>1185</i>&nbsp;                    readerOverflow = r - 1;</b>
+<b class="nc"><i>1186</i>&nbsp;                    next = s;</b>
+<i>1187</i>&nbsp;                }
+<b class="nc"><i>1188</i>&nbsp;                else</b>
+<b class="nc"><i>1189</i>&nbsp;                    next = s - RUNIT;</b>
+<i>1190</i>&nbsp;                STATE.setVolatile(this, next);
+<i>1191</i>&nbsp;                return next;
+<b class="nc"><i>1192</i>&nbsp;            }</b>
+<b class="nc"><i>1193</i>&nbsp;        }</b>
+<i>1194</i>&nbsp;        else if ((LockSupport.nextSecondarySeed() &amp; OVERFLOW_YIELD_RATE) == 0)
+<i>1195</i>&nbsp;            Thread.yield();
+<b class="nc"><i>1196</i>&nbsp;        else</b>
+<b class="nc"><i>1197</i>&nbsp;            Thread.onSpinWait();</b>
+<b class="nc"><i>1198</i>&nbsp;        return 0L;</b>
+<i>1199</i>&nbsp;    }
+<b class="nc"><i>1200</i>&nbsp;</b>
+<i>1201</i>&nbsp;    /**
+<b class="nc"><i>1202</i>&nbsp;     * Wakes up the successor of h (normally whead). This is normally</b>
+<b class="nc"><i>1203</i>&nbsp;     * just h.next, but may require traversal from wtail if next</b>
+<b class="nc"><i>1204</i>&nbsp;     * pointers are lagging. This may fail to wake up an acquiring</b>
+<i>1205</i>&nbsp;     * thread when one or more have been cancelled, but the cancel
+<b class="nc"><i>1206</i>&nbsp;     * methods themselves provide extra safeguards to ensure liveness.</b>
+<b class="nc"><i>1207</i>&nbsp;     */</b>
+<b class="nc"><i>1208</i>&nbsp;    private void release(WNode h) {</b>
+<b class="nc"><i>1209</i>&nbsp;        if (h != null) {</b>
+<b class="nc"><i>1210</i>&nbsp;            WNode q; Thread w;</b>
+<b class="nc"><i>1211</i>&nbsp;            WSTATUS.compareAndSet(h, WAITING, 0);</b>
+<b class="nc"><i>1212</i>&nbsp;            if ((q = h.next) == null || q.status == CANCELLED) {</b>
+<b class="nc"><i>1213</i>&nbsp;                for (WNode t = wtail; t != null &amp;&amp; t != h; t = t.prev)</b>
+<i>1214</i>&nbsp;                    if (t.status &lt;= 0)
+<b class="nc"><i>1215</i>&nbsp;                        q = t;</b>
+<b class="nc"><i>1216</i>&nbsp;            }</b>
+<b class="nc"><i>1217</i>&nbsp;            if (q != null &amp;&amp; (w = q.thread) != null)</b>
+<b class="nc"><i>1218</i>&nbsp;                LockSupport.unpark(w);</b>
+<b class="nc"><i>1219</i>&nbsp;        }</b>
+<i>1220</i>&nbsp;    }
+<b class="nc"><i>1221</i>&nbsp;</b>
+<i>1222</i>&nbsp;    /**
+<b class="nc"><i>1223</i>&nbsp;     * See above for explanation.</b>
+<i>1224</i>&nbsp;     *
+<b class="nc"><i>1225</i>&nbsp;     * @param interruptible true if should check interrupts and if so</b>
+<i>1226</i>&nbsp;     * return INTERRUPTED
+<b class="nc"><i>1227</i>&nbsp;     * @param deadline if nonzero, the System.nanoTime value to timeout</b>
+<b class="nc"><i>1228</i>&nbsp;     * at (and return zero)</b>
+<b class="nc"><i>1229</i>&nbsp;     * @return next state, or INTERRUPTED</b>
+<b class="nc"><i>1230</i>&nbsp;     */</b>
+<b class="nc"><i>1231</i>&nbsp;    private long acquireWrite(boolean interruptible, long deadline) {</b>
+<b class="nc"><i>1232</i>&nbsp;        WNode node = null, p;</b>
+<i>1233</i>&nbsp;        for (int spins = -1;;) { // spin while enqueuing
+<b class="nc"><i>1234</i>&nbsp;            long m, s, ns;</b>
+<b class="nc"><i>1235</i>&nbsp;            if ((m = (s = state) &amp; ABITS) == 0L) {</b>
+<b class="nc"><i>1236</i>&nbsp;                if ((ns = tryWriteLock(s)) != 0L)</b>
+<i>1237</i>&nbsp;                    return ns;
+<b class="nc"><i>1238</i>&nbsp;            }</b>
+<b class="nc"><i>1239</i>&nbsp;            else if (spins &lt; 0)</b>
+<b class="nc"><i>1240</i>&nbsp;                spins = (m == WBIT &amp;&amp; wtail == whead) ? SPINS : 0;</b>
+<b class="nc"><i>1241</i>&nbsp;            else if (spins &gt; 0) {</b>
+<i>1242</i>&nbsp;                --spins;
+<i>1243</i>&nbsp;                Thread.onSpinWait();
+<b class="nc"><i>1244</i>&nbsp;            }</b>
+<i>1245</i>&nbsp;            else if ((p = wtail) == null) { // initialize queue
+<b class="nc"><i>1246</i>&nbsp;                WNode hd = new WNode(WMODE, null);</b>
+<i>1247</i>&nbsp;                if (WHEAD.weakCompareAndSet(this, null, hd))
+<b class="nc"><i>1248</i>&nbsp;                    wtail = hd;</b>
+<b class="nc"><i>1249</i>&nbsp;            }</b>
+<b class="nc"><i>1250</i>&nbsp;            else if (node == null)</b>
+<b class="nc"><i>1251</i>&nbsp;                node = new WNode(WMODE, p);</b>
+<i>1252</i>&nbsp;            else if (node.prev != p)
+<b class="nc"><i>1253</i>&nbsp;                node.prev = p;</b>
+<i>1254</i>&nbsp;            else if (WTAIL.weakCompareAndSet(this, p, node)) {
+<b class="nc"><i>1255</i>&nbsp;                p.next = node;</b>
+<b class="nc"><i>1256</i>&nbsp;                break;</b>
+<i>1257</i>&nbsp;            }
+<b class="nc"><i>1258</i>&nbsp;        }</b>
+<i>1259</i>&nbsp;
+<i>1260</i>&nbsp;        boolean wasInterrupted = false;
+<b class="nc"><i>1261</i>&nbsp;        for (int spins = -1;;) {</b>
+<b class="nc"><i>1262</i>&nbsp;            WNode h, np, pp; int ps;</b>
+<b class="nc"><i>1263</i>&nbsp;            if ((h = whead) == p) {</b>
+<b class="nc"><i>1264</i>&nbsp;                if (spins &lt; 0)</b>
+<i>1265</i>&nbsp;                    spins = HEAD_SPINS;
+<b class="nc"><i>1266</i>&nbsp;                else if (spins &lt; MAX_HEAD_SPINS)</b>
+<b class="nc"><i>1267</i>&nbsp;                    spins &lt;&lt;= 1;</b>
+<b class="nc"><i>1268</i>&nbsp;                for (int k = spins; k &gt; 0; --k) { // spin at head</b>
+<b class="nc"><i>1269</i>&nbsp;                    long s, ns;</b>
+<b class="nc"><i>1270</i>&nbsp;                    if (((s = state) &amp; ABITS) == 0L) {</b>
+<b class="nc"><i>1271</i>&nbsp;                        if ((ns = tryWriteLock(s)) != 0L) {</b>
+<i>1272</i>&nbsp;                            whead = node;
+<i>1273</i>&nbsp;                            node.prev = null;
+<i>1274</i>&nbsp;                            if (wasInterrupted)
+<i>1275</i>&nbsp;                                Thread.currentThread().interrupt();
+<b class="nc"><i>1276</i>&nbsp;                            return ns;</b>
+<b class="nc"><i>1277</i>&nbsp;                        }</b>
+<b class="nc"><i>1278</i>&nbsp;                    }</b>
+<b class="nc"><i>1279</i>&nbsp;                    else</b>
+<b class="nc"><i>1280</i>&nbsp;                        Thread.onSpinWait();</b>
+<b class="nc"><i>1281</i>&nbsp;                }</b>
+<b class="nc"><i>1282</i>&nbsp;            }</b>
+<b class="nc"><i>1283</i>&nbsp;            else if (h != null) { // help release stale waiters</b>
+<i>1284</i>&nbsp;                WNode c; Thread w;
+<i>1285</i>&nbsp;                while ((c = h.cowait) != null) {
+<b class="nc"><i>1286</i>&nbsp;                    if (WCOWAIT.weakCompareAndSet(h, c, c.cowait) &amp;&amp;</b>
+<b class="nc"><i>1287</i>&nbsp;                        (w = c.thread) != null)</b>
+<b class="nc"><i>1288</i>&nbsp;                        LockSupport.unpark(w);</b>
+<b class="nc"><i>1289</i>&nbsp;                }</b>
+<b class="nc"><i>1290</i>&nbsp;            }</b>
+<i>1291</i>&nbsp;            if (whead == h) {
+<i>1292</i>&nbsp;                if ((np = node.prev) != p) {
+<b class="nc"><i>1293</i>&nbsp;                    if (np != null)</b>
+<i>1294</i>&nbsp;                        (p = np).next = node;   // stale
+<i>1295</i>&nbsp;                }
+<i>1296</i>&nbsp;                else if ((ps = p.status) == 0)
+<i>1297</i>&nbsp;                    WSTATUS.compareAndSet(p, 0, WAITING);
+<i>1298</i>&nbsp;                else if (ps == CANCELLED) {
+<i>1299</i>&nbsp;                    if ((pp = p.prev) != null) {
+<i>1300</i>&nbsp;                        node.prev = pp;
+<i>1301</i>&nbsp;                        pp.next = node;
+<i>1302</i>&nbsp;                    }
+<i>1303</i>&nbsp;                }
+<i>1304</i>&nbsp;                else {
+<i>1305</i>&nbsp;                    long time; // 0 argument to park means no timeout
+<i>1306</i>&nbsp;                    if (deadline == 0L)
+<i>1307</i>&nbsp;                        time = 0L;
+<i>1308</i>&nbsp;                    else if ((time = deadline - System.nanoTime()) &lt;= 0L)
+<i>1309</i>&nbsp;                        return cancelWaiter(node, node, false);
+<i>1310</i>&nbsp;                    Thread wt = Thread.currentThread();
+<i>1311</i>&nbsp;                    node.thread = wt;
+<i>1312</i>&nbsp;                    if (p.status &lt; 0 &amp;&amp; (p != h || (state &amp; ABITS) != 0L) &amp;&amp;
+<b class="nc"><i>1313</i>&nbsp;                        whead == h &amp;&amp; node.prev == p) {</b>
+<i>1314</i>&nbsp;                        if (time == 0L)
+<b class="nc"><i>1315</i>&nbsp;                            LockSupport.park(this);</b>
+<i>1316</i>&nbsp;                        else
+<b class="nc"><i>1317</i>&nbsp;                            LockSupport.parkNanos(this, time);</b>
+<b class="nc"><i>1318</i>&nbsp;                    }</b>
+<b class="nc"><i>1319</i>&nbsp;                    node.thread = null;</b>
+<b class="nc"><i>1320</i>&nbsp;                    if (Thread.interrupted()) {</b>
+<i>1321</i>&nbsp;                        if (interruptible)
+<i>1322</i>&nbsp;                            return cancelWaiter(node, node, true);
+<b class="nc"><i>1323</i>&nbsp;                        wasInterrupted = true;</b>
+<i>1324</i>&nbsp;                    }
+<b class="nc"><i>1325</i>&nbsp;                }</b>
+<b class="nc"><i>1326</i>&nbsp;            }</b>
+<b class="nc"><i>1327</i>&nbsp;        }</b>
+<b class="nc"><i>1328</i>&nbsp;    }</b>
+<i>1329</i>&nbsp;
+<b class="nc"><i>1330</i>&nbsp;    /**</b>
+<i>1331</i>&nbsp;     * See above for explanation.
+<b class="nc"><i>1332</i>&nbsp;     *</b>
+<i>1333</i>&nbsp;     * @param interruptible true if should check interrupts and if so
+<b class="nc"><i>1334</i>&nbsp;     * return INTERRUPTED</b>
+<b class="nc"><i>1335</i>&nbsp;     * @param deadline if nonzero, the System.nanoTime value to timeout</b>
+<b class="nc"><i>1336</i>&nbsp;     * at (and return zero)</b>
+<b class="nc"><i>1337</i>&nbsp;     * @return next state, or INTERRUPTED</b>
+<b class="nc"><i>1338</i>&nbsp;     */</b>
+<b class="nc"><i>1339</i>&nbsp;    private long acquireRead(boolean interruptible, long deadline) {</b>
+<i>1340</i>&nbsp;        boolean wasInterrupted = false;
+<b class="nc"><i>1341</i>&nbsp;        WNode node = null, p;</b>
+<b class="nc"><i>1342</i>&nbsp;        for (int spins = -1;;) {</b>
+<i>1343</i>&nbsp;            WNode h;
+<i>1344</i>&nbsp;            if ((h = whead) == (p = wtail)) {
+<b class="nc"><i>1345</i>&nbsp;                for (long m, s, ns;;) {</b>
+<b class="nc"><i>1346</i>&nbsp;                    if ((m = (s = state) &amp; ABITS) &lt; RFULL ?</b>
+<b class="nc"><i>1347</i>&nbsp;                        casState(s, ns = s + RUNIT) :</b>
+<b class="nc"><i>1348</i>&nbsp;                        (m &lt; WBIT &amp;&amp; (ns = tryIncReaderOverflow(s)) != 0L)) {</b>
+<b class="nc"><i>1349</i>&nbsp;                        if (wasInterrupted)</b>
+<b class="nc"><i>1350</i>&nbsp;                            Thread.currentThread().interrupt();</b>
+<i>1351</i>&nbsp;                        return ns;
+<b class="nc"><i>1352</i>&nbsp;                    }</b>
+<b class="nc"><i>1353</i>&nbsp;                    else if (m &gt;= WBIT) {</b>
+<b class="nc"><i>1354</i>&nbsp;                        if (spins &gt; 0) {</b>
+<b class="nc"><i>1355</i>&nbsp;                            --spins;</b>
+<b class="nc"><i>1356</i>&nbsp;                            Thread.onSpinWait();</b>
+<b class="nc"><i>1357</i>&nbsp;                        }</b>
+<i>1358</i>&nbsp;                        else {
+<i>1359</i>&nbsp;                            if (spins == 0) {
+<i>1360</i>&nbsp;                                WNode nh = whead, np = wtail;
+<b class="nc"><i>1361</i>&nbsp;                                if ((nh == h &amp;&amp; np == p) || (h = nh) != (p = np))</b>
+<i>1362</i>&nbsp;                                    break;
+<b class="nc"><i>1363</i>&nbsp;                            }</b>
+<b class="nc"><i>1364</i>&nbsp;                            spins = SPINS;</b>
+<b class="nc"><i>1365</i>&nbsp;                        }</b>
+<b class="nc"><i>1366</i>&nbsp;                    }</b>
+<i>1367</i>&nbsp;                }
+<b class="nc"><i>1368</i>&nbsp;            }</b>
+<b class="nc"><i>1369</i>&nbsp;            if (p == null) { // initialize queue</b>
+<i>1370</i>&nbsp;                WNode hd = new WNode(WMODE, null);
+<i>1371</i>&nbsp;                if (WHEAD.weakCompareAndSet(this, null, hd))
+<b class="nc"><i>1372</i>&nbsp;                    wtail = hd;</b>
+<i>1373</i>&nbsp;            }
+<i>1374</i>&nbsp;            else if (node == null)
+<b class="nc"><i>1375</i>&nbsp;                node = new WNode(RMODE, p);</b>
+<b class="nc"><i>1376</i>&nbsp;            else if (h == p || p.mode != RMODE) {</b>
+<i>1377</i>&nbsp;                if (node.prev != p)
+<i>1378</i>&nbsp;                    node.prev = p;
+<i>1379</i>&nbsp;                else if (WTAIL.weakCompareAndSet(this, p, node)) {
+<i>1380</i>&nbsp;                    p.next = node;
+<i>1381</i>&nbsp;                    break;
+<i>1382</i>&nbsp;                }
+<i>1383</i>&nbsp;            }
+<i>1384</i>&nbsp;            else if (!WCOWAIT.compareAndSet(p, node.cowait = p.cowait, node))
+<i>1385</i>&nbsp;                node.cowait = null;
+<i>1386</i>&nbsp;            else {
+<i>1387</i>&nbsp;                for (;;) {
+<i>1388</i>&nbsp;                    WNode pp, c; Thread w;
+<i>1389</i>&nbsp;                    if ((h = whead) != null &amp;&amp; (c = h.cowait) != null &amp;&amp;
+<i>1390</i>&nbsp;                        WCOWAIT.compareAndSet(h, c, c.cowait) &amp;&amp;
+<b class="nc"><i>1391</i>&nbsp;                        (w = c.thread) != null) // help release</b>
+<b class="nc"><i>1392</i>&nbsp;                        LockSupport.unpark(w);</b>
+<b class="nc"><i>1393</i>&nbsp;                    if (Thread.interrupted()) {</b>
+<b class="nc"><i>1394</i>&nbsp;                        if (interruptible)</b>
+<b class="nc"><i>1395</i>&nbsp;                            return cancelWaiter(node, p, true);</b>
+<b class="nc"><i>1396</i>&nbsp;                        wasInterrupted = true;</b>
+<b class="nc"><i>1397</i>&nbsp;                    }</b>
+<b class="nc"><i>1398</i>&nbsp;                    if (h == (pp = p.prev) || h == p || pp == null) {</b>
+<b class="nc"><i>1399</i>&nbsp;                        long m, s, ns;</b>
+<b class="nc"><i>1400</i>&nbsp;                        do {</b>
+<b class="nc"><i>1401</i>&nbsp;                            if ((m = (s = state) &amp; ABITS) &lt; RFULL ?</b>
+<b class="nc"><i>1402</i>&nbsp;                                casState(s, ns = s + RUNIT) :</b>
+<b class="nc"><i>1403</i>&nbsp;                                (m &lt; WBIT &amp;&amp;</b>
+<b class="nc"><i>1404</i>&nbsp;                                 (ns = tryIncReaderOverflow(s)) != 0L)) {</b>
+<b class="nc"><i>1405</i>&nbsp;                                if (wasInterrupted)</b>
+<b class="nc"><i>1406</i>&nbsp;                                    Thread.currentThread().interrupt();</b>
+<b class="nc"><i>1407</i>&nbsp;                                return ns;</b>
+<b class="nc"><i>1408</i>&nbsp;                            }</b>
+<i>1409</i>&nbsp;                        } while (m &lt; WBIT);
+<b class="nc"><i>1410</i>&nbsp;                    }</b>
+<b class="nc"><i>1411</i>&nbsp;                    if (whead == h &amp;&amp; p.prev == pp) {</b>
+<b class="nc"><i>1412</i>&nbsp;                        long time;</b>
+<i>1413</i>&nbsp;                        if (pp == null || h == p || p.status &gt; 0) {
+<i>1414</i>&nbsp;                            node = null; // throw away
+<i>1415</i>&nbsp;                            break;
+<i>1416</i>&nbsp;                        }
+<i>1417</i>&nbsp;                        if (deadline == 0L)
+<i>1418</i>&nbsp;                            time = 0L;
+<i>1419</i>&nbsp;                        else if ((time = deadline - System.nanoTime()) &lt;= 0L) {
+<i>1420</i>&nbsp;                            if (wasInterrupted)
+<i>1421</i>&nbsp;                                Thread.currentThread().interrupt();
+<i>1422</i>&nbsp;                            return cancelWaiter(node, p, false);
+<i>1423</i>&nbsp;                        }
+<i>1424</i>&nbsp;                        Thread wt = Thread.currentThread();
+<i>1425</i>&nbsp;                        node.thread = wt;
+<i>1426</i>&nbsp;                        if ((h != pp || (state &amp; ABITS) == WBIT) &amp;&amp;
+<i>1427</i>&nbsp;                            whead == h &amp;&amp; p.prev == pp) {
+<i>1428</i>&nbsp;                            if (time == 0L)
+<i>1429</i>&nbsp;                                LockSupport.park(this);
+<i>1430</i>&nbsp;                            else
+<i>1431</i>&nbsp;                                LockSupport.parkNanos(this, time);
+<i>1432</i>&nbsp;                        }
+<i>1433</i>&nbsp;                        node.thread = null;
+<i>1434</i>&nbsp;                    }
+<i>1435</i>&nbsp;                }
+<i>1436</i>&nbsp;            }
+<i>1437</i>&nbsp;        }
+<i>1438</i>&nbsp;
+<i>1439</i>&nbsp;        for (int spins = -1;;) {
+<i>1440</i>&nbsp;            WNode h, np, pp; int ps;
+<i>1441</i>&nbsp;            if ((h = whead) == p) {
+<i>1442</i>&nbsp;                if (spins &lt; 0)
+<i>1443</i>&nbsp;                    spins = HEAD_SPINS;
+<i>1444</i>&nbsp;                else if (spins &lt; MAX_HEAD_SPINS)
+<i>1445</i>&nbsp;                    spins &lt;&lt;= 1;
+<i>1446</i>&nbsp;                for (int k = spins;;) { // spin at head
+<i>1447</i>&nbsp;                    long m, s, ns;
+<i>1448</i>&nbsp;                    if ((m = (s = state) &amp; ABITS) &lt; RFULL ?
+<i>1449</i>&nbsp;                        casState(s, ns = s + RUNIT) :
+<i>1450</i>&nbsp;                        (m &lt; WBIT &amp;&amp; (ns = tryIncReaderOverflow(s)) != 0L)) {
+<i>1451</i>&nbsp;                        WNode c; Thread w;
+<i>1452</i>&nbsp;                        whead = node;
+<i>1453</i>&nbsp;                        node.prev = null;
+<i>1454</i>&nbsp;                        while ((c = node.cowait) != null) {
+<i>1455</i>&nbsp;                            if (WCOWAIT.compareAndSet(node, c, c.cowait) &amp;&amp;
+<i>1456</i>&nbsp;                                (w = c.thread) != null)
+<i>1457</i>&nbsp;                                LockSupport.unpark(w);
+<i>1458</i>&nbsp;                        }
+<i>1459</i>&nbsp;                        if (wasInterrupted)
+<i>1460</i>&nbsp;                            Thread.currentThread().interrupt();
+<i>1461</i>&nbsp;                        return ns;
+<i>1462</i>&nbsp;                    }
+<i>1463</i>&nbsp;                    else if (m &gt;= WBIT &amp;&amp; --k &lt;= 0)
+<i>1464</i>&nbsp;                        break;
+<i>1465</i>&nbsp;                    else
+<i>1466</i>&nbsp;                        Thread.onSpinWait();
+<i>1467</i>&nbsp;                }
+<i>1468</i>&nbsp;            }
+<i>1469</i>&nbsp;            else if (h != null) {
+<i>1470</i>&nbsp;                WNode c; Thread w;
+<i>1471</i>&nbsp;                while ((c = h.cowait) != null) {
+<i>1472</i>&nbsp;                    if (WCOWAIT.compareAndSet(h, c, c.cowait) &amp;&amp;
+<i>1473</i>&nbsp;                        (w = c.thread) != null)
+<i>1474</i>&nbsp;                        LockSupport.unpark(w);
+<i>1475</i>&nbsp;                }
+<i>1476</i>&nbsp;            }
+<i>1477</i>&nbsp;            if (whead == h) {
+<i>1478</i>&nbsp;                if ((np = node.prev) != p) {
+<i>1479</i>&nbsp;                    if (np != null)
+<i>1480</i>&nbsp;                        (p = np).next = node;   // stale
+<i>1481</i>&nbsp;                }
+<i>1482</i>&nbsp;                else if ((ps = p.status) == 0)
+<i>1483</i>&nbsp;                    WSTATUS.compareAndSet(p, 0, WAITING);
+<i>1484</i>&nbsp;                else if (ps == CANCELLED) {
+<i>1485</i>&nbsp;                    if ((pp = p.prev) != null) {
+<i>1486</i>&nbsp;                        node.prev = pp;
+<i>1487</i>&nbsp;                        pp.next = node;
+<i>1488</i>&nbsp;                    }
+<i>1489</i>&nbsp;                }
+<i>1490</i>&nbsp;                else {
+<i>1491</i>&nbsp;                    long time;
+<i>1492</i>&nbsp;                    if (deadline == 0L)
+<i>1493</i>&nbsp;                        time = 0L;
+<i>1494</i>&nbsp;                    else if ((time = deadline - System.nanoTime()) &lt;= 0L)
+<i>1495</i>&nbsp;                        return cancelWaiter(node, node, false);
+<i>1496</i>&nbsp;                    Thread wt = Thread.currentThread();
+<i>1497</i>&nbsp;                    node.thread = wt;
+<i>1498</i>&nbsp;                    if (p.status &lt; 0 &amp;&amp;
+<i>1499</i>&nbsp;                        (p != h || (state &amp; ABITS) == WBIT) &amp;&amp;
+<i>1500</i>&nbsp;                        whead == h &amp;&amp; node.prev == p) {
+<i>1501</i>&nbsp;                            if (time == 0L)
+<i>1502</i>&nbsp;                                LockSupport.park(this);
+<i>1503</i>&nbsp;                            else
+<i>1504</i>&nbsp;                                LockSupport.parkNanos(this, time);
+<i>1505</i>&nbsp;                    }
+<i>1506</i>&nbsp;                    node.thread = null;
+<i>1507</i>&nbsp;                    if (Thread.interrupted()) {
+<i>1508</i>&nbsp;                        if (interruptible)
+<i>1509</i>&nbsp;                            return cancelWaiter(node, node, true);
+<i>1510</i>&nbsp;                        wasInterrupted = true;
+<i>1511</i>&nbsp;                    }
+<i>1512</i>&nbsp;                }
+<i>1513</i>&nbsp;            }
+<i>1514</i>&nbsp;        }
+<i>1515</i>&nbsp;    }
+<i>1516</i>&nbsp;
+<i>1517</i>&nbsp;    /**
+<i>1518</i>&nbsp;     * If node non-null, forces cancel status and unsplices it from
+<i>1519</i>&nbsp;     * queue if possible and wakes up any cowaiters (of the node, or
+<i>1520</i>&nbsp;     * group, as applicable), and in any case helps release current
+<i>1521</i>&nbsp;     * first waiter if lock is free. (Calling with null arguments
+<i>1522</i>&nbsp;     * serves as a conditional form of release, which is not currently
+<i>1523</i>&nbsp;     * needed but may be needed under possible future cancellation
+<i>1524</i>&nbsp;     * policies). This is a variant of cancellation methods in
+<i>1525</i>&nbsp;     * AbstractQueuedSynchronizer (see its detailed explanation in AQS
+<i>1526</i>&nbsp;     * internal documentation).
+<i>1527</i>&nbsp;     *
+<i>1528</i>&nbsp;     * @param node if non-null, the waiter
+<i>1529</i>&nbsp;     * @param group either node or the group node is cowaiting with
+<i>1530</i>&nbsp;     * @param interrupted if already interrupted
+<i>1531</i>&nbsp;     * @return INTERRUPTED if interrupted or Thread.interrupted, else zero
+<i>1532</i>&nbsp;     */
+<i>1533</i>&nbsp;    private long cancelWaiter(WNode node, WNode group, boolean interrupted) {
+<i>1534</i>&nbsp;        if (node != null &amp;&amp; group != null) {
+<i>1535</i>&nbsp;            Thread w;
+<i>1536</i>&nbsp;            node.status = CANCELLED;
+<i>1537</i>&nbsp;            // unsplice cancelled nodes from group
+<i>1538</i>&nbsp;            for (WNode p = group, q; (q = p.cowait) != null;) {
+<i>1539</i>&nbsp;                if (q.status == CANCELLED) {
+<i>1540</i>&nbsp;                    WCOWAIT.compareAndSet(p, q, q.cowait);
+<i>1541</i>&nbsp;                    p = group; // restart
+<i>1542</i>&nbsp;                }
+<i>1543</i>&nbsp;                else
+<i>1544</i>&nbsp;                    p = q;
+<i>1545</i>&nbsp;            }
+<i>1546</i>&nbsp;            if (group == node) {
+<i>1547</i>&nbsp;                for (WNode r = group.cowait; r != null; r = r.cowait) {
+<i>1548</i>&nbsp;                    if ((w = r.thread) != null)
+<i>1549</i>&nbsp;                        LockSupport.unpark(w); // wake up uncancelled co-waiters
+<i>1550</i>&nbsp;                }
+<i>1551</i>&nbsp;                for (WNode pred = node.prev; pred != null; ) { // unsplice
+<i>1552</i>&nbsp;                    WNode succ, pp;        // find valid successor
+<i>1553</i>&nbsp;                    while ((succ = node.next) == null ||
+<i>1554</i>&nbsp;                           succ.status == CANCELLED) {
+<i>1555</i>&nbsp;                        WNode q = null;    // find successor the slow way
+<i>1556</i>&nbsp;                        for (WNode t = wtail; t != null &amp;&amp; t != node; t = t.prev)
+<i>1557</i>&nbsp;                            if (t.status != CANCELLED)
+<i>1558</i>&nbsp;                                q = t;     // don&#39;t link if succ cancelled
+<i>1559</i>&nbsp;                        if (succ == q ||   // ensure accurate successor
+<i>1560</i>&nbsp;                            WNEXT.compareAndSet(node, succ, succ = q)) {
+<i>1561</i>&nbsp;                            if (succ == null &amp;&amp; node == wtail)
+<i>1562</i>&nbsp;                                WTAIL.compareAndSet(this, node, pred);
+<i>1563</i>&nbsp;                            break;
+<i>1564</i>&nbsp;                        }
+<i>1565</i>&nbsp;                    }
+<i>1566</i>&nbsp;                    if (pred.next == node) // unsplice pred link
+<i>1567</i>&nbsp;                        WNEXT.compareAndSet(pred, node, succ);
+<i>1568</i>&nbsp;                    if (succ != null &amp;&amp; (w = succ.thread) != null) {
+<i>1569</i>&nbsp;                        // wake up succ to observe new pred
+<i>1570</i>&nbsp;                        succ.thread = null;
+<i>1571</i>&nbsp;                        LockSupport.unpark(w);
+<i>1572</i>&nbsp;                    }
+<i>1573</i>&nbsp;                    if (pred.status != CANCELLED || (pp = pred.prev) == null)
+<i>1574</i>&nbsp;                        break;
+<i>1575</i>&nbsp;                    node.prev = pp;        // repeat if new pred wrong/cancelled
+<i>1576</i>&nbsp;                    WNEXT.compareAndSet(pp, pred, succ);
+<i>1577</i>&nbsp;                    pred = pp;
+<i>1578</i>&nbsp;                }
+<i>1579</i>&nbsp;            }
+<i>1580</i>&nbsp;        }
+<i>1581</i>&nbsp;        WNode h; // Possibly release first waiter
+<i>1582</i>&nbsp;        while ((h = whead) != null) {
+<i>1583</i>&nbsp;            long s; WNode q; // similar to release() but check eligibility
+<i>1584</i>&nbsp;            if ((q = h.next) == null || q.status == CANCELLED) {
+<i>1585</i>&nbsp;                for (WNode t = wtail; t != null &amp;&amp; t != h; t = t.prev)
+<i>1586</i>&nbsp;                    if (t.status &lt;= 0)
+<i>1587</i>&nbsp;                        q = t;
+<i>1588</i>&nbsp;            }
+<i>1589</i>&nbsp;            if (h == whead) {
+<i>1590</i>&nbsp;                if (q != null &amp;&amp; h.status == 0 &amp;&amp;
+<i>1591</i>&nbsp;                    ((s = state) &amp; ABITS) != WBIT &amp;&amp; // waiter is eligible
+<i>1592</i>&nbsp;                    (s == 0L || q.mode == RMODE))
+<i>1593</i>&nbsp;                    release(h);
+<i>1594</i>&nbsp;                break;
+<i>1595</i>&nbsp;            }
+<i>1596</i>&nbsp;        }
+<i>1597</i>&nbsp;        return (interrupted || Thread.interrupted()) ? INTERRUPTED : 0L;
+<i>1598</i>&nbsp;    }
+<i>1599</i>&nbsp;
+<i>1600</i>&nbsp;    // VarHandle mechanics
+<i>1601</i>&nbsp;    private static final VarHandle STATE;
+<i>1602</i>&nbsp;    private static final VarHandle WHEAD;
+<i>1603</i>&nbsp;    private static final VarHandle WTAIL;
+<i>1604</i>&nbsp;    private static final VarHandle WNEXT;
+<i>1605</i>&nbsp;    private static final VarHandle WSTATUS;
+<i>1606</i>&nbsp;    private static final VarHandle WCOWAIT;
+<i>1607</i>&nbsp;    static {
+<i>1608</i>&nbsp;        try {
+<i>1609</i>&nbsp;            MethodHandles.Lookup l = MethodHandles.lookup();
+<i>1610</i>&nbsp;            STATE = l.findVarHandle(StampedLock.class, &quot;state&quot;, long.class);
+<i>1611</i>&nbsp;            WHEAD = l.findVarHandle(StampedLock.class, &quot;whead&quot;, WNode.class);
+<i>1612</i>&nbsp;            WTAIL = l.findVarHandle(StampedLock.class, &quot;wtail&quot;, WNode.class);
+<i>1613</i>&nbsp;            WSTATUS = l.findVarHandle(WNode.class, &quot;status&quot;, int.class);
+<i>1614</i>&nbsp;            WNEXT = l.findVarHandle(WNode.class, &quot;next&quot;, WNode.class);
+<i>1615</i>&nbsp;            WCOWAIT = l.findVarHandle(WNode.class, &quot;cowait&quot;, WNode.class);
+<i>1616</i>&nbsp;        } catch (ReflectiveOperationException e) {
+<i>1617</i>&nbsp;            throw new ExceptionInInitializerError(e);
+<i>1618</i>&nbsp;        }
+<i>1619</i>&nbsp;    }
+<i>1620</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

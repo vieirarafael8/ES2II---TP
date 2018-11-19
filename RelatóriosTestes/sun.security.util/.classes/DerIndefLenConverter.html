@@ -1,0 +1,440 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: DerIndefLenConverter</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.util</a> ]
+</div>
+
+<h1>Coverage Summary for Class: DerIndefLenConverter (sun.security.util)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">DerIndefLenConverter</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 146)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1998, 2012, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.util;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.util.ArrayList;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;/**
+<i>32</i>&nbsp; * A package private utility class to convert indefinite length DER
+<i>33</i>&nbsp; * encoded byte arrays to definite length DER encoded byte arrays.
+<i>34</i>&nbsp; *
+<i>35</i>&nbsp; * This assumes that the basic data structure is &quot;tag, length, value&quot;
+<i>36</i>&nbsp; * triplet. In the case where the length is &quot;indefinite&quot;, terminating
+<i>37</i>&nbsp; * end-of-contents bytes are expected.
+<i>38</i>&nbsp; *
+<i>39</i>&nbsp; * @author Hemma Prafullchandra
+<i>40</i>&nbsp; */
+<i>41</i>&nbsp;class DerIndefLenConverter {
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;    private static final int TAG_MASK            = 0x1f; // bits 5-1
+<i>44</i>&nbsp;    private static final int FORM_MASK           = 0x20; // bits 6
+<i>45</i>&nbsp;    private static final int CLASS_MASK          = 0xC0; // bits 8 and 7
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;    private static final int LEN_LONG            = 0x80; // bit 8 set
+<i>48</i>&nbsp;    private static final int LEN_MASK            = 0x7f; // bits 7 - 1
+<i>49</i>&nbsp;    private static final int SKIP_EOC_BYTES      = 2;
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;    private byte[] data, newData;
+<i>52</i>&nbsp;    private int newDataPos, dataPos, dataSize, index;
+<b class="nc"><i>53</i>&nbsp;    private int unresolved = 0;</b>
+<i>54</i>&nbsp;
+<b class="nc"><i>55</i>&nbsp;    private ArrayList&lt;Object&gt; ndefsList = new ArrayList&lt;Object&gt;();</b>
+<i>56</i>&nbsp;
+<b class="nc"><i>57</i>&nbsp;    private int numOfTotalLenBytes = 0;</b>
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    private boolean isEOC(int tag) {
+<b class="nc"><i>60</i>&nbsp;        return (((tag &amp; TAG_MASK) == 0x00) &amp;&amp;  // EOC</b>
+<i>61</i>&nbsp;                ((tag &amp; FORM_MASK) == 0x00) &amp;&amp; // primitive
+<i>62</i>&nbsp;                ((tag &amp; CLASS_MASK) == 0x00)); // universal
+<i>63</i>&nbsp;    }
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    // if bit 8 is set then it implies either indefinite length or long form
+<i>66</i>&nbsp;    static boolean isLongForm(int lengthByte) {
+<b class="nc"><i>67</i>&nbsp;        return ((lengthByte &amp; LEN_LONG) == LEN_LONG);</b>
+<i>68</i>&nbsp;    }
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    /*
+<i>71</i>&nbsp;     * Default package private constructor
+<i>72</i>&nbsp;     */
+<i>73</i>&nbsp;    DerIndefLenConverter() { }
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    /**
+<i>76</i>&nbsp;     * Checks whether the given length byte is of the form
+<i>77</i>&nbsp;     * &lt;em&gt;Indefinite&lt;/em&gt;.
+<i>78</i>&nbsp;     *
+<i>79</i>&nbsp;     * @param lengthByte the length byte from a DER encoded
+<i>80</i>&nbsp;     *        object.
+<i>81</i>&nbsp;     * @return true if the byte is of Indefinite form otherwise
+<i>82</i>&nbsp;     *         returns false.
+<i>83</i>&nbsp;     */
+<i>84</i>&nbsp;    static boolean isIndefinite(int lengthByte) {
+<b class="nc"><i>85</i>&nbsp;        return (isLongForm(lengthByte) &amp;&amp; ((lengthByte &amp; LEN_MASK) == 0));</b>
+<i>86</i>&nbsp;    }
+<i>87</i>&nbsp;
+<i>88</i>&nbsp;    /**
+<i>89</i>&nbsp;     * Parse the tag and if it is an end-of-contents tag then
+<i>90</i>&nbsp;     * add the current position to the &lt;code&gt;eocList&lt;/code&gt; vector.
+<i>91</i>&nbsp;     */
+<i>92</i>&nbsp;    private void parseTag() throws IOException {
+<b class="nc"><i>93</i>&nbsp;        if (dataPos == dataSize)</b>
+<i>94</i>&nbsp;            return;
+<b class="nc"><i>95</i>&nbsp;        if (isEOC(data[dataPos]) &amp;&amp; (data[dataPos + 1] == 0)) {</b>
+<b class="nc"><i>96</i>&nbsp;            int numOfEncapsulatedLenBytes = 0;</b>
+<b class="nc"><i>97</i>&nbsp;            Object elem = null;</b>
+<i>98</i>&nbsp;            int index;
+<b class="nc"><i>99</i>&nbsp;            for (index = ndefsList.size()-1; index &gt;= 0; index--) {</b>
+<i>100</i>&nbsp;                // Determine the first element in the vector that does not
+<i>101</i>&nbsp;                // have a matching EOC
+<b class="nc"><i>102</i>&nbsp;                elem = ndefsList.get(index);</b>
+<b class="nc"><i>103</i>&nbsp;                if (elem instanceof Integer) {</b>
+<b class="nc"><i>104</i>&nbsp;                    break;</b>
+<i>105</i>&nbsp;                } else {
+<b class="nc"><i>106</i>&nbsp;                    numOfEncapsulatedLenBytes += ((byte[])elem).length - 3;</b>
+<i>107</i>&nbsp;                }
+<i>108</i>&nbsp;            }
+<b class="nc"><i>109</i>&nbsp;            if (index &lt; 0) {</b>
+<b class="nc"><i>110</i>&nbsp;                throw new IOException(&quot;EOC does not have matching &quot; +</b>
+<i>111</i>&nbsp;                                      &quot;indefinite-length tag&quot;);
+<i>112</i>&nbsp;            }
+<b class="nc"><i>113</i>&nbsp;            int sectionLen = dataPos - ((Integer)elem).intValue() +</b>
+<i>114</i>&nbsp;                             numOfEncapsulatedLenBytes;
+<b class="nc"><i>115</i>&nbsp;            byte[] sectionLenBytes = getLengthBytes(sectionLen);</b>
+<b class="nc"><i>116</i>&nbsp;            ndefsList.set(index, sectionLenBytes);</b>
+<b class="nc"><i>117</i>&nbsp;            unresolved--;</b>
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;            // Add the number of bytes required to represent this section
+<i>120</i>&nbsp;            // to the total number of length bytes,
+<i>121</i>&nbsp;            // and subtract the indefinite-length tag (1 byte) and
+<i>122</i>&nbsp;            // EOC bytes (2 bytes) for this section
+<b class="nc"><i>123</i>&nbsp;            numOfTotalLenBytes += (sectionLenBytes.length - 3);</b>
+<i>124</i>&nbsp;        }
+<b class="nc"><i>125</i>&nbsp;        dataPos++;</b>
+<i>126</i>&nbsp;    }
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;    /**
+<i>129</i>&nbsp;     * Write the tag and if it is an end-of-contents tag
+<i>130</i>&nbsp;     * then skip the tag and its 1 byte length of zero.
+<i>131</i>&nbsp;     */
+<i>132</i>&nbsp;    private void writeTag() {
+<b class="nc"><i>133</i>&nbsp;        if (dataPos == dataSize)</b>
+<i>134</i>&nbsp;            return;
+<b class="nc"><i>135</i>&nbsp;        int tag = data[dataPos++];</b>
+<b class="nc"><i>136</i>&nbsp;        if (isEOC(tag) &amp;&amp; (data[dataPos] == 0)) {</b>
+<b class="nc"><i>137</i>&nbsp;            dataPos++;  // skip length</b>
+<b class="nc"><i>138</i>&nbsp;            writeTag();</b>
+<i>139</i>&nbsp;        } else
+<b class="nc"><i>140</i>&nbsp;            newData[newDataPos++] = (byte)tag;</b>
+<i>141</i>&nbsp;    }
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;    /**
+<i>144</i>&nbsp;     * Parse the length and if it is an indefinite length then add
+<i>145</i>&nbsp;     * the current position to the &lt;code&gt;ndefsList&lt;/code&gt; vector.
+<i>146</i>&nbsp;     */
+<i>147</i>&nbsp;    private int parseLength() throws IOException {
+<b class="nc"><i>148</i>&nbsp;        int curLen = 0;</b>
+<b class="nc"><i>149</i>&nbsp;        if (dataPos == dataSize)</b>
+<b class="nc"><i>150</i>&nbsp;            return curLen;</b>
+<b class="nc"><i>151</i>&nbsp;        int lenByte = data[dataPos++] &amp; 0xff;</b>
+<b class="nc"><i>152</i>&nbsp;        if (isIndefinite(lenByte)) {</b>
+<b class="nc"><i>153</i>&nbsp;            ndefsList.add(dataPos);</b>
+<b class="nc"><i>154</i>&nbsp;            unresolved++;</b>
+<b class="nc"><i>155</i>&nbsp;            return curLen;</b>
+<i>156</i>&nbsp;        }
+<b class="nc"><i>157</i>&nbsp;        if (isLongForm(lenByte)) {</b>
+<b class="nc"><i>158</i>&nbsp;            lenByte &amp;= LEN_MASK;</b>
+<b class="nc"><i>159</i>&nbsp;            if (lenByte &gt; 4) {</b>
+<b class="nc"><i>160</i>&nbsp;                throw new IOException(&quot;Too much data&quot;);</b>
+<i>161</i>&nbsp;            }
+<b class="nc"><i>162</i>&nbsp;            if ((dataSize - dataPos) &lt; (lenByte + 1)) {</b>
+<b class="nc"><i>163</i>&nbsp;                throw new IOException(&quot;Too little data&quot;);</b>
+<i>164</i>&nbsp;            }
+<b class="nc"><i>165</i>&nbsp;            for (int i = 0; i &lt; lenByte; i++) {</b>
+<b class="nc"><i>166</i>&nbsp;                curLen = (curLen &lt;&lt; 8) + (data[dataPos++] &amp; 0xff);</b>
+<i>167</i>&nbsp;            }
+<b class="nc"><i>168</i>&nbsp;            if (curLen &lt; 0) {</b>
+<b class="nc"><i>169</i>&nbsp;                throw new IOException(&quot;Invalid length bytes&quot;);</b>
+<i>170</i>&nbsp;            }
+<i>171</i>&nbsp;        } else {
+<b class="nc"><i>172</i>&nbsp;           curLen = (lenByte &amp; LEN_MASK);</b>
+<i>173</i>&nbsp;        }
+<b class="nc"><i>174</i>&nbsp;        return curLen;</b>
+<i>175</i>&nbsp;    }
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * Write the length and if it is an indefinite length
+<i>179</i>&nbsp;     * then calculate the definite length from the positions
+<i>180</i>&nbsp;     * of the indefinite length and its matching EOC terminator.
+<i>181</i>&nbsp;     * Then, write the value.
+<i>182</i>&nbsp;     */
+<i>183</i>&nbsp;    private void writeLengthAndValue() throws IOException {
+<b class="nc"><i>184</i>&nbsp;        if (dataPos == dataSize)</b>
+<i>185</i>&nbsp;           return;
+<b class="nc"><i>186</i>&nbsp;        int curLen = 0;</b>
+<b class="nc"><i>187</i>&nbsp;        int lenByte = data[dataPos++] &amp; 0xff;</b>
+<b class="nc"><i>188</i>&nbsp;        if (isIndefinite(lenByte)) {</b>
+<b class="nc"><i>189</i>&nbsp;            byte[] lenBytes = (byte[])ndefsList.get(index++);</b>
+<b class="nc"><i>190</i>&nbsp;            System.arraycopy(lenBytes, 0, newData, newDataPos,</b>
+<i>191</i>&nbsp;                             lenBytes.length);
+<b class="nc"><i>192</i>&nbsp;            newDataPos += lenBytes.length;</b>
+<i>193</i>&nbsp;            return;
+<i>194</i>&nbsp;        }
+<b class="nc"><i>195</i>&nbsp;        if (isLongForm(lenByte)) {</b>
+<b class="nc"><i>196</i>&nbsp;            lenByte &amp;= LEN_MASK;</b>
+<b class="nc"><i>197</i>&nbsp;            for (int i = 0; i &lt; lenByte; i++) {</b>
+<b class="nc"><i>198</i>&nbsp;                curLen = (curLen &lt;&lt; 8) + (data[dataPos++] &amp; 0xff);</b>
+<i>199</i>&nbsp;            }
+<b class="nc"><i>200</i>&nbsp;            if (curLen &lt; 0) {</b>
+<b class="nc"><i>201</i>&nbsp;                throw new IOException(&quot;Invalid length bytes&quot;);</b>
+<i>202</i>&nbsp;            }
+<i>203</i>&nbsp;        } else {
+<b class="nc"><i>204</i>&nbsp;            curLen = (lenByte &amp; LEN_MASK);</b>
+<i>205</i>&nbsp;        }
+<b class="nc"><i>206</i>&nbsp;        writeLength(curLen);</b>
+<b class="nc"><i>207</i>&nbsp;        writeValue(curLen);</b>
+<i>208</i>&nbsp;    }
+<i>209</i>&nbsp;
+<i>210</i>&nbsp;    private void writeLength(int curLen) {
+<b class="nc"><i>211</i>&nbsp;        if (curLen &lt; 128) {</b>
+<b class="nc"><i>212</i>&nbsp;            newData[newDataPos++] = (byte)curLen;</b>
+<i>213</i>&nbsp;
+<b class="nc"><i>214</i>&nbsp;        } else if (curLen &lt; (1 &lt;&lt; 8)) {</b>
+<b class="nc"><i>215</i>&nbsp;            newData[newDataPos++] = (byte)0x81;</b>
+<b class="nc"><i>216</i>&nbsp;            newData[newDataPos++] = (byte)curLen;</b>
+<i>217</i>&nbsp;
+<b class="nc"><i>218</i>&nbsp;        } else if (curLen &lt; (1 &lt;&lt; 16)) {</b>
+<b class="nc"><i>219</i>&nbsp;            newData[newDataPos++] = (byte)0x82;</b>
+<b class="nc"><i>220</i>&nbsp;            newData[newDataPos++] = (byte)(curLen &gt;&gt; 8);</b>
+<b class="nc"><i>221</i>&nbsp;            newData[newDataPos++] = (byte)curLen;</b>
+<i>222</i>&nbsp;
+<b class="nc"><i>223</i>&nbsp;        } else if (curLen &lt; (1 &lt;&lt; 24)) {</b>
+<b class="nc"><i>224</i>&nbsp;            newData[newDataPos++] = (byte)0x83;</b>
+<b class="nc"><i>225</i>&nbsp;            newData[newDataPos++] = (byte)(curLen &gt;&gt; 16);</b>
+<b class="nc"><i>226</i>&nbsp;            newData[newDataPos++] = (byte)(curLen &gt;&gt; 8);</b>
+<b class="nc"><i>227</i>&nbsp;            newData[newDataPos++] = (byte)curLen;</b>
+<i>228</i>&nbsp;
+<i>229</i>&nbsp;        } else {
+<b class="nc"><i>230</i>&nbsp;            newData[newDataPos++] = (byte)0x84;</b>
+<b class="nc"><i>231</i>&nbsp;            newData[newDataPos++] = (byte)(curLen &gt;&gt; 24);</b>
+<b class="nc"><i>232</i>&nbsp;            newData[newDataPos++] = (byte)(curLen &gt;&gt; 16);</b>
+<b class="nc"><i>233</i>&nbsp;            newData[newDataPos++] = (byte)(curLen &gt;&gt; 8);</b>
+<b class="nc"><i>234</i>&nbsp;            newData[newDataPos++] = (byte)curLen;</b>
+<i>235</i>&nbsp;        }
+<i>236</i>&nbsp;    }
+<i>237</i>&nbsp;
+<i>238</i>&nbsp;    private byte[] getLengthBytes(int curLen) {
+<i>239</i>&nbsp;        byte[] lenBytes;
+<b class="nc"><i>240</i>&nbsp;        int index = 0;</b>
+<i>241</i>&nbsp;
+<b class="nc"><i>242</i>&nbsp;        if (curLen &lt; 128) {</b>
+<b class="nc"><i>243</i>&nbsp;            lenBytes = new byte[1];</b>
+<b class="nc"><i>244</i>&nbsp;            lenBytes[index++] = (byte)curLen;</b>
+<i>245</i>&nbsp;
+<b class="nc"><i>246</i>&nbsp;        } else if (curLen &lt; (1 &lt;&lt; 8)) {</b>
+<b class="nc"><i>247</i>&nbsp;            lenBytes = new byte[2];</b>
+<b class="nc"><i>248</i>&nbsp;            lenBytes[index++] = (byte)0x81;</b>
+<b class="nc"><i>249</i>&nbsp;            lenBytes[index++] = (byte)curLen;</b>
+<i>250</i>&nbsp;
+<b class="nc"><i>251</i>&nbsp;        } else if (curLen &lt; (1 &lt;&lt; 16)) {</b>
+<b class="nc"><i>252</i>&nbsp;            lenBytes = new byte[3];</b>
+<b class="nc"><i>253</i>&nbsp;            lenBytes[index++] = (byte)0x82;</b>
+<b class="nc"><i>254</i>&nbsp;            lenBytes[index++] = (byte)(curLen &gt;&gt; 8);</b>
+<b class="nc"><i>255</i>&nbsp;            lenBytes[index++] = (byte)curLen;</b>
+<i>256</i>&nbsp;
+<b class="nc"><i>257</i>&nbsp;        } else if (curLen &lt; (1 &lt;&lt; 24)) {</b>
+<b class="nc"><i>258</i>&nbsp;            lenBytes = new byte[4];</b>
+<b class="nc"><i>259</i>&nbsp;            lenBytes[index++] = (byte)0x83;</b>
+<b class="nc"><i>260</i>&nbsp;            lenBytes[index++] = (byte)(curLen &gt;&gt; 16);</b>
+<b class="nc"><i>261</i>&nbsp;            lenBytes[index++] = (byte)(curLen &gt;&gt; 8);</b>
+<b class="nc"><i>262</i>&nbsp;            lenBytes[index++] = (byte)curLen;</b>
+<i>263</i>&nbsp;
+<i>264</i>&nbsp;        } else {
+<b class="nc"><i>265</i>&nbsp;            lenBytes = new byte[5];</b>
+<b class="nc"><i>266</i>&nbsp;            lenBytes[index++] = (byte)0x84;</b>
+<b class="nc"><i>267</i>&nbsp;            lenBytes[index++] = (byte)(curLen &gt;&gt; 24);</b>
+<b class="nc"><i>268</i>&nbsp;            lenBytes[index++] = (byte)(curLen &gt;&gt; 16);</b>
+<b class="nc"><i>269</i>&nbsp;            lenBytes[index++] = (byte)(curLen &gt;&gt; 8);</b>
+<b class="nc"><i>270</i>&nbsp;            lenBytes[index++] = (byte)curLen;</b>
+<i>271</i>&nbsp;        }
+<i>272</i>&nbsp;
+<b class="nc"><i>273</i>&nbsp;        return lenBytes;</b>
+<i>274</i>&nbsp;    }
+<i>275</i>&nbsp;
+<i>276</i>&nbsp;    // Returns the number of bytes needed to represent the given length
+<i>277</i>&nbsp;    // in ASN.1 notation
+<i>278</i>&nbsp;    private int getNumOfLenBytes(int len) {
+<b class="nc"><i>279</i>&nbsp;        int numOfLenBytes = 0;</b>
+<i>280</i>&nbsp;
+<b class="nc"><i>281</i>&nbsp;        if (len &lt; 128) {</b>
+<b class="nc"><i>282</i>&nbsp;            numOfLenBytes = 1;</b>
+<b class="nc"><i>283</i>&nbsp;        } else if (len &lt; (1 &lt;&lt; 8)) {</b>
+<b class="nc"><i>284</i>&nbsp;            numOfLenBytes = 2;</b>
+<b class="nc"><i>285</i>&nbsp;        } else if (len &lt; (1 &lt;&lt; 16)) {</b>
+<b class="nc"><i>286</i>&nbsp;            numOfLenBytes = 3;</b>
+<b class="nc"><i>287</i>&nbsp;        } else if (len &lt; (1 &lt;&lt; 24)) {</b>
+<b class="nc"><i>288</i>&nbsp;            numOfLenBytes = 4;</b>
+<i>289</i>&nbsp;        } else {
+<b class="nc"><i>290</i>&nbsp;            numOfLenBytes = 5;</b>
+<i>291</i>&nbsp;        }
+<b class="nc"><i>292</i>&nbsp;        return numOfLenBytes;</b>
+<i>293</i>&nbsp;    }
+<i>294</i>&nbsp;
+<i>295</i>&nbsp;    /**
+<i>296</i>&nbsp;     * Parse the value;
+<i>297</i>&nbsp;     */
+<i>298</i>&nbsp;    private void parseValue(int curLen) {
+<b class="nc"><i>299</i>&nbsp;        dataPos += curLen;</b>
+<i>300</i>&nbsp;    }
+<i>301</i>&nbsp;
+<i>302</i>&nbsp;    /**
+<i>303</i>&nbsp;     * Write the value;
+<i>304</i>&nbsp;     */
+<i>305</i>&nbsp;    private void writeValue(int curLen) {
+<b class="nc"><i>306</i>&nbsp;        for (int i=0; i &lt; curLen; i++)</b>
+<b class="nc"><i>307</i>&nbsp;            newData[newDataPos++] = data[dataPos++];</b>
+<i>308</i>&nbsp;    }
+<i>309</i>&nbsp;
+<i>310</i>&nbsp;    /**
+<i>311</i>&nbsp;     * Converts a indefinite length DER encoded byte array to
+<i>312</i>&nbsp;     * a definte length DER encoding.
+<i>313</i>&nbsp;     *
+<i>314</i>&nbsp;     * @param indefData the byte array holding the indefinite
+<i>315</i>&nbsp;     *        length encoding.
+<i>316</i>&nbsp;     * @return the byte array containing the definite length
+<i>317</i>&nbsp;     *         DER encoding.
+<i>318</i>&nbsp;     * @exception IOException on parsing or re-writing errors.
+<i>319</i>&nbsp;     */
+<i>320</i>&nbsp;    byte[] convert(byte[] indefData) throws IOException {
+<b class="nc"><i>321</i>&nbsp;        data = indefData;</b>
+<b class="nc"><i>322</i>&nbsp;        dataPos=0; index=0;</b>
+<b class="nc"><i>323</i>&nbsp;        dataSize = data.length;</b>
+<b class="nc"><i>324</i>&nbsp;        int len=0;</b>
+<b class="nc"><i>325</i>&nbsp;        int unused = 0;</b>
+<i>326</i>&nbsp;
+<i>327</i>&nbsp;        // parse and set up the vectors of all the indefinite-lengths
+<b class="nc"><i>328</i>&nbsp;        while (dataPos &lt; dataSize) {</b>
+<b class="nc"><i>329</i>&nbsp;            parseTag();</b>
+<b class="nc"><i>330</i>&nbsp;            len = parseLength();</b>
+<b class="nc"><i>331</i>&nbsp;            parseValue(len);</b>
+<b class="nc"><i>332</i>&nbsp;            if (unresolved == 0) {</b>
+<b class="nc"><i>333</i>&nbsp;                unused = dataSize - dataPos;</b>
+<b class="nc"><i>334</i>&nbsp;                dataSize = dataPos;</b>
+<b class="nc"><i>335</i>&nbsp;                break;</b>
+<i>336</i>&nbsp;            }
+<i>337</i>&nbsp;        }
+<i>338</i>&nbsp;
+<b class="nc"><i>339</i>&nbsp;        if (unresolved != 0) {</b>
+<b class="nc"><i>340</i>&nbsp;            throw new IOException(&quot;not all indef len BER resolved&quot;);</b>
+<i>341</i>&nbsp;        }
+<i>342</i>&nbsp;
+<b class="nc"><i>343</i>&nbsp;        newData = new byte[dataSize + numOfTotalLenBytes + unused];</b>
+<b class="nc"><i>344</i>&nbsp;        dataPos=0; newDataPos=0; index=0;</b>
+<i>345</i>&nbsp;
+<i>346</i>&nbsp;        // write out the new byte array replacing all the indefinite-lengths
+<i>347</i>&nbsp;        // and EOCs
+<b class="nc"><i>348</i>&nbsp;        while (dataPos &lt; dataSize) {</b>
+<b class="nc"><i>349</i>&nbsp;           writeTag();</b>
+<b class="nc"><i>350</i>&nbsp;           writeLengthAndValue();</b>
+<i>351</i>&nbsp;        }
+<b class="nc"><i>352</i>&nbsp;        System.arraycopy(indefData, dataSize,</b>
+<i>353</i>&nbsp;                         newData, dataSize + numOfTotalLenBytes, unused);
+<i>354</i>&nbsp;
+<b class="nc"><i>355</i>&nbsp;        return newData;</b>
+<i>356</i>&nbsp;    }
+<i>357</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

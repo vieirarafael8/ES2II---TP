@@ -1,0 +1,657 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: VMConnection</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.tools.example.debug.tty</a> ]
+</div>
+
+<h1>Coverage Summary for Class: VMConnection (com.sun.tools.example.debug.tty)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">VMConnection</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 27)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 225)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">VMConnection$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 29)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 231)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1998, 2012, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;/*
+<i>27</i>&nbsp; * This source code is provided to illustrate the usage of a given feature
+<i>28</i>&nbsp; * or technique and has been deliberately simplified. Additional steps
+<i>29</i>&nbsp; * required for a production-quality application, such as security checks,
+<i>30</i>&nbsp; * input validation and proper error handling, might not be present in
+<i>31</i>&nbsp; * this sample code.
+<i>32</i>&nbsp; */
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;package com.sun.tools.example.debug.tty;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;import com.sun.jdi.*;
+<i>38</i>&nbsp;import com.sun.jdi.connect.*;
+<i>39</i>&nbsp;import com.sun.jdi.request.EventRequestManager;
+<i>40</i>&nbsp;import com.sun.jdi.request.ThreadStartRequest;
+<i>41</i>&nbsp;import com.sun.jdi.request.ThreadDeathRequest;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;import java.util.*;
+<i>44</i>&nbsp;import java.util.regex.*;
+<i>45</i>&nbsp;import java.io.*;
+<i>46</i>&nbsp;
+<b class="nc"><i>47</i>&nbsp;class VMConnection {</b>
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;    private VirtualMachine vm;
+<b class="nc"><i>50</i>&nbsp;    private Process process = null;</b>
+<b class="nc"><i>51</i>&nbsp;    private int outputCompleteCount = 0;</b>
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;    private final Connector connector;
+<i>54</i>&nbsp;    private final Map&lt;String, com.sun.jdi.connect.Connector.Argument&gt; connectorArgs;
+<i>55</i>&nbsp;    private final int traceFlags;
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;    synchronized void notifyOutputComplete() {
+<b class="nc"><i>58</i>&nbsp;        outputCompleteCount++;</b>
+<b class="nc"><i>59</i>&nbsp;        notifyAll();</b>
+<i>60</i>&nbsp;    }
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    synchronized void waitOutputComplete() {
+<i>63</i>&nbsp;        // Wait for stderr and stdout
+<b class="nc"><i>64</i>&nbsp;        if (process != null) {</b>
+<b class="nc"><i>65</i>&nbsp;            while (outputCompleteCount &lt; 2) {</b>
+<b class="nc"><i>66</i>&nbsp;                try {wait();} catch (InterruptedException e) {}</b>
+<i>67</i>&nbsp;            }
+<i>68</i>&nbsp;        }
+<i>69</i>&nbsp;    }
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;    private Connector findConnector(String name) {
+<i>72</i>&nbsp;        for (Connector connector :
+<b class="nc"><i>73</i>&nbsp;                 Bootstrap.virtualMachineManager().allConnectors()) {</b>
+<b class="nc"><i>74</i>&nbsp;            if (connector.name().equals(name)) {</b>
+<b class="nc"><i>75</i>&nbsp;                return connector;</b>
+<i>76</i>&nbsp;            }
+<b class="nc"><i>77</i>&nbsp;        }</b>
+<b class="nc"><i>78</i>&nbsp;        return null;</b>
+<i>79</i>&nbsp;    }
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    private Map &lt;String, com.sun.jdi.connect.Connector.Argument&gt; parseConnectorArgs(Connector connector, String argString) {
+<b class="nc"><i>82</i>&nbsp;        Map&lt;String, com.sun.jdi.connect.Connector.Argument&gt; arguments = connector.defaultArguments();</b>
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;        /*
+<i>85</i>&nbsp;         * We are parsing strings of the form:
+<i>86</i>&nbsp;         *    name1=value1,[name2=value2,...]
+<i>87</i>&nbsp;         * However, the value1...valuen substrings may contain
+<i>88</i>&nbsp;         * embedded comma(s), so make provision for quoting inside
+<i>89</i>&nbsp;         * the value substrings. (Bug ID 4285874)
+<i>90</i>&nbsp;         */
+<b class="nc"><i>91</i>&nbsp;        String regexPattern =</b>
+<i>92</i>&nbsp;            &quot;(quote=[^,]+,)|&quot; +           // special case for quote=.,
+<i>93</i>&nbsp;            &quot;(\\w+=)&quot; +                   // name=
+<i>94</i>&nbsp;            &quot;(((\&quot;[^\&quot;]*\&quot;)|&quot; +           //   ( &quot;l , ue&quot;
+<i>95</i>&nbsp;            &quot;(&#39;[^&#39;]*&#39;)|&quot; +                //     &#39;l , ue&#39;
+<i>96</i>&nbsp;            &quot;([^,&#39;\&quot;]+))+,)&quot;;             //     v a l u e )+ ,
+<b class="nc"><i>97</i>&nbsp;        Pattern p = Pattern.compile(regexPattern);</b>
+<b class="nc"><i>98</i>&nbsp;        Matcher m = p.matcher(argString);</b>
+<b class="nc"><i>99</i>&nbsp;        while (m.find()) {</b>
+<b class="nc"><i>100</i>&nbsp;            int startPosition = m.start();</b>
+<b class="nc"><i>101</i>&nbsp;            int endPosition = m.end();</b>
+<b class="nc"><i>102</i>&nbsp;            if (startPosition &gt; 0) {</b>
+<i>103</i>&nbsp;                /*
+<i>104</i>&nbsp;                 * It is an error if parsing skips over any part of argString.
+<i>105</i>&nbsp;                 */
+<b class="nc"><i>106</i>&nbsp;                throw new IllegalArgumentException</b>
+<b class="nc"><i>107</i>&nbsp;                    (MessageOutput.format(&quot;Illegal connector argument&quot;,</b>
+<i>108</i>&nbsp;                                          argString));
+<i>109</i>&nbsp;            }
+<i>110</i>&nbsp;
+<b class="nc"><i>111</i>&nbsp;            String token = argString.substring(startPosition, endPosition);</b>
+<b class="nc"><i>112</i>&nbsp;            int index = token.indexOf(&#39;=&#39;);</b>
+<b class="nc"><i>113</i>&nbsp;            String name = token.substring(0, index);</b>
+<b class="nc"><i>114</i>&nbsp;            String value = token.substring(index + 1,</b>
+<b class="nc"><i>115</i>&nbsp;                                           token.length() - 1); // Remove comma delimiter</b>
+<i>116</i>&nbsp;
+<i>117</i>&nbsp;            /*
+<i>118</i>&nbsp;             * for values enclosed in quotes (single and/or double quotes)
+<i>119</i>&nbsp;             * strip off enclosing quote chars
+<i>120</i>&nbsp;             * needed for quote enclosed delimited substrings
+<i>121</i>&nbsp;             */
+<b class="nc"><i>122</i>&nbsp;            if (name.equals(&quot;options&quot;)) {</b>
+<b class="nc"><i>123</i>&nbsp;                StringBuilder sb = new StringBuilder();</b>
+<b class="nc"><i>124</i>&nbsp;                for (String s : splitStringAtNonEnclosedWhiteSpace(value)) {</b>
+<b class="nc"><i>125</i>&nbsp;                    while (isEnclosed(s, &quot;\&quot;&quot;) || isEnclosed(s, &quot;&#39;&quot;)) {</b>
+<b class="nc"><i>126</i>&nbsp;                        s = s.substring(1, s.length() - 1);</b>
+<i>127</i>&nbsp;                    }
+<b class="nc"><i>128</i>&nbsp;                    sb.append(s);</b>
+<b class="nc"><i>129</i>&nbsp;                    sb.append(&quot; &quot;);</b>
+<b class="nc"><i>130</i>&nbsp;                }</b>
+<b class="nc"><i>131</i>&nbsp;                value = sb.toString();</b>
+<i>132</i>&nbsp;            }
+<i>133</i>&nbsp;
+<b class="nc"><i>134</i>&nbsp;            Connector.Argument argument = arguments.get(name);</b>
+<b class="nc"><i>135</i>&nbsp;            if (argument == null) {</b>
+<b class="nc"><i>136</i>&nbsp;                throw new IllegalArgumentException</b>
+<b class="nc"><i>137</i>&nbsp;                    (MessageOutput.format(&quot;Argument is not defined for connector:&quot;,</b>
+<b class="nc"><i>138</i>&nbsp;                                          new Object [] {name, connector.name()}));</b>
+<i>139</i>&nbsp;            }
+<b class="nc"><i>140</i>&nbsp;            argument.setValue(value);</b>
+<i>141</i>&nbsp;
+<b class="nc"><i>142</i>&nbsp;            argString = argString.substring(endPosition); // Remove what was just parsed...</b>
+<b class="nc"><i>143</i>&nbsp;            m = p.matcher(argString);                     //    and parse again on what is left.</b>
+<b class="nc"><i>144</i>&nbsp;        }</b>
+<b class="nc"><i>145</i>&nbsp;        if ((! argString.equals(&quot;,&quot;)) &amp;&amp; (argString.length() &gt; 0)) {</b>
+<i>146</i>&nbsp;            /*
+<i>147</i>&nbsp;             * It is an error if any part of argString is left over,
+<i>148</i>&nbsp;             * unless it was empty to begin with.
+<i>149</i>&nbsp;             */
+<b class="nc"><i>150</i>&nbsp;            throw new IllegalArgumentException</b>
+<b class="nc"><i>151</i>&nbsp;                (MessageOutput.format(&quot;Illegal connector argument&quot;, argString));</b>
+<i>152</i>&nbsp;        }
+<b class="nc"><i>153</i>&nbsp;        return arguments;</b>
+<i>154</i>&nbsp;    }
+<i>155</i>&nbsp;
+<i>156</i>&nbsp;    private static boolean isEnclosed(String value, String enclosingChar) {
+<b class="nc"><i>157</i>&nbsp;        if (value.indexOf(enclosingChar) == 0) {</b>
+<b class="nc"><i>158</i>&nbsp;            int lastIndex = value.lastIndexOf(enclosingChar);</b>
+<b class="nc"><i>159</i>&nbsp;            if (lastIndex &gt; 0 &amp;&amp; lastIndex  == value.length() - 1) {</b>
+<b class="nc"><i>160</i>&nbsp;                return true;</b>
+<i>161</i>&nbsp;            }
+<i>162</i>&nbsp;        }
+<b class="nc"><i>163</i>&nbsp;        return false;</b>
+<i>164</i>&nbsp;    }
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;    private static List&lt;String&gt; splitStringAtNonEnclosedWhiteSpace(String value) throws IllegalArgumentException {
+<b class="nc"><i>167</i>&nbsp;        List&lt;String&gt; al = new ArrayList&lt;String&gt;();</b>
+<i>168</i>&nbsp;        char[] arr;
+<b class="nc"><i>169</i>&nbsp;        int startPosition = 0;</b>
+<b class="nc"><i>170</i>&nbsp;        int endPosition = 0;</b>
+<i>171</i>&nbsp;        final char SPACE = &#39; &#39;;
+<i>172</i>&nbsp;        final char DOUBLEQ = &#39;&quot;&#39;;
+<i>173</i>&nbsp;        final char SINGLEQ = &#39;\&#39;&#39;;
+<i>174</i>&nbsp;
+<i>175</i>&nbsp;        /*
+<i>176</i>&nbsp;         * An &quot;open&quot; or &quot;active&quot; enclosing state is where
+<i>177</i>&nbsp;         * the first valid start quote qualifier is found,
+<i>178</i>&nbsp;         * and there is a search in progress for the
+<i>179</i>&nbsp;         * relevant end matching quote
+<i>180</i>&nbsp;         *
+<i>181</i>&nbsp;         * enclosingTargetChar set to SPACE
+<i>182</i>&nbsp;         * is used to signal a non open enclosing state
+<i>183</i>&nbsp;         */
+<b class="nc"><i>184</i>&nbsp;        char enclosingTargetChar = SPACE;</b>
+<i>185</i>&nbsp;
+<b class="nc"><i>186</i>&nbsp;        if (value == null) {</b>
+<b class="nc"><i>187</i>&nbsp;            throw new IllegalArgumentException</b>
+<b class="nc"><i>188</i>&nbsp;                (MessageOutput.format(&quot;value string is null&quot;));</b>
+<i>189</i>&nbsp;        }
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;        // split parameter string into individual chars
+<b class="nc"><i>192</i>&nbsp;        arr = value.toCharArray();</b>
+<i>193</i>&nbsp;
+<b class="nc"><i>194</i>&nbsp;        for (int i = 0; i &lt; arr.length; i++) {</b>
+<b class="nc"><i>195</i>&nbsp;            switch (arr[i]) {</b>
+<i>196</i>&nbsp;                case SPACE: {
+<i>197</i>&nbsp;                    // do nothing for spaces
+<i>198</i>&nbsp;                    // unless last in array
+<b class="nc"><i>199</i>&nbsp;                    if (isLastChar(arr, i)) {</b>
+<b class="nc"><i>200</i>&nbsp;                        endPosition = i;</b>
+<i>201</i>&nbsp;                        // break for substring creation
+<b class="nc"><i>202</i>&nbsp;                        break;</b>
+<i>203</i>&nbsp;                    }
+<i>204</i>&nbsp;                    continue;
+<i>205</i>&nbsp;                }
+<i>206</i>&nbsp;                case DOUBLEQ:
+<i>207</i>&nbsp;                case SINGLEQ: {
+<b class="nc"><i>208</i>&nbsp;                    if (enclosingTargetChar == arr[i]) {</b>
+<i>209</i>&nbsp;                        // potential match to close open enclosing
+<b class="nc"><i>210</i>&nbsp;                        if (isNextCharWhitespace(arr, i)) {</b>
+<i>211</i>&nbsp;                            // if peek next is whitespace
+<i>212</i>&nbsp;                            // then enclosing is a valid substring
+<b class="nc"><i>213</i>&nbsp;                            endPosition = i;</b>
+<i>214</i>&nbsp;                            // reset enclosing target char
+<b class="nc"><i>215</i>&nbsp;                            enclosingTargetChar = SPACE;</b>
+<i>216</i>&nbsp;                            // break for substring creation
+<b class="nc"><i>217</i>&nbsp;                            break;</b>
+<i>218</i>&nbsp;                        }
+<i>219</i>&nbsp;                    }
+<b class="nc"><i>220</i>&nbsp;                    if (enclosingTargetChar == SPACE) {</b>
+<i>221</i>&nbsp;                        // no open enclosing state
+<i>222</i>&nbsp;                        // handle as normal char
+<b class="nc"><i>223</i>&nbsp;                        if (isPreviousCharWhitespace(arr, i)) {</b>
+<b class="nc"><i>224</i>&nbsp;                            startPosition = i;</b>
+<i>225</i>&nbsp;                            // peek forward for end candidates
+<b class="nc"><i>226</i>&nbsp;                            if (value.indexOf(arr[i], i + 1) &gt;= 0) {</b>
+<i>227</i>&nbsp;                                // set open enclosing state by
+<i>228</i>&nbsp;                                // setting up the target char
+<b class="nc"><i>229</i>&nbsp;                                enclosingTargetChar = arr[i];</b>
+<i>230</i>&nbsp;                            } else {
+<i>231</i>&nbsp;                                // no more target chars left to match
+<i>232</i>&nbsp;                                // end enclosing, handle as normal char
+<b class="nc"><i>233</i>&nbsp;                                if (isNextCharWhitespace(arr, i)) {</b>
+<b class="nc"><i>234</i>&nbsp;                                    endPosition = i;</b>
+<i>235</i>&nbsp;                                    // break for substring creation
+<b class="nc"><i>236</i>&nbsp;                                    break;</b>
+<i>237</i>&nbsp;                                }
+<i>238</i>&nbsp;                            }
+<i>239</i>&nbsp;                        }
+<i>240</i>&nbsp;                    }
+<i>241</i>&nbsp;                    continue;
+<i>242</i>&nbsp;                }
+<i>243</i>&nbsp;                default: {
+<i>244</i>&nbsp;                    // normal non-space, non-&quot; and non-&#39; chars
+<b class="nc"><i>245</i>&nbsp;                    if (enclosingTargetChar == SPACE) {</b>
+<i>246</i>&nbsp;                        // no open enclosing state
+<b class="nc"><i>247</i>&nbsp;                        if (isPreviousCharWhitespace(arr, i)) {</b>
+<i>248</i>&nbsp;                            // start of space delim substring
+<b class="nc"><i>249</i>&nbsp;                            startPosition = i;</b>
+<i>250</i>&nbsp;                        }
+<b class="nc"><i>251</i>&nbsp;                        if (isNextCharWhitespace(arr, i)) {</b>
+<i>252</i>&nbsp;                            // end of space delim substring
+<b class="nc"><i>253</i>&nbsp;                            endPosition = i;</b>
+<i>254</i>&nbsp;                            // break for substring creation
+<i>255</i>&nbsp;                            break;
+<i>256</i>&nbsp;                        }
+<i>257</i>&nbsp;                    }
+<i>258</i>&nbsp;                    continue;
+<i>259</i>&nbsp;                }
+<i>260</i>&nbsp;            }
+<i>261</i>&nbsp;
+<i>262</i>&nbsp;            // break&#39;s end up here
+<b class="nc"><i>263</i>&nbsp;            if (startPosition &gt; endPosition) {</b>
+<b class="nc"><i>264</i>&nbsp;                throw new IllegalArgumentException</b>
+<b class="nc"><i>265</i>&nbsp;                    (MessageOutput.format(&quot;Illegal option values&quot;));</b>
+<i>266</i>&nbsp;            }
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;            // extract substring and add to List&lt;String&gt;
+<b class="nc"><i>269</i>&nbsp;            al.add(value.substring(startPosition, ++endPosition));</b>
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;            // set new start position
+<b class="nc"><i>272</i>&nbsp;            i = startPosition = endPosition;</b>
+<i>273</i>&nbsp;
+<i>274</i>&nbsp;        } // for loop
+<i>275</i>&nbsp;
+<b class="nc"><i>276</i>&nbsp;        return al;</b>
+<i>277</i>&nbsp;    }
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;    static private boolean isPreviousCharWhitespace(char[] arr, int curr_pos) {
+<b class="nc"><i>280</i>&nbsp;        return isCharWhitespace(arr, curr_pos - 1);</b>
+<i>281</i>&nbsp;    }
+<i>282</i>&nbsp;
+<i>283</i>&nbsp;    static private boolean isNextCharWhitespace(char[] arr, int curr_pos) {
+<b class="nc"><i>284</i>&nbsp;        return isCharWhitespace(arr, curr_pos + 1);</b>
+<i>285</i>&nbsp;    }
+<i>286</i>&nbsp;
+<i>287</i>&nbsp;    static private boolean isCharWhitespace(char[] arr, int pos) {
+<b class="nc"><i>288</i>&nbsp;        if (pos &lt; 0 || pos &gt;= arr.length) {</b>
+<i>289</i>&nbsp;            // outside arraybounds is considered an implicit space
+<b class="nc"><i>290</i>&nbsp;            return true;</b>
+<i>291</i>&nbsp;        }
+<b class="nc"><i>292</i>&nbsp;        if (arr[pos] == &#39; &#39;) {</b>
+<b class="nc"><i>293</i>&nbsp;            return true;</b>
+<i>294</i>&nbsp;        }
+<b class="nc"><i>295</i>&nbsp;        return false;</b>
+<i>296</i>&nbsp;    }
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;    static private boolean isLastChar(char[] arr, int pos) {
+<b class="nc"><i>299</i>&nbsp;        return (pos + 1 == arr.length);</b>
+<i>300</i>&nbsp;    }
+<i>301</i>&nbsp;
+<b class="nc"><i>302</i>&nbsp;    VMConnection(String connectSpec, int traceFlags) {</b>
+<i>303</i>&nbsp;        String nameString;
+<i>304</i>&nbsp;        String argString;
+<b class="nc"><i>305</i>&nbsp;        int index = connectSpec.indexOf(&#39;:&#39;);</b>
+<b class="nc"><i>306</i>&nbsp;        if (index == -1) {</b>
+<b class="nc"><i>307</i>&nbsp;            nameString = connectSpec;</b>
+<b class="nc"><i>308</i>&nbsp;            argString = &quot;&quot;;</b>
+<i>309</i>&nbsp;        } else {
+<b class="nc"><i>310</i>&nbsp;            nameString = connectSpec.substring(0, index);</b>
+<b class="nc"><i>311</i>&nbsp;            argString = connectSpec.substring(index + 1);</b>
+<i>312</i>&nbsp;        }
+<i>313</i>&nbsp;
+<b class="nc"><i>314</i>&nbsp;        connector = findConnector(nameString);</b>
+<b class="nc"><i>315</i>&nbsp;        if (connector == null) {</b>
+<b class="nc"><i>316</i>&nbsp;            throw new IllegalArgumentException</b>
+<b class="nc"><i>317</i>&nbsp;                (MessageOutput.format(&quot;No connector named:&quot;, nameString));</b>
+<i>318</i>&nbsp;        }
+<i>319</i>&nbsp;
+<b class="nc"><i>320</i>&nbsp;        connectorArgs = parseConnectorArgs(connector, argString);</b>
+<b class="nc"><i>321</i>&nbsp;        this.traceFlags = traceFlags;</b>
+<i>322</i>&nbsp;    }
+<i>323</i>&nbsp;
+<i>324</i>&nbsp;    synchronized VirtualMachine open() {
+<b class="nc"><i>325</i>&nbsp;        if (connector instanceof LaunchingConnector) {</b>
+<b class="nc"><i>326</i>&nbsp;            vm = launchTarget();</b>
+<b class="nc"><i>327</i>&nbsp;        } else if (connector instanceof AttachingConnector) {</b>
+<b class="nc"><i>328</i>&nbsp;            vm = attachTarget();</b>
+<b class="nc"><i>329</i>&nbsp;        } else if (connector instanceof ListeningConnector) {</b>
+<b class="nc"><i>330</i>&nbsp;            vm = listenTarget();</b>
+<i>331</i>&nbsp;        } else {
+<b class="nc"><i>332</i>&nbsp;            throw new InternalError</b>
+<b class="nc"><i>333</i>&nbsp;                (MessageOutput.format(&quot;Invalid connect type&quot;));</b>
+<i>334</i>&nbsp;        }
+<b class="nc"><i>335</i>&nbsp;        vm.setDebugTraceMode(traceFlags);</b>
+<b class="nc"><i>336</i>&nbsp;        if (vm.canBeModified()){</b>
+<b class="nc"><i>337</i>&nbsp;            setEventRequests(vm);</b>
+<b class="nc"><i>338</i>&nbsp;            resolveEventRequests();</b>
+<i>339</i>&nbsp;        }
+<i>340</i>&nbsp;        /*
+<i>341</i>&nbsp;         * Now that the vm connection is open, fetch the debugee
+<i>342</i>&nbsp;         * classpath and set up a default sourcepath.
+<i>343</i>&nbsp;         * (Unless user supplied a sourcepath on the command line)
+<i>344</i>&nbsp;         * (Bug ID 4186582)
+<i>345</i>&nbsp;         */
+<b class="nc"><i>346</i>&nbsp;        if (Env.getSourcePath().length() == 0) {</b>
+<b class="nc"><i>347</i>&nbsp;            if (vm instanceof PathSearchingVirtualMachine) {</b>
+<b class="nc"><i>348</i>&nbsp;                PathSearchingVirtualMachine psvm =</b>
+<i>349</i>&nbsp;                    (PathSearchingVirtualMachine) vm;
+<b class="nc"><i>350</i>&nbsp;                Env.setSourcePath(psvm.classPath());</b>
+<b class="nc"><i>351</i>&nbsp;            } else {</b>
+<b class="nc"><i>352</i>&nbsp;                Env.setSourcePath(&quot;.&quot;);</b>
+<i>353</i>&nbsp;            }
+<i>354</i>&nbsp;        }
+<i>355</i>&nbsp;
+<b class="nc"><i>356</i>&nbsp;        return vm;</b>
+<i>357</i>&nbsp;    }
+<i>358</i>&nbsp;
+<i>359</i>&nbsp;    boolean setConnectorArg(String name, String value) {
+<i>360</i>&nbsp;        /*
+<i>361</i>&nbsp;         * Too late if the connection already made
+<i>362</i>&nbsp;         */
+<b class="nc"><i>363</i>&nbsp;        if (vm != null) {</b>
+<b class="nc"><i>364</i>&nbsp;            return false;</b>
+<i>365</i>&nbsp;        }
+<i>366</i>&nbsp;
+<b class="nc"><i>367</i>&nbsp;        Connector.Argument argument = connectorArgs.get(name);</b>
+<b class="nc"><i>368</i>&nbsp;        if (argument == null) {</b>
+<b class="nc"><i>369</i>&nbsp;            return false;</b>
+<i>370</i>&nbsp;        }
+<b class="nc"><i>371</i>&nbsp;        argument.setValue(value);</b>
+<b class="nc"><i>372</i>&nbsp;        return true;</b>
+<i>373</i>&nbsp;    }
+<i>374</i>&nbsp;
+<i>375</i>&nbsp;    String connectorArg(String name) {
+<b class="nc"><i>376</i>&nbsp;        Connector.Argument argument = connectorArgs.get(name);</b>
+<b class="nc"><i>377</i>&nbsp;        if (argument == null) {</b>
+<b class="nc"><i>378</i>&nbsp;            return &quot;&quot;;</b>
+<i>379</i>&nbsp;        }
+<b class="nc"><i>380</i>&nbsp;        return argument.value();</b>
+<i>381</i>&nbsp;    }
+<i>382</i>&nbsp;
+<i>383</i>&nbsp;    public synchronized VirtualMachine vm() {
+<b class="nc"><i>384</i>&nbsp;        if (vm == null) {</b>
+<b class="nc"><i>385</i>&nbsp;            throw new VMNotConnectedException();</b>
+<i>386</i>&nbsp;        } else {
+<b class="nc"><i>387</i>&nbsp;            return vm;</b>
+<i>388</i>&nbsp;        }
+<i>389</i>&nbsp;    }
+<i>390</i>&nbsp;
+<i>391</i>&nbsp;    boolean isOpen() {
+<b class="nc"><i>392</i>&nbsp;        return (vm != null);</b>
+<i>393</i>&nbsp;    }
+<i>394</i>&nbsp;
+<i>395</i>&nbsp;    boolean isLaunch() {
+<b class="nc"><i>396</i>&nbsp;        return (connector instanceof LaunchingConnector);</b>
+<i>397</i>&nbsp;    }
+<i>398</i>&nbsp;
+<i>399</i>&nbsp;    public void disposeVM() {
+<i>400</i>&nbsp;        try {
+<b class="nc"><i>401</i>&nbsp;            if (vm != null) {</b>
+<b class="nc"><i>402</i>&nbsp;                vm.dispose();</b>
+<b class="nc"><i>403</i>&nbsp;                vm = null;</b>
+<i>404</i>&nbsp;            }
+<i>405</i>&nbsp;        } finally {
+<b class="nc"><i>406</i>&nbsp;            if (process != null) {</b>
+<b class="nc"><i>407</i>&nbsp;                process.destroy();</b>
+<b class="nc"><i>408</i>&nbsp;                process = null;</b>
+<i>409</i>&nbsp;            }
+<b class="nc"><i>410</i>&nbsp;            waitOutputComplete();</b>
+<b class="nc"><i>411</i>&nbsp;        }</b>
+<i>412</i>&nbsp;    }
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;    private void setEventRequests(VirtualMachine vm) {
+<b class="nc"><i>415</i>&nbsp;        EventRequestManager erm = vm.eventRequestManager();</b>
+<i>416</i>&nbsp;
+<i>417</i>&nbsp;        // Normally, we want all uncaught exceptions.  We request them
+<i>418</i>&nbsp;        // via the same mechanism as Commands.commandCatchException()
+<i>419</i>&nbsp;        // so the user can ignore them later if they are not
+<i>420</i>&nbsp;        // interested.
+<i>421</i>&nbsp;        // FIXME: this works but generates spurious messages on stdout
+<i>422</i>&nbsp;        //        during startup:
+<i>423</i>&nbsp;        //          Set uncaught java.lang.Throwable
+<i>424</i>&nbsp;        //          Set deferred uncaught java.lang.Throwable
+<b class="nc"><i>425</i>&nbsp;        Commands evaluator = new Commands();</b>
+<b class="nc"><i>426</i>&nbsp;        evaluator.commandCatchException</b>
+<b class="nc"><i>427</i>&nbsp;            (new StringTokenizer(&quot;uncaught java.lang.Throwable&quot;));</b>
+<i>428</i>&nbsp;
+<b class="nc"><i>429</i>&nbsp;        ThreadStartRequest tsr = erm.createThreadStartRequest();</b>
+<b class="nc"><i>430</i>&nbsp;        tsr.enable();</b>
+<b class="nc"><i>431</i>&nbsp;        ThreadDeathRequest tdr = erm.createThreadDeathRequest();</b>
+<b class="nc"><i>432</i>&nbsp;        tdr.enable();</b>
+<i>433</i>&nbsp;    }
+<i>434</i>&nbsp;
+<i>435</i>&nbsp;    private void resolveEventRequests() {
+<b class="nc"><i>436</i>&nbsp;        Env.specList.resolveAll();</b>
+<i>437</i>&nbsp;    }
+<i>438</i>&nbsp;
+<i>439</i>&nbsp;    private void dumpStream(InputStream stream) throws IOException {
+<b class="nc"><i>440</i>&nbsp;        BufferedReader in =</b>
+<i>441</i>&nbsp;            new BufferedReader(new InputStreamReader(stream));
+<i>442</i>&nbsp;        int i;
+<i>443</i>&nbsp;        try {
+<b class="nc"><i>444</i>&nbsp;            while ((i = in.read()) != -1) {</b>
+<b class="nc"><i>445</i>&nbsp;                   MessageOutput.printDirect((char)i);// Special case: use</b>
+<i>446</i>&nbsp;                                                      //   printDirect()
+<i>447</i>&nbsp;            }
+<b class="nc"><i>448</i>&nbsp;        } catch (IOException ex) {</b>
+<b class="nc"><i>449</i>&nbsp;            String s = ex.getMessage();</b>
+<b class="nc"><i>450</i>&nbsp;            if (!s.startsWith(&quot;Bad file number&quot;)) {</b>
+<b class="nc"><i>451</i>&nbsp;                  throw ex;</b>
+<i>452</i>&nbsp;            }
+<i>453</i>&nbsp;            // else we got a Bad file number IOException which just means
+<i>454</i>&nbsp;            // that the debuggee has gone away.  We&#39;ll just treat it the
+<i>455</i>&nbsp;            // same as if we got an EOF.
+<b class="nc"><i>456</i>&nbsp;        }</b>
+<i>457</i>&nbsp;    }
+<i>458</i>&nbsp;
+<i>459</i>&nbsp;    /**
+<i>460</i>&nbsp;     *  Create a Thread that will retrieve and display any output.
+<i>461</i>&nbsp;     *  Needs to be high priority, else debugger may exit before
+<i>462</i>&nbsp;     *  it can be displayed.
+<i>463</i>&nbsp;     */
+<i>464</i>&nbsp;    private void displayRemoteOutput(final InputStream stream) {
+<b class="nc"><i>465</i>&nbsp;        Thread thr = new Thread(&quot;output reader&quot;) {</b>
+<i>466</i>&nbsp;            @Override
+<i>467</i>&nbsp;            public void run() {
+<i>468</i>&nbsp;                try {
+<b class="nc"><i>469</i>&nbsp;                    dumpStream(stream);</b>
+<b class="nc"><i>470</i>&nbsp;                } catch (IOException ex) {</b>
+<b class="nc"><i>471</i>&nbsp;                    MessageOutput.fatalError(&quot;Failed reading output&quot;);</b>
+<i>472</i>&nbsp;                } finally {
+<b class="nc"><i>473</i>&nbsp;                    notifyOutputComplete();</b>
+<b class="nc"><i>474</i>&nbsp;                }</b>
+<i>475</i>&nbsp;            }
+<i>476</i>&nbsp;        };
+<b class="nc"><i>477</i>&nbsp;        thr.setPriority(Thread.MAX_PRIORITY-1);</b>
+<b class="nc"><i>478</i>&nbsp;        thr.start();</b>
+<i>479</i>&nbsp;    }
+<i>480</i>&nbsp;
+<i>481</i>&nbsp;    private void dumpFailedLaunchInfo(Process process) {
+<i>482</i>&nbsp;        try {
+<b class="nc"><i>483</i>&nbsp;            dumpStream(process.getErrorStream());</b>
+<b class="nc"><i>484</i>&nbsp;            dumpStream(process.getInputStream());</b>
+<b class="nc"><i>485</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>486</i>&nbsp;            MessageOutput.println(&quot;Unable to display process output:&quot;,</b>
+<b class="nc"><i>487</i>&nbsp;                                  e.getMessage());</b>
+<b class="nc"><i>488</i>&nbsp;        }</b>
+<i>489</i>&nbsp;    }
+<i>490</i>&nbsp;
+<i>491</i>&nbsp;    /* launch child target vm */
+<i>492</i>&nbsp;    private VirtualMachine launchTarget() {
+<b class="nc"><i>493</i>&nbsp;        LaunchingConnector launcher = (LaunchingConnector)connector;</b>
+<i>494</i>&nbsp;        try {
+<b class="nc"><i>495</i>&nbsp;            VirtualMachine vm = launcher.launch(connectorArgs);</b>
+<b class="nc"><i>496</i>&nbsp;            process = vm.process();</b>
+<b class="nc"><i>497</i>&nbsp;            displayRemoteOutput(process.getErrorStream());</b>
+<b class="nc"><i>498</i>&nbsp;            displayRemoteOutput(process.getInputStream());</b>
+<b class="nc"><i>499</i>&nbsp;            return vm;</b>
+<b class="nc"><i>500</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>501</i>&nbsp;            ioe.printStackTrace();</b>
+<b class="nc"><i>502</i>&nbsp;            MessageOutput.fatalError(&quot;Unable to launch target VM.&quot;);</b>
+<b class="nc"><i>503</i>&nbsp;        } catch (IllegalConnectorArgumentsException icae) {</b>
+<b class="nc"><i>504</i>&nbsp;            icae.printStackTrace();</b>
+<b class="nc"><i>505</i>&nbsp;            MessageOutput.fatalError(&quot;Internal debugger error.&quot;);</b>
+<b class="nc"><i>506</i>&nbsp;        } catch (VMStartException vmse) {</b>
+<b class="nc"><i>507</i>&nbsp;            MessageOutput.println(&quot;vmstartexception&quot;, vmse.getMessage());</b>
+<b class="nc"><i>508</i>&nbsp;            MessageOutput.println();</b>
+<b class="nc"><i>509</i>&nbsp;            dumpFailedLaunchInfo(vmse.process());</b>
+<b class="nc"><i>510</i>&nbsp;            MessageOutput.fatalError(&quot;Target VM failed to initialize.&quot;);</b>
+<b class="nc"><i>511</i>&nbsp;        }</b>
+<b class="nc"><i>512</i>&nbsp;        return null; // Shuts up the compiler</b>
+<i>513</i>&nbsp;    }
+<i>514</i>&nbsp;
+<i>515</i>&nbsp;    /* attach to running target vm */
+<i>516</i>&nbsp;    private VirtualMachine attachTarget() {
+<b class="nc"><i>517</i>&nbsp;        AttachingConnector attacher = (AttachingConnector)connector;</b>
+<i>518</i>&nbsp;        try {
+<b class="nc"><i>519</i>&nbsp;            return attacher.attach(connectorArgs);</b>
+<b class="nc"><i>520</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>521</i>&nbsp;            ioe.printStackTrace();</b>
+<b class="nc"><i>522</i>&nbsp;            MessageOutput.fatalError(&quot;Unable to attach to target VM.&quot;);</b>
+<b class="nc"><i>523</i>&nbsp;        } catch (IllegalConnectorArgumentsException icae) {</b>
+<b class="nc"><i>524</i>&nbsp;            icae.printStackTrace();</b>
+<b class="nc"><i>525</i>&nbsp;            MessageOutput.fatalError(&quot;Internal debugger error.&quot;);</b>
+<b class="nc"><i>526</i>&nbsp;        }</b>
+<b class="nc"><i>527</i>&nbsp;        return null; // Shuts up the compiler</b>
+<i>528</i>&nbsp;    }
+<i>529</i>&nbsp;
+<i>530</i>&nbsp;    /* listen for connection from target vm */
+<i>531</i>&nbsp;    private VirtualMachine listenTarget() {
+<b class="nc"><i>532</i>&nbsp;        ListeningConnector listener = (ListeningConnector)connector;</b>
+<i>533</i>&nbsp;        try {
+<b class="nc"><i>534</i>&nbsp;            String retAddress = listener.startListening(connectorArgs);</b>
+<b class="nc"><i>535</i>&nbsp;            MessageOutput.println(&quot;Listening at address:&quot;, retAddress);</b>
+<b class="nc"><i>536</i>&nbsp;            vm = listener.accept(connectorArgs);</b>
+<b class="nc"><i>537</i>&nbsp;            listener.stopListening(connectorArgs);</b>
+<b class="nc"><i>538</i>&nbsp;            return vm;</b>
+<b class="nc"><i>539</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>540</i>&nbsp;            ioe.printStackTrace();</b>
+<b class="nc"><i>541</i>&nbsp;            MessageOutput.fatalError(&quot;Unable to attach to target VM.&quot;);</b>
+<b class="nc"><i>542</i>&nbsp;        } catch (IllegalConnectorArgumentsException icae) {</b>
+<b class="nc"><i>543</i>&nbsp;            icae.printStackTrace();</b>
+<b class="nc"><i>544</i>&nbsp;            MessageOutput.fatalError(&quot;Internal debugger error.&quot;);</b>
+<b class="nc"><i>545</i>&nbsp;        }</b>
+<b class="nc"><i>546</i>&nbsp;        return null; // Shuts up the compiler</b>
+<i>547</i>&nbsp;    }
+<i>548</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

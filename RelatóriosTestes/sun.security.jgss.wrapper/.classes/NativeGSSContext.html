@@ -1,0 +1,714 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: NativeGSSContext</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.jgss.wrapper</a> ]
+</div>
+
+<h1>Coverage Summary for Class: NativeGSSContext (sun.security.jgss.wrapper)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">NativeGSSContext</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 56)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 277)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2005, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.jgss.wrapper;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import org.ietf.jgss.*;
+<i>29</i>&nbsp;import java.security.Provider;
+<i>30</i>&nbsp;import sun.security.jgss.GSSHeader;
+<i>31</i>&nbsp;import sun.security.jgss.GSSUtil;
+<i>32</i>&nbsp;import sun.security.jgss.GSSExceptionImpl;
+<i>33</i>&nbsp;import sun.security.jgss.spi.*;
+<i>34</i>&nbsp;import sun.security.util.DerValue;
+<i>35</i>&nbsp;import sun.security.util.ObjectIdentifier;
+<i>36</i>&nbsp;import sun.security.jgss.spnego.NegTokenInit;
+<i>37</i>&nbsp;import sun.security.jgss.spnego.NegTokenTarg;
+<i>38</i>&nbsp;import javax.security.auth.kerberos.DelegationPermission;
+<i>39</i>&nbsp;import java.io.*;
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;
+<i>42</i>&nbsp;/**
+<i>43</i>&nbsp; * This class is essentially a wrapper class for the gss_ctx_id_t
+<i>44</i>&nbsp; * structure of the native GSS library.
+<i>45</i>&nbsp; * @author Valerie Peng
+<i>46</i>&nbsp; * @since 1.6
+<i>47</i>&nbsp; */
+<i>48</i>&nbsp;class NativeGSSContext implements GSSContextSpi {
+<b class="nc"><i>49</i>&nbsp;</b>
+<i>50</i>&nbsp;    private static final int GSS_C_DELEG_FLAG = 1;
+<i>51</i>&nbsp;    private static final int GSS_C_MUTUAL_FLAG = 2;
+<i>52</i>&nbsp;    private static final int GSS_C_REPLAY_FLAG = 4;
+<i>53</i>&nbsp;    private static final int GSS_C_SEQUENCE_FLAG = 8;
+<i>54</i>&nbsp;    private static final int GSS_C_CONF_FLAG = 16;
+<i>55</i>&nbsp;    private static final int GSS_C_INTEG_FLAG = 32;
+<i>56</i>&nbsp;    private static final int GSS_C_ANON_FLAG = 64;
+<i>57</i>&nbsp;    private static final int GSS_C_PROT_READY_FLAG = 128;
+<i>58</i>&nbsp;    private static final int GSS_C_TRANS_FLAG = 256;
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    private static final int NUM_OF_INQUIRE_VALUES = 6;
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    private long pContext = 0; // Pointer to the gss_ctx_id_t structure
+<b class="nc"><i>63</i>&nbsp;    private GSSNameElement srcName;</b>
+<i>64</i>&nbsp;    private GSSNameElement targetName;
+<i>65</i>&nbsp;    private GSSCredElement cred;
+<i>66</i>&nbsp;    private boolean isInitiator;
+<i>67</i>&nbsp;    private boolean isEstablished;
+<i>68</i>&nbsp;    private Oid actualMech; // Assigned during context establishment
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    private ChannelBinding cb;
+<i>71</i>&nbsp;    private GSSCredElement delegatedCred;
+<i>72</i>&nbsp;    private int flags;
+<i>73</i>&nbsp;    private int lifetime = GSSCredential.DEFAULT_LIFETIME;
+<b class="nc"><i>74</i>&nbsp;    private final GSSLibStub cStub;</b>
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    private boolean skipDelegPermCheck;
+<i>77</i>&nbsp;    private boolean skipServicePermCheck;
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    // Retrieve the (preferred) mech out of SPNEGO tokens, i.e.
+<i>80</i>&nbsp;    // NegTokenInit &amp; NegTokenTarg
+<i>81</i>&nbsp;    private static Oid getMechFromSpNegoToken(byte[] token,
+<i>82</i>&nbsp;                                              boolean isInitiator)
+<i>83</i>&nbsp;        throws GSSException {
+<i>84</i>&nbsp;        Oid mech = null;
+<b class="nc"><i>85</i>&nbsp;        if (isInitiator) {</b>
+<b class="nc"><i>86</i>&nbsp;            GSSHeader header = null;</b>
+<b class="nc"><i>87</i>&nbsp;            try {</b>
+<i>88</i>&nbsp;                header = new GSSHeader(new ByteArrayInputStream(token));
+<b class="nc"><i>89</i>&nbsp;            } catch (IOException ioe) {</b>
+<b class="nc"><i>90</i>&nbsp;                throw new GSSExceptionImpl(GSSException.FAILURE, ioe);</b>
+<b class="nc"><i>91</i>&nbsp;            }</b>
+<b class="nc"><i>92</i>&nbsp;            int negTokenLen = header.getMechTokenLength();</b>
+<b class="nc"><i>93</i>&nbsp;            byte[] negToken = new byte[negTokenLen];</b>
+<b class="nc"><i>94</i>&nbsp;            System.arraycopy(token, token.length-negTokenLen,</b>
+<b class="nc"><i>95</i>&nbsp;                             negToken, 0, negToken.length);</b>
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;            NegTokenInit ntok = new NegTokenInit(negToken);
+<b class="nc"><i>98</i>&nbsp;            if (ntok.getMechToken() != null) {</b>
+<b class="nc"><i>99</i>&nbsp;                Oid[] mechList = ntok.getMechTypeList();</b>
+<b class="nc"><i>100</i>&nbsp;                mech = mechList[0];</b>
+<b class="nc"><i>101</i>&nbsp;            }</b>
+<i>102</i>&nbsp;        } else {
+<b class="nc"><i>103</i>&nbsp;            NegTokenTarg ntok = new NegTokenTarg(token);</b>
+<b class="nc"><i>104</i>&nbsp;            mech = ntok.getSupportedMech();</b>
+<b class="nc"><i>105</i>&nbsp;        }</b>
+<i>106</i>&nbsp;        return mech;
+<b class="nc"><i>107</i>&nbsp;    }</b>
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    // Perform the Service permission check
+<i>110</i>&nbsp;    private void doServicePermCheck() throws GSSException {
+<i>111</i>&nbsp;        if (System.getSecurityManager() != null) {
+<b class="nc"><i>112</i>&nbsp;            String action = (isInitiator? &quot;initiate&quot; : &quot;accept&quot;);</b>
+<b class="nc"><i>113</i>&nbsp;            // Need to check Service permission for accessing</b>
+<i>114</i>&nbsp;            // initiator cred for SPNEGO during context establishment
+<i>115</i>&nbsp;            if (GSSUtil.isSpNegoMech(cStub.getMech()) &amp;&amp; isInitiator
+<b class="nc"><i>116</i>&nbsp;                &amp;&amp; !isEstablished) {</b>
+<i>117</i>&nbsp;                if (srcName == null) {
+<b class="nc"><i>118</i>&nbsp;                    // Check by creating default initiator KRB5 cred</b>
+<i>119</i>&nbsp;                    GSSCredElement tempCred =
+<b class="nc"><i>120</i>&nbsp;                        new GSSCredElement(null, lifetime,</b>
+<i>121</i>&nbsp;                                           GSSCredential.INITIATE_ONLY,
+<i>122</i>&nbsp;                                           GSSLibStub.getInstance(GSSUtil.GSS_KRB5_MECH_OID));
+<b class="nc"><i>123</i>&nbsp;                    tempCred.dispose();</b>
+<b class="nc"><i>124</i>&nbsp;                } else {</b>
+<b class="nc"><i>125</i>&nbsp;                    String tgsName = Krb5Util.getTGSName(srcName);</b>
+<b class="nc"><i>126</i>&nbsp;                    Krb5Util.checkServicePermission(tgsName, action);</b>
+<b class="nc"><i>127</i>&nbsp;                }</b>
+<i>128</i>&nbsp;            }
+<i>129</i>&nbsp;            String targetStr = targetName.getKrbName();
+<b class="nc"><i>130</i>&nbsp;            Krb5Util.checkServicePermission(targetStr, action);</b>
+<b class="nc"><i>131</i>&nbsp;            skipServicePermCheck = true;</b>
+<b class="nc"><i>132</i>&nbsp;        }</b>
+<i>133</i>&nbsp;    }
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;    // Perform the Delegation permission check
+<i>136</i>&nbsp;    private void doDelegPermCheck() throws GSSException {
+<i>137</i>&nbsp;        SecurityManager sm = System.getSecurityManager();
+<b class="nc"><i>138</i>&nbsp;        if (sm != null) {</b>
+<b class="nc"><i>139</i>&nbsp;            String targetStr = targetName.getKrbName();</b>
+<b class="nc"><i>140</i>&nbsp;            String tgsStr = Krb5Util.getTGSName(targetName);</b>
+<b class="nc"><i>141</i>&nbsp;            StringBuilder sb = new StringBuilder(&quot;\&quot;&quot;);</b>
+<b class="nc"><i>142</i>&nbsp;            sb.append(targetStr).append(&quot;\&quot; \&quot;&quot;);</b>
+<b class="nc"><i>143</i>&nbsp;            sb.append(tgsStr).append(&#39;\&quot;&#39;);</b>
+<b class="nc"><i>144</i>&nbsp;            String krbPrincPair = sb.toString();</b>
+<b class="nc"><i>145</i>&nbsp;            SunNativeProvider.debug(&quot;Checking DelegationPermission (&quot; +</b>
+<b class="nc"><i>146</i>&nbsp;                                    krbPrincPair + &quot;)&quot;);</b>
+<i>147</i>&nbsp;            DelegationPermission perm =
+<b class="nc"><i>148</i>&nbsp;                new DelegationPermission(krbPrincPair);</b>
+<i>149</i>&nbsp;            sm.checkPermission(perm);
+<b class="nc"><i>150</i>&nbsp;            skipDelegPermCheck = true;</b>
+<b class="nc"><i>151</i>&nbsp;        }</b>
+<i>152</i>&nbsp;    }
+<i>153</i>&nbsp;
+<i>154</i>&nbsp;    private byte[] retrieveToken(InputStream is, int mechTokenLen)
+<i>155</i>&nbsp;        throws GSSException {
+<i>156</i>&nbsp;        try {
+<i>157</i>&nbsp;            byte[] result = null;
+<b class="nc"><i>158</i>&nbsp;            if (mechTokenLen != -1) {</b>
+<b class="nc"><i>159</i>&nbsp;                // Need to add back the GSS header for a complete GSS token</b>
+<i>160</i>&nbsp;                SunNativeProvider.debug(&quot;Precomputed mechToken length: &quot; +
+<b class="nc"><i>161</i>&nbsp;                                         mechTokenLen);</b>
+<i>162</i>&nbsp;                GSSHeader gssHeader = new GSSHeader
+<b class="nc"><i>163</i>&nbsp;                    (new ObjectIdentifier(cStub.getMech().toString()),</b>
+<b class="nc"><i>164</i>&nbsp;                     mechTokenLen);</b>
+<i>165</i>&nbsp;                ByteArrayOutputStream baos = new ByteArrayOutputStream(600);
+<b class="nc"><i>166</i>&nbsp;</b>
+<i>167</i>&nbsp;                byte[] mechToken = new byte[mechTokenLen];
+<b class="nc"><i>168</i>&nbsp;                int len = is.read(mechToken);</b>
+<b class="nc"><i>169</i>&nbsp;                assert(mechTokenLen == len);</b>
+<b class="nc"><i>170</i>&nbsp;                gssHeader.encode(baos);</b>
+<b class="nc"><i>171</i>&nbsp;                baos.write(mechToken);</b>
+<b class="nc"><i>172</i>&nbsp;                result = baos.toByteArray();</b>
+<b class="nc"><i>173</i>&nbsp;            } else {</b>
+<b class="nc"><i>174</i>&nbsp;                // Must be unparsed GSS token or SPNEGO&#39;s NegTokenTarg token</b>
+<i>175</i>&nbsp;                assert(mechTokenLen == -1);
+<b class="nc"><i>176</i>&nbsp;                DerValue dv = new DerValue(is);</b>
+<b class="nc"><i>177</i>&nbsp;                result = dv.toByteArray();</b>
+<b class="nc"><i>178</i>&nbsp;            }</b>
+<i>179</i>&nbsp;            SunNativeProvider.debug(&quot;Complete Token length: &quot; +
+<b class="nc"><i>180</i>&nbsp;                                    result.length);</b>
+<i>181</i>&nbsp;            return result;
+<b class="nc"><i>182</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>183</i>&nbsp;            throw new GSSExceptionImpl(GSSException.FAILURE, ioe);</b>
+<b class="nc"><i>184</i>&nbsp;        }</b>
+<i>185</i>&nbsp;    }
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;    // Constructor for context initiator
+<i>188</i>&nbsp;    NativeGSSContext(GSSNameElement peer, GSSCredElement myCred,
+<i>189</i>&nbsp;                     int time, GSSLibStub stub) throws GSSException {
+<b class="nc"><i>190</i>&nbsp;        if (peer == null) {</b>
+<b class="nc"><i>191</i>&nbsp;            throw new GSSException(GSSException.FAILURE, 1, &quot;null peer&quot;);</b>
+<b class="nc"><i>192</i>&nbsp;        }</b>
+<i>193</i>&nbsp;        cStub = stub;
+<b class="nc"><i>194</i>&nbsp;        cred = myCred;</b>
+<b class="nc"><i>195</i>&nbsp;        targetName = peer;</b>
+<b class="nc"><i>196</i>&nbsp;        isInitiator = true;</b>
+<b class="nc"><i>197</i>&nbsp;        lifetime = time;</b>
+<b class="nc"><i>198</i>&nbsp;</b>
+<i>199</i>&nbsp;        if (GSSUtil.isKerberosMech(cStub.getMech())) {
+<b class="nc"><i>200</i>&nbsp;            doServicePermCheck();</b>
+<b class="nc"><i>201</i>&nbsp;            if (cred == null) {</b>
+<b class="nc"><i>202</i>&nbsp;                cred = new GSSCredElement(null, lifetime,</b>
+<b class="nc"><i>203</i>&nbsp;                                          GSSCredential.INITIATE_ONLY, cStub);</b>
+<i>204</i>&nbsp;            }
+<i>205</i>&nbsp;            srcName = cred.getName();
+<b class="nc"><i>206</i>&nbsp;        }</b>
+<i>207</i>&nbsp;    }
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    // Constructor for context acceptor
+<i>210</i>&nbsp;    NativeGSSContext(GSSCredElement myCred, GSSLibStub stub)
+<i>211</i>&nbsp;        throws GSSException {
+<b class="nc"><i>212</i>&nbsp;        cStub = stub;</b>
+<b class="nc"><i>213</i>&nbsp;        cred = myCred;</b>
+<b class="nc"><i>214</i>&nbsp;</b>
+<i>215</i>&nbsp;        if (cred != null) targetName = cred.getName();
+<b class="nc"><i>216</i>&nbsp;</b>
+<i>217</i>&nbsp;        isInitiator = false;
+<b class="nc"><i>218</i>&nbsp;        // Defer Service permission check for default acceptor cred</b>
+<i>219</i>&nbsp;        // to acceptSecContext()
+<i>220</i>&nbsp;        if (GSSUtil.isKerberosMech(cStub.getMech()) &amp;&amp; targetName != null) {
+<b class="nc"><i>221</i>&nbsp;            doServicePermCheck();</b>
+<b class="nc"><i>222</i>&nbsp;        }</b>
+<i>223</i>&nbsp;
+<i>224</i>&nbsp;        // srcName and potentially targetName (when myCred is null)
+<i>225</i>&nbsp;        // will be set in GSSLibStub.acceptContext(...)
+<i>226</i>&nbsp;    }
+<i>227</i>&nbsp;
+<i>228</i>&nbsp;    // Constructor for imported context
+<i>229</i>&nbsp;    NativeGSSContext(long pCtxt, GSSLibStub stub) throws GSSException {
+<b class="nc"><i>230</i>&nbsp;        assert(pContext != 0);</b>
+<b class="nc"><i>231</i>&nbsp;        pContext = pCtxt;</b>
+<b class="nc"><i>232</i>&nbsp;        cStub = stub;</b>
+<b class="nc"><i>233</i>&nbsp;</b>
+<i>234</i>&nbsp;        // Set everything except cred, cb, delegatedCred
+<i>235</i>&nbsp;        long[] info = cStub.inquireContext(pContext);
+<b class="nc"><i>236</i>&nbsp;        if (info.length != NUM_OF_INQUIRE_VALUES) {</b>
+<b class="nc"><i>237</i>&nbsp;            throw new RuntimeException(&quot;Bug w/ GSSLibStub.inquireContext()&quot;);</b>
+<b class="nc"><i>238</i>&nbsp;        }</b>
+<i>239</i>&nbsp;        srcName = new GSSNameElement(info[0], cStub);
+<b class="nc"><i>240</i>&nbsp;        targetName = new GSSNameElement(info[1], cStub);</b>
+<b class="nc"><i>241</i>&nbsp;        isInitiator = (info[2] != 0);</b>
+<b class="nc"><i>242</i>&nbsp;        isEstablished = (info[3] != 0);</b>
+<b class="nc"><i>243</i>&nbsp;        flags = (int) info[4];</b>
+<b class="nc"><i>244</i>&nbsp;        lifetime = (int) info[5];</b>
+<b class="nc"><i>245</i>&nbsp;</b>
+<i>246</i>&nbsp;        // Do Service Permission check when importing SPNEGO context
+<i>247</i>&nbsp;        // just to be safe
+<i>248</i>&nbsp;        Oid mech = cStub.getMech();
+<b class="nc"><i>249</i>&nbsp;        if (GSSUtil.isSpNegoMech(mech) || GSSUtil.isKerberosMech(mech)) {</b>
+<b class="nc"><i>250</i>&nbsp;            doServicePermCheck();</b>
+<b class="nc"><i>251</i>&nbsp;        }</b>
+<i>252</i>&nbsp;    }
+<i>253</i>&nbsp;
+<i>254</i>&nbsp;    public Provider getProvider() {
+<i>255</i>&nbsp;        return SunNativeProvider.INSTANCE;
+<b class="nc"><i>256</i>&nbsp;    }</b>
+<i>257</i>&nbsp;
+<i>258</i>&nbsp;    public byte[] initSecContext(InputStream is, int mechTokenLen)
+<i>259</i>&nbsp;        throws GSSException {
+<i>260</i>&nbsp;        byte[] outToken = null;
+<b class="nc"><i>261</i>&nbsp;        if ((!isEstablished) &amp;&amp; (isInitiator)) {</b>
+<b class="nc"><i>262</i>&nbsp;            byte[] inToken = null;</b>
+<b class="nc"><i>263</i>&nbsp;            // Ignore the specified input stream on the first call</b>
+<i>264</i>&nbsp;            if (pContext != 0) {
+<b class="nc"><i>265</i>&nbsp;                inToken = retrieveToken(is, mechTokenLen);</b>
+<b class="nc"><i>266</i>&nbsp;                SunNativeProvider.debug(&quot;initSecContext=&gt; inToken len=&quot; +</b>
+<b class="nc"><i>267</i>&nbsp;                    inToken.length);</b>
+<i>268</i>&nbsp;            }
+<i>269</i>&nbsp;
+<i>270</i>&nbsp;            if (!getCredDelegState()) skipDelegPermCheck = true;
+<b class="nc"><i>271</i>&nbsp;</b>
+<i>272</i>&nbsp;            if (GSSUtil.isKerberosMech(cStub.getMech()) &amp;&amp; !skipDelegPermCheck) {
+<b class="nc"><i>273</i>&nbsp;                doDelegPermCheck();</b>
+<b class="nc"><i>274</i>&nbsp;            }</b>
+<i>275</i>&nbsp;
+<i>276</i>&nbsp;            long pCred = (cred == null? 0 : cred.pCred);
+<b class="nc"><i>277</i>&nbsp;            outToken = cStub.initContext(pCred, targetName.pName,</b>
+<b class="nc"><i>278</i>&nbsp;                                         cb, inToken, this);</b>
+<i>279</i>&nbsp;            SunNativeProvider.debug(&quot;initSecContext=&gt; outToken len=&quot; +
+<b class="nc"><i>280</i>&nbsp;                (outToken == null ? 0 : outToken.length));</b>
+<i>281</i>&nbsp;
+<i>282</i>&nbsp;            // Only inspect the token when the permission check
+<i>283</i>&nbsp;            // has not been performed
+<i>284</i>&nbsp;            if (GSSUtil.isSpNegoMech(cStub.getMech()) &amp;&amp; outToken != null) {
+<b class="nc"><i>285</i>&nbsp;                // WORKAROUND for SEAM bug#6287358</b>
+<i>286</i>&nbsp;                actualMech = getMechFromSpNegoToken(outToken, true);
+<b class="nc"><i>287</i>&nbsp;</b>
+<i>288</i>&nbsp;                if (GSSUtil.isKerberosMech(actualMech)) {
+<b class="nc"><i>289</i>&nbsp;                    if (!skipServicePermCheck) doServicePermCheck();</b>
+<b class="nc"><i>290</i>&nbsp;                    if (!skipDelegPermCheck) doDelegPermCheck();</b>
+<b class="nc"><i>291</i>&nbsp;                }</b>
+<i>292</i>&nbsp;            }
+<i>293</i>&nbsp;
+<i>294</i>&nbsp;            if (isEstablished) {
+<b class="nc"><i>295</i>&nbsp;                if (srcName == null) {</b>
+<b class="nc"><i>296</i>&nbsp;                    srcName = new GSSNameElement</b>
+<b class="nc"><i>297</i>&nbsp;                        (cStub.getContextName(pContext, true), cStub);</b>
+<b class="nc"><i>298</i>&nbsp;                }</b>
+<i>299</i>&nbsp;                if (cred == null) {
+<b class="nc"><i>300</i>&nbsp;                    cred = new GSSCredElement(srcName, lifetime,</b>
+<b class="nc"><i>301</i>&nbsp;                                              GSSCredential.INITIATE_ONLY,</b>
+<i>302</i>&nbsp;                                              cStub);
+<i>303</i>&nbsp;                }
+<i>304</i>&nbsp;            }
+<i>305</i>&nbsp;        }
+<i>306</i>&nbsp;        return outToken;
+<b class="nc"><i>307</i>&nbsp;    }</b>
+<i>308</i>&nbsp;
+<i>309</i>&nbsp;    public byte[] acceptSecContext(InputStream is, int mechTokenLen)
+<i>310</i>&nbsp;        throws GSSException {
+<i>311</i>&nbsp;        byte[] outToken = null;
+<b class="nc"><i>312</i>&nbsp;        if ((!isEstablished) &amp;&amp; (!isInitiator)) {</b>
+<b class="nc"><i>313</i>&nbsp;            byte[] inToken = retrieveToken(is, mechTokenLen);</b>
+<b class="nc"><i>314</i>&nbsp;            SunNativeProvider.debug(&quot;acceptSecContext=&gt; inToken len=&quot; +</b>
+<b class="nc"><i>315</i>&nbsp;                                    inToken.length);</b>
+<i>316</i>&nbsp;            long pCred = (cred == null? 0 : cred.pCred);
+<b class="nc"><i>317</i>&nbsp;            outToken = cStub.acceptContext(pCred, cb, inToken, this);</b>
+<b class="nc"><i>318</i>&nbsp;            SunNativeProvider.debug(&quot;acceptSecContext=&gt; outToken len=&quot; +</b>
+<b class="nc"><i>319</i>&nbsp;                                    (outToken == null? 0 : outToken.length));</b>
+<i>320</i>&nbsp;
+<i>321</i>&nbsp;            if (targetName == null) {
+<b class="nc"><i>322</i>&nbsp;                targetName = new GSSNameElement</b>
+<b class="nc"><i>323</i>&nbsp;                    (cStub.getContextName(pContext, false), cStub);</b>
+<b class="nc"><i>324</i>&nbsp;                // Replace the current default acceptor cred now that</b>
+<i>325</i>&nbsp;                // the context acceptor name is available
+<i>326</i>&nbsp;                if (cred != null) cred.dispose();
+<b class="nc"><i>327</i>&nbsp;                cred = new GSSCredElement(targetName, lifetime,</b>
+<b class="nc"><i>328</i>&nbsp;                                          GSSCredential.ACCEPT_ONLY, cStub);</b>
+<i>329</i>&nbsp;            }
+<i>330</i>&nbsp;
+<i>331</i>&nbsp;            // Only inspect token when the permission check has not
+<i>332</i>&nbsp;            // been performed
+<i>333</i>&nbsp;            if (GSSUtil.isSpNegoMech(cStub.getMech()) &amp;&amp;
+<b class="nc"><i>334</i>&nbsp;                (outToken != null) &amp;&amp; !skipServicePermCheck) {</b>
+<i>335</i>&nbsp;                if (GSSUtil.isKerberosMech(getMechFromSpNegoToken
+<b class="nc"><i>336</i>&nbsp;                                           (outToken, false))) {</b>
+<b class="nc"><i>337</i>&nbsp;                    doServicePermCheck();</b>
+<b class="nc"><i>338</i>&nbsp;                }</b>
+<i>339</i>&nbsp;            }
+<i>340</i>&nbsp;        }
+<i>341</i>&nbsp;        return outToken;
+<b class="nc"><i>342</i>&nbsp;    }</b>
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;    public boolean isEstablished() {
+<i>345</i>&nbsp;        return isEstablished;
+<b class="nc"><i>346</i>&nbsp;    }</b>
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;    public void dispose() throws GSSException {
+<i>349</i>&nbsp;        srcName = null;
+<b class="nc"><i>350</i>&nbsp;        targetName = null;</b>
+<b class="nc"><i>351</i>&nbsp;        cred = null;</b>
+<b class="nc"><i>352</i>&nbsp;        delegatedCred = null;</b>
+<b class="nc"><i>353</i>&nbsp;        if (pContext != 0) {</b>
+<b class="nc"><i>354</i>&nbsp;            pContext = cStub.deleteContext(pContext);</b>
+<b class="nc"><i>355</i>&nbsp;            pContext = 0;</b>
+<b class="nc"><i>356</i>&nbsp;        }</b>
+<i>357</i>&nbsp;    }
+<i>358</i>&nbsp;
+<i>359</i>&nbsp;    public int getWrapSizeLimit(int qop, boolean confReq,
+<i>360</i>&nbsp;                                int maxTokenSize)
+<i>361</i>&nbsp;        throws GSSException {
+<i>362</i>&nbsp;        return cStub.wrapSizeLimit(pContext, (confReq? 1:0), qop,
+<b class="nc"><i>363</i>&nbsp;                                   maxTokenSize);</b>
+<i>364</i>&nbsp;    }
+<i>365</i>&nbsp;
+<i>366</i>&nbsp;    public byte[] wrap(byte[] inBuf, int offset, int len,
+<i>367</i>&nbsp;                       MessageProp msgProp) throws GSSException {
+<i>368</i>&nbsp;        byte[] data = inBuf;
+<b class="nc"><i>369</i>&nbsp;        if ((offset != 0) || (len != inBuf.length)) {</b>
+<b class="nc"><i>370</i>&nbsp;            data = new byte[len];</b>
+<b class="nc"><i>371</i>&nbsp;            System.arraycopy(inBuf, offset, data, 0, len);</b>
+<b class="nc"><i>372</i>&nbsp;        }</b>
+<i>373</i>&nbsp;        return cStub.wrap(pContext, data, msgProp);
+<b class="nc"><i>374</i>&nbsp;    }</b>
+<i>375</i>&nbsp;    public void wrap(byte[] inBuf, int offset, int len,
+<i>376</i>&nbsp;                     OutputStream os, MessageProp msgProp)
+<i>377</i>&nbsp;        throws GSSException {
+<i>378</i>&nbsp;        try {
+<i>379</i>&nbsp;        byte[] result = wrap(inBuf, offset, len, msgProp);
+<b class="nc"><i>380</i>&nbsp;        os.write(result);</b>
+<b class="nc"><i>381</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>382</i>&nbsp;            throw new GSSExceptionImpl(GSSException.FAILURE, ioe);</b>
+<b class="nc"><i>383</i>&nbsp;        }</b>
+<b class="nc"><i>384</i>&nbsp;    }</b>
+<i>385</i>&nbsp;    public int wrap(byte[] inBuf, int inOffset, int len, byte[] outBuf,
+<i>386</i>&nbsp;                    int outOffset, MessageProp msgProp)
+<i>387</i>&nbsp;        throws GSSException {
+<i>388</i>&nbsp;        byte[] result = wrap(inBuf, inOffset, len, msgProp);
+<b class="nc"><i>389</i>&nbsp;        System.arraycopy(result, 0, outBuf, outOffset, result.length);</b>
+<b class="nc"><i>390</i>&nbsp;        return result.length;</b>
+<b class="nc"><i>391</i>&nbsp;    }</b>
+<i>392</i>&nbsp;    public void wrap(InputStream inStream, OutputStream outStream,
+<i>393</i>&nbsp;                     MessageProp msgProp) throws GSSException {
+<i>394</i>&nbsp;        try {
+<i>395</i>&nbsp;            byte[] data = new byte[inStream.available()];
+<b class="nc"><i>396</i>&nbsp;            int length = inStream.read(data);</b>
+<b class="nc"><i>397</i>&nbsp;            byte[] token = wrap(data, 0, length, msgProp);</b>
+<b class="nc"><i>398</i>&nbsp;            outStream.write(token);</b>
+<b class="nc"><i>399</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>400</i>&nbsp;            throw new GSSExceptionImpl(GSSException.FAILURE, ioe);</b>
+<b class="nc"><i>401</i>&nbsp;        }</b>
+<b class="nc"><i>402</i>&nbsp;    }</b>
+<i>403</i>&nbsp;
+<i>404</i>&nbsp;    public byte[] unwrap(byte[] inBuf, int offset, int len,
+<i>405</i>&nbsp;                         MessageProp msgProp)
+<i>406</i>&nbsp;        throws GSSException {
+<i>407</i>&nbsp;        if ((offset != 0) || (len != inBuf.length)) {
+<b class="nc"><i>408</i>&nbsp;            byte[] temp = new byte[len];</b>
+<b class="nc"><i>409</i>&nbsp;            System.arraycopy(inBuf, offset, temp, 0, len);</b>
+<b class="nc"><i>410</i>&nbsp;            return cStub.unwrap(pContext, temp, msgProp);</b>
+<b class="nc"><i>411</i>&nbsp;        } else {</b>
+<i>412</i>&nbsp;            return cStub.unwrap(pContext, inBuf, msgProp);
+<b class="nc"><i>413</i>&nbsp;        }</b>
+<i>414</i>&nbsp;    }
+<i>415</i>&nbsp;    public int unwrap(byte[] inBuf, int inOffset, int len,
+<i>416</i>&nbsp;                      byte[] outBuf, int outOffset,
+<i>417</i>&nbsp;                      MessageProp msgProp) throws GSSException {
+<i>418</i>&nbsp;        byte[] result = null;
+<b class="nc"><i>419</i>&nbsp;        if ((inOffset != 0) || (len != inBuf.length)) {</b>
+<b class="nc"><i>420</i>&nbsp;            byte[] temp = new byte[len];</b>
+<b class="nc"><i>421</i>&nbsp;            System.arraycopy(inBuf, inOffset, temp, 0, len);</b>
+<b class="nc"><i>422</i>&nbsp;            result = cStub.unwrap(pContext, temp, msgProp);</b>
+<b class="nc"><i>423</i>&nbsp;        } else {</b>
+<b class="nc"><i>424</i>&nbsp;            result = cStub.unwrap(pContext, inBuf, msgProp);</b>
+<b class="nc"><i>425</i>&nbsp;        }</b>
+<i>426</i>&nbsp;        System.arraycopy(result, 0, outBuf, outOffset, result.length);
+<b class="nc"><i>427</i>&nbsp;        return result.length;</b>
+<b class="nc"><i>428</i>&nbsp;    }</b>
+<i>429</i>&nbsp;    public void unwrap(InputStream inStream, OutputStream outStream,
+<i>430</i>&nbsp;                       MessageProp msgProp) throws GSSException {
+<i>431</i>&nbsp;        try {
+<i>432</i>&nbsp;            byte[] wrapped = new byte[inStream.available()];
+<b class="nc"><i>433</i>&nbsp;            int wLength = inStream.read(wrapped);</b>
+<b class="nc"><i>434</i>&nbsp;            byte[] data = unwrap(wrapped, 0, wLength, msgProp);</b>
+<b class="nc"><i>435</i>&nbsp;            outStream.write(data);</b>
+<b class="nc"><i>436</i>&nbsp;            outStream.flush();</b>
+<b class="nc"><i>437</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>438</i>&nbsp;            throw new GSSExceptionImpl(GSSException.FAILURE, ioe);</b>
+<b class="nc"><i>439</i>&nbsp;        }</b>
+<b class="nc"><i>440</i>&nbsp;    }</b>
+<i>441</i>&nbsp;
+<i>442</i>&nbsp;    public int unwrap(InputStream inStream,
+<i>443</i>&nbsp;                      byte[] outBuf, int outOffset,
+<i>444</i>&nbsp;                      MessageProp msgProp) throws GSSException {
+<i>445</i>&nbsp;        byte[] wrapped = null;
+<b class="nc"><i>446</i>&nbsp;        int wLength = 0;</b>
+<b class="nc"><i>447</i>&nbsp;        try {</b>
+<i>448</i>&nbsp;            wrapped = new byte[inStream.available()];
+<b class="nc"><i>449</i>&nbsp;            wLength = inStream.read(wrapped);</b>
+<b class="nc"><i>450</i>&nbsp;            byte[] result = unwrap(wrapped, 0, wLength, msgProp);</b>
+<b class="nc"><i>451</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>452</i>&nbsp;            throw new GSSExceptionImpl(GSSException.FAILURE, ioe);</b>
+<b class="nc"><i>453</i>&nbsp;        }</b>
+<b class="nc"><i>454</i>&nbsp;        byte[] result = unwrap(wrapped, 0, wLength, msgProp);</b>
+<b class="nc"><i>455</i>&nbsp;        System.arraycopy(result, 0, outBuf, outOffset, result.length);</b>
+<b class="nc"><i>456</i>&nbsp;        return result.length;</b>
+<b class="nc"><i>457</i>&nbsp;    }</b>
+<i>458</i>&nbsp;
+<i>459</i>&nbsp;    public byte[] getMIC(byte[] in, int offset, int len,
+<i>460</i>&nbsp;                         MessageProp msgProp) throws GSSException {
+<i>461</i>&nbsp;        int qop = (msgProp == null? 0:msgProp.getQOP());
+<b class="nc"><i>462</i>&nbsp;        byte[] inMsg = in;</b>
+<b class="nc"><i>463</i>&nbsp;        if ((offset != 0) || (len != in.length)) {</b>
+<b class="nc"><i>464</i>&nbsp;            inMsg = new byte[len];</b>
+<b class="nc"><i>465</i>&nbsp;            System.arraycopy(in, offset, inMsg, 0, len);</b>
+<b class="nc"><i>466</i>&nbsp;        }</b>
+<i>467</i>&nbsp;        return cStub.getMic(pContext, qop, inMsg);
+<b class="nc"><i>468</i>&nbsp;    }</b>
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;    public void getMIC(InputStream inStream, OutputStream outStream,
+<i>471</i>&nbsp;                       MessageProp msgProp) throws GSSException {
+<i>472</i>&nbsp;        try {
+<i>473</i>&nbsp;            int length = 0;
+<b class="nc"><i>474</i>&nbsp;            byte[] msg = new byte[inStream.available()];</b>
+<b class="nc"><i>475</i>&nbsp;            length = inStream.read(msg);</b>
+<b class="nc"><i>476</i>&nbsp;</b>
+<i>477</i>&nbsp;            byte[] msgToken = getMIC(msg, 0, length, msgProp);
+<b class="nc"><i>478</i>&nbsp;            if ((msgToken != null) &amp;&amp; msgToken.length != 0) {</b>
+<b class="nc"><i>479</i>&nbsp;                outStream.write(msgToken);</b>
+<b class="nc"><i>480</i>&nbsp;            }</b>
+<i>481</i>&nbsp;        } catch (IOException ioe) {
+<b class="nc"><i>482</i>&nbsp;            throw new GSSExceptionImpl(GSSException.FAILURE, ioe);</b>
+<b class="nc"><i>483</i>&nbsp;        }</b>
+<b class="nc"><i>484</i>&nbsp;    }</b>
+<i>485</i>&nbsp;
+<i>486</i>&nbsp;    public void verifyMIC(byte[] inToken, int tOffset, int tLen,
+<i>487</i>&nbsp;                          byte[] inMsg, int mOffset, int mLen,
+<i>488</i>&nbsp;                          MessageProp msgProp) throws GSSException {
+<i>489</i>&nbsp;        byte[] token = inToken;
+<b class="nc"><i>490</i>&nbsp;        byte[] msg = inMsg;</b>
+<b class="nc"><i>491</i>&nbsp;        if ((tOffset != 0) || (tLen != inToken.length)) {</b>
+<b class="nc"><i>492</i>&nbsp;            token = new byte[tLen];</b>
+<b class="nc"><i>493</i>&nbsp;            System.arraycopy(inToken, tOffset, token, 0, tLen);</b>
+<b class="nc"><i>494</i>&nbsp;        }</b>
+<i>495</i>&nbsp;        if ((mOffset != 0) || (mLen != inMsg.length)) {
+<b class="nc"><i>496</i>&nbsp;            msg = new byte[mLen];</b>
+<b class="nc"><i>497</i>&nbsp;            System.arraycopy(inMsg, mOffset, msg, 0, mLen);</b>
+<b class="nc"><i>498</i>&nbsp;        }</b>
+<i>499</i>&nbsp;        cStub.verifyMic(pContext, token, msg, msgProp);
+<b class="nc"><i>500</i>&nbsp;    }</b>
+<i>501</i>&nbsp;
+<i>502</i>&nbsp;    public void verifyMIC(InputStream tokStream, InputStream msgStream,
+<i>503</i>&nbsp;                          MessageProp msgProp) throws GSSException {
+<i>504</i>&nbsp;        try {
+<i>505</i>&nbsp;            byte[] msg = new byte[msgStream.available()];
+<b class="nc"><i>506</i>&nbsp;            int mLength = msgStream.read(msg);</b>
+<b class="nc"><i>507</i>&nbsp;            byte[] tok = new byte[tokStream.available()];</b>
+<b class="nc"><i>508</i>&nbsp;            int tLength = tokStream.read(tok);</b>
+<b class="nc"><i>509</i>&nbsp;            verifyMIC(tok, 0, tLength, msg, 0, mLength, msgProp);</b>
+<b class="nc"><i>510</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>511</i>&nbsp;            throw new GSSExceptionImpl(GSSException.FAILURE, ioe);</b>
+<b class="nc"><i>512</i>&nbsp;        }</b>
+<b class="nc"><i>513</i>&nbsp;    }</b>
+<i>514</i>&nbsp;
+<i>515</i>&nbsp;    public byte[] export() throws GSSException {
+<i>516</i>&nbsp;        byte[] result = cStub.exportContext(pContext);
+<b class="nc"><i>517</i>&nbsp;        pContext = 0;</b>
+<b class="nc"><i>518</i>&nbsp;        return result;</b>
+<b class="nc"><i>519</i>&nbsp;    }</b>
+<i>520</i>&nbsp;
+<i>521</i>&nbsp;    private void changeFlags(int flagMask, boolean isEnable) {
+<i>522</i>&nbsp;        if (isInitiator &amp;&amp; pContext == 0) {
+<b class="nc"><i>523</i>&nbsp;            if (isEnable) {</b>
+<b class="nc"><i>524</i>&nbsp;                flags |= flagMask;</b>
+<b class="nc"><i>525</i>&nbsp;            } else {</b>
+<i>526</i>&nbsp;                flags &amp;= ~flagMask;
+<b class="nc"><i>527</i>&nbsp;            }</b>
+<i>528</i>&nbsp;        }
+<i>529</i>&nbsp;    }
+<i>530</i>&nbsp;    public void requestMutualAuth(boolean state) throws GSSException {
+<i>531</i>&nbsp;        changeFlags(GSS_C_MUTUAL_FLAG, state);
+<b class="nc"><i>532</i>&nbsp;    }</b>
+<i>533</i>&nbsp;    public void requestReplayDet(boolean state) throws GSSException {
+<i>534</i>&nbsp;        changeFlags(GSS_C_REPLAY_FLAG, state);
+<b class="nc"><i>535</i>&nbsp;    }</b>
+<i>536</i>&nbsp;    public void requestSequenceDet(boolean state) throws GSSException {
+<i>537</i>&nbsp;        changeFlags(GSS_C_SEQUENCE_FLAG, state);
+<b class="nc"><i>538</i>&nbsp;    }</b>
+<i>539</i>&nbsp;    public void requestCredDeleg(boolean state) throws GSSException {
+<i>540</i>&nbsp;        changeFlags(GSS_C_DELEG_FLAG, state);
+<b class="nc"><i>541</i>&nbsp;    }</b>
+<i>542</i>&nbsp;    public void requestAnonymity(boolean state) throws GSSException {
+<i>543</i>&nbsp;        changeFlags(GSS_C_ANON_FLAG, state);
+<b class="nc"><i>544</i>&nbsp;    }</b>
+<i>545</i>&nbsp;    public void requestConf(boolean state) throws GSSException {
+<i>546</i>&nbsp;        changeFlags(GSS_C_CONF_FLAG, state);
+<b class="nc"><i>547</i>&nbsp;    }</b>
+<i>548</i>&nbsp;    public void requestInteg(boolean state) throws GSSException {
+<i>549</i>&nbsp;        changeFlags(GSS_C_INTEG_FLAG, state);
+<b class="nc"><i>550</i>&nbsp;    }</b>
+<i>551</i>&nbsp;    public void requestDelegPolicy(boolean state) throws GSSException {
+<i>552</i>&nbsp;        // Not supported, ignore
+<i>553</i>&nbsp;    }
+<i>554</i>&nbsp;    public void requestLifetime(int lifetime) throws GSSException {
+<i>555</i>&nbsp;        if (isInitiator &amp;&amp; pContext == 0) {
+<b class="nc"><i>556</i>&nbsp;            this.lifetime = lifetime;</b>
+<b class="nc"><i>557</i>&nbsp;        }</b>
+<i>558</i>&nbsp;    }
+<i>559</i>&nbsp;    public void setChannelBinding(ChannelBinding cb) throws GSSException {
+<i>560</i>&nbsp;        if (pContext == 0) {
+<b class="nc"><i>561</i>&nbsp;            this.cb = cb;</b>
+<b class="nc"><i>562</i>&nbsp;        }</b>
+<i>563</i>&nbsp;    }
+<i>564</i>&nbsp;
+<i>565</i>&nbsp;    private boolean checkFlags(int flagMask) {
+<i>566</i>&nbsp;        return ((flags &amp; flagMask) != 0);
+<b class="nc"><i>567</i>&nbsp;    }</b>
+<i>568</i>&nbsp;    public boolean getCredDelegState() {
+<i>569</i>&nbsp;        return checkFlags(GSS_C_DELEG_FLAG);
+<b class="nc"><i>570</i>&nbsp;    }</b>
+<i>571</i>&nbsp;    public boolean getMutualAuthState() {
+<i>572</i>&nbsp;        return checkFlags(GSS_C_MUTUAL_FLAG);
+<b class="nc"><i>573</i>&nbsp;    }</b>
+<i>574</i>&nbsp;    public boolean getReplayDetState() {
+<i>575</i>&nbsp;        return checkFlags(GSS_C_REPLAY_FLAG);
+<b class="nc"><i>576</i>&nbsp;    }</b>
+<i>577</i>&nbsp;    public boolean getSequenceDetState() {
+<i>578</i>&nbsp;        return checkFlags(GSS_C_SEQUENCE_FLAG);
+<b class="nc"><i>579</i>&nbsp;    }</b>
+<i>580</i>&nbsp;    public boolean getAnonymityState() {
+<i>581</i>&nbsp;        return checkFlags(GSS_C_ANON_FLAG);
+<b class="nc"><i>582</i>&nbsp;    }</b>
+<i>583</i>&nbsp;    public boolean isTransferable() throws GSSException {
+<i>584</i>&nbsp;        return checkFlags(GSS_C_TRANS_FLAG);
+<b class="nc"><i>585</i>&nbsp;    }</b>
+<i>586</i>&nbsp;    public boolean isProtReady() {
+<i>587</i>&nbsp;        return checkFlags(GSS_C_PROT_READY_FLAG);
+<b class="nc"><i>588</i>&nbsp;    }</b>
+<i>589</i>&nbsp;    public boolean getConfState() {
+<i>590</i>&nbsp;        return checkFlags(GSS_C_CONF_FLAG);
+<b class="nc"><i>591</i>&nbsp;    }</b>
+<i>592</i>&nbsp;    public boolean getIntegState() {
+<i>593</i>&nbsp;        return checkFlags(GSS_C_INTEG_FLAG);
+<b class="nc"><i>594</i>&nbsp;    }</b>
+<i>595</i>&nbsp;    public boolean getDelegPolicyState() {
+<i>596</i>&nbsp;        return false;
+<b class="nc"><i>597</i>&nbsp;    }</b>
+<i>598</i>&nbsp;    public int getLifetime() {
+<i>599</i>&nbsp;        return cStub.getContextTime(pContext);
+<b class="nc"><i>600</i>&nbsp;    }</b>
+<i>601</i>&nbsp;    public GSSNameSpi getSrcName() throws GSSException {
+<i>602</i>&nbsp;        return srcName;
+<b class="nc"><i>603</i>&nbsp;    }</b>
+<i>604</i>&nbsp;    public GSSNameSpi getTargName() throws GSSException {
+<i>605</i>&nbsp;        return targetName;
+<b class="nc"><i>606</i>&nbsp;    }</b>
+<i>607</i>&nbsp;    public Oid getMech() throws GSSException {
+<i>608</i>&nbsp;        if (isEstablished &amp;&amp; actualMech != null) {
+<b class="nc"><i>609</i>&nbsp;            return actualMech;</b>
+<b class="nc"><i>610</i>&nbsp;        } else {</b>
+<i>611</i>&nbsp;            return cStub.getMech();
+<b class="nc"><i>612</i>&nbsp;        }</b>
+<i>613</i>&nbsp;    }
+<i>614</i>&nbsp;    public GSSCredentialSpi getDelegCred() throws GSSException {
+<i>615</i>&nbsp;        return delegatedCred;
+<b class="nc"><i>616</i>&nbsp;    }</b>
+<i>617</i>&nbsp;    public boolean isInitiator() {
+<i>618</i>&nbsp;        return isInitiator;
+<b class="nc"><i>619</i>&nbsp;    }</b>
+<i>620</i>&nbsp;
+<i>621</i>&nbsp;    @SuppressWarnings(&quot;deprecation&quot;)
+<i>622</i>&nbsp;    protected void finalize() throws Throwable {
+<b class="nc"><i>623</i>&nbsp;        dispose();</b>
+<i>624</i>&nbsp;    }
+<i>625</i>&nbsp;
+<i>626</i>&nbsp;    public Object inquireSecContext(String type)
+<i>627</i>&nbsp;            throws GSSException {
+<b class="nc"><i>628</i>&nbsp;        throw new GSSException(GSSException.UNAVAILABLE, -1,</b>
+<i>629</i>&nbsp;                &quot;Inquire type not supported.&quot;);
+<i>630</i>&nbsp;    }
+<i>631</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

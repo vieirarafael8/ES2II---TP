@@ -1,0 +1,1787 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: RelationSupport</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">javax.management.relation</a> ]
+</div>
+
+<h1>Coverage Summary for Class: RelationSupport (javax.management.relation)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">RelationSupport</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 27)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 387)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package javax.management.relation;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;import java.lang.System.Logger.Level;
+<i>31</i>&nbsp;import java.util.ArrayList;
+<i>32</i>&nbsp;import java.util.HashMap;
+<i>33</i>&nbsp;import java.util.Iterator;
+<i>34</i>&nbsp;import java.util.Map;
+<i>35</i>&nbsp;import java.util.List;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;import java.util.concurrent.atomic.AtomicBoolean;
+<i>38</i>&nbsp;import static com.sun.jmx.defaults.JmxProperties.RELATION_LOGGER;
+<i>39</i>&nbsp;import static com.sun.jmx.mbeanserver.Util.cast;
+<i>40</i>&nbsp;import javax.management.InstanceNotFoundException;
+<i>41</i>&nbsp;import javax.management.MBeanException;
+<i>42</i>&nbsp;import javax.management.MBeanRegistration;
+<i>43</i>&nbsp;import javax.management.MBeanServer;
+<i>44</i>&nbsp;import javax.management.ObjectName;
+<i>45</i>&nbsp;import javax.management.ReflectionException;
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;/**
+<i>48</i>&nbsp; * A RelationSupport object is used internally by the Relation Service to
+<i>49</i>&nbsp; * represent simple relations (only roles, no properties or methods), with an
+<i>50</i>&nbsp; * unlimited number of roles, of any relation type. As internal representation,
+<i>51</i>&nbsp; * it is not exposed to the user.
+<i>52</i>&nbsp; * &lt;P&gt;RelationSupport class conforms to the design patterns of standard MBean. So
+<i>53</i>&nbsp; * the user can decide to instantiate a RelationSupport object himself as
+<i>54</i>&nbsp; * a MBean (as it follows the MBean design patterns), to register it in the
+<i>55</i>&nbsp; * MBean Server, and then to add it in the Relation Service.
+<i>56</i>&nbsp; * &lt;P&gt;The user can also, when creating his own MBean relation class, have it
+<i>57</i>&nbsp; * extending RelationSupport, to retrieve the implementations of required
+<i>58</i>&nbsp; * interfaces (see below).
+<i>59</i>&nbsp; * &lt;P&gt;It is also possible to have in a user relation MBean class a member
+<i>60</i>&nbsp; * being a RelationSupport object, and to implement the required interfaces by
+<i>61</i>&nbsp; * delegating all to this member.
+<i>62</i>&nbsp; * &lt;P&gt; RelationSupport implements the Relation interface (to be handled by the
+<i>63</i>&nbsp; * Relation Service).
+<i>64</i>&nbsp; * &lt;P&gt;It implements also the MBeanRegistration interface to be able to retrieve
+<i>65</i>&nbsp; * the MBean Server where it is registered (if registered as a MBean) to access
+<i>66</i>&nbsp; * to its Relation Service.
+<i>67</i>&nbsp; *
+<i>68</i>&nbsp; * @since 1.5
+<i>69</i>&nbsp; */
+<i>70</i>&nbsp;public class RelationSupport
+<i>71</i>&nbsp;    implements RelationSupportMBean, MBeanRegistration {
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;    //
+<i>74</i>&nbsp;    // Private members
+<i>75</i>&nbsp;    //
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    // Relation identifier (expected to be unique in the Relation Service where
+<i>78</i>&nbsp;    // the RelationSupport object will be added)
+<b class="nc"><i>79</i>&nbsp;    private String myRelId = null;</b>
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    // ObjectName of the Relation Service where the relation will be added
+<i>82</i>&nbsp;    // REQUIRED if the RelationSupport is created by the user to be registered as
+<i>83</i>&nbsp;    // a MBean, as it will have to access the Relation Service via the MBean
+<i>84</i>&nbsp;    // Server to perform the check regarding the relation type.
+<i>85</i>&nbsp;    // Is null if current object is directly created by the Relation Service,
+<i>86</i>&nbsp;    // as the object will directly access it.
+<b class="nc"><i>87</i>&nbsp;    private ObjectName myRelServiceName = null;</b>
+<i>88</i>&nbsp;
+<i>89</i>&nbsp;    // Reference to the MBean Server where the Relation Service is
+<i>90</i>&nbsp;    // registered
+<i>91</i>&nbsp;    // REQUIRED if the RelationSupport is created by the user to be registered as
+<i>92</i>&nbsp;    // a MBean, as it will have to access the Relation Service via the MBean
+<i>93</i>&nbsp;    // Server to perform the check regarding the relation type.
+<i>94</i>&nbsp;    // If the Relationbase object is created by the Relation Service (use of
+<i>95</i>&nbsp;    // createRelation() method), this is null as not needed, direct access to
+<i>96</i>&nbsp;    // the Relation Service.
+<i>97</i>&nbsp;    // If the Relationbase object is created by the user and registered as a
+<i>98</i>&nbsp;    // MBean, this is set by the preRegister() method below.
+<b class="nc"><i>99</i>&nbsp;    private MBeanServer myRelServiceMBeanServer = null;</b>
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;    // Relation type name (must be known in the Relation Service where the
+<i>102</i>&nbsp;    // relation will be added)
+<b class="nc"><i>103</i>&nbsp;    private String myRelTypeName = null;</b>
+<i>104</i>&nbsp;
+<i>105</i>&nbsp;    // Role map, mapping &lt;role-name&gt; -&gt; &lt;Role&gt;
+<i>106</i>&nbsp;    // Initialized by role list in the constructor, then updated:
+<i>107</i>&nbsp;    // - if the relation is a MBean, via setRole() and setRoles() methods, or
+<i>108</i>&nbsp;    //   via Relation Service setRole() and setRoles() methods
+<i>109</i>&nbsp;    // - if the relation is internal to the Relation Service, via
+<i>110</i>&nbsp;    //   setRoleInt() and setRolesInt() methods.
+<b class="nc"><i>111</i>&nbsp;    private final Map&lt;String,Role&gt; myRoleName2ValueMap = new HashMap&lt;String,Role&gt;();</b>
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;    // Flag to indicate if the object has been added in the Relation Service
+<b class="nc"><i>114</i>&nbsp;    private final AtomicBoolean myInRelServFlg = new AtomicBoolean();</b>
+<i>115</i>&nbsp;
+<i>116</i>&nbsp;    //
+<i>117</i>&nbsp;    // Constructors
+<i>118</i>&nbsp;    //
+<i>119</i>&nbsp;
+<i>120</i>&nbsp;    /**
+<i>121</i>&nbsp;     * Creates a {@code RelationSupport} object.
+<i>122</i>&nbsp;     * &lt;P&gt;This constructor has to be used when the RelationSupport object will
+<i>123</i>&nbsp;     * be registered as a MBean by the user, or when creating a user relation
+<i>124</i>&nbsp;     * MBean whose class extends RelationSupport.
+<i>125</i>&nbsp;     * &lt;P&gt;Nothing is done at the Relation Service level, i.e.
+<i>126</i>&nbsp;     * the {@code RelationSupport} object is not added to the
+<i>127</i>&nbsp;     * {@code RelationService} and no checks are performed to
+<i>128</i>&nbsp;     * see if the provided values are correct.
+<i>129</i>&nbsp;     * The object is always created, EXCEPT if:
+<i>130</i>&nbsp;     * &lt;P&gt;- any of the required parameters is {@code null}.
+<i>131</i>&nbsp;     * &lt;P&gt;- the same name is used for two roles.
+<i>132</i>&nbsp;     * &lt;P&gt;To be handled as a relation, the {@code RelationSupport} object has
+<i>133</i>&nbsp;     * to be added to the Relation Service using the Relation Service method
+<i>134</i>&nbsp;     * addRelation().
+<i>135</i>&nbsp;     *
+<i>136</i>&nbsp;     * @param relationId  relation identifier, to identify the relation in the
+<i>137</i>&nbsp;     * Relation Service.
+<i>138</i>&nbsp;     * &lt;P&gt;Expected to be unique in the given Relation Service.
+<i>139</i>&nbsp;     * @param relationServiceName  ObjectName of the Relation Service where
+<i>140</i>&nbsp;     * the relation will be registered.
+<i>141</i>&nbsp;     * &lt;P&gt;This parameter is required as it is the Relation Service that is
+<i>142</i>&nbsp;     * aware of the definition of the relation type of the given relation,
+<i>143</i>&nbsp;     * so that will be able to check update operations (set).
+<i>144</i>&nbsp;     * @param relationTypeName  Name of relation type.
+<i>145</i>&nbsp;     * &lt;P&gt;Expected to have been created in the given Relation Service.
+<i>146</i>&nbsp;     * @param list  list of roles (Role objects) to initialize the
+<i>147</i>&nbsp;     * relation. Can be {@code null}.
+<i>148</i>&nbsp;     * &lt;P&gt;Expected to conform to relation info in associated relation type.
+<i>149</i>&nbsp;     *
+<i>150</i>&nbsp;     * @exception InvalidRoleValueException  if the same name is used for two
+<i>151</i>&nbsp;     * roles.
+<i>152</i>&nbsp;     * @exception IllegalArgumentException  if any of the required parameters
+<i>153</i>&nbsp;     * (relation id, relation service ObjectName, or relation type name) is
+<i>154</i>&nbsp;     * {@code null}.
+<i>155</i>&nbsp;     */
+<i>156</i>&nbsp;    public RelationSupport(String relationId,
+<i>157</i>&nbsp;                        ObjectName relationServiceName,
+<i>158</i>&nbsp;                        String relationTypeName,
+<i>159</i>&nbsp;                        RoleList list)
+<i>160</i>&nbsp;        throws InvalidRoleValueException,
+<i>161</i>&nbsp;               IllegalArgumentException {
+<i>162</i>&nbsp;
+<b class="nc"><i>163</i>&nbsp;        super();</b>
+<i>164</i>&nbsp;
+<b class="nc"><i>165</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY&quot;);</b>
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;        // Can throw InvalidRoleValueException and IllegalArgumentException
+<i>168</i>&nbsp;        initMembers(relationId,
+<b class="nc"><i>169</i>&nbsp;                    relationServiceName,</b>
+<i>170</i>&nbsp;                    null,
+<i>171</i>&nbsp;                    relationTypeName,
+<i>172</i>&nbsp;                    list);
+<i>173</i>&nbsp;
+<i>174</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<b class="nc"><i>175</i>&nbsp;    }</b>
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * Creates a {@code RelationSupport} object.
+<i>179</i>&nbsp;     * &lt;P&gt;This constructor has to be used when the user relation MBean
+<i>180</i>&nbsp;     * implements the interfaces expected to be supported by a relation by
+<i>181</i>&nbsp;     * delegating to a RelationSupport object.
+<i>182</i>&nbsp;     * &lt;P&gt;This object needs to know the Relation Service expected to handle the
+<i>183</i>&nbsp;     * relation. So it has to know the MBean Server where the Relation Service
+<i>184</i>&nbsp;     * is registered.
+<i>185</i>&nbsp;     * &lt;P&gt;According to a limitation, a relation MBean must be registered in the
+<i>186</i>&nbsp;     * same MBean Server as the Relation Service expected to handle it. So the
+<i>187</i>&nbsp;     * user relation MBean has to be created and registered, and then the
+<i>188</i>&nbsp;     * wrapped RelationSupport object can be created within the identified MBean
+<i>189</i>&nbsp;     * Server.
+<i>190</i>&nbsp;     * &lt;P&gt;Nothing is done at the Relation Service level, i.e.
+<i>191</i>&nbsp;     * the {@code RelationSupport} object is not added to the
+<i>192</i>&nbsp;     * {@code RelationService} and no checks are performed to
+<i>193</i>&nbsp;     * see if the provided values are correct.
+<i>194</i>&nbsp;     * The object is always created, EXCEPT if:
+<i>195</i>&nbsp;     * &lt;P&gt;- any of the required parameters is {@code null}.
+<i>196</i>&nbsp;     * &lt;P&gt;- the same name is used for two roles.
+<i>197</i>&nbsp;     * &lt;P&gt;To be handled as a relation, the {@code RelationSupport} object has
+<i>198</i>&nbsp;     * to be added to the Relation Service using the Relation Service method
+<i>199</i>&nbsp;     * addRelation().
+<i>200</i>&nbsp;     *
+<i>201</i>&nbsp;     * @param relationId  relation identifier, to identify the relation in the
+<i>202</i>&nbsp;     * Relation Service.
+<i>203</i>&nbsp;     * &lt;P&gt;Expected to be unique in the given Relation Service.
+<i>204</i>&nbsp;     * @param relationServiceName  ObjectName of the Relation Service where
+<i>205</i>&nbsp;     * the relation will be registered.
+<i>206</i>&nbsp;     * &lt;P&gt;This parameter is required as it is the Relation Service that is
+<i>207</i>&nbsp;     * aware of the definition of the relation type of the given relation,
+<i>208</i>&nbsp;     * so that will be able to check update operations (set).
+<i>209</i>&nbsp;     * @param relationServiceMBeanServer  MBean Server where the wrapping MBean
+<i>210</i>&nbsp;     * is or will be registered.
+<i>211</i>&nbsp;     * &lt;P&gt;Expected to be the MBean Server where the Relation Service is or will
+<i>212</i>&nbsp;     * be registered.
+<i>213</i>&nbsp;     * @param relationTypeName  Name of relation type.
+<i>214</i>&nbsp;     * &lt;P&gt;Expected to have been created in the given Relation Service.
+<i>215</i>&nbsp;     * @param list  list of roles (Role objects) to initialize the
+<i>216</i>&nbsp;     * relation. Can be {@code null}.
+<i>217</i>&nbsp;     * &lt;P&gt;Expected to conform to relation info in associated relation type.
+<i>218</i>&nbsp;     *
+<i>219</i>&nbsp;     * @exception InvalidRoleValueException  if the same name is used for two
+<i>220</i>&nbsp;     * roles.
+<i>221</i>&nbsp;     * @exception IllegalArgumentException  if any of the required parameters
+<i>222</i>&nbsp;     * (relation id, relation service ObjectName, relation service MBeanServer,
+<i>223</i>&nbsp;     * or relation type name) is {@code null}.
+<i>224</i>&nbsp;     */
+<i>225</i>&nbsp;    public RelationSupport(String relationId,
+<i>226</i>&nbsp;                        ObjectName relationServiceName,
+<i>227</i>&nbsp;                        MBeanServer relationServiceMBeanServer,
+<i>228</i>&nbsp;                        String relationTypeName,
+<i>229</i>&nbsp;                        RoleList list)
+<i>230</i>&nbsp;        throws InvalidRoleValueException,
+<i>231</i>&nbsp;               IllegalArgumentException {
+<i>232</i>&nbsp;
+<i>233</i>&nbsp;        super();
+<i>234</i>&nbsp;
+<b class="nc"><i>235</i>&nbsp;        if (relationServiceMBeanServer == null) {</b>
+<i>236</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<b class="nc"><i>237</i>&nbsp;            throw new IllegalArgumentException(excMsg);</b>
+<b class="nc"><i>238</i>&nbsp;        }</b>
+<b class="nc"><i>239</i>&nbsp;</b>
+<i>240</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY&quot;);
+<i>241</i>&nbsp;
+<b class="nc"><i>242</i>&nbsp;        // Can throw InvalidRoleValueException and</b>
+<i>243</i>&nbsp;        // IllegalArgumentException
+<i>244</i>&nbsp;        initMembers(relationId,
+<i>245</i>&nbsp;                    relationServiceName,
+<i>246</i>&nbsp;                    relationServiceMBeanServer,
+<b class="nc"><i>247</i>&nbsp;                    relationTypeName,</b>
+<i>248</i>&nbsp;                    list);
+<i>249</i>&nbsp;
+<i>250</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>251</i>&nbsp;    }
+<i>252</i>&nbsp;
+<b class="nc"><i>253</i>&nbsp;    //</b>
+<i>254</i>&nbsp;    // Relation Interface
+<i>255</i>&nbsp;    //
+<i>256</i>&nbsp;
+<i>257</i>&nbsp;    /**
+<i>258</i>&nbsp;     * Retrieves role value for given role name.
+<i>259</i>&nbsp;     * &lt;P&gt;Checks if the role exists and is readable according to the relation
+<i>260</i>&nbsp;     * type.
+<i>261</i>&nbsp;     *
+<i>262</i>&nbsp;     * @param roleName  name of role
+<i>263</i>&nbsp;     *
+<i>264</i>&nbsp;     * @return the ArrayList of ObjectName objects being the role value
+<i>265</i>&nbsp;     *
+<i>266</i>&nbsp;     * @exception IllegalArgumentException  if null role name
+<i>267</i>&nbsp;     * @exception RoleNotFoundException  if:
+<i>268</i>&nbsp;     * &lt;P&gt;- there is no role with given name
+<i>269</i>&nbsp;     * &lt;P&gt;- the role is not readable.
+<i>270</i>&nbsp;     * @exception RelationServiceNotRegisteredException  if the Relation
+<i>271</i>&nbsp;     * Service is not registered in the MBean Server
+<i>272</i>&nbsp;     *
+<i>273</i>&nbsp;     * @see #setRole
+<i>274</i>&nbsp;     */
+<i>275</i>&nbsp;    public List&lt;ObjectName&gt; getRole(String roleName)
+<i>276</i>&nbsp;        throws IllegalArgumentException,
+<i>277</i>&nbsp;               RoleNotFoundException,
+<i>278</i>&nbsp;               RelationServiceNotRegisteredException {
+<i>279</i>&nbsp;
+<i>280</i>&nbsp;        if (roleName == null) {
+<i>281</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>282</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>283</i>&nbsp;        }
+<b class="nc"><i>284</i>&nbsp;</b>
+<b class="nc"><i>285</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0}&quot;, roleName);</b>
+<b class="nc"><i>286</i>&nbsp;</b>
+<i>287</i>&nbsp;        // Can throw RoleNotFoundException and
+<i>288</i>&nbsp;        // RelationServiceNotRegisteredException
+<b class="nc"><i>289</i>&nbsp;        List&lt;ObjectName&gt; result = cast(</b>
+<i>290</i>&nbsp;            getRoleInt(roleName, false, null, false));
+<i>291</i>&nbsp;
+<i>292</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>293</i>&nbsp;        return result;
+<b class="nc"><i>294</i>&nbsp;    }</b>
+<b class="nc"><i>295</i>&nbsp;</b>
+<i>296</i>&nbsp;    /**
+<b class="nc"><i>297</i>&nbsp;     * Retrieves values of roles with given names.</b>
+<b class="nc"><i>298</i>&nbsp;     * &lt;P&gt;Checks for each role if it exists and is readable according to the</b>
+<i>299</i>&nbsp;     * relation type.
+<i>300</i>&nbsp;     *
+<i>301</i>&nbsp;     * @param roleNameArray  array of names of roles to be retrieved
+<i>302</i>&nbsp;     *
+<i>303</i>&nbsp;     * @return a RoleResult object, including a RoleList (for roles
+<i>304</i>&nbsp;     * successfully retrieved) and a RoleUnresolvedList (for roles not
+<i>305</i>&nbsp;     * retrieved).
+<i>306</i>&nbsp;     *
+<i>307</i>&nbsp;     * @exception IllegalArgumentException  if null role name
+<i>308</i>&nbsp;     * @exception RelationServiceNotRegisteredException  if the Relation
+<i>309</i>&nbsp;     * Service is not registered in the MBean Server
+<i>310</i>&nbsp;     *
+<i>311</i>&nbsp;     * @see #setRoles
+<i>312</i>&nbsp;     */
+<i>313</i>&nbsp;    public RoleResult getRoles(String[] roleNameArray)
+<i>314</i>&nbsp;        throws IllegalArgumentException,
+<i>315</i>&nbsp;               RelationServiceNotRegisteredException {
+<i>316</i>&nbsp;
+<i>317</i>&nbsp;        if (roleNameArray == null) {
+<i>318</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>319</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>320</i>&nbsp;        }
+<i>321</i>&nbsp;
+<b class="nc"><i>322</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY&quot;);</b>
+<b class="nc"><i>323</i>&nbsp;</b>
+<b class="nc"><i>324</i>&nbsp;        // Can throw RelationServiceNotRegisteredException</b>
+<i>325</i>&nbsp;        RoleResult result = getRolesInt(roleNameArray, false, null);
+<i>326</i>&nbsp;
+<b class="nc"><i>327</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);</b>
+<i>328</i>&nbsp;        return result;
+<i>329</i>&nbsp;    }
+<b class="nc"><i>330</i>&nbsp;</b>
+<i>331</i>&nbsp;    /**
+<b class="nc"><i>332</i>&nbsp;     * Returns all roles present in the relation.</b>
+<b class="nc"><i>333</i>&nbsp;     *</b>
+<i>334</i>&nbsp;     * @return a RoleResult object, including a RoleList (for roles
+<i>335</i>&nbsp;     * successfully retrieved) and a RoleUnresolvedList (for roles not
+<i>336</i>&nbsp;     * readable).
+<i>337</i>&nbsp;     *
+<i>338</i>&nbsp;     * @exception RelationServiceNotRegisteredException  if the Relation
+<i>339</i>&nbsp;     * Service is not registered in the MBean Server
+<i>340</i>&nbsp;     */
+<i>341</i>&nbsp;    public RoleResult getAllRoles()
+<i>342</i>&nbsp;        throws RelationServiceNotRegisteredException {
+<i>343</i>&nbsp;
+<i>344</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY&quot;);
+<i>345</i>&nbsp;
+<i>346</i>&nbsp;        RoleResult result = null;
+<i>347</i>&nbsp;        try {
+<i>348</i>&nbsp;            result = getAllRolesInt(false, null);
+<b class="nc"><i>349</i>&nbsp;        } catch (IllegalArgumentException exc) {</b>
+<i>350</i>&nbsp;            // OK : Invalid parameters, ignore...
+<i>351</i>&nbsp;        }
+<b class="nc"><i>352</i>&nbsp;</b>
+<i>353</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<b class="nc"><i>354</i>&nbsp;        return result;</b>
+<b class="nc"><i>355</i>&nbsp;    }</b>
+<i>356</i>&nbsp;
+<b class="nc"><i>357</i>&nbsp;    /**</b>
+<i>358</i>&nbsp;     * Returns all roles in the relation without checking read mode.
+<b class="nc"><i>359</i>&nbsp;     *</b>
+<b class="nc"><i>360</i>&nbsp;     * @return a RoleList</b>
+<i>361</i>&nbsp;     */
+<i>362</i>&nbsp;    public RoleList retrieveAllRoles() {
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY&quot;);
+<i>365</i>&nbsp;
+<i>366</i>&nbsp;        RoleList result;
+<i>367</i>&nbsp;        synchronized(myRoleName2ValueMap) {
+<i>368</i>&nbsp;            result =
+<i>369</i>&nbsp;                new RoleList(new ArrayList&lt;Role&gt;(myRoleName2ValueMap.values()));
+<b class="nc"><i>370</i>&nbsp;        }</b>
+<i>371</i>&nbsp;
+<i>372</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>373</i>&nbsp;        return result;
+<b class="nc"><i>374</i>&nbsp;    }</b>
+<b class="nc"><i>375</i>&nbsp;</b>
+<b class="nc"><i>376</i>&nbsp;    /**</b>
+<b class="nc"><i>377</i>&nbsp;     * Returns the number of MBeans currently referenced in the given role.</b>
+<i>378</i>&nbsp;     *
+<b class="nc"><i>379</i>&nbsp;     * @param roleName  name of role</b>
+<i>380</i>&nbsp;     *
+<b class="nc"><i>381</i>&nbsp;     * @return the number of currently referenced MBeans in that role</b>
+<i>382</i>&nbsp;     *
+<i>383</i>&nbsp;     * @exception IllegalArgumentException  if null role name
+<i>384</i>&nbsp;     * @exception RoleNotFoundException  if there is no role with given name
+<i>385</i>&nbsp;     */
+<i>386</i>&nbsp;    public Integer getRoleCardinality(String roleName)
+<i>387</i>&nbsp;        throws IllegalArgumentException,
+<i>388</i>&nbsp;               RoleNotFoundException {
+<i>389</i>&nbsp;
+<i>390</i>&nbsp;        if (roleName == null) {
+<i>391</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>392</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>393</i>&nbsp;        }
+<i>394</i>&nbsp;
+<i>395</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0}&quot;, roleName);
+<i>396</i>&nbsp;
+<i>397</i>&nbsp;        // Try to retrieve the role
+<b class="nc"><i>398</i>&nbsp;        Role role;</b>
+<b class="nc"><i>399</i>&nbsp;        synchronized(myRoleName2ValueMap) {</b>
+<b class="nc"><i>400</i>&nbsp;            // No null Role is allowed, so direct use of get()</b>
+<i>401</i>&nbsp;            role = (myRoleName2ValueMap.get(roleName));
+<i>402</i>&nbsp;        }
+<b class="nc"><i>403</i>&nbsp;        if (role == null) {</b>
+<i>404</i>&nbsp;            int pbType = RoleStatus.NO_ROLE_WITH_NAME;
+<i>405</i>&nbsp;            // Will throw a RoleNotFoundException
+<i>406</i>&nbsp;            //
+<i>407</i>&nbsp;            // Will not throw InvalidRoleValueException, so catch it for the
+<b class="nc"><i>408</i>&nbsp;            // compiler</b>
+<i>409</i>&nbsp;            try {
+<b class="nc"><i>410</i>&nbsp;                RelationService.throwRoleProblemException(pbType,</b>
+<b class="nc"><i>411</i>&nbsp;                                                          roleName);</b>
+<b class="nc"><i>412</i>&nbsp;            } catch (InvalidRoleValueException exc) {</b>
+<b class="nc"><i>413</i>&nbsp;                // OK : Do not throw InvalidRoleValueException as</b>
+<i>414</i>&nbsp;                //      a RoleNotFoundException will be thrown.
+<i>415</i>&nbsp;            }
+<i>416</i>&nbsp;        }
+<i>417</i>&nbsp;
+<i>418</i>&nbsp;        List&lt;ObjectName&gt; roleValue = role.getRoleValue();
+<b class="nc"><i>419</i>&nbsp;</b>
+<i>420</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<b class="nc"><i>421</i>&nbsp;        return roleValue.size();</b>
+<i>422</i>&nbsp;    }
+<i>423</i>&nbsp;
+<b class="nc"><i>424</i>&nbsp;    /**</b>
+<i>425</i>&nbsp;     * Sets the given role.
+<i>426</i>&nbsp;     * &lt;P&gt;Will check the role according to its corresponding role definition
+<b class="nc"><i>427</i>&nbsp;     * provided in relation&#39;s relation type</b>
+<i>428</i>&nbsp;     * &lt;P&gt;Will send a notification (RelationNotification with type
+<b class="nc"><i>429</i>&nbsp;     * RELATION_BASIC_UPDATE or RELATION_MBEAN_UPDATE, depending if the</b>
+<i>430</i>&nbsp;     * relation is a MBean or not).
+<b class="nc"><i>431</i>&nbsp;     *</b>
+<i>432</i>&nbsp;     * @param role  role to be set (name and new value)
+<i>433</i>&nbsp;     *
+<i>434</i>&nbsp;     * @exception IllegalArgumentException  if null role
+<i>435</i>&nbsp;     * @exception RoleNotFoundException  if there is no role with the supplied
+<i>436</i>&nbsp;     * role&#39;s name or if the role is not writable (no test on the write access
+<i>437</i>&nbsp;     * mode performed when initializing the role)
+<i>438</i>&nbsp;     * @exception InvalidRoleValueException  if value provided for
+<i>439</i>&nbsp;     * role is not valid, i.e.:
+<i>440</i>&nbsp;     * &lt;P&gt;- the number of referenced MBeans in given value is less than
+<i>441</i>&nbsp;     * expected minimum degree
+<i>442</i>&nbsp;     * &lt;P&gt;- the number of referenced MBeans in provided value exceeds expected
+<i>443</i>&nbsp;     * maximum degree
+<i>444</i>&nbsp;     * &lt;P&gt;- one referenced MBean in the value is not an Object of the MBean
+<i>445</i>&nbsp;     * class expected for that role
+<i>446</i>&nbsp;     * &lt;P&gt;- a MBean provided for that role does not exist
+<i>447</i>&nbsp;     * @exception RelationServiceNotRegisteredException  if the Relation
+<i>448</i>&nbsp;     * Service is not registered in the MBean Server
+<i>449</i>&nbsp;     * @exception RelationTypeNotFoundException  if the relation type has not
+<i>450</i>&nbsp;     * been declared in the Relation Service
+<i>451</i>&nbsp;     * @exception RelationNotFoundException  if the relation has not been
+<i>452</i>&nbsp;     * added in the Relation Service.
+<i>453</i>&nbsp;     *
+<i>454</i>&nbsp;     * @see #getRole
+<i>455</i>&nbsp;     */
+<i>456</i>&nbsp;    public void setRole(Role role)
+<i>457</i>&nbsp;        throws IllegalArgumentException,
+<i>458</i>&nbsp;               RoleNotFoundException,
+<i>459</i>&nbsp;               RelationTypeNotFoundException,
+<i>460</i>&nbsp;               InvalidRoleValueException,
+<i>461</i>&nbsp;               RelationServiceNotRegisteredException,
+<i>462</i>&nbsp;               RelationNotFoundException {
+<i>463</i>&nbsp;
+<i>464</i>&nbsp;        if (role == null) {
+<i>465</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>466</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>467</i>&nbsp;        }
+<i>468</i>&nbsp;
+<i>469</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0}&quot;, role);
+<i>470</i>&nbsp;
+<i>471</i>&nbsp;        // Will return null :)
+<i>472</i>&nbsp;        Object result = setRoleInt(role, false, null, false);
+<i>473</i>&nbsp;
+<b class="nc"><i>474</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);</b>
+<b class="nc"><i>475</i>&nbsp;        return;</b>
+<b class="nc"><i>476</i>&nbsp;    }</b>
+<i>477</i>&nbsp;
+<i>478</i>&nbsp;    /**
+<b class="nc"><i>479</i>&nbsp;     * Sets the given roles.</b>
+<i>480</i>&nbsp;     * &lt;P&gt;Will check the role according to its corresponding role definition
+<i>481</i>&nbsp;     * provided in relation&#39;s relation type
+<i>482</i>&nbsp;     * &lt;P&gt;Will send one notification (RelationNotification with type
+<b class="nc"><i>483</i>&nbsp;     * RELATION_BASIC_UPDATE or RELATION_MBEAN_UPDATE, depending if the</b>
+<i>484</i>&nbsp;     * relation is a MBean or not) per updated role.
+<b class="nc"><i>485</i>&nbsp;     *</b>
+<i>486</i>&nbsp;     * @param list  list of roles to be set
+<i>487</i>&nbsp;     *
+<i>488</i>&nbsp;     * @return a RoleResult object, including a RoleList (for roles
+<i>489</i>&nbsp;     * successfully set) and a RoleUnresolvedList (for roles not
+<i>490</i>&nbsp;     * set).
+<i>491</i>&nbsp;     *
+<i>492</i>&nbsp;     * @exception IllegalArgumentException  if null role list
+<i>493</i>&nbsp;     * @exception RelationServiceNotRegisteredException  if the Relation
+<i>494</i>&nbsp;     * Service is not registered in the MBean Server
+<i>495</i>&nbsp;     * @exception RelationTypeNotFoundException  if the relation type has not
+<i>496</i>&nbsp;     * been declared in the Relation Service.
+<i>497</i>&nbsp;     * @exception RelationNotFoundException  if the relation MBean has not been
+<i>498</i>&nbsp;     * added in the Relation Service.
+<i>499</i>&nbsp;     *
+<i>500</i>&nbsp;     * @see #getRoles
+<i>501</i>&nbsp;     */
+<i>502</i>&nbsp;    public RoleResult setRoles(RoleList list)
+<i>503</i>&nbsp;        throws IllegalArgumentException,
+<i>504</i>&nbsp;               RelationServiceNotRegisteredException,
+<i>505</i>&nbsp;               RelationTypeNotFoundException,
+<i>506</i>&nbsp;               RelationNotFoundException {
+<i>507</i>&nbsp;
+<i>508</i>&nbsp;        if (list == null) {
+<i>509</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>510</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>511</i>&nbsp;        }
+<i>512</i>&nbsp;
+<i>513</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0}&quot;, list);
+<i>514</i>&nbsp;
+<i>515</i>&nbsp;        RoleResult result = setRolesInt(list, false, null);
+<i>516</i>&nbsp;
+<i>517</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>518</i>&nbsp;        return result;
+<b class="nc"><i>519</i>&nbsp;    }</b>
+<b class="nc"><i>520</i>&nbsp;</b>
+<b class="nc"><i>521</i>&nbsp;    /**</b>
+<i>522</i>&nbsp;     * Callback used by the Relation Service when a MBean referenced in a role
+<i>523</i>&nbsp;     * is unregistered.
+<b class="nc"><i>524</i>&nbsp;     * &lt;P&gt;The Relation Service will call this method to let the relation</b>
+<i>525</i>&nbsp;     * take action to reflect the impact of such unregistration.
+<i>526</i>&nbsp;     * &lt;P&gt;BEWARE. the user is not expected to call this method.
+<b class="nc"><i>527</i>&nbsp;     * &lt;P&gt;Current implementation is to set the role with its current value</b>
+<i>528</i>&nbsp;     * (list of ObjectNames of referenced MBeans) without the unregistered
+<b class="nc"><i>529</i>&nbsp;     * one.</b>
+<b class="nc"><i>530</i>&nbsp;     *</b>
+<i>531</i>&nbsp;     * @param objectName  ObjectName of unregistered MBean
+<i>532</i>&nbsp;     * @param roleName  name of role where the MBean is referenced
+<i>533</i>&nbsp;     *
+<i>534</i>&nbsp;     * @exception IllegalArgumentException  if null parameter
+<i>535</i>&nbsp;     * @exception RoleNotFoundException  if role does not exist in the
+<i>536</i>&nbsp;     * relation or is not writable
+<i>537</i>&nbsp;     * @exception InvalidRoleValueException  if role value does not conform to
+<i>538</i>&nbsp;     * the associated role info (this will never happen when called from the
+<i>539</i>&nbsp;     * Relation Service)
+<i>540</i>&nbsp;     * @exception RelationServiceNotRegisteredException  if the Relation
+<i>541</i>&nbsp;     * Service is not registered in the MBean Server
+<i>542</i>&nbsp;     * @exception RelationTypeNotFoundException  if the relation type has not
+<i>543</i>&nbsp;     * been declared in the Relation Service.
+<i>544</i>&nbsp;     * @exception RelationNotFoundException  if this method is called for a
+<i>545</i>&nbsp;     * relation MBean not added in the Relation Service.
+<i>546</i>&nbsp;     */
+<i>547</i>&nbsp;    public void handleMBeanUnregistration(ObjectName objectName,
+<i>548</i>&nbsp;                                          String roleName)
+<i>549</i>&nbsp;        throws IllegalArgumentException,
+<i>550</i>&nbsp;               RoleNotFoundException,
+<i>551</i>&nbsp;               InvalidRoleValueException,
+<i>552</i>&nbsp;               RelationServiceNotRegisteredException,
+<i>553</i>&nbsp;               RelationTypeNotFoundException,
+<i>554</i>&nbsp;               RelationNotFoundException {
+<i>555</i>&nbsp;
+<i>556</i>&nbsp;        if (objectName == null || roleName == null) {
+<i>557</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>558</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>559</i>&nbsp;        }
+<i>560</i>&nbsp;
+<i>561</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0} {1}&quot;, objectName, roleName);
+<i>562</i>&nbsp;
+<i>563</i>&nbsp;        // Can throw RoleNotFoundException, InvalidRoleValueException,
+<i>564</i>&nbsp;        // or RelationTypeNotFoundException
+<i>565</i>&nbsp;        handleMBeanUnregistrationInt(objectName,
+<i>566</i>&nbsp;                                     roleName,
+<i>567</i>&nbsp;                                     false,
+<b class="nc"><i>568</i>&nbsp;                                     null);</b>
+<b class="nc"><i>569</i>&nbsp;</b>
+<b class="nc"><i>570</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);</b>
+<i>571</i>&nbsp;        return;
+<i>572</i>&nbsp;    }
+<b class="nc"><i>573</i>&nbsp;</b>
+<i>574</i>&nbsp;    /**
+<i>575</i>&nbsp;     * Retrieves MBeans referenced in the various roles of the relation.
+<i>576</i>&nbsp;     *
+<i>577</i>&nbsp;     * @return a HashMap mapping:
+<i>578</i>&nbsp;     * &lt;P&gt; ObjectName {@literal -&gt;} ArrayList of String (role names)
+<b class="nc"><i>579</i>&nbsp;     */</b>
+<i>580</i>&nbsp;    public Map&lt;ObjectName,List&lt;String&gt;&gt; getReferencedMBeans() {
+<i>581</i>&nbsp;
+<i>582</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY&quot;);
+<i>583</i>&nbsp;
+<b class="nc"><i>584</i>&nbsp;        Map&lt;ObjectName,List&lt;String&gt;&gt; refMBeanMap =</b>
+<i>585</i>&nbsp;            new HashMap&lt;ObjectName,List&lt;String&gt;&gt;();
+<i>586</i>&nbsp;
+<i>587</i>&nbsp;        synchronized(myRoleName2ValueMap) {
+<i>588</i>&nbsp;
+<i>589</i>&nbsp;            for (Role currRole : myRoleName2ValueMap.values()) {
+<i>590</i>&nbsp;
+<i>591</i>&nbsp;                String currRoleName = currRole.getRoleName();
+<i>592</i>&nbsp;                // Retrieves ObjectNames of MBeans referenced in current role
+<i>593</i>&nbsp;                List&lt;ObjectName&gt; currRefMBeanList = currRole.getRoleValue();
+<i>594</i>&nbsp;
+<i>595</i>&nbsp;                for (ObjectName currRoleObjName : currRefMBeanList) {
+<i>596</i>&nbsp;
+<b class="nc"><i>597</i>&nbsp;                    // Sees if current MBean has been already referenced in</b>
+<i>598</i>&nbsp;                    // roles already seen
+<i>599</i>&nbsp;                    List&lt;String&gt; mbeanRoleNameList =
+<b class="nc"><i>600</i>&nbsp;                        refMBeanMap.get(currRoleObjName);</b>
+<i>601</i>&nbsp;
+<i>602</i>&nbsp;                    boolean newRefFlg = false;
+<b class="nc"><i>603</i>&nbsp;                    if (mbeanRoleNameList == null) {</b>
+<i>604</i>&nbsp;                        newRefFlg = true;
+<b class="nc"><i>605</i>&nbsp;                        mbeanRoleNameList = new ArrayList&lt;String&gt;();</b>
+<i>606</i>&nbsp;                    }
+<b class="nc"><i>607</i>&nbsp;                    mbeanRoleNameList.add(currRoleName);</b>
+<i>608</i>&nbsp;                    if (newRefFlg) {
+<b class="nc"><i>609</i>&nbsp;                        refMBeanMap.put(currRoleObjName, mbeanRoleNameList);</b>
+<i>610</i>&nbsp;                    }
+<b class="nc"><i>611</i>&nbsp;                }</b>
+<i>612</i>&nbsp;            }
+<i>613</i>&nbsp;        }
+<i>614</i>&nbsp;
+<b class="nc"><i>615</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);</b>
+<b class="nc"><i>616</i>&nbsp;        return refMBeanMap;</b>
+<i>617</i>&nbsp;    }
+<b class="nc"><i>618</i>&nbsp;</b>
+<b class="nc"><i>619</i>&nbsp;    /**</b>
+<b class="nc"><i>620</i>&nbsp;     * Returns name of associated relation type.</b>
+<b class="nc"><i>621</i>&nbsp;     */</b>
+<i>622</i>&nbsp;    public String getRelationTypeName() {
+<b class="nc"><i>623</i>&nbsp;        return myRelTypeName;</b>
+<b class="nc"><i>624</i>&nbsp;    }</b>
+<b class="nc"><i>625</i>&nbsp;</b>
+<i>626</i>&nbsp;    /**
+<b class="nc"><i>627</i>&nbsp;     * Returns ObjectName of the Relation Service handling the relation.</b>
+<b class="nc"><i>628</i>&nbsp;     *</b>
+<b class="nc"><i>629</i>&nbsp;     * @return the ObjectName of the Relation Service.</b>
+<i>630</i>&nbsp;     */
+<b class="nc"><i>631</i>&nbsp;    public ObjectName getRelationServiceName() {</b>
+<i>632</i>&nbsp;        return myRelServiceName;
+<b class="nc"><i>633</i>&nbsp;    }</b>
+<i>634</i>&nbsp;
+<i>635</i>&nbsp;    /**
+<i>636</i>&nbsp;     * Returns relation identifier (used to uniquely identify the relation
+<i>637</i>&nbsp;     * inside the Relation Service).
+<i>638</i>&nbsp;     *
+<i>639</i>&nbsp;     * @return the relation id.
+<b class="nc"><i>640</i>&nbsp;     */</b>
+<i>641</i>&nbsp;    public String getRelationId() {
+<i>642</i>&nbsp;        return myRelId;
+<i>643</i>&nbsp;    }
+<i>644</i>&nbsp;
+<i>645</i>&nbsp;    //
+<i>646</i>&nbsp;    // MBeanRegistration interface
+<i>647</i>&nbsp;    //
+<i>648</i>&nbsp;
+<b class="nc"><i>649</i>&nbsp;    // Pre-registration: retrieves the MBean Server (useful to access to the</b>
+<i>650</i>&nbsp;    // Relation Service)
+<i>651</i>&nbsp;    // This is the way to retrieve the MBean Server when the relation object is
+<i>652</i>&nbsp;    // a MBean created by the user outside of the Relation Service.
+<i>653</i>&nbsp;    //
+<i>654</i>&nbsp;    // No exception thrown.
+<i>655</i>&nbsp;    public ObjectName preRegister(MBeanServer server,
+<i>656</i>&nbsp;                                  ObjectName name)
+<i>657</i>&nbsp;        throws Exception {
+<i>658</i>&nbsp;
+<b class="nc"><i>659</i>&nbsp;        myRelServiceMBeanServer = server;</b>
+<i>660</i>&nbsp;        return name;
+<i>661</i>&nbsp;    }
+<i>662</i>&nbsp;
+<i>663</i>&nbsp;    // Post-registration: does nothing
+<i>664</i>&nbsp;    public void postRegister(Boolean registrationDone) {
+<i>665</i>&nbsp;        return;
+<i>666</i>&nbsp;    }
+<i>667</i>&nbsp;
+<i>668</i>&nbsp;    // Pre-unregistration: does nothing
+<i>669</i>&nbsp;    public void preDeregister()
+<i>670</i>&nbsp;        throws Exception {
+<i>671</i>&nbsp;        return;
+<i>672</i>&nbsp;    }
+<i>673</i>&nbsp;
+<i>674</i>&nbsp;    // Post-unregistration: does nothing
+<i>675</i>&nbsp;    public void postDeregister() {
+<b class="nc"><i>676</i>&nbsp;        return;</b>
+<b class="nc"><i>677</i>&nbsp;    }</b>
+<i>678</i>&nbsp;
+<i>679</i>&nbsp;    //
+<i>680</i>&nbsp;    // Others
+<i>681</i>&nbsp;    //
+<i>682</i>&nbsp;
+<i>683</i>&nbsp;    /**
+<i>684</i>&nbsp;     * Returns an internal flag specifying if the object is still handled by
+<i>685</i>&nbsp;     * the Relation Service.
+<i>686</i>&nbsp;     */
+<i>687</i>&nbsp;    public Boolean isInRelationService() {
+<i>688</i>&nbsp;        return myInRelServFlg.get();
+<i>689</i>&nbsp;    }
+<i>690</i>&nbsp;
+<i>691</i>&nbsp;    public void setRelationServiceManagementFlag(Boolean flag)
+<i>692</i>&nbsp;        throws IllegalArgumentException {
+<i>693</i>&nbsp;
+<i>694</i>&nbsp;        if (flag == null) {
+<i>695</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>696</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>697</i>&nbsp;        }
+<i>698</i>&nbsp;        myInRelServFlg.set(flag);
+<i>699</i>&nbsp;    }
+<i>700</i>&nbsp;
+<i>701</i>&nbsp;    //
+<i>702</i>&nbsp;    // Misc
+<i>703</i>&nbsp;    //
+<i>704</i>&nbsp;
+<b class="nc"><i>705</i>&nbsp;    // Gets the role with given name</b>
+<i>706</i>&nbsp;    // Checks if the role exists and is readable according to the relation
+<i>707</i>&nbsp;    // type.
+<i>708</i>&nbsp;    //
+<i>709</i>&nbsp;    // This method is called in getRole() above.
+<i>710</i>&nbsp;    // It is also called in the Relation Service getRole() method.
+<b class="nc"><i>711</i>&nbsp;    // It is also called in getRolesInt() below (used for getRoles() above</b>
+<b class="nc"><i>712</i>&nbsp;    // and for Relation Service getRoles() method).</b>
+<b class="nc"><i>713</i>&nbsp;    //</b>
+<i>714</i>&nbsp;    // Depending on parameters reflecting its use (either in the scope of
+<b class="nc"><i>715</i>&nbsp;    // getting a single role or of getting several roles), will return:</b>
+<i>716</i>&nbsp;    // - in case of success:
+<i>717</i>&nbsp;    //   - for single role retrieval, the ArrayList of ObjectNames being the
+<i>718</i>&nbsp;    //     role value
+<i>719</i>&nbsp;    //   - for multi-role retrieval, the Role object itself
+<i>720</i>&nbsp;    // - in case of failure (except critical exceptions):
+<i>721</i>&nbsp;    //   - for single role retrieval, if role does not exist or is not
+<i>722</i>&nbsp;    //     readable, an RoleNotFoundException exception is raised
+<i>723</i>&nbsp;    //   - for multi-role retrieval, a RoleUnresolved object
+<i>724</i>&nbsp;    //
+<i>725</i>&nbsp;    // -param roleName  name of role to be retrieved
+<i>726</i>&nbsp;    // -param relationServCallFlg  true if call from the Relation Service; this
+<i>727</i>&nbsp;    //  will happen if the current RelationSupport object has been created by
+<i>728</i>&nbsp;    //  the Relation Service (via createRelation()) method, so direct access is
+<i>729</i>&nbsp;    //  possible.
+<i>730</i>&nbsp;    // -param relationServ  reference to Relation Service object, if object
+<i>731</i>&nbsp;    //  created by Relation Service.
+<i>732</i>&nbsp;    // -param multiRoleFlg  true if getting the role in the scope of a
+<i>733</i>&nbsp;    //  multiple retrieval.
+<i>734</i>&nbsp;    //
+<i>735</i>&nbsp;    // -return:
+<i>736</i>&nbsp;    //  - for single role retrieval (multiRoleFlg false):
+<i>737</i>&nbsp;    //    - ArrayList of ObjectName objects, value of role with given name, if
+<i>738</i>&nbsp;    //      the role can be retrieved
+<i>739</i>&nbsp;    //    - raise a RoleNotFoundException exception else
+<i>740</i>&nbsp;    //  - for multi-role retrieval (multiRoleFlg true):
+<i>741</i>&nbsp;    //    - the Role object for given role name if role can be retrieved
+<i>742</i>&nbsp;    //    - a RoleUnresolved object with problem.
+<i>743</i>&nbsp;    //
+<i>744</i>&nbsp;    // -exception IllegalArgumentException  if null parameter
+<i>745</i>&nbsp;    // -exception RoleNotFoundException  if multiRoleFlg is false and:
+<i>746</i>&nbsp;    //  - there is no role with given name
+<i>747</i>&nbsp;    //  or
+<i>748</i>&nbsp;    //  - the role is not readable.
+<i>749</i>&nbsp;    // -exception RelationServiceNotRegisteredException  if the Relation
+<i>750</i>&nbsp;    //  Service is not registered in the MBean Server
+<i>751</i>&nbsp;    Object getRoleInt(String roleName,
+<i>752</i>&nbsp;                      boolean relationServCallFlg,
+<i>753</i>&nbsp;                      RelationService relationServ,
+<i>754</i>&nbsp;                      boolean multiRoleFlg)
+<i>755</i>&nbsp;        throws IllegalArgumentException,
+<i>756</i>&nbsp;               RoleNotFoundException,
+<i>757</i>&nbsp;               RelationServiceNotRegisteredException {
+<i>758</i>&nbsp;
+<i>759</i>&nbsp;        if (roleName == null ||
+<i>760</i>&nbsp;            (relationServCallFlg &amp;&amp; relationServ == null)) {
+<i>761</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>762</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>763</i>&nbsp;        }
+<i>764</i>&nbsp;
+<i>765</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0}&quot;, roleName);
+<i>766</i>&nbsp;
+<i>767</i>&nbsp;        int pbType = 0;
+<i>768</i>&nbsp;
+<i>769</i>&nbsp;        Role role;
+<i>770</i>&nbsp;        synchronized(myRoleName2ValueMap) {
+<i>771</i>&nbsp;            // No null Role is allowed, so direct use of get()
+<i>772</i>&nbsp;            role = (myRoleName2ValueMap.get(roleName));
+<i>773</i>&nbsp;        }
+<i>774</i>&nbsp;
+<i>775</i>&nbsp;        if (role == null) {
+<b class="nc"><i>776</i>&nbsp;                pbType = RoleStatus.NO_ROLE_WITH_NAME;</b>
+<i>777</i>&nbsp;
+<b class="nc"><i>778</i>&nbsp;        } else {</b>
+<b class="nc"><i>779</i>&nbsp;            // Checks if the role is readable</b>
+<i>780</i>&nbsp;            Integer status;
+<i>781</i>&nbsp;
+<b class="nc"><i>782</i>&nbsp;            if (relationServCallFlg) {</b>
+<i>783</i>&nbsp;
+<i>784</i>&nbsp;                // Call from the Relation Service, so direct access to it,
+<b class="nc"><i>785</i>&nbsp;                // avoiding MBean Server</b>
+<i>786</i>&nbsp;                // Shall not throw a RelationTypeNotFoundException
+<i>787</i>&nbsp;                try {
+<b class="nc"><i>788</i>&nbsp;                    status = relationServ.checkRoleReading(roleName,</b>
+<i>789</i>&nbsp;                                                         myRelTypeName);
+<b class="nc"><i>790</i>&nbsp;                } catch (RelationTypeNotFoundException exc) {</b>
+<b class="nc"><i>791</i>&nbsp;                    throw new RuntimeException(exc.getMessage());</b>
+<i>792</i>&nbsp;                }
+<b class="nc"><i>793</i>&nbsp;</b>
+<b class="nc"><i>794</i>&nbsp;            } else {</b>
+<i>795</i>&nbsp;
+<i>796</i>&nbsp;                // Call from getRole() method above
+<i>797</i>&nbsp;                // So we have a MBean. We must access the Relation Service
+<i>798</i>&nbsp;                // via the MBean Server.
+<i>799</i>&nbsp;                Object[] params = new Object[2];
+<b class="nc"><i>800</i>&nbsp;                params[0] = roleName;</b>
+<i>801</i>&nbsp;                params[1] = myRelTypeName;
+<i>802</i>&nbsp;                String[] signature = new String[2];
+<i>803</i>&nbsp;                signature[0] = &quot;java.lang.String&quot;;
+<i>804</i>&nbsp;                signature[1] = &quot;java.lang.String&quot;;
+<i>805</i>&nbsp;                // Can throw InstanceNotFoundException if the Relation
+<b class="nc"><i>806</i>&nbsp;                // Service is not registered (to be catched in any case and</b>
+<i>807</i>&nbsp;                // transformed into RelationServiceNotRegisteredException).
+<b class="nc"><i>808</i>&nbsp;                //</b>
+<b class="nc"><i>809</i>&nbsp;                // Shall not throw a MBeanException, or a ReflectionException</b>
+<b class="nc"><i>810</i>&nbsp;                // or an InstanceNotFoundException</b>
+<i>811</i>&nbsp;                try {
+<i>812</i>&nbsp;                    status = (Integer)
+<i>813</i>&nbsp;                        (myRelServiceMBeanServer.invoke(myRelServiceName,
+<i>814</i>&nbsp;                                                        &quot;checkRoleReading&quot;,
+<i>815</i>&nbsp;                                                        params,
+<i>816</i>&nbsp;                                                        signature));
+<b class="nc"><i>817</i>&nbsp;                } catch (MBeanException exc1) {</b>
+<b class="nc"><i>818</i>&nbsp;                    throw new RuntimeException(&quot;incorrect relation type&quot;);</b>
+<b class="nc"><i>819</i>&nbsp;                } catch (ReflectionException exc2) {</b>
+<b class="nc"><i>820</i>&nbsp;                    throw new RuntimeException(exc2.getMessage());</b>
+<b class="nc"><i>821</i>&nbsp;                } catch (InstanceNotFoundException exc3) {</b>
+<b class="nc"><i>822</i>&nbsp;                    throw new RelationServiceNotRegisteredException(</b>
+<i>823</i>&nbsp;                                                            exc3.getMessage());
+<i>824</i>&nbsp;                }
+<i>825</i>&nbsp;            }
+<i>826</i>&nbsp;
+<i>827</i>&nbsp;            pbType = status.intValue();
+<i>828</i>&nbsp;        }
+<i>829</i>&nbsp;
+<b class="nc"><i>830</i>&nbsp;        Object result;</b>
+<b class="nc"><i>831</i>&nbsp;</b>
+<i>832</i>&nbsp;        if (pbType == 0) {
+<i>833</i>&nbsp;            // Role can be retrieved
+<i>834</i>&nbsp;
+<b class="nc"><i>835</i>&nbsp;            if (!(multiRoleFlg)) {</b>
+<b class="nc"><i>836</i>&nbsp;                // Single role retrieved: returns its value</b>
+<b class="nc"><i>837</i>&nbsp;                // Note: no need to test if role value (list) not null before</b>
+<b class="nc"><i>838</i>&nbsp;                //       cloning, null value not allowed, empty list if</b>
+<b class="nc"><i>839</i>&nbsp;                //       nothing.</b>
+<b class="nc"><i>840</i>&nbsp;                result = new ArrayList&lt;ObjectName&gt;(role.getRoleValue());</b>
+<b class="nc"><i>841</i>&nbsp;</b>
+<b class="nc"><i>842</i>&nbsp;            } else {</b>
+<i>843</i>&nbsp;                // Role retrieved during multi-role retrieval: returns the
+<i>844</i>&nbsp;                // role
+<b class="nc"><i>845</i>&nbsp;                result = (Role)(role.clone());</b>
+<i>846</i>&nbsp;            }
+<i>847</i>&nbsp;
+<i>848</i>&nbsp;        } else {
+<i>849</i>&nbsp;            // Role not retrieved
+<b class="nc"><i>850</i>&nbsp;</b>
+<i>851</i>&nbsp;            if (!(multiRoleFlg)) {
+<i>852</i>&nbsp;                // Problem when retrieving a simple role: either role not
+<b class="nc"><i>853</i>&nbsp;                // found or not readable, so raises a RoleNotFoundException.</b>
+<i>854</i>&nbsp;                try {
+<i>855</i>&nbsp;                    RelationService.throwRoleProblemException(pbType,
+<i>856</i>&nbsp;                                                              roleName);
+<i>857</i>&nbsp;                    // To keep compiler happy :)
+<b class="nc"><i>858</i>&nbsp;                    return null;</b>
+<i>859</i>&nbsp;                } catch (InvalidRoleValueException exc) {
+<i>860</i>&nbsp;                    throw new RuntimeException(exc.getMessage());
+<i>861</i>&nbsp;                }
+<i>862</i>&nbsp;
+<b class="nc"><i>863</i>&nbsp;            } else {</b>
+<i>864</i>&nbsp;                // Problem when retrieving a role in a multi-role retrieval:
+<i>865</i>&nbsp;                // returns a RoleUnresolved object
+<i>866</i>&nbsp;                result = new RoleUnresolved(roleName, null, pbType);
+<i>867</i>&nbsp;            }
+<i>868</i>&nbsp;        }
+<b class="nc"><i>869</i>&nbsp;</b>
+<i>870</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>871</i>&nbsp;        return result;
+<i>872</i>&nbsp;    }
+<b class="nc"><i>873</i>&nbsp;</b>
+<i>874</i>&nbsp;    // Gets the given roles
+<i>875</i>&nbsp;    // For each role, verifies if the role exists and is readable according to
+<b class="nc"><i>876</i>&nbsp;    // the relation type.</b>
+<b class="nc"><i>877</i>&nbsp;    //</b>
+<b class="nc"><i>878</i>&nbsp;    // This method is called in getRoles() above and in Relation Service</b>
+<i>879</i>&nbsp;    // getRoles() method.
+<i>880</i>&nbsp;    //
+<i>881</i>&nbsp;    // -param roleNameArray  array of names of roles to be retrieved
+<i>882</i>&nbsp;    // -param relationServCallFlg  true if call from the Relation Service; this
+<i>883</i>&nbsp;    //  will happen if the current RelationSupport object has been created by
+<b class="nc"><i>884</i>&nbsp;    //  the Relation Service (via createRelation()) method, so direct access is</b>
+<i>885</i>&nbsp;    //  possible.
+<i>886</i>&nbsp;    // -param relationServ  reference to Relation Service object, if object
+<i>887</i>&nbsp;    //  created by Relation Service.
+<b class="nc"><i>888</i>&nbsp;    //</b>
+<b class="nc"><i>889</i>&nbsp;    // -return a RoleResult object</b>
+<i>890</i>&nbsp;    //
+<i>891</i>&nbsp;    // -exception IllegalArgumentException  if null parameter
+<i>892</i>&nbsp;    // -exception RelationServiceNotRegisteredException  if the Relation
+<i>893</i>&nbsp;    //  Service is not registered in the MBean Server
+<i>894</i>&nbsp;    RoleResult getRolesInt(String[] roleNameArray,
+<i>895</i>&nbsp;                           boolean relationServCallFlg,
+<i>896</i>&nbsp;                           RelationService relationServ)
+<i>897</i>&nbsp;        throws IllegalArgumentException,
+<i>898</i>&nbsp;               RelationServiceNotRegisteredException {
+<i>899</i>&nbsp;
+<i>900</i>&nbsp;        if (roleNameArray == null ||
+<i>901</i>&nbsp;            (relationServCallFlg &amp;&amp; relationServ == null)) {
+<i>902</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>903</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>904</i>&nbsp;        }
+<i>905</i>&nbsp;
+<i>906</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY&quot;);
+<i>907</i>&nbsp;
+<i>908</i>&nbsp;        RoleList roleList = new RoleList();
+<i>909</i>&nbsp;        RoleUnresolvedList roleUnresList = new RoleUnresolvedList();
+<i>910</i>&nbsp;
+<i>911</i>&nbsp;        for (int i = 0; i &lt; roleNameArray.length; i++) {
+<i>912</i>&nbsp;            String currRoleName = roleNameArray[i];
+<i>913</i>&nbsp;
+<i>914</i>&nbsp;            Object currResult;
+<i>915</i>&nbsp;
+<i>916</i>&nbsp;            // Can throw RelationServiceNotRegisteredException
+<i>917</i>&nbsp;            //
+<b class="nc"><i>918</i>&nbsp;            // RoleNotFoundException: not possible but catch it for compiler :)</b>
+<i>919</i>&nbsp;            try {
+<b class="nc"><i>920</i>&nbsp;                currResult = getRoleInt(currRoleName,</b>
+<b class="nc"><i>921</i>&nbsp;                                        relationServCallFlg,</b>
+<i>922</i>&nbsp;                                        relationServ,
+<i>923</i>&nbsp;                                        true);
+<b class="nc"><i>924</i>&nbsp;</b>
+<i>925</i>&nbsp;            } catch (RoleNotFoundException exc) {
+<i>926</i>&nbsp;                return null; // :)
+<b class="nc"><i>927</i>&nbsp;            }</b>
+<b class="nc"><i>928</i>&nbsp;</b>
+<i>929</i>&nbsp;            if (currResult instanceof Role) {
+<b class="nc"><i>930</i>&nbsp;                // Can throw IllegalArgumentException if role is null</b>
+<b class="nc"><i>931</i>&nbsp;                // (normally should not happen :(</b>
+<i>932</i>&nbsp;                try {
+<i>933</i>&nbsp;                    roleList.add((Role)currResult);
+<i>934</i>&nbsp;                } catch (IllegalArgumentException exc) {
+<i>935</i>&nbsp;                    throw new RuntimeException(exc.getMessage());
+<i>936</i>&nbsp;                }
+<i>937</i>&nbsp;
+<i>938</i>&nbsp;            } else if (currResult instanceof RoleUnresolved) {
+<b class="nc"><i>939</i>&nbsp;                // Can throw IllegalArgumentException if role is null</b>
+<i>940</i>&nbsp;                // (normally should not happen :(
+<i>941</i>&nbsp;                try {
+<i>942</i>&nbsp;                    roleUnresList.add((RoleUnresolved)currResult);
+<i>943</i>&nbsp;                } catch (IllegalArgumentException exc) {
+<b class="nc"><i>944</i>&nbsp;                    throw new RuntimeException(exc.getMessage());</b>
+<b class="nc"><i>945</i>&nbsp;                }</b>
+<b class="nc"><i>946</i>&nbsp;            }</b>
+<i>947</i>&nbsp;        }
+<b class="nc"><i>948</i>&nbsp;</b>
+<i>949</i>&nbsp;        RoleResult result = new RoleResult(roleList, roleUnresList);
+<i>950</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>951</i>&nbsp;        return result;
+<b class="nc"><i>952</i>&nbsp;    }</b>
+<b class="nc"><i>953</i>&nbsp;</b>
+<b class="nc"><i>954</i>&nbsp;    // Returns all roles present in the relation</b>
+<b class="nc"><i>955</i>&nbsp;    //</b>
+<i>956</i>&nbsp;    // -return a RoleResult object, including a RoleList (for roles
+<b class="nc"><i>957</i>&nbsp;    //  successfully retrieved) and a RoleUnresolvedList (for roles not</b>
+<i>958</i>&nbsp;    //  readable).
+<i>959</i>&nbsp;    //
+<i>960</i>&nbsp;    // -exception IllegalArgumentException if null parameter
+<b class="nc"><i>961</i>&nbsp;    // -exception RelationServiceNotRegisteredException  if the Relation</b>
+<b class="nc"><i>962</i>&nbsp;    //  Service is not registered in the MBean Server</b>
+<b class="nc"><i>963</i>&nbsp;    //</b>
+<b class="nc"><i>964</i>&nbsp;    RoleResult getAllRolesInt(boolean relationServCallFlg,</b>
+<i>965</i>&nbsp;                              RelationService relationServ)
+<i>966</i>&nbsp;        throws IllegalArgumentException,
+<i>967</i>&nbsp;               RelationServiceNotRegisteredException {
+<b class="nc"><i>968</i>&nbsp;</b>
+<b class="nc"><i>969</i>&nbsp;        if (relationServCallFlg &amp;&amp; relationServ == null) {</b>
+<i>970</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<b class="nc"><i>971</i>&nbsp;            throw new IllegalArgumentException(excMsg);</b>
+<i>972</i>&nbsp;        }
+<i>973</i>&nbsp;
+<i>974</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY&quot;);
+<i>975</i>&nbsp;
+<i>976</i>&nbsp;        List&lt;String&gt; roleNameList;
+<i>977</i>&nbsp;        synchronized(myRoleName2ValueMap) {
+<i>978</i>&nbsp;            roleNameList =
+<i>979</i>&nbsp;                new ArrayList&lt;String&gt;(myRoleName2ValueMap.keySet());
+<i>980</i>&nbsp;        }
+<i>981</i>&nbsp;        String[] roleNames = new String[roleNameList.size()];
+<i>982</i>&nbsp;        roleNameList.toArray(roleNames);
+<i>983</i>&nbsp;
+<i>984</i>&nbsp;        RoleResult result = getRolesInt(roleNames,
+<i>985</i>&nbsp;                                        relationServCallFlg,
+<i>986</i>&nbsp;                                        relationServ);
+<i>987</i>&nbsp;
+<i>988</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<b class="nc"><i>989</i>&nbsp;        return result;</b>
+<b class="nc"><i>990</i>&nbsp;    }</b>
+<b class="nc"><i>991</i>&nbsp;</b>
+<i>992</i>&nbsp;    // Sets the role with given value
+<i>993</i>&nbsp;    //
+<b class="nc"><i>994</i>&nbsp;    // This method is called in setRole() above.</b>
+<i>995</i>&nbsp;    // It is also called by the Relation Service setRole() method.
+<i>996</i>&nbsp;    // It is also called in setRolesInt() method below (used in setRoles()
+<i>997</i>&nbsp;    // above and in RelationService setRoles() method).
+<b class="nc"><i>998</i>&nbsp;    //</b>
+<b class="nc"><i>999</i>&nbsp;    // Will check the role according to its corresponding role definition</b>
+<b class="nc"><i>1000</i>&nbsp;    // provided in relation&#39;s relation type</b>
+<b class="nc"><i>1001</i>&nbsp;    // Will send a notification (RelationNotification with type</b>
+<b class="nc"><i>1002</i>&nbsp;    // RELATION_BASIC_UPDATE or RELATION_MBEAN_UPDATE, depending if the</b>
+<b class="nc"><i>1003</i>&nbsp;    // relation is a MBean or not) if not initialization of role.</b>
+<i>1004</i>&nbsp;    //
+<b class="nc"><i>1005</i>&nbsp;    // -param aRole  role to be set (name and new value)</b>
+<i>1006</i>&nbsp;    // -param relationServCallFlg  true if call from the Relation Service; this
+<i>1007</i>&nbsp;    //  will happen if the current RelationSupport object has been created by
+<i>1008</i>&nbsp;    //  the Relation Service (via createRelation()) method, so direct access is
+<b class="nc"><i>1009</i>&nbsp;    //  possible.</b>
+<i>1010</i>&nbsp;    // -param relationServ  reference to Relation Service object, if internal
+<b class="nc"><i>1011</i>&nbsp;    //  relation</b>
+<i>1012</i>&nbsp;    // -param multiRoleFlg  true if getting the role in the scope of a
+<i>1013</i>&nbsp;    //  multiple retrieval.
+<i>1014</i>&nbsp;    //
+<i>1015</i>&nbsp;    // -return (except other &quot;critical&quot; exceptions):
+<i>1016</i>&nbsp;    //  - for single role retrieval (multiRoleFlg false):
+<i>1017</i>&nbsp;    //    - null if the role has been set
+<i>1018</i>&nbsp;    //    - raise an InvalidRoleValueException
+<i>1019</i>&nbsp;    // else
+<i>1020</i>&nbsp;    //  - for multi-role retrieval (multiRoleFlg true):
+<i>1021</i>&nbsp;    //    - the Role object for given role name if role has been set
+<i>1022</i>&nbsp;    //    - a RoleUnresolved object with problem else.
+<i>1023</i>&nbsp;    //
+<i>1024</i>&nbsp;    // -exception IllegalArgumentException if null parameter
+<i>1025</i>&nbsp;    // -exception RoleNotFoundException  if multiRoleFlg is false and:
+<i>1026</i>&nbsp;    //  - internal relation and the role does not exist
+<i>1027</i>&nbsp;    //  or
+<i>1028</i>&nbsp;    //  - existing role (i.e. not initializing it) and the role is not
+<i>1029</i>&nbsp;    //    writable.
+<i>1030</i>&nbsp;    // -exception InvalidRoleValueException  ifmultiRoleFlg is false and
+<i>1031</i>&nbsp;    //  value provided for:
+<i>1032</i>&nbsp;    //   - the number of referenced MBeans in given value is less than
+<i>1033</i>&nbsp;    //     expected minimum degree
+<i>1034</i>&nbsp;    //   or
+<i>1035</i>&nbsp;    //   - the number of referenced MBeans in provided value exceeds expected
+<i>1036</i>&nbsp;    //     maximum degree
+<i>1037</i>&nbsp;    //   or
+<i>1038</i>&nbsp;    //   - one referenced MBean in the value is not an Object of the MBean
+<i>1039</i>&nbsp;    //     class expected for that role
+<i>1040</i>&nbsp;    //   or
+<i>1041</i>&nbsp;    //   - a MBean provided for that role does not exist
+<i>1042</i>&nbsp;    // -exception RelationServiceNotRegisteredException  if the Relation
+<i>1043</i>&nbsp;    //  Service is not registered in the MBean Server
+<i>1044</i>&nbsp;    // -exception RelationTypeNotFoundException  if relation type unknown
+<i>1045</i>&nbsp;    // -exception RelationNotFoundException  if a relation MBean has not been
+<i>1046</i>&nbsp;    //  added in the Relation Service
+<i>1047</i>&nbsp;    Object setRoleInt(Role aRole,
+<i>1048</i>&nbsp;                      boolean relationServCallFlg,
+<i>1049</i>&nbsp;                      RelationService relationServ,
+<i>1050</i>&nbsp;                      boolean multiRoleFlg)
+<i>1051</i>&nbsp;        throws IllegalArgumentException,
+<i>1052</i>&nbsp;               RoleNotFoundException,
+<i>1053</i>&nbsp;               InvalidRoleValueException,
+<i>1054</i>&nbsp;               RelationServiceNotRegisteredException,
+<i>1055</i>&nbsp;               RelationTypeNotFoundException,
+<i>1056</i>&nbsp;               RelationNotFoundException {
+<i>1057</i>&nbsp;
+<i>1058</i>&nbsp;        if (aRole == null ||
+<i>1059</i>&nbsp;            (relationServCallFlg &amp;&amp; relationServ == null)) {
+<i>1060</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>1061</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>1062</i>&nbsp;        }
+<i>1063</i>&nbsp;
+<i>1064</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0} {1} {2} {3}&quot;,
+<i>1065</i>&nbsp;                            aRole, relationServCallFlg, relationServ,
+<i>1066</i>&nbsp;                            multiRoleFlg);
+<i>1067</i>&nbsp;
+<i>1068</i>&nbsp;        String roleName = aRole.getRoleName();
+<i>1069</i>&nbsp;        int pbType = 0;
+<i>1070</i>&nbsp;
+<i>1071</i>&nbsp;        // Checks if role exists in the relation
+<i>1072</i>&nbsp;        // No error if the role does not exist in the relation, to be able to
+<i>1073</i>&nbsp;        // handle initialization of role when creating the relation
+<i>1074</i>&nbsp;        // (roles provided in the RoleList parameter are directly set but
+<i>1075</i>&nbsp;        // roles automatically initialized are set using setRole())
+<i>1076</i>&nbsp;        Role role;
+<i>1077</i>&nbsp;        synchronized(myRoleName2ValueMap) {
+<i>1078</i>&nbsp;            role = (myRoleName2ValueMap.get(roleName));
+<i>1079</i>&nbsp;        }
+<b class="nc"><i>1080</i>&nbsp;</b>
+<i>1081</i>&nbsp;        List&lt;ObjectName&gt; oldRoleValue;
+<b class="nc"><i>1082</i>&nbsp;        Boolean initFlg;</b>
+<b class="nc"><i>1083</i>&nbsp;</b>
+<i>1084</i>&nbsp;        if (role == null) {
+<i>1085</i>&nbsp;            initFlg = true;
+<b class="nc"><i>1086</i>&nbsp;            oldRoleValue = new ArrayList&lt;ObjectName&gt;();</b>
+<b class="nc"><i>1087</i>&nbsp;</b>
+<b class="nc"><i>1088</i>&nbsp;        } else {</b>
+<i>1089</i>&nbsp;            initFlg = false;
+<b class="nc"><i>1090</i>&nbsp;            oldRoleValue = role.getRoleValue();</b>
+<b class="nc"><i>1091</i>&nbsp;        }</b>
+<i>1092</i>&nbsp;
+<i>1093</i>&nbsp;        // Checks if the role can be set: is writable (except if
+<i>1094</i>&nbsp;        // initialization) and correct value
+<i>1095</i>&nbsp;        try {
+<i>1096</i>&nbsp;            Integer status;
+<i>1097</i>&nbsp;
+<i>1098</i>&nbsp;            if (relationServCallFlg) {
+<b class="nc"><i>1099</i>&nbsp;</b>
+<b class="nc"><i>1100</i>&nbsp;                // Call from the Relation Service, so direct access to it,</b>
+<b class="nc"><i>1101</i>&nbsp;                // avoiding MBean Server</b>
+<i>1102</i>&nbsp;                //
+<i>1103</i>&nbsp;                // Shall not raise a RelationTypeNotFoundException
+<i>1104</i>&nbsp;                status = relationServ.checkRoleWriting(aRole,
+<i>1105</i>&nbsp;                                                     myRelTypeName,
+<b class="nc"><i>1106</i>&nbsp;                                                     initFlg);</b>
+<b class="nc"><i>1107</i>&nbsp;</b>
+<b class="nc"><i>1108</i>&nbsp;            } else {</b>
+<i>1109</i>&nbsp;
+<i>1110</i>&nbsp;                // Call from setRole() method above
+<b class="nc"><i>1111</i>&nbsp;                // So we have a MBean. We must access the Relation Service</b>
+<b class="nc"><i>1112</i>&nbsp;                // via the MBean Server.</b>
+<i>1113</i>&nbsp;                Object[] params = new Object[3];
+<i>1114</i>&nbsp;                params[0] = aRole;
+<i>1115</i>&nbsp;                params[1] = myRelTypeName;
+<i>1116</i>&nbsp;                params[2] = initFlg;
+<i>1117</i>&nbsp;                String[] signature = new String[3];
+<i>1118</i>&nbsp;                signature[0] = &quot;javax.management.relation.Role&quot;;
+<i>1119</i>&nbsp;                signature[1] = &quot;java.lang.String&quot;;
+<b class="nc"><i>1120</i>&nbsp;                signature[2] = &quot;java.lang.Boolean&quot;;</b>
+<i>1121</i>&nbsp;                // Can throw InstanceNotFoundException if the Relation Service
+<i>1122</i>&nbsp;                // is not registered (to be transformed into
+<i>1123</i>&nbsp;                // RelationServiceNotRegisteredException in any case).
+<i>1124</i>&nbsp;                //
+<i>1125</i>&nbsp;                // Can throw a MBeanException wrapping a
+<b class="nc"><i>1126</i>&nbsp;                // RelationTypeNotFoundException:</b>
+<i>1127</i>&nbsp;                // throw wrapped exception.
+<i>1128</i>&nbsp;                //
+<i>1129</i>&nbsp;                // Shall not throw a ReflectionException
+<i>1130</i>&nbsp;                status = (Integer)
+<i>1131</i>&nbsp;                    (myRelServiceMBeanServer.invoke(myRelServiceName,
+<i>1132</i>&nbsp;                                                    &quot;checkRoleWriting&quot;,
+<i>1133</i>&nbsp;                                                    params,
+<i>1134</i>&nbsp;                                                    signature));
+<b class="nc"><i>1135</i>&nbsp;            }</b>
+<b class="nc"><i>1136</i>&nbsp;</b>
+<b class="nc"><i>1137</i>&nbsp;            pbType = status.intValue();</b>
+<b class="nc"><i>1138</i>&nbsp;</b>
+<b class="nc"><i>1139</i>&nbsp;        } catch (MBeanException exc2) {</b>
+<b class="nc"><i>1140</i>&nbsp;</b>
+<b class="nc"><i>1141</i>&nbsp;            // Retrieves underlying exception</b>
+<b class="nc"><i>1142</i>&nbsp;            Exception wrappedExc = exc2.getTargetException();</b>
+<i>1143</i>&nbsp;            if (wrappedExc instanceof RelationTypeNotFoundException) {
+<i>1144</i>&nbsp;                throw ((RelationTypeNotFoundException)wrappedExc);
+<i>1145</i>&nbsp;
+<i>1146</i>&nbsp;            } else {
+<i>1147</i>&nbsp;                throw new RuntimeException(wrappedExc.getMessage());
+<i>1148</i>&nbsp;            }
+<i>1149</i>&nbsp;
+<i>1150</i>&nbsp;        } catch (ReflectionException exc3) {
+<i>1151</i>&nbsp;            throw new RuntimeException(exc3.getMessage());
+<b class="nc"><i>1152</i>&nbsp;</b>
+<b class="nc"><i>1153</i>&nbsp;        } catch (RelationTypeNotFoundException exc4) {</b>
+<i>1154</i>&nbsp;            throw new RuntimeException(exc4.getMessage());
+<i>1155</i>&nbsp;
+<i>1156</i>&nbsp;        } catch (InstanceNotFoundException exc5) {
+<i>1157</i>&nbsp;            throw new RelationServiceNotRegisteredException(exc5.getMessage());
+<i>1158</i>&nbsp;        }
+<b class="nc"><i>1159</i>&nbsp;</b>
+<i>1160</i>&nbsp;        Object result = null;
+<b class="nc"><i>1161</i>&nbsp;</b>
+<i>1162</i>&nbsp;        if (pbType == 0) {
+<i>1163</i>&nbsp;            // Role can be set
+<b class="nc"><i>1164</i>&nbsp;            if (!(initFlg.booleanValue())) {</b>
+<b class="nc"><i>1165</i>&nbsp;</b>
+<b class="nc"><i>1166</i>&nbsp;                // Not initializing the role</b>
+<i>1167</i>&nbsp;                // If role being initialized:
+<i>1168</i>&nbsp;                // - do not send an update notification
+<b class="nc"><i>1169</i>&nbsp;                // - do not try to update internal map of Relation Service</b>
+<i>1170</i>&nbsp;                //   listing referenced MBeans, as role is initialized to an
+<i>1171</i>&nbsp;                //   empty list
+<b class="nc"><i>1172</i>&nbsp;</b>
+<b class="nc"><i>1173</i>&nbsp;                // Sends a notification (RelationNotification)</b>
+<i>1174</i>&nbsp;                // Can throw a RelationNotFoundException
+<b class="nc"><i>1175</i>&nbsp;                sendRoleUpdateNotification(aRole,</b>
+<b class="nc"><i>1176</i>&nbsp;                                           oldRoleValue,</b>
+<i>1177</i>&nbsp;                                           relationServCallFlg,
+<b class="nc"><i>1178</i>&nbsp;                                           relationServ);</b>
+<b class="nc"><i>1179</i>&nbsp;</b>
+<b class="nc"><i>1180</i>&nbsp;                // Updates the role map of the Relation Service</b>
+<i>1181</i>&nbsp;                // Can throw RelationNotFoundException
+<b class="nc"><i>1182</i>&nbsp;                updateRelationServiceMap(aRole,</b>
+<i>1183</i>&nbsp;                                         oldRoleValue,
+<b class="nc"><i>1184</i>&nbsp;                                         relationServCallFlg,</b>
+<i>1185</i>&nbsp;                                         relationServ);
+<b class="nc"><i>1186</i>&nbsp;</b>
+<i>1187</i>&nbsp;            }
+<i>1188</i>&nbsp;
+<i>1189</i>&nbsp;            // Sets the role
+<i>1190</i>&nbsp;            synchronized(myRoleName2ValueMap) {
+<i>1191</i>&nbsp;                myRoleName2ValueMap.put(roleName,
+<i>1192</i>&nbsp;                                        (Role)(aRole.clone()));
+<i>1193</i>&nbsp;            }
+<i>1194</i>&nbsp;
+<i>1195</i>&nbsp;            // Single role set: returns null: nothing to set in result
+<i>1196</i>&nbsp;
+<b class="nc"><i>1197</i>&nbsp;            if (multiRoleFlg) {</b>
+<i>1198</i>&nbsp;                // Multi-roles retrieval: returns the role
+<i>1199</i>&nbsp;                result = aRole;
+<i>1200</i>&nbsp;            }
+<i>1201</i>&nbsp;
+<i>1202</i>&nbsp;        } else {
+<i>1203</i>&nbsp;
+<b class="nc"><i>1204</i>&nbsp;            // Role not set</b>
+<i>1205</i>&nbsp;
+<i>1206</i>&nbsp;            if (!(multiRoleFlg)) {
+<i>1207</i>&nbsp;                // Problem when setting a simple role: either role not
+<i>1208</i>&nbsp;                // found, not writable, or incorrect value:
+<i>1209</i>&nbsp;                // raises appropriate exception, RoleNotFoundException or
+<i>1210</i>&nbsp;                // InvalidRoleValueException
+<i>1211</i>&nbsp;                RelationService.throwRoleProblemException(pbType,
+<b class="nc"><i>1212</i>&nbsp;                                                          roleName);</b>
+<b class="nc"><i>1213</i>&nbsp;                // To keep compiler happy :)</b>
+<b class="nc"><i>1214</i>&nbsp;                return null;</b>
+<b class="nc"><i>1215</i>&nbsp;</b>
+<i>1216</i>&nbsp;            } else {
+<i>1217</i>&nbsp;                // Problem when retrieving a role in a multi-role retrieval:
+<i>1218</i>&nbsp;                // returns a RoleUnresolved object
+<b class="nc"><i>1219</i>&nbsp;                result = new RoleUnresolved(roleName,</b>
+<i>1220</i>&nbsp;                                            aRole.getRoleValue(),
+<b class="nc"><i>1221</i>&nbsp;                                            pbType);</b>
+<i>1222</i>&nbsp;            }
+<i>1223</i>&nbsp;        }
+<i>1224</i>&nbsp;
+<i>1225</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>1226</i>&nbsp;        return result;
+<i>1227</i>&nbsp;    }
+<b class="nc"><i>1228</i>&nbsp;</b>
+<i>1229</i>&nbsp;    // Requires the Relation Service to send a notification
+<i>1230</i>&nbsp;    // RelationNotification, with type being either:
+<i>1231</i>&nbsp;    // - RelationNotification.RELATION_BASIC_UPDATE if the updated relation is
+<i>1232</i>&nbsp;    //   a relation internal to the Relation Service
+<b class="nc"><i>1233</i>&nbsp;    // - RelationNotification.RELATION_MBEAN_UPDATE if the updated relation is</b>
+<i>1234</i>&nbsp;    //   a relation MBean.
+<i>1235</i>&nbsp;    //
+<b class="nc"><i>1236</i>&nbsp;    // -param newRole  new role</b>
+<i>1237</i>&nbsp;    // -param oldRoleValue  old role value (ArrayList of ObjectNames)
+<i>1238</i>&nbsp;    // -param relationServCallFlg  true if call from the Relation Service; this
+<i>1239</i>&nbsp;    //  will happen if the current RelationSupport object has been created by
+<i>1240</i>&nbsp;    //  the Relation Service (via createRelation()) method, so direct access is
+<b class="nc"><i>1241</i>&nbsp;    //  possible.</b>
+<b class="nc"><i>1242</i>&nbsp;    // -param relationServ  reference to Relation Service object, if object</b>
+<i>1243</i>&nbsp;    //  created by Relation Service.
+<i>1244</i>&nbsp;    //
+<i>1245</i>&nbsp;    // -exception IllegalArgumentException  if null parameter provided
+<i>1246</i>&nbsp;    // -exception RelationServiceNotRegisteredException  if the Relation
+<b class="nc"><i>1247</i>&nbsp;    //  Service is not registered in the MBean Server</b>
+<b class="nc"><i>1248</i>&nbsp;    // -exception RelationNotFoundException if:</b>
+<i>1249</i>&nbsp;    //  - relation MBean
+<i>1250</i>&nbsp;    //  and
+<i>1251</i>&nbsp;    //  - it has not been added into the Relation Service
+<i>1252</i>&nbsp;    private void sendRoleUpdateNotification(Role newRole,
+<i>1253</i>&nbsp;                                            List&lt;ObjectName&gt; oldRoleValue,
+<i>1254</i>&nbsp;                                            boolean relationServCallFlg,
+<i>1255</i>&nbsp;                                            RelationService relationServ)
+<i>1256</i>&nbsp;        throws IllegalArgumentException,
+<i>1257</i>&nbsp;               RelationServiceNotRegisteredException,
+<i>1258</i>&nbsp;               RelationNotFoundException {
+<i>1259</i>&nbsp;
+<i>1260</i>&nbsp;        if (newRole == null ||
+<i>1261</i>&nbsp;            oldRoleValue == null ||
+<i>1262</i>&nbsp;            (relationServCallFlg &amp;&amp; relationServ == null)) {
+<i>1263</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>1264</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>1265</i>&nbsp;        }
+<i>1266</i>&nbsp;
+<i>1267</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0} {1} {2} {3}&quot;,
+<i>1268</i>&nbsp;                            newRole, oldRoleValue, relationServCallFlg,
+<i>1269</i>&nbsp;                            relationServ);
+<i>1270</i>&nbsp;
+<i>1271</i>&nbsp;        if (relationServCallFlg) {
+<i>1272</i>&nbsp;            // Direct call to the Relation Service
+<i>1273</i>&nbsp;            // Shall not throw a RelationNotFoundException for an internal
+<i>1274</i>&nbsp;            // relation
+<i>1275</i>&nbsp;            try {
+<i>1276</i>&nbsp;                relationServ.sendRoleUpdateNotification(myRelId,
+<i>1277</i>&nbsp;                                                      newRole,
+<i>1278</i>&nbsp;                                                      oldRoleValue);
+<i>1279</i>&nbsp;            } catch (RelationNotFoundException exc) {
+<i>1280</i>&nbsp;                throw new RuntimeException(exc.getMessage());
+<i>1281</i>&nbsp;            }
+<b class="nc"><i>1282</i>&nbsp;</b>
+<i>1283</i>&nbsp;        } else {
+<i>1284</i>&nbsp;
+<b class="nc"><i>1285</i>&nbsp;            Object[] params = new Object[3];</b>
+<b class="nc"><i>1286</i>&nbsp;            params[0] = myRelId;</b>
+<i>1287</i>&nbsp;            params[1] = newRole;
+<i>1288</i>&nbsp;            params[2] = oldRoleValue;
+<b class="nc"><i>1289</i>&nbsp;            String[] signature = new String[3];</b>
+<i>1290</i>&nbsp;            signature[0] = &quot;java.lang.String&quot;;
+<b class="nc"><i>1291</i>&nbsp;            signature[1] = &quot;javax.management.relation.Role&quot;;</b>
+<i>1292</i>&nbsp;            signature[2] = &quot;java.util.List&quot;;
+<b class="nc"><i>1293</i>&nbsp;</b>
+<i>1294</i>&nbsp;            // Can throw InstanceNotFoundException if the Relation Service
+<i>1295</i>&nbsp;            // is not registered (to be transformed).
+<i>1296</i>&nbsp;            //
+<i>1297</i>&nbsp;            // Can throw a MBeanException wrapping a
+<b class="nc"><i>1298</i>&nbsp;            // RelationNotFoundException (to be raised in any case): wrapped</b>
+<i>1299</i>&nbsp;            // exception to be thrown
+<i>1300</i>&nbsp;            //
+<b class="nc"><i>1301</i>&nbsp;            // Shall not throw a ReflectionException</b>
+<b class="nc"><i>1302</i>&nbsp;            try {</b>
+<b class="nc"><i>1303</i>&nbsp;                myRelServiceMBeanServer.invoke(myRelServiceName,</b>
+<i>1304</i>&nbsp;                                               &quot;sendRoleUpdateNotification&quot;,
+<i>1305</i>&nbsp;                                               params,
+<i>1306</i>&nbsp;                                               signature);
+<b class="nc"><i>1307</i>&nbsp;            } catch (ReflectionException exc1) {</b>
+<b class="nc"><i>1308</i>&nbsp;                throw new RuntimeException(exc1.getMessage());</b>
+<b class="nc"><i>1309</i>&nbsp;            } catch (InstanceNotFoundException exc2) {</b>
+<b class="nc"><i>1310</i>&nbsp;                throw new RelationServiceNotRegisteredException(</b>
+<b class="nc"><i>1311</i>&nbsp;                                                            exc2.getMessage());</b>
+<b class="nc"><i>1312</i>&nbsp;            } catch (MBeanException exc3) {</b>
+<b class="nc"><i>1313</i>&nbsp;                Exception wrappedExc = exc3.getTargetException();</b>
+<b class="nc"><i>1314</i>&nbsp;                if (wrappedExc instanceof RelationNotFoundException) {</b>
+<i>1315</i>&nbsp;                    throw ((RelationNotFoundException)wrappedExc);
+<i>1316</i>&nbsp;                } else {
+<i>1317</i>&nbsp;                    throw new RuntimeException(wrappedExc.getMessage());
+<i>1318</i>&nbsp;                }
+<i>1319</i>&nbsp;            }
+<i>1320</i>&nbsp;        }
+<i>1321</i>&nbsp;
+<i>1322</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>1323</i>&nbsp;        return;
+<i>1324</i>&nbsp;    }
+<b class="nc"><i>1325</i>&nbsp;</b>
+<i>1326</i>&nbsp;    // Requires the Relation Service to update its internal map handling
+<i>1327</i>&nbsp;    // MBeans referenced in relations.
+<i>1328</i>&nbsp;    // The Relation Service will also update its recording as a listener to
+<b class="nc"><i>1329</i>&nbsp;    // be informed about unregistration of new referenced MBeans, and no longer</b>
+<b class="nc"><i>1330</i>&nbsp;    // informed of MBeans no longer referenced.</b>
+<b class="nc"><i>1331</i>&nbsp;    //</b>
+<b class="nc"><i>1332</i>&nbsp;    // -param newRole  new role</b>
+<b class="nc"><i>1333</i>&nbsp;    // -param oldRoleValue  old role value (ArrayList of ObjectNames)</b>
+<b class="nc"><i>1334</i>&nbsp;    // -param relationServCallFlg  true if call from the Relation Service; this</b>
+<b class="nc"><i>1335</i>&nbsp;    //  will happen if the current RelationSupport object has been created by</b>
+<b class="nc"><i>1336</i>&nbsp;    //  the Relation Service (via createRelation()) method, so direct access is</b>
+<b class="nc"><i>1337</i>&nbsp;    //  possible.</b>
+<i>1338</i>&nbsp;    // -param relationServ  reference to Relation Service object, if object
+<b class="nc"><i>1339</i>&nbsp;    //  created by Relation Service.</b>
+<i>1340</i>&nbsp;    //
+<b class="nc"><i>1341</i>&nbsp;    // -exception IllegalArgumentException  if null parameter</b>
+<i>1342</i>&nbsp;    // -exception RelationServiceNotRegisteredException  if the Relation
+<i>1343</i>&nbsp;    //  Service is not registered in the MBean Server
+<b class="nc"><i>1344</i>&nbsp;    // -exception RelationNotFoundException if:</b>
+<i>1345</i>&nbsp;    //  - relation MBean
+<i>1346</i>&nbsp;    //  and
+<i>1347</i>&nbsp;    //  - the relation is not added in the Relation Service
+<i>1348</i>&nbsp;    private void updateRelationServiceMap(Role newRole,
+<i>1349</i>&nbsp;                                          List&lt;ObjectName&gt; oldRoleValue,
+<i>1350</i>&nbsp;                                          boolean relationServCallFlg,
+<i>1351</i>&nbsp;                                          RelationService relationServ)
+<i>1352</i>&nbsp;        throws IllegalArgumentException,
+<i>1353</i>&nbsp;               RelationServiceNotRegisteredException,
+<i>1354</i>&nbsp;               RelationNotFoundException {
+<i>1355</i>&nbsp;
+<i>1356</i>&nbsp;        if (newRole == null ||
+<i>1357</i>&nbsp;            oldRoleValue == null ||
+<i>1358</i>&nbsp;            (relationServCallFlg &amp;&amp; relationServ == null)) {
+<i>1359</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>1360</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>1361</i>&nbsp;        }
+<i>1362</i>&nbsp;
+<i>1363</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0} {1} {2} {3}&quot;,
+<i>1364</i>&nbsp;                            newRole, oldRoleValue, relationServCallFlg,
+<i>1365</i>&nbsp;                            relationServ);
+<i>1366</i>&nbsp;
+<i>1367</i>&nbsp;        if (relationServCallFlg) {
+<i>1368</i>&nbsp;            // Direct call to the Relation Service
+<i>1369</i>&nbsp;            // Shall not throw a RelationNotFoundException
+<i>1370</i>&nbsp;            try {
+<i>1371</i>&nbsp;                relationServ.updateRoleMap(myRelId,
+<i>1372</i>&nbsp;                                         newRole,
+<i>1373</i>&nbsp;                                         oldRoleValue);
+<i>1374</i>&nbsp;            } catch (RelationNotFoundException exc) {
+<i>1375</i>&nbsp;                throw new RuntimeException(exc.getMessage());
+<i>1376</i>&nbsp;            }
+<i>1377</i>&nbsp;
+<i>1378</i>&nbsp;        } else {
+<b class="nc"><i>1379</i>&nbsp;            Object[] params = new Object[3];</b>
+<i>1380</i>&nbsp;            params[0] = myRelId;
+<i>1381</i>&nbsp;            params[1] = newRole;
+<b class="nc"><i>1382</i>&nbsp;            params[2] = oldRoleValue;</b>
+<b class="nc"><i>1383</i>&nbsp;            String[] signature = new String[3];</b>
+<i>1384</i>&nbsp;            signature[0] = &quot;java.lang.String&quot;;
+<i>1385</i>&nbsp;            signature[1] = &quot;javax.management.relation.Role&quot;;
+<b class="nc"><i>1386</i>&nbsp;            signature[2] = &quot;java.util.List&quot;;</b>
+<i>1387</i>&nbsp;            // Can throw InstanceNotFoundException if the Relation Service
+<b class="nc"><i>1388</i>&nbsp;            // is not registered (to be transformed).</b>
+<i>1389</i>&nbsp;            // Can throw a MBeanException wrapping a RelationNotFoundException:
+<b class="nc"><i>1390</i>&nbsp;            // wrapped exception to be thrown</b>
+<i>1391</i>&nbsp;            //
+<i>1392</i>&nbsp;            // Shall not throw a ReflectionException
+<i>1393</i>&nbsp;            try {
+<b class="nc"><i>1394</i>&nbsp;                myRelServiceMBeanServer.invoke(myRelServiceName,</b>
+<i>1395</i>&nbsp;                                               &quot;updateRoleMap&quot;,
+<i>1396</i>&nbsp;                                               params,
+<b class="nc"><i>1397</i>&nbsp;                                               signature);</b>
+<b class="nc"><i>1398</i>&nbsp;            } catch (ReflectionException exc1) {</b>
+<b class="nc"><i>1399</i>&nbsp;                throw new RuntimeException(exc1.getMessage());</b>
+<i>1400</i>&nbsp;            } catch (InstanceNotFoundException exc2) {
+<i>1401</i>&nbsp;                throw new
+<b class="nc"><i>1402</i>&nbsp;                     RelationServiceNotRegisteredException(exc2.getMessage());</b>
+<b class="nc"><i>1403</i>&nbsp;            } catch (MBeanException exc3) {</b>
+<b class="nc"><i>1404</i>&nbsp;                Exception wrappedExc = exc3.getTargetException();</b>
+<b class="nc"><i>1405</i>&nbsp;                if (wrappedExc instanceof RelationNotFoundException) {</b>
+<b class="nc"><i>1406</i>&nbsp;                    throw ((RelationNotFoundException)wrappedExc);</b>
+<b class="nc"><i>1407</i>&nbsp;                } else {</b>
+<b class="nc"><i>1408</i>&nbsp;                    throw new RuntimeException(wrappedExc.getMessage());</b>
+<b class="nc"><i>1409</i>&nbsp;                }</b>
+<i>1410</i>&nbsp;            }
+<i>1411</i>&nbsp;        }
+<i>1412</i>&nbsp;
+<i>1413</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>1414</i>&nbsp;        return;
+<i>1415</i>&nbsp;    }
+<i>1416</i>&nbsp;
+<b class="nc"><i>1417</i>&nbsp;    // Sets the given roles</b>
+<i>1418</i>&nbsp;    // For each role:
+<i>1419</i>&nbsp;    // - will check the role according to its corresponding role definition
+<i>1420</i>&nbsp;    //   provided in relation&#39;s relation type
+<b class="nc"><i>1421</i>&nbsp;    // - will send a notification (RelationNotification with type</b>
+<b class="nc"><i>1422</i>&nbsp;    //   RELATION_BASIC_UPDATE or RELATION_MBEAN_UPDATE, depending if the</b>
+<b class="nc"><i>1423</i>&nbsp;    //   relation is a MBean or not) for each updated role.</b>
+<b class="nc"><i>1424</i>&nbsp;    //</b>
+<b class="nc"><i>1425</i>&nbsp;    // This method is called in setRoles() above and in Relation Service</b>
+<b class="nc"><i>1426</i>&nbsp;    // setRoles() method.</b>
+<b class="nc"><i>1427</i>&nbsp;    //</b>
+<b class="nc"><i>1428</i>&nbsp;    // -param list  list of roles to be set</b>
+<b class="nc"><i>1429</i>&nbsp;    // -param relationServCallFlg  true if call from the Relation Service; this</b>
+<i>1430</i>&nbsp;    //  will happen if the current RelationSupport object has been created by
+<b class="nc"><i>1431</i>&nbsp;    //  the Relation Service (via createRelation()) method, so direct access is</b>
+<i>1432</i>&nbsp;    //  possible.
+<b class="nc"><i>1433</i>&nbsp;    // -param relationServ  reference to Relation Service object, if object</b>
+<i>1434</i>&nbsp;    //  created by Relation Service.
+<i>1435</i>&nbsp;    //
+<b class="nc"><i>1436</i>&nbsp;    // -return a RoleResult object</b>
+<i>1437</i>&nbsp;    //
+<i>1438</i>&nbsp;    // -exception IllegalArgumentException  if null parameter
+<i>1439</i>&nbsp;    // -exception RelationServiceNotRegisteredException  if the Relation
+<i>1440</i>&nbsp;    //  Service is not registered in the MBean Server
+<i>1441</i>&nbsp;    // -exception RelationTypeNotFoundException if:
+<i>1442</i>&nbsp;    //  - relation MBean
+<i>1443</i>&nbsp;    //  and
+<i>1444</i>&nbsp;    //  - unknown relation type
+<i>1445</i>&nbsp;    // -exception RelationNotFoundException if:
+<i>1446</i>&nbsp;    //  - relation MBean
+<i>1447</i>&nbsp;    // and
+<i>1448</i>&nbsp;    // - not added in the RS
+<i>1449</i>&nbsp;    RoleResult setRolesInt(RoleList list,
+<i>1450</i>&nbsp;                           boolean relationServCallFlg,
+<i>1451</i>&nbsp;                           RelationService relationServ)
+<i>1452</i>&nbsp;        throws IllegalArgumentException,
+<i>1453</i>&nbsp;               RelationServiceNotRegisteredException,
+<i>1454</i>&nbsp;               RelationTypeNotFoundException,
+<i>1455</i>&nbsp;               RelationNotFoundException {
+<i>1456</i>&nbsp;
+<i>1457</i>&nbsp;        if (list == null ||
+<i>1458</i>&nbsp;            (relationServCallFlg &amp;&amp; relationServ == null)) {
+<i>1459</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>1460</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>1461</i>&nbsp;        }
+<i>1462</i>&nbsp;
+<i>1463</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0} {1} {2}&quot;,
+<i>1464</i>&nbsp;                            list, relationServCallFlg, relationServ);
+<i>1465</i>&nbsp;
+<i>1466</i>&nbsp;        RoleList roleList = new RoleList();
+<i>1467</i>&nbsp;        RoleUnresolvedList roleUnresList = new RoleUnresolvedList();
+<i>1468</i>&nbsp;
+<i>1469</i>&nbsp;        for (Role currRole : list.asList()) {
+<i>1470</i>&nbsp;
+<i>1471</i>&nbsp;            Object currResult = null;
+<i>1472</i>&nbsp;            // Can throw:
+<i>1473</i>&nbsp;            // RelationServiceNotRegisteredException,
+<i>1474</i>&nbsp;            // RelationTypeNotFoundException
+<i>1475</i>&nbsp;            //
+<i>1476</i>&nbsp;            // Will not throw, due to parameters, RoleNotFoundException or
+<i>1477</i>&nbsp;            // InvalidRoleValueException, but catch them to keep compiler
+<i>1478</i>&nbsp;            // happy
+<i>1479</i>&nbsp;            try {
+<i>1480</i>&nbsp;                currResult = setRoleInt(currRole,
+<b class="nc"><i>1481</i>&nbsp;                                        relationServCallFlg,</b>
+<i>1482</i>&nbsp;                                        relationServ,
+<b class="nc"><i>1483</i>&nbsp;                                        true);</b>
+<b class="nc"><i>1484</i>&nbsp;            } catch (RoleNotFoundException exc1) {</b>
+<i>1485</i>&nbsp;                // OK : Do not throw a RoleNotFoundException.
+<i>1486</i>&nbsp;            } catch (InvalidRoleValueException exc2) {
+<b class="nc"><i>1487</i>&nbsp;                // OK : Do not throw an InvalidRoleValueException.</b>
+<i>1488</i>&nbsp;            }
+<b class="nc"><i>1489</i>&nbsp;</b>
+<i>1490</i>&nbsp;            if (currResult instanceof Role) {
+<b class="nc"><i>1491</i>&nbsp;                // Can throw IllegalArgumentException if role is null</b>
+<b class="nc"><i>1492</i>&nbsp;                // (normally should not happen :(</b>
+<i>1493</i>&nbsp;                try {
+<b class="nc"><i>1494</i>&nbsp;                    roleList.add((Role)currResult);</b>
+<i>1495</i>&nbsp;                } catch (IllegalArgumentException exc) {
+<b class="nc"><i>1496</i>&nbsp;                    throw new RuntimeException(exc.getMessage());</b>
+<i>1497</i>&nbsp;                }
+<i>1498</i>&nbsp;
+<i>1499</i>&nbsp;            } else if (currResult instanceof RoleUnresolved) {
+<i>1500</i>&nbsp;                // Can throw IllegalArgumentException if role is null
+<i>1501</i>&nbsp;                // (normally should not happen :(
+<i>1502</i>&nbsp;                try {
+<i>1503</i>&nbsp;                    roleUnresList.add((RoleUnresolved)currResult);
+<i>1504</i>&nbsp;                } catch (IllegalArgumentException exc) {
+<b class="nc"><i>1505</i>&nbsp;                    throw new RuntimeException(exc.getMessage());</b>
+<i>1506</i>&nbsp;                }
+<i>1507</i>&nbsp;            }
+<i>1508</i>&nbsp;        }
+<b class="nc"><i>1509</i>&nbsp;</b>
+<i>1510</i>&nbsp;        RoleResult result = new RoleResult(roleList, roleUnresList);
+<b class="nc"><i>1511</i>&nbsp;</b>
+<i>1512</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<b class="nc"><i>1513</i>&nbsp;        return result;</b>
+<i>1514</i>&nbsp;    }
+<b class="nc"><i>1515</i>&nbsp;</b>
+<i>1516</i>&nbsp;    // Initializes all members
+<i>1517</i>&nbsp;    //
+<i>1518</i>&nbsp;    // -param relationId  relation identifier, to identify the relation in the
+<b class="nc"><i>1519</i>&nbsp;    // Relation Service.</b>
+<b class="nc"><i>1520</i>&nbsp;    // Expected to be unique in the given Relation Service.</b>
+<b class="nc"><i>1521</i>&nbsp;    // -param relationServiceName  ObjectName of the Relation Service where</b>
+<b class="nc"><i>1522</i>&nbsp;    // the relation will be registered.</b>
+<i>1523</i>&nbsp;    // It is required as this is the Relation Service that is aware of the
+<b class="nc"><i>1524</i>&nbsp;    // definition of the relation type of given relation, so that will be able</b>
+<i>1525</i>&nbsp;    // to check update operations (set). Direct access via the Relation
+<i>1526</i>&nbsp;    // Service (RelationService.setRole()) do not need this information but
+<i>1527</i>&nbsp;    // as any user relation is a MBean, setRole() is part of its management
+<b class="nc"><i>1528</i>&nbsp;    // interface and can be called directly on the user relation MBean. So the</b>
+<b class="nc"><i>1529</i>&nbsp;    // user relation MBean must be aware of the Relation Service where it will</b>
+<b class="nc"><i>1530</i>&nbsp;    // be added.</b>
+<b class="nc"><i>1531</i>&nbsp;    // -param relationTypeName  Name of relation type.</b>
+<i>1532</i>&nbsp;    // Expected to have been created in given Relation Service.
+<b class="nc"><i>1533</i>&nbsp;    // -param list  list of roles (Role objects) to initialized the</b>
+<i>1534</i>&nbsp;    // relation. Can be null.
+<b class="nc"><i>1535</i>&nbsp;    // Expected to conform to relation info in associated relation type.</b>
+<i>1536</i>&nbsp;    //
+<b class="nc"><i>1537</i>&nbsp;    // -exception InvalidRoleValueException  if the same name is used for two</b>
+<b class="nc"><i>1538</i>&nbsp;    //  roles.</b>
+<i>1539</i>&nbsp;    // -exception IllegalArgumentException  if a required value (Relation
+<i>1540</i>&nbsp;    //  Service Object Name, etc.) is not provided as parameter.
+<i>1541</i>&nbsp;    private void initMembers(String relationId,
+<i>1542</i>&nbsp;                             ObjectName relationServiceName,
+<i>1543</i>&nbsp;                             MBeanServer relationServiceMBeanServer,
+<i>1544</i>&nbsp;                             String relationTypeName,
+<i>1545</i>&nbsp;                             RoleList list)
+<i>1546</i>&nbsp;        throws InvalidRoleValueException,
+<i>1547</i>&nbsp;               IllegalArgumentException {
+<i>1548</i>&nbsp;
+<i>1549</i>&nbsp;        if (relationId == null ||
+<i>1550</i>&nbsp;            relationServiceName == null ||
+<i>1551</i>&nbsp;            relationTypeName == null) {
+<i>1552</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>1553</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>1554</i>&nbsp;        }
+<i>1555</i>&nbsp;
+<i>1556</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0} {1} {2} {3} {4}&quot;,
+<i>1557</i>&nbsp;                            relationId, relationServiceName,
+<i>1558</i>&nbsp;                            relationServiceMBeanServer, relationTypeName, list);
+<i>1559</i>&nbsp;
+<i>1560</i>&nbsp;        myRelId = relationId;
+<i>1561</i>&nbsp;        myRelServiceName = relationServiceName;
+<i>1562</i>&nbsp;        myRelServiceMBeanServer = relationServiceMBeanServer;
+<i>1563</i>&nbsp;        myRelTypeName = relationTypeName;
+<i>1564</i>&nbsp;        // Can throw InvalidRoleValueException
+<i>1565</i>&nbsp;        initRoleMap(list);
+<i>1566</i>&nbsp;
+<i>1567</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>1568</i>&nbsp;        return;
+<i>1569</i>&nbsp;    }
+<i>1570</i>&nbsp;
+<i>1571</i>&nbsp;    // Initialize the internal role map from given RoleList parameter
+<i>1572</i>&nbsp;    //
+<i>1573</i>&nbsp;    // -param list  role list. Can be null.
+<b class="nc"><i>1574</i>&nbsp;    //  As it is a RoleList object, it cannot include null (rejected).</b>
+<i>1575</i>&nbsp;    //
+<i>1576</i>&nbsp;    // -exception InvalidRoleValueException  if the same role name is used for
+<b class="nc"><i>1577</i>&nbsp;    //  several roles.</b>
+<b class="nc"><i>1578</i>&nbsp;    //</b>
+<i>1579</i>&nbsp;    private void initRoleMap(RoleList list)
+<i>1580</i>&nbsp;        throws InvalidRoleValueException {
+<b class="nc"><i>1581</i>&nbsp;</b>
+<i>1582</i>&nbsp;        if (list == null) {
+<i>1583</i>&nbsp;            return;
+<i>1584</i>&nbsp;        }
+<b class="nc"><i>1585</i>&nbsp;</b>
+<b class="nc"><i>1586</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0}&quot;, list);</b>
+<b class="nc"><i>1587</i>&nbsp;</b>
+<b class="nc"><i>1588</i>&nbsp;        synchronized(myRoleName2ValueMap) {</b>
+<i>1589</i>&nbsp;
+<b class="nc"><i>1590</i>&nbsp;            for (Role currRole : list.asList()) {</b>
+<i>1591</i>&nbsp;
+<b class="nc"><i>1592</i>&nbsp;                // No need to check if role is null, it is not allowed to store</b>
+<i>1593</i>&nbsp;                // a null role in a RoleList :)
+<i>1594</i>&nbsp;                String currRoleName = currRole.getRoleName();
+<i>1595</i>&nbsp;
+<i>1596</i>&nbsp;                if (myRoleName2ValueMap.containsKey(currRoleName)) {
+<i>1597</i>&nbsp;                    // Role already provided in current list
+<i>1598</i>&nbsp;                    StringBuilder excMsgStrB = new StringBuilder(&quot;Role name &quot;);
+<i>1599</i>&nbsp;                    excMsgStrB.append(currRoleName);
+<i>1600</i>&nbsp;                    excMsgStrB.append(&quot; used for two roles.&quot;);
+<i>1601</i>&nbsp;                    throw new InvalidRoleValueException(excMsgStrB.toString());
+<i>1602</i>&nbsp;                }
+<i>1603</i>&nbsp;
+<i>1604</i>&nbsp;                myRoleName2ValueMap.put(currRoleName,
+<i>1605</i>&nbsp;                                        (Role)(currRole.clone()));
+<i>1606</i>&nbsp;            }
+<b class="nc"><i>1607</i>&nbsp;        }</b>
+<i>1608</i>&nbsp;
+<i>1609</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<i>1610</i>&nbsp;        return;
+<b class="nc"><i>1611</i>&nbsp;    }</b>
+<i>1612</i>&nbsp;
+<i>1613</i>&nbsp;    // Callback used by the Relation Service when a MBean referenced in a role
+<b class="nc"><i>1614</i>&nbsp;    // is unregistered.</b>
+<i>1615</i>&nbsp;    // The Relation Service will call this method to let the relation
+<b class="nc"><i>1616</i>&nbsp;    // take action to reflect the impact of such unregistration.</b>
+<i>1617</i>&nbsp;    // Current implementation is to set the role with its current value
+<i>1618</i>&nbsp;    // (list of ObjectNames of referenced MBeans) without the unregistered
+<i>1619</i>&nbsp;    // one.
+<b class="nc"><i>1620</i>&nbsp;    //</b>
+<i>1621</i>&nbsp;    // -param objectName  ObjectName of unregistered MBean
+<b class="nc"><i>1622</i>&nbsp;    // -param roleName  name of role where the MBean is referenced</b>
+<i>1623</i>&nbsp;    // -param relationServCallFlg  true if call from the Relation Service; this
+<b class="nc"><i>1624</i>&nbsp;    //  will happen if the current RelationSupport object has been created by</b>
+<b class="nc"><i>1625</i>&nbsp;    //  the Relation Service (via createRelation()) method, so direct access is</b>
+<b class="nc"><i>1626</i>&nbsp;    //  possible.</b>
+<b class="nc"><i>1627</i>&nbsp;    // -param relationServ  reference to Relation Service object, if internal</b>
+<i>1628</i>&nbsp;    //  relation
+<i>1629</i>&nbsp;    //
+<b class="nc"><i>1630</i>&nbsp;    // -exception IllegalArgumentException if null parameter</b>
+<b class="nc"><i>1631</i>&nbsp;    // -exception RoleNotFoundException  if:</b>
+<b class="nc"><i>1632</i>&nbsp;    //  - the role does not exist</b>
+<b class="nc"><i>1633</i>&nbsp;    //  or</b>
+<i>1634</i>&nbsp;    //  - role not writable.
+<b class="nc"><i>1635</i>&nbsp;    // -exception InvalidRoleValueException  if value provided for:</b>
+<i>1636</i>&nbsp;    //   - the number of referenced MBeans in given value is less than
+<i>1637</i>&nbsp;    //     expected minimum degree
+<i>1638</i>&nbsp;    //   or
+<i>1639</i>&nbsp;    //   - the number of referenced MBeans in provided value exceeds expected
+<i>1640</i>&nbsp;    //     maximum degree
+<i>1641</i>&nbsp;    //   or
+<i>1642</i>&nbsp;    //   - one referenced MBean in the value is not an Object of the MBean
+<i>1643</i>&nbsp;    //     class expected for that role
+<i>1644</i>&nbsp;    //   or
+<i>1645</i>&nbsp;    //   - a MBean provided for that role does not exist
+<i>1646</i>&nbsp;    // -exception RelationServiceNotRegisteredException  if the Relation
+<i>1647</i>&nbsp;    //  Service is not registered in the MBean Server
+<i>1648</i>&nbsp;    // -exception RelationTypeNotFoundException if unknown relation type
+<i>1649</i>&nbsp;    // -exception RelationNotFoundException if current relation has not been
+<i>1650</i>&nbsp;    //  added in the RS
+<i>1651</i>&nbsp;    void handleMBeanUnregistrationInt(ObjectName objectName,
+<i>1652</i>&nbsp;                                      String roleName,
+<i>1653</i>&nbsp;                                      boolean relationServCallFlg,
+<i>1654</i>&nbsp;                                      RelationService relationServ)
+<i>1655</i>&nbsp;        throws IllegalArgumentException,
+<i>1656</i>&nbsp;               RoleNotFoundException,
+<i>1657</i>&nbsp;               InvalidRoleValueException,
+<i>1658</i>&nbsp;               RelationServiceNotRegisteredException,
+<i>1659</i>&nbsp;               RelationTypeNotFoundException,
+<i>1660</i>&nbsp;               RelationNotFoundException {
+<i>1661</i>&nbsp;
+<i>1662</i>&nbsp;        if (objectName == null ||
+<i>1663</i>&nbsp;            roleName == null ||
+<i>1664</i>&nbsp;            (relationServCallFlg &amp;&amp; relationServ == null)) {
+<i>1665</i>&nbsp;            String excMsg = &quot;Invalid parameter.&quot;;
+<i>1666</i>&nbsp;            throw new IllegalArgumentException(excMsg);
+<i>1667</i>&nbsp;        }
+<i>1668</i>&nbsp;
+<i>1669</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;ENTRY {0} {1} {2} {3}&quot;,
+<i>1670</i>&nbsp;                            objectName, roleName, relationServCallFlg,
+<i>1671</i>&nbsp;                            relationServ);
+<i>1672</i>&nbsp;
+<i>1673</i>&nbsp;        // Retrieves current role value
+<i>1674</i>&nbsp;        Role role;
+<i>1675</i>&nbsp;        synchronized(myRoleName2ValueMap) {
+<i>1676</i>&nbsp;            role = (myRoleName2ValueMap.get(roleName));
+<i>1677</i>&nbsp;        }
+<i>1678</i>&nbsp;
+<i>1679</i>&nbsp;        if (role == null) {
+<i>1680</i>&nbsp;            StringBuilder excMsgStrB = new StringBuilder();
+<i>1681</i>&nbsp;            String excMsg = &quot;No role with name &quot;;
+<i>1682</i>&nbsp;            excMsgStrB.append(excMsg);
+<i>1683</i>&nbsp;            excMsgStrB.append(roleName);
+<i>1684</i>&nbsp;            throw new RoleNotFoundException(excMsgStrB.toString());
+<i>1685</i>&nbsp;        }
+<i>1686</i>&nbsp;        List&lt;ObjectName&gt; currRoleValue = role.getRoleValue();
+<i>1687</i>&nbsp;
+<b class="nc"><i>1688</i>&nbsp;        // Note: no need to test if list not null before cloning, null value</b>
+<i>1689</i>&nbsp;        //       not allowed for role value.
+<i>1690</i>&nbsp;        List&lt;ObjectName&gt; newRoleValue = new ArrayList&lt;ObjectName&gt;(currRoleValue);
+<b class="nc"><i>1691</i>&nbsp;        newRoleValue.remove(objectName);</b>
+<b class="nc"><i>1692</i>&nbsp;        Role newRole = new Role(roleName, newRoleValue);</b>
+<i>1693</i>&nbsp;
+<i>1694</i>&nbsp;        // Can throw InvalidRoleValueException,
+<b class="nc"><i>1695</i>&nbsp;        // RelationTypeNotFoundException</b>
+<i>1696</i>&nbsp;        // (RoleNotFoundException already detected)
+<b class="nc"><i>1697</i>&nbsp;        Object result =</b>
+<i>1698</i>&nbsp;            setRoleInt(newRole, relationServCallFlg, relationServ, false);
+<i>1699</i>&nbsp;
+<i>1700</i>&nbsp;        RELATION_LOGGER.log(Level.TRACE, &quot;RETURN&quot;);
+<b class="nc"><i>1701</i>&nbsp;        return;</b>
+<b class="nc"><i>1702</i>&nbsp;    }</b>
+<b class="nc"><i>1703</i>&nbsp;</b>
+<i>1704</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,1497 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Introspector</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.beans</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Introspector (java.beans)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Introspector</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 40)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 579)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;package java.beans;
+<i>26</i>&nbsp;
+<i>27</i>&nbsp;import com.sun.beans.TypeResolver;
+<i>28</i>&nbsp;import com.sun.beans.WeakCache;
+<i>29</i>&nbsp;import com.sun.beans.finder.ClassFinder;
+<i>30</i>&nbsp;import com.sun.beans.introspect.ClassInfo;
+<i>31</i>&nbsp;import com.sun.beans.introspect.EventSetInfo;
+<i>32</i>&nbsp;import com.sun.beans.introspect.PropertyInfo;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import java.awt.Component;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import java.lang.ref.Reference;
+<i>37</i>&nbsp;import java.lang.ref.SoftReference;
+<i>38</i>&nbsp;import java.lang.reflect.Constructor;
+<i>39</i>&nbsp;import java.lang.reflect.InvocationTargetException;
+<i>40</i>&nbsp;import java.lang.reflect.Method;
+<i>41</i>&nbsp;import java.lang.reflect.Type;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;import java.util.Map;
+<i>44</i>&nbsp;import java.util.ArrayList;
+<i>45</i>&nbsp;import java.util.Arrays;
+<i>46</i>&nbsp;import java.util.HashMap;
+<i>47</i>&nbsp;import java.util.Iterator;
+<i>48</i>&nbsp;import java.util.EventObject;
+<i>49</i>&nbsp;import java.util.List;
+<i>50</i>&nbsp;import java.util.TreeMap;
+<i>51</i>&nbsp;
+<i>52</i>&nbsp;import jdk.internal.misc.JavaBeansAccess;
+<i>53</i>&nbsp;import jdk.internal.misc.SharedSecrets;
+<i>54</i>&nbsp;import sun.reflect.misc.ReflectUtil;
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;/**
+<i>57</i>&nbsp; * The Introspector class provides a standard way for tools to learn about
+<i>58</i>&nbsp; * the properties, events, and methods supported by a target Java Bean.
+<i>59</i>&nbsp; * &lt;p&gt;
+<i>60</i>&nbsp; * For each of those three kinds of information, the Introspector will
+<i>61</i>&nbsp; * separately analyze the bean&#39;s class and superclasses looking for
+<i>62</i>&nbsp; * either explicit or implicit information and use that information to
+<i>63</i>&nbsp; * build a BeanInfo object that comprehensively describes the target bean.
+<i>64</i>&nbsp; * &lt;p&gt;
+<i>65</i>&nbsp; * For each class &quot;Foo&quot;, explicit information may be available if there exists
+<i>66</i>&nbsp; * a corresponding &quot;FooBeanInfo&quot; class that provides a non-null value when
+<i>67</i>&nbsp; * queried for the information.   We first look for the BeanInfo class by
+<i>68</i>&nbsp; * taking the full package-qualified name of the target bean class and
+<i>69</i>&nbsp; * appending &quot;BeanInfo&quot; to form a new class name.  If this fails, then
+<i>70</i>&nbsp; * we take the final classname component of this name, and look for that
+<i>71</i>&nbsp; * class in each of the packages specified in the BeanInfo package search
+<i>72</i>&nbsp; * path.
+<i>73</i>&nbsp; * &lt;p&gt;
+<i>74</i>&nbsp; * Thus for a class such as &quot;sun.xyz.OurButton&quot; we would first look for a
+<i>75</i>&nbsp; * BeanInfo class called &quot;sun.xyz.OurButtonBeanInfo&quot; and if that failed we&#39;d
+<i>76</i>&nbsp; * look in each package in the BeanInfo search path for an OurButtonBeanInfo
+<i>77</i>&nbsp; * class.  With the default search path, this would mean looking for
+<i>78</i>&nbsp; * &quot;sun.beans.infos.OurButtonBeanInfo&quot;.
+<i>79</i>&nbsp; * &lt;p&gt;
+<i>80</i>&nbsp; * If a class provides explicit BeanInfo about itself then we add that to
+<i>81</i>&nbsp; * the BeanInfo information we obtained from analyzing any derived classes,
+<i>82</i>&nbsp; * but we regard the explicit information as being definitive for the current
+<i>83</i>&nbsp; * class and its base classes, and do not proceed any further up the superclass
+<i>84</i>&nbsp; * chain.
+<i>85</i>&nbsp; * &lt;p&gt;
+<i>86</i>&nbsp; * If we don&#39;t find explicit BeanInfo on a class, we use low-level
+<i>87</i>&nbsp; * reflection to study the methods of the class and apply standard design
+<i>88</i>&nbsp; * patterns to identify property accessors, event sources, or public
+<i>89</i>&nbsp; * methods.  We then proceed to analyze the class&#39;s superclass and add
+<i>90</i>&nbsp; * in the information from it (and possibly on up the superclass chain).
+<i>91</i>&nbsp; * &lt;p&gt;
+<i>92</i>&nbsp; * For more information about introspection and design patterns, please
+<i>93</i>&nbsp; * consult the
+<i>94</i>&nbsp; *  &lt;a href=&quot;http://www.oracle.com/technetwork/java/javase/documentation/spec-136004.html&quot;&gt;JavaBeans&amp;trade; specification&lt;/a&gt;.
+<i>95</i>&nbsp; *
+<i>96</i>&nbsp; * @since 1.1
+<i>97</i>&nbsp; */
+<i>98</i>&nbsp;
+<i>99</i>&nbsp;public class Introspector {
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;    // Flags that can be used to control getBeanInfo:
+<i>102</i>&nbsp;    /**
+<i>103</i>&nbsp;     * Flag to indicate to use of all beaninfo.
+<i>104</i>&nbsp;     * @since 1.2
+<i>105</i>&nbsp;     */
+<i>106</i>&nbsp;    public static final int USE_ALL_BEANINFO           = 1;
+<i>107</i>&nbsp;    /**
+<i>108</i>&nbsp;     * Flag to indicate to ignore immediate beaninfo.
+<i>109</i>&nbsp;     * @since 1.2
+<b class="nc"><i>110</i>&nbsp;     */</b>
+<i>111</i>&nbsp;    public static final int IGNORE_IMMEDIATE_BEANINFO  = 2;
+<i>112</i>&nbsp;    /**
+<i>113</i>&nbsp;     * Flag to indicate to ignore all beaninfo.
+<i>114</i>&nbsp;     * @since 1.2
+<i>115</i>&nbsp;     */
+<i>116</i>&nbsp;    public static final int IGNORE_ALL_BEANINFO        = 3;
+<b class="nc"><i>117</i>&nbsp;</b>
+<b class="nc"><i>118</i>&nbsp;    // Static Caches to speed up introspection.</b>
+<i>119</i>&nbsp;    private static final WeakCache&lt;Class&lt;?&gt;, Method[]&gt; declaredMethodCache = new WeakCache&lt;&gt;();
+<i>120</i>&nbsp;
+<i>121</i>&nbsp;    private Class&lt;?&gt; beanClass;
+<i>122</i>&nbsp;    private BeanInfo explicitBeanInfo;
+<b class="nc"><i>123</i>&nbsp;    private BeanInfo superBeanInfo;</b>
+<b class="nc"><i>124</i>&nbsp;    private BeanInfo additionalBeanInfo[];</b>
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;    private boolean propertyChangeSource = false;
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;    // These should be removed.
+<i>129</i>&nbsp;    private String defaultEventName;
+<i>130</i>&nbsp;    private String defaultPropertyName;
+<i>131</i>&nbsp;    private int defaultEventIndex = -1;
+<i>132</i>&nbsp;    private int defaultPropertyIndex = -1;
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;    // Methods maps from Method names to MethodDescriptors
+<b class="nc"><i>135</i>&nbsp;    private Map&lt;String, MethodDescriptor&gt; methods;</b>
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;    // properties maps from String names to PropertyDescriptors
+<i>138</i>&nbsp;    private Map&lt;String, PropertyDescriptor&gt; properties;
+<i>139</i>&nbsp;
+<i>140</i>&nbsp;    // events maps from String names to EventSetDescriptors
+<i>141</i>&nbsp;    private Map&lt;String, EventSetDescriptor&gt; events;
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;    private static final EventSetDescriptor[] EMPTY_EVENTSETDESCRIPTORS = new EventSetDescriptor[0];
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;    static final String ADD_PREFIX = &quot;add&quot;;
+<i>146</i>&nbsp;    static final String REMOVE_PREFIX = &quot;remove&quot;;
+<i>147</i>&nbsp;    static final String GET_PREFIX = &quot;get&quot;;
+<i>148</i>&nbsp;    static final String SET_PREFIX = &quot;set&quot;;
+<i>149</i>&nbsp;    static final String IS_PREFIX = &quot;is&quot;;
+<i>150</i>&nbsp;
+<i>151</i>&nbsp;    // register with SharedSecrets for JMX usage
+<i>152</i>&nbsp;    static {
+<i>153</i>&nbsp;        SharedSecrets.setJavaBeansAccess(new JavaBeansAccess() {
+<i>154</i>&nbsp;            @Override
+<i>155</i>&nbsp;            public Method getReadMethod(Class&lt;?&gt; clazz, String property) throws Exception {
+<i>156</i>&nbsp;                BeanInfo bi = Introspector.getBeanInfo(clazz);
+<i>157</i>&nbsp;                PropertyDescriptor[] pds = bi.getPropertyDescriptors();
+<i>158</i>&nbsp;                for (PropertyDescriptor pd: pds) {
+<i>159</i>&nbsp;                    if (pd.getName().equals(property)) {
+<i>160</i>&nbsp;                        return pd.getReadMethod();
+<i>161</i>&nbsp;                    }
+<i>162</i>&nbsp;                }
+<i>163</i>&nbsp;                return null;
+<b class="nc"><i>164</i>&nbsp;            }</b>
+<b class="nc"><i>165</i>&nbsp;</b>
+<i>166</i>&nbsp;            @Override
+<b class="nc"><i>167</i>&nbsp;            public String[] getConstructorPropertiesValue(Constructor&lt;?&gt; ctr) {</b>
+<i>168</i>&nbsp;                ConstructorProperties cp = ctr.getAnnotation(ConstructorProperties.class);
+<b class="nc"><i>169</i>&nbsp;                String [] ret = cp != null ? cp.value() : null;</b>
+<b class="nc"><i>170</i>&nbsp;                return ret;</b>
+<b class="nc"><i>171</i>&nbsp;            }</b>
+<b class="nc"><i>172</i>&nbsp;        });</b>
+<b class="nc"><i>173</i>&nbsp;    }</b>
+<b class="nc"><i>174</i>&nbsp;</b>
+<b class="nc"><i>175</i>&nbsp;    //======================================================================</b>
+<b class="nc"><i>176</i>&nbsp;    //                          Public methods</b>
+<i>177</i>&nbsp;    //======================================================================
+<b class="nc"><i>178</i>&nbsp;</b>
+<i>179</i>&nbsp;    /**
+<i>180</i>&nbsp;     * Introspect on a Java Bean and learn about all its properties, exposed
+<i>181</i>&nbsp;     * methods, and events.
+<i>182</i>&nbsp;     * &lt;p&gt;
+<i>183</i>&nbsp;     * If the BeanInfo class for a Java Bean has been previously Introspected
+<i>184</i>&nbsp;     * then the BeanInfo class is retrieved from the BeanInfo cache.
+<i>185</i>&nbsp;     *
+<i>186</i>&nbsp;     * @param beanClass  The bean class to be analyzed.
+<i>187</i>&nbsp;     * @return  A BeanInfo object describing the target bean.
+<i>188</i>&nbsp;     * @exception IntrospectionException if an exception occurs during
+<i>189</i>&nbsp;     *              introspection.
+<i>190</i>&nbsp;     * @see #flushCaches
+<i>191</i>&nbsp;     * @see #flushFromCaches
+<i>192</i>&nbsp;     */
+<i>193</i>&nbsp;    public static BeanInfo getBeanInfo(Class&lt;?&gt; beanClass)
+<i>194</i>&nbsp;        throws IntrospectionException
+<i>195</i>&nbsp;    {
+<i>196</i>&nbsp;        if (!ReflectUtil.isPackageAccessible(beanClass)) {
+<i>197</i>&nbsp;            return (new Introspector(beanClass, null, USE_ALL_BEANINFO)).getBeanInfo();
+<i>198</i>&nbsp;        }
+<i>199</i>&nbsp;        ThreadGroupContext context = ThreadGroupContext.getContext();
+<i>200</i>&nbsp;        BeanInfo beanInfo;
+<i>201</i>&nbsp;        synchronized (declaredMethodCache) {
+<i>202</i>&nbsp;            beanInfo = context.getBeanInfo(beanClass);
+<i>203</i>&nbsp;        }
+<b class="nc"><i>204</i>&nbsp;        if (beanInfo == null) {</b>
+<i>205</i>&nbsp;            beanInfo = new Introspector(beanClass, null, USE_ALL_BEANINFO).getBeanInfo();
+<i>206</i>&nbsp;            synchronized (declaredMethodCache) {
+<i>207</i>&nbsp;                context.putBeanInfo(beanClass, beanInfo);
+<i>208</i>&nbsp;            }
+<i>209</i>&nbsp;        }
+<i>210</i>&nbsp;        return beanInfo;
+<i>211</i>&nbsp;    }
+<i>212</i>&nbsp;
+<i>213</i>&nbsp;    /**
+<i>214</i>&nbsp;     * Introspect on a Java bean and learn about all its properties, exposed
+<i>215</i>&nbsp;     * methods, and events, subject to some control flags.
+<i>216</i>&nbsp;     * &lt;p&gt;
+<i>217</i>&nbsp;     * If the BeanInfo class for a Java Bean has been previously Introspected
+<i>218</i>&nbsp;     * based on the same arguments then the BeanInfo class is retrieved
+<i>219</i>&nbsp;     * from the BeanInfo cache.
+<i>220</i>&nbsp;     *
+<i>221</i>&nbsp;     * @param beanClass  The bean class to be analyzed.
+<i>222</i>&nbsp;     * @param flags  Flags to control the introspection.
+<i>223</i>&nbsp;     *     If flags == USE_ALL_BEANINFO then we use all of the BeanInfo
+<b class="nc"><i>224</i>&nbsp;     *          classes we can discover.</b>
+<i>225</i>&nbsp;     *     If flags == IGNORE_IMMEDIATE_BEANINFO then we ignore any
+<i>226</i>&nbsp;     *           BeanInfo associated with the specified beanClass.
+<i>227</i>&nbsp;     *     If flags == IGNORE_ALL_BEANINFO then we ignore all BeanInfo
+<i>228</i>&nbsp;     *           associated with the specified beanClass or any of its
+<i>229</i>&nbsp;     *           parent classes.
+<i>230</i>&nbsp;     * @return  A BeanInfo object describing the target bean.
+<i>231</i>&nbsp;     * @exception IntrospectionException if an exception occurs during
+<i>232</i>&nbsp;     *              introspection.
+<i>233</i>&nbsp;     * @since 1.2
+<i>234</i>&nbsp;     */
+<i>235</i>&nbsp;    public static BeanInfo getBeanInfo(Class&lt;?&gt; beanClass, int flags)
+<i>236</i>&nbsp;                                                throws IntrospectionException {
+<i>237</i>&nbsp;        return getBeanInfo(beanClass, null, flags);
+<i>238</i>&nbsp;    }
+<i>239</i>&nbsp;
+<i>240</i>&nbsp;    /**
+<i>241</i>&nbsp;     * Introspect on a Java bean and learn all about its properties, exposed
+<i>242</i>&nbsp;     * methods, below a given &quot;stop&quot; point.
+<i>243</i>&nbsp;     * &lt;p&gt;
+<i>244</i>&nbsp;     * If the BeanInfo class for a Java Bean has been previously Introspected
+<i>245</i>&nbsp;     * based on the same arguments, then the BeanInfo class is retrieved
+<i>246</i>&nbsp;     * from the BeanInfo cache.
+<i>247</i>&nbsp;     * @return the BeanInfo for the bean
+<i>248</i>&nbsp;     * @param beanClass The bean class to be analyzed.
+<i>249</i>&nbsp;     * @param stopClass The baseclass at which to stop the analysis.  Any
+<i>250</i>&nbsp;     *    methods/properties/events in the stopClass or in its baseclasses
+<i>251</i>&nbsp;     *    will be ignored in the analysis.
+<i>252</i>&nbsp;     * @exception IntrospectionException if an exception occurs during
+<i>253</i>&nbsp;     *              introspection.
+<i>254</i>&nbsp;     */
+<i>255</i>&nbsp;    public static BeanInfo getBeanInfo(Class&lt;?&gt; beanClass, Class&lt;?&gt; stopClass)
+<i>256</i>&nbsp;                                                throws IntrospectionException {
+<i>257</i>&nbsp;        return getBeanInfo(beanClass, stopClass, USE_ALL_BEANINFO);
+<b class="nc"><i>258</i>&nbsp;    }</b>
+<i>259</i>&nbsp;
+<b class="nc"><i>260</i>&nbsp;    /**</b>
+<i>261</i>&nbsp;     * Introspect on a Java Bean and learn about all its properties,
+<b class="nc"><i>262</i>&nbsp;     * exposed methods and events, below a given {@code stopClass} point</b>
+<i>263</i>&nbsp;     * subject to some control {@code flags}.
+<b class="nc"><i>264</i>&nbsp;     * &lt;dl&gt;</b>
+<i>265</i>&nbsp;     *  &lt;dt&gt;USE_ALL_BEANINFO&lt;/dt&gt;
+<i>266</i>&nbsp;     *  &lt;dd&gt;Any BeanInfo that can be discovered will be used.&lt;/dd&gt;
+<i>267</i>&nbsp;     *  &lt;dt&gt;IGNORE_IMMEDIATE_BEANINFO&lt;/dt&gt;
+<i>268</i>&nbsp;     *  &lt;dd&gt;Any BeanInfo associated with the specified {@code beanClass} will be ignored.&lt;/dd&gt;
+<i>269</i>&nbsp;     *  &lt;dt&gt;IGNORE_ALL_BEANINFO&lt;/dt&gt;
+<i>270</i>&nbsp;     *  &lt;dd&gt;Any BeanInfo associated with the specified {@code beanClass}
+<i>271</i>&nbsp;     *      or any of its parent classes will be ignored.&lt;/dd&gt;
+<i>272</i>&nbsp;     * &lt;/dl&gt;
+<i>273</i>&nbsp;     * Any methods/properties/events in the {@code stopClass}
+<i>274</i>&nbsp;     * or in its parent classes will be ignored in the analysis.
+<i>275</i>&nbsp;     * &lt;p&gt;
+<i>276</i>&nbsp;     * If the BeanInfo class for a Java Bean has been
+<i>277</i>&nbsp;     * previously introspected based on the same arguments then
+<i>278</i>&nbsp;     * the BeanInfo class is retrieved from the BeanInfo cache.
+<i>279</i>&nbsp;     *
+<i>280</i>&nbsp;     * @param beanClass  the bean class to be analyzed
+<i>281</i>&nbsp;     * @param stopClass  the parent class at which to stop the analysis
+<i>282</i>&nbsp;     * @param flags      flags to control the introspection
+<i>283</i>&nbsp;     * @return a BeanInfo object describing the target bean
+<i>284</i>&nbsp;     * @exception IntrospectionException if an exception occurs during introspection
+<b class="nc"><i>285</i>&nbsp;     *</b>
+<b class="nc"><i>286</i>&nbsp;     * @since 1.7</b>
+<i>287</i>&nbsp;     */
+<b class="nc"><i>288</i>&nbsp;    public static BeanInfo getBeanInfo(Class&lt;?&gt; beanClass, Class&lt;?&gt; stopClass,</b>
+<b class="nc"><i>289</i>&nbsp;                                        int flags) throws IntrospectionException {</b>
+<b class="nc"><i>290</i>&nbsp;        BeanInfo bi;</b>
+<i>291</i>&nbsp;        if (stopClass == null &amp;&amp; flags == USE_ALL_BEANINFO) {
+<b class="nc"><i>292</i>&nbsp;            // Same parameters to take advantage of caching.</b>
+<b class="nc"><i>293</i>&nbsp;            bi = getBeanInfo(beanClass);</b>
+<b class="nc"><i>294</i>&nbsp;        } else {</b>
+<i>295</i>&nbsp;            bi = (new Introspector(beanClass, stopClass, flags)).getBeanInfo();
+<i>296</i>&nbsp;        }
+<i>297</i>&nbsp;        return bi;
+<i>298</i>&nbsp;
+<i>299</i>&nbsp;        // Old behaviour: Make an independent copy of the BeanInfo.
+<i>300</i>&nbsp;        //return new GenericBeanInfo(bi);
+<i>301</i>&nbsp;    }
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;    /**
+<i>305</i>&nbsp;     * Utility method to take a string and convert it to normal Java variable
+<i>306</i>&nbsp;     * name capitalization.  This normally means converting the first
+<i>307</i>&nbsp;     * character from upper case to lower case, but in the (unusual) special
+<b class="nc"><i>308</i>&nbsp;     * case when there is more than one character and both the first and</b>
+<i>309</i>&nbsp;     * second characters are upper case, we leave it alone.
+<i>310</i>&nbsp;     * &lt;p&gt;
+<i>311</i>&nbsp;     * Thus &quot;FooBah&quot; becomes &quot;fooBah&quot; and &quot;X&quot; becomes &quot;x&quot;, but &quot;URL&quot; stays
+<i>312</i>&nbsp;     * as &quot;URL&quot;.
+<i>313</i>&nbsp;     *
+<i>314</i>&nbsp;     * @param  name The string to be decapitalized.
+<i>315</i>&nbsp;     * @return  The decapitalized version of the string.
+<i>316</i>&nbsp;     */
+<i>317</i>&nbsp;    public static String decapitalize(String name) {
+<i>318</i>&nbsp;        if (name == null || name.length() == 0) {
+<i>319</i>&nbsp;            return name;
+<i>320</i>&nbsp;        }
+<i>321</i>&nbsp;        if (name.length() &gt; 1 &amp;&amp; Character.isUpperCase(name.charAt(1)) &amp;&amp;
+<i>322</i>&nbsp;                        Character.isUpperCase(name.charAt(0))){
+<i>323</i>&nbsp;            return name;
+<i>324</i>&nbsp;        }
+<i>325</i>&nbsp;        char chars[] = name.toCharArray();
+<i>326</i>&nbsp;        chars[0] = Character.toLowerCase(chars[0]);
+<i>327</i>&nbsp;        return new String(chars);
+<b class="nc"><i>328</i>&nbsp;    }</b>
+<b class="nc"><i>329</i>&nbsp;</b>
+<b class="nc"><i>330</i>&nbsp;    /**</b>
+<i>331</i>&nbsp;     * Gets the list of package names that will be used for
+<b class="nc"><i>332</i>&nbsp;     *          finding BeanInfo classes.</b>
+<i>333</i>&nbsp;     *
+<i>334</i>&nbsp;     * @return  The array of package names that will be searched in
+<i>335</i>&nbsp;     *          order to find BeanInfo classes. The default value
+<i>336</i>&nbsp;     *          for this array is implementation-dependent; e.g.
+<i>337</i>&nbsp;     *          Sun implementation initially sets to {&quot;sun.beans.infos&quot;}.
+<i>338</i>&nbsp;     */
+<i>339</i>&nbsp;
+<i>340</i>&nbsp;    public static String[] getBeanInfoSearchPath() {
+<i>341</i>&nbsp;        return ThreadGroupContext.getContext().getBeanInfoFinder().getPackages();
+<i>342</i>&nbsp;    }
+<i>343</i>&nbsp;
+<b class="nc"><i>344</i>&nbsp;    /**</b>
+<b class="nc"><i>345</i>&nbsp;     * Change the list of package names that will be used for</b>
+<b class="nc"><i>346</i>&nbsp;     *          finding BeanInfo classes.  The behaviour of</b>
+<b class="nc"><i>347</i>&nbsp;     *          this method is undefined if parameter path</b>
+<i>348</i>&nbsp;     *          is null.
+<i>349</i>&nbsp;     *
+<i>350</i>&nbsp;     * &lt;p&gt;First, if there is a security manager, its {@code checkPropertiesAccess}
+<i>351</i>&nbsp;     * method is called. This could result in a SecurityException.
+<i>352</i>&nbsp;     *
+<i>353</i>&nbsp;     * @param path  Array of package names.
+<i>354</i>&nbsp;     * @exception  SecurityException  if a security manager exists and its
+<i>355</i>&nbsp;     *             {@code checkPropertiesAccess} method doesn&#39;t allow setting
+<i>356</i>&nbsp;     *              of system properties.
+<i>357</i>&nbsp;     * @see SecurityManager#checkPropertiesAccess
+<i>358</i>&nbsp;     */
+<i>359</i>&nbsp;
+<i>360</i>&nbsp;    public static void setBeanInfoSearchPath(String[] path) {
+<i>361</i>&nbsp;        SecurityManager sm = System.getSecurityManager();
+<i>362</i>&nbsp;        if (sm != null) {
+<i>363</i>&nbsp;            sm.checkPropertiesAccess();
+<i>364</i>&nbsp;        }
+<i>365</i>&nbsp;        ThreadGroupContext.getContext().getBeanInfoFinder().setPackages(path);
+<b class="nc"><i>366</i>&nbsp;    }</b>
+<b class="nc"><i>367</i>&nbsp;</b>
+<i>368</i>&nbsp;
+<b class="nc"><i>369</i>&nbsp;    /**</b>
+<b class="nc"><i>370</i>&nbsp;     * Flush all of the Introspector&#39;s internal caches.  This method is</b>
+<b class="nc"><i>371</i>&nbsp;     * not normally required.  It is normally only needed by advanced</b>
+<b class="nc"><i>372</i>&nbsp;     * tools that update existing &quot;Class&quot; objects in-place and need</b>
+<i>373</i>&nbsp;     * to make the Introspector re-analyze existing Class objects.
+<i>374</i>&nbsp;     *
+<i>375</i>&nbsp;     * @since 1.2
+<i>376</i>&nbsp;     */
+<i>377</i>&nbsp;
+<i>378</i>&nbsp;    public static void flushCaches() {
+<i>379</i>&nbsp;        synchronized (declaredMethodCache) {
+<b class="nc"><i>380</i>&nbsp;            ThreadGroupContext.getContext().clearBeanInfoCache();</b>
+<b class="nc"><i>381</i>&nbsp;            declaredMethodCache.clear();</b>
+<i>382</i>&nbsp;        }
+<i>383</i>&nbsp;    }
+<b class="nc"><i>384</i>&nbsp;</b>
+<b class="nc"><i>385</i>&nbsp;    /**</b>
+<b class="nc"><i>386</i>&nbsp;     * Flush the Introspector&#39;s internal cached information for a given class.</b>
+<b class="nc"><i>387</i>&nbsp;     * This method is not normally required.  It is normally only needed</b>
+<b class="nc"><i>388</i>&nbsp;     * by advanced tools that update existing &quot;Class&quot; objects in-place</b>
+<i>389</i>&nbsp;     * and need to make the Introspector re-analyze an existing Class object.
+<i>390</i>&nbsp;     *
+<b class="nc"><i>391</i>&nbsp;     * Note that only the direct state associated with the target Class</b>
+<b class="nc"><i>392</i>&nbsp;     * object is flushed.  We do not flush state for other Class objects</b>
+<b class="nc"><i>393</i>&nbsp;     * with the same name, nor do we flush state for any related Class</b>
+<i>394</i>&nbsp;     * objects (such as subclasses), even though their state may include
+<i>395</i>&nbsp;     * information indirectly obtained from the target Class object.
+<i>396</i>&nbsp;     *
+<b class="nc"><i>397</i>&nbsp;     * @param clz  Class object to be flushed.</b>
+<b class="nc"><i>398</i>&nbsp;     * @throws NullPointerException If the Class object is null.</b>
+<i>399</i>&nbsp;     * @since 1.2
+<i>400</i>&nbsp;     */
+<b class="nc"><i>401</i>&nbsp;    public static void flushFromCaches(Class&lt;?&gt; clz) {</b>
+<b class="nc"><i>402</i>&nbsp;        if (clz == null) {</b>
+<b class="nc"><i>403</i>&nbsp;            throw new NullPointerException();</b>
+<b class="nc"><i>404</i>&nbsp;        }</b>
+<b class="nc"><i>405</i>&nbsp;        synchronized (declaredMethodCache) {</b>
+<i>406</i>&nbsp;            ThreadGroupContext.getContext().removeBeanInfo(clz);
+<b class="nc"><i>407</i>&nbsp;            declaredMethodCache.put(clz, null);</b>
+<i>408</i>&nbsp;        }
+<b class="nc"><i>409</i>&nbsp;    }</b>
+<b class="nc"><i>410</i>&nbsp;</b>
+<i>411</i>&nbsp;    //======================================================================
+<b class="nc"><i>412</i>&nbsp;    //                  Private implementation methods</b>
+<b class="nc"><i>413</i>&nbsp;    //======================================================================</b>
+<i>414</i>&nbsp;
+<i>415</i>&nbsp;    private Introspector(Class&lt;?&gt; beanClass, Class&lt;?&gt; stopClass, int flags)
+<i>416</i>&nbsp;                                            throws IntrospectionException {
+<i>417</i>&nbsp;        this.beanClass = beanClass;
+<i>418</i>&nbsp;
+<i>419</i>&nbsp;        // Check stopClass is a superClass of startClass.
+<i>420</i>&nbsp;        if (stopClass != null) {
+<i>421</i>&nbsp;            boolean isSuper = false;
+<i>422</i>&nbsp;            for (Class&lt;?&gt; c = beanClass.getSuperclass(); c != null; c = c.getSuperclass()) {
+<i>423</i>&nbsp;                if (c == stopClass) {
+<i>424</i>&nbsp;                    isSuper = true;
+<b class="nc"><i>425</i>&nbsp;                }</b>
+<b class="nc"><i>426</i>&nbsp;            }</b>
+<b class="nc"><i>427</i>&nbsp;            if (!isSuper) {</b>
+<b class="nc"><i>428</i>&nbsp;                throw new IntrospectionException(stopClass.getName() + &quot; not superclass of &quot; +</b>
+<i>429</i>&nbsp;                                        beanClass.getName());
+<b class="nc"><i>430</i>&nbsp;            }</b>
+<b class="nc"><i>431</i>&nbsp;        }</b>
+<i>432</i>&nbsp;
+<b class="nc"><i>433</i>&nbsp;        if (flags == USE_ALL_BEANINFO) {</b>
+<i>434</i>&nbsp;            explicitBeanInfo = findExplicitBeanInfo(beanClass);
+<i>435</i>&nbsp;        }
+<i>436</i>&nbsp;
+<i>437</i>&nbsp;        Class&lt;?&gt; superClass = beanClass.getSuperclass();
+<i>438</i>&nbsp;        if (superClass != stopClass) {
+<i>439</i>&nbsp;            int newFlags = flags;
+<i>440</i>&nbsp;            if (newFlags == IGNORE_IMMEDIATE_BEANINFO) {
+<i>441</i>&nbsp;                newFlags = USE_ALL_BEANINFO;
+<i>442</i>&nbsp;            }
+<i>443</i>&nbsp;            superBeanInfo = getBeanInfo(superClass, stopClass, newFlags);
+<i>444</i>&nbsp;        }
+<i>445</i>&nbsp;        if (explicitBeanInfo != null) {
+<i>446</i>&nbsp;            additionalBeanInfo = explicitBeanInfo.getAdditionalBeanInfo();
+<i>447</i>&nbsp;        }
+<b class="nc"><i>448</i>&nbsp;        if (additionalBeanInfo == null) {</b>
+<i>449</i>&nbsp;            additionalBeanInfo = new BeanInfo[0];
+<i>450</i>&nbsp;        }
+<i>451</i>&nbsp;    }
+<i>452</i>&nbsp;
+<i>453</i>&nbsp;    /**
+<i>454</i>&nbsp;     * Constructs a GenericBeanInfo class from the state of the Introspector
+<i>455</i>&nbsp;     */
+<i>456</i>&nbsp;    private BeanInfo getBeanInfo() throws IntrospectionException {
+<i>457</i>&nbsp;
+<i>458</i>&nbsp;        // the evaluation order here is import, as we evaluate the
+<i>459</i>&nbsp;        // event sets and locate PropertyChangeListeners before we
+<b class="nc"><i>460</i>&nbsp;        // look for properties.</b>
+<b class="nc"><i>461</i>&nbsp;        BeanDescriptor bd = getTargetBeanDescriptor();</b>
+<b class="nc"><i>462</i>&nbsp;        MethodDescriptor mds[] = getTargetMethodInfo();</b>
+<i>463</i>&nbsp;        EventSetDescriptor esds[] = getTargetEventInfo();
+<i>464</i>&nbsp;        PropertyDescriptor pds[] = getTargetPropertyInfo();
+<b class="nc"><i>465</i>&nbsp;</b>
+<i>466</i>&nbsp;        int defaultEvent = getTargetDefaultEventIndex();
+<b class="nc"><i>467</i>&nbsp;        int defaultProperty = getTargetDefaultPropertyIndex();</b>
+<i>468</i>&nbsp;
+<i>469</i>&nbsp;        return new GenericBeanInfo(bd, esds, defaultEvent, pds,
+<b class="nc"><i>470</i>&nbsp;                        defaultProperty, mds, explicitBeanInfo);</b>
+<b class="nc"><i>471</i>&nbsp;</b>
+<i>472</i>&nbsp;    }
+<i>473</i>&nbsp;
+<b class="nc"><i>474</i>&nbsp;    /**</b>
+<i>475</i>&nbsp;     * Looks for an explicit BeanInfo class that corresponds to the Class.
+<b class="nc"><i>476</i>&nbsp;     * First it looks in the existing package that the Class is defined in,</b>
+<i>477</i>&nbsp;     * then it checks to see if the class is its own BeanInfo. Finally,
+<i>478</i>&nbsp;     * the BeanInfo search path is prepended to the class and searched.
+<i>479</i>&nbsp;     *
+<i>480</i>&nbsp;     * @param beanClass  the class type of the bean
+<i>481</i>&nbsp;     * @return Instance of an explicit BeanInfo class or null if one isn&#39;t found.
+<i>482</i>&nbsp;     */
+<b class="nc"><i>483</i>&nbsp;    private static BeanInfo findExplicitBeanInfo(Class&lt;?&gt; beanClass) {</b>
+<i>484</i>&nbsp;        return ThreadGroupContext.getContext().getBeanInfoFinder().find(beanClass);
+<i>485</i>&nbsp;    }
+<b class="nc"><i>486</i>&nbsp;</b>
+<b class="nc"><i>487</i>&nbsp;    /**</b>
+<b class="nc"><i>488</i>&nbsp;     * @return An array of PropertyDescriptors describing the editable</b>
+<b class="nc"><i>489</i>&nbsp;     * properties supported by the target bean.</b>
+<i>490</i>&nbsp;     */
+<i>491</i>&nbsp;
+<b class="nc"><i>492</i>&nbsp;    private PropertyDescriptor[] getTargetPropertyInfo() {</b>
+<b class="nc"><i>493</i>&nbsp;</b>
+<b class="nc"><i>494</i>&nbsp;        // Check if the bean has its own BeanInfo that will provide</b>
+<i>495</i>&nbsp;        // explicit information.
+<b class="nc"><i>496</i>&nbsp;        PropertyDescriptor[] explicitProperties = null;</b>
+<b class="nc"><i>497</i>&nbsp;        if (explicitBeanInfo != null) {</b>
+<b class="nc"><i>498</i>&nbsp;            explicitProperties = getPropertyDescriptors(this.explicitBeanInfo);</b>
+<b class="nc"><i>499</i>&nbsp;        }</b>
+<b class="nc"><i>500</i>&nbsp;</b>
+<i>501</i>&nbsp;        if (explicitProperties == null &amp;&amp; superBeanInfo != null) {
+<b class="nc"><i>502</i>&nbsp;            // We have no explicit BeanInfo properties.  Check with our parent.</b>
+<i>503</i>&nbsp;            addPropertyDescriptors(getPropertyDescriptors(this.superBeanInfo));
+<b class="nc"><i>504</i>&nbsp;        }</b>
+<i>505</i>&nbsp;
+<i>506</i>&nbsp;        for (int i = 0; i &lt; additionalBeanInfo.length; i++) {
+<i>507</i>&nbsp;            addPropertyDescriptors(additionalBeanInfo[i].getPropertyDescriptors());
+<i>508</i>&nbsp;        }
+<b class="nc"><i>509</i>&nbsp;</b>
+<b class="nc"><i>510</i>&nbsp;        if (explicitProperties != null) {</b>
+<i>511</i>&nbsp;            // Add the explicit BeanInfo data to our results.
+<b class="nc"><i>512</i>&nbsp;            addPropertyDescriptors(explicitProperties);</b>
+<b class="nc"><i>513</i>&nbsp;</b>
+<i>514</i>&nbsp;        } else {
+<b class="nc"><i>515</i>&nbsp;            // Apply some reflection to the current class.</b>
+<i>516</i>&nbsp;            for (Map.Entry&lt;String,PropertyInfo&gt; entry : ClassInfo.get(this.beanClass).getProperties().entrySet()) {
+<b class="nc"><i>517</i>&nbsp;                addPropertyDescriptor(null != entry.getValue().getIndexed()</b>
+<b class="nc"><i>518</i>&nbsp;                        ? new IndexedPropertyDescriptor(entry, this.propertyChangeSource)</b>
+<b class="nc"><i>519</i>&nbsp;                        : new PropertyDescriptor(entry, this.propertyChangeSource));</b>
+<b class="nc"><i>520</i>&nbsp;            }</b>
+<i>521</i>&nbsp;            JavaBean annotation = this.beanClass.getAnnotation(JavaBean.class);
+<b class="nc"><i>522</i>&nbsp;            if ((annotation != null) &amp;&amp; !annotation.defaultProperty().isEmpty()) {</b>
+<b class="nc"><i>523</i>&nbsp;                this.defaultPropertyName = annotation.defaultProperty();</b>
+<b class="nc"><i>524</i>&nbsp;            }</b>
+<i>525</i>&nbsp;        }
+<i>526</i>&nbsp;        processPropertyDescriptors();
+<b class="nc"><i>527</i>&nbsp;</b>
+<b class="nc"><i>528</i>&nbsp;        // Allocate and populate the result array.</b>
+<b class="nc"><i>529</i>&nbsp;        PropertyDescriptor result[] =</b>
+<b class="nc"><i>530</i>&nbsp;                properties.values().toArray(new PropertyDescriptor[properties.size()]);</b>
+<b class="nc"><i>531</i>&nbsp;</b>
+<i>532</i>&nbsp;        // Set the default index.
+<i>533</i>&nbsp;        if (defaultPropertyName != null) {
+<i>534</i>&nbsp;            for (int i = 0; i &lt; result.length; i++) {
+<b class="nc"><i>535</i>&nbsp;                if (defaultPropertyName.equals(result[i].getName())) {</b>
+<i>536</i>&nbsp;                    defaultPropertyIndex = i;
+<i>537</i>&nbsp;                }
+<i>538</i>&nbsp;            }
+<i>539</i>&nbsp;        }
+<b class="nc"><i>540</i>&nbsp;        return result;</b>
+<b class="nc"><i>541</i>&nbsp;    }</b>
+<i>542</i>&nbsp;
+<b class="nc"><i>543</i>&nbsp;    private HashMap&lt;String, List&lt;PropertyDescriptor&gt;&gt; pdStore = new HashMap&lt;&gt;();</b>
+<i>544</i>&nbsp;
+<i>545</i>&nbsp;    /**
+<b class="nc"><i>546</i>&nbsp;     * Adds the property descriptor to the list store.</b>
+<b class="nc"><i>547</i>&nbsp;     */</b>
+<i>548</i>&nbsp;    private void addPropertyDescriptor(PropertyDescriptor pd) {
+<b class="nc"><i>549</i>&nbsp;        String propName = pd.getName();</b>
+<i>550</i>&nbsp;        List&lt;PropertyDescriptor&gt; list = pdStore.get(propName);
+<i>551</i>&nbsp;        if (list == null) {
+<i>552</i>&nbsp;            list = new ArrayList&lt;&gt;();
+<b class="nc"><i>553</i>&nbsp;            pdStore.put(propName, list);</b>
+<i>554</i>&nbsp;        }
+<i>555</i>&nbsp;        if (this.beanClass != pd.getClass0()) {
+<b class="nc"><i>556</i>&nbsp;            // replace existing property descriptor</b>
+<b class="nc"><i>557</i>&nbsp;            // only if we have types to resolve</b>
+<i>558</i>&nbsp;            // in the context of this.beanClass
+<i>559</i>&nbsp;            Method read = pd.getReadMethod();
+<b class="nc"><i>560</i>&nbsp;            Method write = pd.getWriteMethod();</b>
+<b class="nc"><i>561</i>&nbsp;            boolean cls = true;</b>
+<b class="nc"><i>562</i>&nbsp;            if (read != null) cls = cls &amp;&amp; read.getGenericReturnType() instanceof Class;</b>
+<b class="nc"><i>563</i>&nbsp;            if (write != null) cls = cls &amp;&amp; write.getGenericParameterTypes()[0] instanceof Class;</b>
+<i>564</i>&nbsp;            if (pd instanceof IndexedPropertyDescriptor) {
+<i>565</i>&nbsp;                IndexedPropertyDescriptor ipd = (IndexedPropertyDescriptor) pd;
+<i>566</i>&nbsp;                Method readI = ipd.getIndexedReadMethod();
+<i>567</i>&nbsp;                Method writeI = ipd.getIndexedWriteMethod();
+<b class="nc"><i>568</i>&nbsp;                if (readI != null) cls = cls &amp;&amp; readI.getGenericReturnType() instanceof Class;</b>
+<i>569</i>&nbsp;                if (writeI != null) cls = cls &amp;&amp; writeI.getGenericParameterTypes()[1] instanceof Class;
+<i>570</i>&nbsp;                if (!cls) {
+<b class="nc"><i>571</i>&nbsp;                    pd = new IndexedPropertyDescriptor(ipd);</b>
+<i>572</i>&nbsp;                    pd.updateGenericsFor(this.beanClass);
+<i>573</i>&nbsp;                }
+<i>574</i>&nbsp;            }
+<i>575</i>&nbsp;            else if (!cls) {
+<i>576</i>&nbsp;                pd = new PropertyDescriptor(pd);
+<b class="nc"><i>577</i>&nbsp;                pd.updateGenericsFor(this.beanClass);</b>
+<b class="nc"><i>578</i>&nbsp;            }</b>
+<b class="nc"><i>579</i>&nbsp;        }</b>
+<b class="nc"><i>580</i>&nbsp;        list.add(pd);</b>
+<b class="nc"><i>581</i>&nbsp;    }</b>
+<i>582</i>&nbsp;
+<b class="nc"><i>583</i>&nbsp;    private void addPropertyDescriptors(PropertyDescriptor[] descriptors) {</b>
+<i>584</i>&nbsp;        if (descriptors != null) {
+<i>585</i>&nbsp;            for (PropertyDescriptor descriptor : descriptors) {
+<i>586</i>&nbsp;                addPropertyDescriptor(descriptor);
+<b class="nc"><i>587</i>&nbsp;            }</b>
+<b class="nc"><i>588</i>&nbsp;        }</b>
+<b class="nc"><i>589</i>&nbsp;    }</b>
+<b class="nc"><i>590</i>&nbsp;</b>
+<b class="nc"><i>591</i>&nbsp;    private PropertyDescriptor[] getPropertyDescriptors(BeanInfo info) {</b>
+<b class="nc"><i>592</i>&nbsp;        PropertyDescriptor[] descriptors = info.getPropertyDescriptors();</b>
+<b class="nc"><i>593</i>&nbsp;        int index = info.getDefaultPropertyIndex();</b>
+<b class="nc"><i>594</i>&nbsp;        if ((0 &lt;= index) &amp;&amp; (index &lt; descriptors.length)) {</b>
+<b class="nc"><i>595</i>&nbsp;            this.defaultPropertyName = descriptors[index].getName();</b>
+<b class="nc"><i>596</i>&nbsp;        }</b>
+<b class="nc"><i>597</i>&nbsp;        return descriptors;</b>
+<b class="nc"><i>598</i>&nbsp;    }</b>
+<b class="nc"><i>599</i>&nbsp;</b>
+<b class="nc"><i>600</i>&nbsp;    /**</b>
+<i>601</i>&nbsp;     * Populates the property descriptor table by merging the
+<b class="nc"><i>602</i>&nbsp;     * lists of Property descriptors.</b>
+<b class="nc"><i>603</i>&nbsp;     */</b>
+<b class="nc"><i>604</i>&nbsp;    private void processPropertyDescriptors() {</b>
+<b class="nc"><i>605</i>&nbsp;        if (properties == null) {</b>
+<i>606</i>&nbsp;            properties = new TreeMap&lt;&gt;();
+<i>607</i>&nbsp;        }
+<b class="nc"><i>608</i>&nbsp;</b>
+<i>609</i>&nbsp;        List&lt;PropertyDescriptor&gt; list;
+<i>610</i>&nbsp;
+<i>611</i>&nbsp;        PropertyDescriptor pd, gpd, spd;
+<b class="nc"><i>612</i>&nbsp;        IndexedPropertyDescriptor ipd, igpd, ispd;</b>
+<b class="nc"><i>613</i>&nbsp;</b>
+<b class="nc"><i>614</i>&nbsp;        Iterator&lt;List&lt;PropertyDescriptor&gt;&gt; it = pdStore.values().iterator();</b>
+<i>615</i>&nbsp;        while (it.hasNext()) {
+<i>616</i>&nbsp;            pd = null; gpd = null; spd = null;
+<i>617</i>&nbsp;            ipd = null; igpd = null; ispd = null;
+<i>618</i>&nbsp;
+<i>619</i>&nbsp;            list = it.next();
+<b class="nc"><i>620</i>&nbsp;</b>
+<b class="nc"><i>621</i>&nbsp;            // First pass. Find the latest getter method. Merge properties</b>
+<b class="nc"><i>622</i>&nbsp;            // of previous getter methods.</b>
+<b class="nc"><i>623</i>&nbsp;            for (int i = 0; i &lt; list.size(); i++) {</b>
+<i>624</i>&nbsp;                pd = list.get(i);
+<b class="nc"><i>625</i>&nbsp;                if (pd instanceof IndexedPropertyDescriptor) {</b>
+<i>626</i>&nbsp;                    ipd = (IndexedPropertyDescriptor)pd;
+<i>627</i>&nbsp;                    if (ipd.getIndexedReadMethod() != null) {
+<i>628</i>&nbsp;                        if (igpd != null) {
+<i>629</i>&nbsp;                            igpd = new IndexedPropertyDescriptor(igpd, ipd);
+<i>630</i>&nbsp;                        } else {
+<i>631</i>&nbsp;                            igpd = ipd;
+<i>632</i>&nbsp;                        }
+<b class="nc"><i>633</i>&nbsp;                    }</b>
+<b class="nc"><i>634</i>&nbsp;                } else {</b>
+<i>635</i>&nbsp;                    if (pd.getReadMethod() != null) {
+<i>636</i>&nbsp;                        String pdName = pd.getReadMethod().getName();
+<i>637</i>&nbsp;                        if (gpd != null) {
+<i>638</i>&nbsp;                            // Don&#39;t replace the existing read
+<i>639</i>&nbsp;                            // method if it starts with &quot;is&quot;
+<i>640</i>&nbsp;                            String gpdName = gpd.getReadMethod().getName();
+<i>641</i>&nbsp;                            if (gpdName.equals(pdName) || !gpdName.startsWith(IS_PREFIX)) {
+<b class="nc"><i>642</i>&nbsp;                                gpd = new PropertyDescriptor(gpd, pd);</b>
+<b class="nc"><i>643</i>&nbsp;                            }</b>
+<b class="nc"><i>644</i>&nbsp;                        } else {</b>
+<b class="nc"><i>645</i>&nbsp;                            gpd = pd;</b>
+<i>646</i>&nbsp;                        }
+<b class="nc"><i>647</i>&nbsp;                    }</b>
+<i>648</i>&nbsp;                }
+<i>649</i>&nbsp;            }
+<i>650</i>&nbsp;
+<b class="nc"><i>651</i>&nbsp;            // Second pass. Find the latest setter method which</b>
+<b class="nc"><i>652</i>&nbsp;            // has the same type as the getter method.</b>
+<b class="nc"><i>653</i>&nbsp;            for (int i = 0; i &lt; list.size(); i++) {</b>
+<b class="nc"><i>654</i>&nbsp;                pd = list.get(i);</b>
+<b class="nc"><i>655</i>&nbsp;                if (pd instanceof IndexedPropertyDescriptor) {</b>
+<b class="nc"><i>656</i>&nbsp;                    ipd = (IndexedPropertyDescriptor)pd;</b>
+<b class="nc"><i>657</i>&nbsp;                    if (ipd.getIndexedWriteMethod() != null) {</b>
+<i>658</i>&nbsp;                        if (igpd != null) {
+<b class="nc"><i>659</i>&nbsp;                            if (isAssignable(igpd.getIndexedPropertyType(), ipd.getIndexedPropertyType())) {</b>
+<i>660</i>&nbsp;                                if (ispd != null) {
+<i>661</i>&nbsp;                                    ispd = new IndexedPropertyDescriptor(ispd, ipd);
+<i>662</i>&nbsp;                                } else {
+<b class="nc"><i>663</i>&nbsp;                                    ispd = ipd;</b>
+<b class="nc"><i>664</i>&nbsp;                                }</b>
+<b class="nc"><i>665</i>&nbsp;                            }</b>
+<i>666</i>&nbsp;                        } else {
+<i>667</i>&nbsp;                            if (ispd != null) {
+<b class="nc"><i>668</i>&nbsp;                                ispd = new IndexedPropertyDescriptor(ispd, ipd);</b>
+<b class="nc"><i>669</i>&nbsp;                            } else {</b>
+<b class="nc"><i>670</i>&nbsp;                                ispd = ipd;</b>
+<i>671</i>&nbsp;                            }
+<b class="nc"><i>672</i>&nbsp;                        }</b>
+<b class="nc"><i>673</i>&nbsp;                    }</b>
+<i>674</i>&nbsp;                } else {
+<i>675</i>&nbsp;                    if (pd.getWriteMethod() != null) {
+<i>676</i>&nbsp;                        if (gpd != null) {
+<i>677</i>&nbsp;                            if (isAssignable(gpd.getPropertyType(), pd.getPropertyType())) {
+<i>678</i>&nbsp;                                if (spd != null) {
+<i>679</i>&nbsp;                                    spd = new PropertyDescriptor(spd, pd);
+<i>680</i>&nbsp;                                } else {
+<b class="nc"><i>681</i>&nbsp;                                    spd = pd;</b>
+<b class="nc"><i>682</i>&nbsp;                                }</b>
+<b class="nc"><i>683</i>&nbsp;                            }</b>
+<b class="nc"><i>684</i>&nbsp;                        } else {</b>
+<b class="nc"><i>685</i>&nbsp;                            if (spd != null) {</b>
+<b class="nc"><i>686</i>&nbsp;                                spd = new PropertyDescriptor(spd, pd);</b>
+<b class="nc"><i>687</i>&nbsp;                            } else {</b>
+<b class="nc"><i>688</i>&nbsp;                                spd = pd;</b>
+<b class="nc"><i>689</i>&nbsp;                            }</b>
+<i>690</i>&nbsp;                        }
+<b class="nc"><i>691</i>&nbsp;                    }</b>
+<i>692</i>&nbsp;                }
+<i>693</i>&nbsp;            }
+<i>694</i>&nbsp;
+<b class="nc"><i>695</i>&nbsp;            // At this stage we should have either PDs or IPDs for the</b>
+<b class="nc"><i>696</i>&nbsp;            // representative getters and setters. The order at which the</b>
+<i>697</i>&nbsp;            // property descriptors are determined represent the
+<b class="nc"><i>698</i>&nbsp;            // precedence of the property ordering.</b>
+<i>699</i>&nbsp;            pd = null; ipd = null;
+<i>700</i>&nbsp;
+<i>701</i>&nbsp;            if (igpd != null &amp;&amp; ispd != null) {
+<i>702</i>&nbsp;                // Complete indexed properties set
+<b class="nc"><i>703</i>&nbsp;                // Merge any classic property descriptors</b>
+<b class="nc"><i>704</i>&nbsp;                if ((gpd == spd) || (gpd == null)) {</b>
+<b class="nc"><i>705</i>&nbsp;                    pd = spd;</b>
+<b class="nc"><i>706</i>&nbsp;                } else if (spd == null) {</b>
+<b class="nc"><i>707</i>&nbsp;                    pd = gpd;</b>
+<i>708</i>&nbsp;                } else if (spd instanceof IndexedPropertyDescriptor) {
+<b class="nc"><i>709</i>&nbsp;                    pd = mergePropertyWithIndexedProperty(gpd, (IndexedPropertyDescriptor) spd);</b>
+<i>710</i>&nbsp;                } else if (gpd instanceof IndexedPropertyDescriptor) {
+<i>711</i>&nbsp;                    pd = mergePropertyWithIndexedProperty(spd, (IndexedPropertyDescriptor) gpd);
+<i>712</i>&nbsp;                } else {
+<b class="nc"><i>713</i>&nbsp;                    pd = mergePropertyDescriptor(gpd, spd);</b>
+<b class="nc"><i>714</i>&nbsp;                }</b>
+<i>715</i>&nbsp;                if (igpd == ispd) {
+<b class="nc"><i>716</i>&nbsp;                    ipd = igpd;</b>
+<i>717</i>&nbsp;                } else {
+<i>718</i>&nbsp;                    ipd = mergePropertyDescriptor(igpd, ispd);
+<i>719</i>&nbsp;                }
+<i>720</i>&nbsp;                if (pd == null) {
+<i>721</i>&nbsp;                    pd = ipd;
+<i>722</i>&nbsp;                } else {
+<i>723</i>&nbsp;                    Class&lt;?&gt; propType = pd.getPropertyType();
+<i>724</i>&nbsp;                    Class&lt;?&gt; ipropType = ipd.getIndexedPropertyType();
+<i>725</i>&nbsp;                    if (propType.isArray() &amp;&amp; propType.getComponentType() == ipropType) {
+<i>726</i>&nbsp;                        pd = pd.getClass0().isAssignableFrom(ipd.getClass0())
+<b class="nc"><i>727</i>&nbsp;                                ? new IndexedPropertyDescriptor(pd, ipd)</b>
+<i>728</i>&nbsp;                                : new IndexedPropertyDescriptor(ipd, pd);
+<b class="nc"><i>729</i>&nbsp;                    } else if (pd.getClass0().isAssignableFrom(ipd.getClass0())) {</b>
+<i>730</i>&nbsp;                        pd = pd.getClass0().isAssignableFrom(ipd.getClass0())
+<i>731</i>&nbsp;                                ? new PropertyDescriptor(pd, ipd)
+<b class="nc"><i>732</i>&nbsp;                                : new PropertyDescriptor(ipd, pd);</b>
+<b class="nc"><i>733</i>&nbsp;                    } else {</b>
+<b class="nc"><i>734</i>&nbsp;                        pd = ipd;</b>
+<b class="nc"><i>735</i>&nbsp;                    }</b>
+<b class="nc"><i>736</i>&nbsp;                }</b>
+<b class="nc"><i>737</i>&nbsp;            } else if (gpd != null &amp;&amp; spd != null) {</b>
+<b class="nc"><i>738</i>&nbsp;                if (igpd != null) {</b>
+<b class="nc"><i>739</i>&nbsp;                    gpd = mergePropertyWithIndexedProperty(gpd, igpd);</b>
+<i>740</i>&nbsp;                }
+<b class="nc"><i>741</i>&nbsp;                if (ispd != null) {</b>
+<i>742</i>&nbsp;                    spd = mergePropertyWithIndexedProperty(spd, ispd);
+<b class="nc"><i>743</i>&nbsp;                }</b>
+<b class="nc"><i>744</i>&nbsp;                // Complete simple properties set</b>
+<i>745</i>&nbsp;                if (gpd == spd) {
+<b class="nc"><i>746</i>&nbsp;                    pd = gpd;</b>
+<i>747</i>&nbsp;                } else if (spd instanceof IndexedPropertyDescriptor) {
+<b class="nc"><i>748</i>&nbsp;                    pd = mergePropertyWithIndexedProperty(gpd, (IndexedPropertyDescriptor) spd);</b>
+<b class="nc"><i>749</i>&nbsp;                } else if (gpd instanceof IndexedPropertyDescriptor) {</b>
+<i>750</i>&nbsp;                    pd = mergePropertyWithIndexedProperty(spd, (IndexedPropertyDescriptor) gpd);
+<b class="nc"><i>751</i>&nbsp;                } else {</b>
+<b class="nc"><i>752</i>&nbsp;                    pd = mergePropertyDescriptor(gpd, spd);</b>
+<b class="nc"><i>753</i>&nbsp;                }</b>
+<b class="nc"><i>754</i>&nbsp;            } else if (ispd != null) {</b>
+<i>755</i>&nbsp;                // indexed setter
+<i>756</i>&nbsp;                pd = ispd;
+<b class="nc"><i>757</i>&nbsp;                // Merge any classic property descriptors</b>
+<b class="nc"><i>758</i>&nbsp;                if (spd != null) {</b>
+<i>759</i>&nbsp;                    pd = mergePropertyDescriptor(ispd, spd);
+<i>760</i>&nbsp;                }
+<i>761</i>&nbsp;                if (gpd != null) {
+<b class="nc"><i>762</i>&nbsp;                    pd = mergePropertyDescriptor(ispd, gpd);</b>
+<i>763</i>&nbsp;                }
+<b class="nc"><i>764</i>&nbsp;            } else if (igpd != null) {</b>
+<b class="nc"><i>765</i>&nbsp;                // indexed getter</b>
+<b class="nc"><i>766</i>&nbsp;                pd = igpd;</b>
+<b class="nc"><i>767</i>&nbsp;                // Merge any classic property descriptors</b>
+<i>768</i>&nbsp;                if (gpd != null) {
+<b class="nc"><i>769</i>&nbsp;                    pd = mergePropertyDescriptor(igpd, gpd);</b>
+<b class="nc"><i>770</i>&nbsp;                }</b>
+<i>771</i>&nbsp;                if (spd != null) {
+<i>772</i>&nbsp;                    pd = mergePropertyDescriptor(igpd, spd);
+<b class="nc"><i>773</i>&nbsp;                }</b>
+<b class="nc"><i>774</i>&nbsp;            } else if (spd != null) {</b>
+<b class="nc"><i>775</i>&nbsp;                // simple setter</b>
+<b class="nc"><i>776</i>&nbsp;                pd = spd;</b>
+<b class="nc"><i>777</i>&nbsp;            } else if (gpd != null) {</b>
+<b class="nc"><i>778</i>&nbsp;                // simple getter</b>
+<i>779</i>&nbsp;                pd = gpd;
+<b class="nc"><i>780</i>&nbsp;            }</b>
+<i>781</i>&nbsp;
+<b class="nc"><i>782</i>&nbsp;            // Very special case to ensure that an IndexedPropertyDescriptor</b>
+<i>783</i>&nbsp;            // doesn&#39;t contain less information than the enclosed
+<b class="nc"><i>784</i>&nbsp;            // PropertyDescriptor. If it does, then recreate as a</b>
+<i>785</i>&nbsp;            // PropertyDescriptor. See 4168833
+<b class="nc"><i>786</i>&nbsp;            if (pd instanceof IndexedPropertyDescriptor) {</b>
+<b class="nc"><i>787</i>&nbsp;                ipd = (IndexedPropertyDescriptor)pd;</b>
+<i>788</i>&nbsp;                if (ipd.getIndexedReadMethod() == null &amp;&amp; ipd.getIndexedWriteMethod() == null) {
+<b class="nc"><i>789</i>&nbsp;                    pd = new PropertyDescriptor(ipd);</b>
+<b class="nc"><i>790</i>&nbsp;                }</b>
+<i>791</i>&nbsp;            }
+<b class="nc"><i>792</i>&nbsp;</b>
+<i>793</i>&nbsp;            // Find the first property descriptor
+<b class="nc"><i>794</i>&nbsp;            // which does not have getter and setter methods.</b>
+<i>795</i>&nbsp;            // See regression bug 4984912.
+<b class="nc"><i>796</i>&nbsp;            if ( (pd == null) &amp;&amp; (list.size() &gt; 0) ) {</b>
+<b class="nc"><i>797</i>&nbsp;                pd = list.get(0);</b>
+<i>798</i>&nbsp;            }
+<b class="nc"><i>799</i>&nbsp;</b>
+<b class="nc"><i>800</i>&nbsp;            if (pd != null) {</b>
+<i>801</i>&nbsp;                properties.put(pd.getName(), pd);
+<b class="nc"><i>802</i>&nbsp;            }</b>
+<i>803</i>&nbsp;        }
+<b class="nc"><i>804</i>&nbsp;    }</b>
+<b class="nc"><i>805</i>&nbsp;</b>
+<i>806</i>&nbsp;    private static boolean isAssignable(Class&lt;?&gt; current, Class&lt;?&gt; candidate) {
+<b class="nc"><i>807</i>&nbsp;        return ((current == null) || (candidate == null)) ? current == candidate : current.isAssignableFrom(candidate);</b>
+<i>808</i>&nbsp;    }
+<i>809</i>&nbsp;
+<i>810</i>&nbsp;    private PropertyDescriptor mergePropertyWithIndexedProperty(PropertyDescriptor pd, IndexedPropertyDescriptor ipd) {
+<i>811</i>&nbsp;        Class&lt;?&gt; type = pd.getPropertyType();
+<i>812</i>&nbsp;        if (type.isArray() &amp;&amp; (type.getComponentType() == ipd.getIndexedPropertyType())) {
+<i>813</i>&nbsp;            return pd.getClass0().isAssignableFrom(ipd.getClass0())
+<b class="nc"><i>814</i>&nbsp;                    ? new IndexedPropertyDescriptor(pd, ipd)</b>
+<b class="nc"><i>815</i>&nbsp;                    : new IndexedPropertyDescriptor(ipd, pd);</b>
+<b class="nc"><i>816</i>&nbsp;        }</b>
+<b class="nc"><i>817</i>&nbsp;        return pd;</b>
+<i>818</i>&nbsp;    }
+<i>819</i>&nbsp;
+<i>820</i>&nbsp;    /**
+<i>821</i>&nbsp;     * Adds the property descriptor to the indexedproperty descriptor only if the
+<i>822</i>&nbsp;     * types are the same.
+<i>823</i>&nbsp;     *
+<b class="nc"><i>824</i>&nbsp;     * The most specific property descriptor will take precedence.</b>
+<b class="nc"><i>825</i>&nbsp;     */</b>
+<i>826</i>&nbsp;    private PropertyDescriptor mergePropertyDescriptor(IndexedPropertyDescriptor ipd,
+<i>827</i>&nbsp;                                                       PropertyDescriptor pd) {
+<b class="nc"><i>828</i>&nbsp;        PropertyDescriptor result = null;</b>
+<b class="nc"><i>829</i>&nbsp;</b>
+<i>830</i>&nbsp;        Class&lt;?&gt; propType = pd.getPropertyType();
+<i>831</i>&nbsp;        Class&lt;?&gt; ipropType = ipd.getIndexedPropertyType();
+<i>832</i>&nbsp;
+<i>833</i>&nbsp;        if (propType.isArray() &amp;&amp; propType.getComponentType() == ipropType) {
+<i>834</i>&nbsp;            if (pd.getClass0().isAssignableFrom(ipd.getClass0())) {
+<b class="nc"><i>835</i>&nbsp;                result = new IndexedPropertyDescriptor(pd, ipd);</b>
+<i>836</i>&nbsp;            } else {
+<i>837</i>&nbsp;                result = new IndexedPropertyDescriptor(ipd, pd);
+<i>838</i>&nbsp;            }
+<b class="nc"><i>839</i>&nbsp;        } else if ((ipd.getReadMethod() == null) &amp;&amp; (ipd.getWriteMethod() == null)) {</b>
+<b class="nc"><i>840</i>&nbsp;            if (pd.getClass0().isAssignableFrom(ipd.getClass0())) {</b>
+<b class="nc"><i>841</i>&nbsp;                result = new PropertyDescriptor(pd, ipd);</b>
+<i>842</i>&nbsp;            } else {
+<i>843</i>&nbsp;                result = new PropertyDescriptor(ipd, pd);
+<i>844</i>&nbsp;            }
+<b class="nc"><i>845</i>&nbsp;        } else {</b>
+<i>846</i>&nbsp;            // Cannot merge the pd because of type mismatch
+<i>847</i>&nbsp;            // Return the most specific pd
+<i>848</i>&nbsp;            if (pd.getClass0().isAssignableFrom(ipd.getClass0())) {
+<i>849</i>&nbsp;                result = ipd;
+<i>850</i>&nbsp;            } else {
+<i>851</i>&nbsp;                result = pd;
+<i>852</i>&nbsp;                // Try to add methods which may have been lost in the type change
+<i>853</i>&nbsp;                // See 4168833
+<i>854</i>&nbsp;                Method write = result.getWriteMethod();
+<i>855</i>&nbsp;                Method read = result.getReadMethod();
+<b class="nc"><i>856</i>&nbsp;</b>
+<i>857</i>&nbsp;                if (read == null &amp;&amp; write != null) {
+<b class="nc"><i>858</i>&nbsp;                    read = findMethod(result.getClass0(),</b>
+<b class="nc"><i>859</i>&nbsp;                                      GET_PREFIX + NameGenerator.capitalize(result.getName()), 0);</b>
+<i>860</i>&nbsp;                    if (read != null) {
+<b class="nc"><i>861</i>&nbsp;                        try {</b>
+<b class="nc"><i>862</i>&nbsp;                            result.setReadMethod(read);</b>
+<b class="nc"><i>863</i>&nbsp;                        } catch (IntrospectionException ex) {</b>
+<i>864</i>&nbsp;                            // no consequences for failure.
+<b class="nc"><i>865</i>&nbsp;                        }</b>
+<i>866</i>&nbsp;                    }
+<b class="nc"><i>867</i>&nbsp;                }</b>
+<b class="nc"><i>868</i>&nbsp;                if (write == null &amp;&amp; read != null) {</b>
+<b class="nc"><i>869</i>&nbsp;                    write = findMethod(result.getClass0(),</b>
+<i>870</i>&nbsp;                                       SET_PREFIX + NameGenerator.capitalize(result.getName()), 1,
+<b class="nc"><i>871</i>&nbsp;                                       new Class&lt;?&gt;[] { FeatureDescriptor.getReturnType(result.getClass0(), read) });</b>
+<i>872</i>&nbsp;                    if (write != null) {
+<i>873</i>&nbsp;                        try {
+<i>874</i>&nbsp;                            result.setWriteMethod(write);
+<i>875</i>&nbsp;                        } catch (IntrospectionException ex) {
+<b class="nc"><i>876</i>&nbsp;                            // no consequences for failure.</b>
+<b class="nc"><i>877</i>&nbsp;                        }</b>
+<i>878</i>&nbsp;                    }
+<b class="nc"><i>879</i>&nbsp;                }</b>
+<i>880</i>&nbsp;            }
+<i>881</i>&nbsp;        }
+<b class="nc"><i>882</i>&nbsp;        return result;</b>
+<b class="nc"><i>883</i>&nbsp;    }</b>
+<i>884</i>&nbsp;
+<b class="nc"><i>885</i>&nbsp;    // Handle regular pd merge</b>
+<b class="nc"><i>886</i>&nbsp;    private PropertyDescriptor mergePropertyDescriptor(PropertyDescriptor pd1,</b>
+<b class="nc"><i>887</i>&nbsp;                                                       PropertyDescriptor pd2) {</b>
+<b class="nc"><i>888</i>&nbsp;        if (pd1.getClass0().isAssignableFrom(pd2.getClass0())) {</b>
+<i>889</i>&nbsp;            return new PropertyDescriptor(pd1, pd2);
+<b class="nc"><i>890</i>&nbsp;        } else {</b>
+<b class="nc"><i>891</i>&nbsp;            return new PropertyDescriptor(pd2, pd1);</b>
+<i>892</i>&nbsp;        }
+<b class="nc"><i>893</i>&nbsp;    }</b>
+<i>894</i>&nbsp;
+<i>895</i>&nbsp;    // Handle regular ipd merge
+<b class="nc"><i>896</i>&nbsp;    private IndexedPropertyDescriptor mergePropertyDescriptor(IndexedPropertyDescriptor ipd1,</b>
+<b class="nc"><i>897</i>&nbsp;                                                       IndexedPropertyDescriptor ipd2) {</b>
+<b class="nc"><i>898</i>&nbsp;        if (ipd1.getClass0().isAssignableFrom(ipd2.getClass0())) {</b>
+<b class="nc"><i>899</i>&nbsp;            return new IndexedPropertyDescriptor(ipd1, ipd2);</b>
+<b class="nc"><i>900</i>&nbsp;        } else {</b>
+<i>901</i>&nbsp;            return new IndexedPropertyDescriptor(ipd2, ipd1);
+<b class="nc"><i>902</i>&nbsp;        }</b>
+<b class="nc"><i>903</i>&nbsp;    }</b>
+<i>904</i>&nbsp;
+<b class="nc"><i>905</i>&nbsp;    /**</b>
+<i>906</i>&nbsp;     * @return An array of EventSetDescriptors describing the kinds of
+<i>907</i>&nbsp;     * events fired by the target bean.
+<i>908</i>&nbsp;     */
+<i>909</i>&nbsp;    private EventSetDescriptor[] getTargetEventInfo() throws IntrospectionException {
+<b class="nc"><i>910</i>&nbsp;        if (events == null) {</b>
+<i>911</i>&nbsp;            events = new HashMap&lt;&gt;();
+<i>912</i>&nbsp;        }
+<i>913</i>&nbsp;
+<i>914</i>&nbsp;        // Check if the bean has its own BeanInfo that will provide
+<i>915</i>&nbsp;        // explicit information.
+<b class="nc"><i>916</i>&nbsp;        EventSetDescriptor[] explicitEvents = null;</b>
+<b class="nc"><i>917</i>&nbsp;        if (explicitBeanInfo != null) {</b>
+<i>918</i>&nbsp;            explicitEvents = explicitBeanInfo.getEventSetDescriptors();
+<b class="nc"><i>919</i>&nbsp;            int ix = explicitBeanInfo.getDefaultEventIndex();</b>
+<i>920</i>&nbsp;            if (ix &gt;= 0 &amp;&amp; ix &lt; explicitEvents.length) {
+<i>921</i>&nbsp;                defaultEventName = explicitEvents[ix].getName();
+<i>922</i>&nbsp;            }
+<i>923</i>&nbsp;        }
+<i>924</i>&nbsp;
+<i>925</i>&nbsp;        if (explicitEvents == null &amp;&amp; superBeanInfo != null) {
+<b class="nc"><i>926</i>&nbsp;            // We have no explicit BeanInfo events.  Check with our parent.</b>
+<b class="nc"><i>927</i>&nbsp;            EventSetDescriptor supers[] = superBeanInfo.getEventSetDescriptors();</b>
+<i>928</i>&nbsp;            for (int i = 0 ; i &lt; supers.length; i++) {
+<b class="nc"><i>929</i>&nbsp;                addEvent(supers[i]);</b>
+<i>930</i>&nbsp;            }
+<i>931</i>&nbsp;            int ix = superBeanInfo.getDefaultEventIndex();
+<i>932</i>&nbsp;            if (ix &gt;= 0 &amp;&amp; ix &lt; supers.length) {
+<i>933</i>&nbsp;                defaultEventName = supers[ix].getName();
+<i>934</i>&nbsp;            }
+<i>935</i>&nbsp;        }
+<i>936</i>&nbsp;
+<i>937</i>&nbsp;        for (int i = 0; i &lt; additionalBeanInfo.length; i++) {
+<b class="nc"><i>938</i>&nbsp;            EventSetDescriptor additional[] = additionalBeanInfo[i].getEventSetDescriptors();</b>
+<b class="nc"><i>939</i>&nbsp;            if (additional != null) {</b>
+<i>940</i>&nbsp;                for (int j = 0 ; j &lt; additional.length; j++) {
+<i>941</i>&nbsp;                    addEvent(additional[j]);
+<i>942</i>&nbsp;                }
+<i>943</i>&nbsp;            }
+<b class="nc"><i>944</i>&nbsp;        }</b>
+<b class="nc"><i>945</i>&nbsp;</b>
+<b class="nc"><i>946</i>&nbsp;        if (explicitEvents != null) {</b>
+<b class="nc"><i>947</i>&nbsp;            // Add the explicit explicitBeanInfo data to our results.</b>
+<b class="nc"><i>948</i>&nbsp;            for (int i = 0 ; i &lt; explicitEvents.length; i++) {</b>
+<b class="nc"><i>949</i>&nbsp;                addEvent(explicitEvents[i]);</b>
+<i>950</i>&nbsp;            }
+<i>951</i>&nbsp;
+<i>952</i>&nbsp;        } else {
+<b class="nc"><i>953</i>&nbsp;            // Apply some reflection to the current class.</b>
+<i>954</i>&nbsp;            for (Map.Entry&lt;String,EventSetInfo&gt; entry : ClassInfo.get(this.beanClass).getEventSets().entrySet()) {
+<b class="nc"><i>955</i>&nbsp;                    // generate a list of Method objects for each of the target methods:</b>
+<b class="nc"><i>956</i>&nbsp;                List&lt;Method&gt; methods = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>957</i>&nbsp;                for (Method method : ClassInfo.get(entry.getValue().getListenerType()).getMethods()) {</b>
+<i>958</i>&nbsp;                    if (isEventHandler(method)) {
+<b class="nc"><i>959</i>&nbsp;                        methods.add(method);</b>
+<b class="nc"><i>960</i>&nbsp;                    }</b>
+<b class="nc"><i>961</i>&nbsp;                }</b>
+<i>962</i>&nbsp;                addEvent(new EventSetDescriptor(
+<i>963</i>&nbsp;                        entry.getKey(),
+<i>964</i>&nbsp;                        entry.getValue(),
+<b class="nc"><i>965</i>&nbsp;                        methods.toArray(new Method[methods.size()])));</b>
+<b class="nc"><i>966</i>&nbsp;            }</b>
+<b class="nc"><i>967</i>&nbsp;            JavaBean annotation = this.beanClass.getAnnotation(JavaBean.class);</b>
+<b class="nc"><i>968</i>&nbsp;            if ((annotation != null) &amp;&amp; !annotation.defaultEventSet().isEmpty()) {</b>
+<b class="nc"><i>969</i>&nbsp;                this.defaultEventName = annotation.defaultEventSet();</b>
+<i>970</i>&nbsp;            }
+<i>971</i>&nbsp;        }
+<i>972</i>&nbsp;        EventSetDescriptor[] result;
+<i>973</i>&nbsp;        if (events.size() == 0) {
+<b class="nc"><i>974</i>&nbsp;            result = EMPTY_EVENTSETDESCRIPTORS;</b>
+<i>975</i>&nbsp;        } else {
+<b class="nc"><i>976</i>&nbsp;            // Allocate and populate the result array.</b>
+<b class="nc"><i>977</i>&nbsp;            result = new EventSetDescriptor[events.size()];</b>
+<i>978</i>&nbsp;            result = events.values().toArray(result);
+<i>979</i>&nbsp;            // Set the default index.
+<i>980</i>&nbsp;            if (defaultEventName != null) {
+<i>981</i>&nbsp;                for (int i = 0; i &lt; result.length; i++) {
+<i>982</i>&nbsp;                    if (defaultEventName.equals(result[i].getName())) {
+<i>983</i>&nbsp;                        defaultEventIndex = i;
+<i>984</i>&nbsp;                    }
+<b class="nc"><i>985</i>&nbsp;                }</b>
+<i>986</i>&nbsp;            }
+<i>987</i>&nbsp;        }
+<i>988</i>&nbsp;        return result;
+<i>989</i>&nbsp;    }
+<b class="nc"><i>990</i>&nbsp;</b>
+<b class="nc"><i>991</i>&nbsp;    private void addEvent(EventSetDescriptor esd) {</b>
+<b class="nc"><i>992</i>&nbsp;        String key = esd.getName();</b>
+<i>993</i>&nbsp;        if (esd.getName().equals(&quot;propertyChange&quot;)) {
+<b class="nc"><i>994</i>&nbsp;            propertyChangeSource = true;</b>
+<b class="nc"><i>995</i>&nbsp;        }</b>
+<b class="nc"><i>996</i>&nbsp;        EventSetDescriptor old = events.get(key);</b>
+<b class="nc"><i>997</i>&nbsp;        if (old == null) {</b>
+<i>998</i>&nbsp;            events.put(key, esd);
+<i>999</i>&nbsp;            return;
+<b class="nc"><i>1000</i>&nbsp;        }</b>
+<b class="nc"><i>1001</i>&nbsp;        EventSetDescriptor composite = new EventSetDescriptor(old, esd);</b>
+<b class="nc"><i>1002</i>&nbsp;        events.put(key, composite);</b>
+<i>1003</i>&nbsp;    }
+<b class="nc"><i>1004</i>&nbsp;</b>
+<i>1005</i>&nbsp;    /**
+<b class="nc"><i>1006</i>&nbsp;     * @return An array of MethodDescriptors describing the private</b>
+<b class="nc"><i>1007</i>&nbsp;     * methods supported by the target bean.</b>
+<b class="nc"><i>1008</i>&nbsp;     */</b>
+<i>1009</i>&nbsp;    private MethodDescriptor[] getTargetMethodInfo() {
+<i>1010</i>&nbsp;        if (methods == null) {
+<b class="nc"><i>1011</i>&nbsp;            methods = new HashMap&lt;&gt;(100);</b>
+<b class="nc"><i>1012</i>&nbsp;        }</b>
+<b class="nc"><i>1013</i>&nbsp;</b>
+<b class="nc"><i>1014</i>&nbsp;        // Check if the bean has its own BeanInfo that will provide</b>
+<b class="nc"><i>1015</i>&nbsp;        // explicit information.</b>
+<b class="nc"><i>1016</i>&nbsp;        MethodDescriptor[] explicitMethods = null;</b>
+<b class="nc"><i>1017</i>&nbsp;        if (explicitBeanInfo != null) {</b>
+<b class="nc"><i>1018</i>&nbsp;            explicitMethods = explicitBeanInfo.getMethodDescriptors();</b>
+<b class="nc"><i>1019</i>&nbsp;        }</b>
+<b class="nc"><i>1020</i>&nbsp;</b>
+<b class="nc"><i>1021</i>&nbsp;        if (explicitMethods == null &amp;&amp; superBeanInfo != null) {</b>
+<b class="nc"><i>1022</i>&nbsp;            // We have no explicit BeanInfo methods.  Check with our parent.</b>
+<i>1023</i>&nbsp;            MethodDescriptor supers[] = superBeanInfo.getMethodDescriptors();
+<b class="nc"><i>1024</i>&nbsp;            for (int i = 0 ; i &lt; supers.length; i++) {</b>
+<i>1025</i>&nbsp;                addMethod(supers[i]);
+<i>1026</i>&nbsp;            }
+<i>1027</i>&nbsp;        }
+<i>1028</i>&nbsp;
+<b class="nc"><i>1029</i>&nbsp;        for (int i = 0; i &lt; additionalBeanInfo.length; i++) {</b>
+<b class="nc"><i>1030</i>&nbsp;            MethodDescriptor additional[] = additionalBeanInfo[i].getMethodDescriptors();</b>
+<b class="nc"><i>1031</i>&nbsp;            if (additional != null) {</b>
+<b class="nc"><i>1032</i>&nbsp;                for (int j = 0 ; j &lt; additional.length; j++) {</b>
+<b class="nc"><i>1033</i>&nbsp;                    addMethod(additional[j]);</b>
+<b class="nc"><i>1034</i>&nbsp;                }</b>
+<b class="nc"><i>1035</i>&nbsp;            }</b>
+<b class="nc"><i>1036</i>&nbsp;        }</b>
+<b class="nc"><i>1037</i>&nbsp;</b>
+<b class="nc"><i>1038</i>&nbsp;        if (explicitMethods != null) {</b>
+<b class="nc"><i>1039</i>&nbsp;            // Add the explicit explicitBeanInfo data to our results.</b>
+<b class="nc"><i>1040</i>&nbsp;            for (int i = 0 ; i &lt; explicitMethods.length; i++) {</b>
+<b class="nc"><i>1041</i>&nbsp;                addMethod(explicitMethods[i]);</b>
+<i>1042</i>&nbsp;            }
+<b class="nc"><i>1043</i>&nbsp;</b>
+<i>1044</i>&nbsp;        } else {
+<i>1045</i>&nbsp;            // Apply some reflection to the current class.
+<i>1046</i>&nbsp;            for (Method method : ClassInfo.get(this.beanClass).getMethods()) {
+<i>1047</i>&nbsp;                addMethod(new MethodDescriptor(method));
+<b class="nc"><i>1048</i>&nbsp;            }</b>
+<b class="nc"><i>1049</i>&nbsp;        }</b>
+<b class="nc"><i>1050</i>&nbsp;</b>
+<b class="nc"><i>1051</i>&nbsp;        // Allocate and populate the result array.</b>
+<b class="nc"><i>1052</i>&nbsp;        MethodDescriptor result[] = new MethodDescriptor[methods.size()];</b>
+<b class="nc"><i>1053</i>&nbsp;        result = methods.values().toArray(result);</b>
+<b class="nc"><i>1054</i>&nbsp;</b>
+<b class="nc"><i>1055</i>&nbsp;        return result;</b>
+<b class="nc"><i>1056</i>&nbsp;    }</b>
+<b class="nc"><i>1057</i>&nbsp;</b>
+<b class="nc"><i>1058</i>&nbsp;    private void addMethod(MethodDescriptor md) {</b>
+<b class="nc"><i>1059</i>&nbsp;        // We have to be careful here to distinguish method by both name</b>
+<b class="nc"><i>1060</i>&nbsp;        // and argument lists.</b>
+<i>1061</i>&nbsp;        // This method gets called a *lot, so we try to be efficient.
+<b class="nc"><i>1062</i>&nbsp;        String name = md.getName();</b>
+<i>1063</i>&nbsp;
+<i>1064</i>&nbsp;        MethodDescriptor old = methods.get(name);
+<i>1065</i>&nbsp;        if (old == null) {
+<i>1066</i>&nbsp;            // This is the common case.
+<i>1067</i>&nbsp;            methods.put(name, md);
+<i>1068</i>&nbsp;            return;
+<i>1069</i>&nbsp;        }
+<b class="nc"><i>1070</i>&nbsp;</b>
+<i>1071</i>&nbsp;        // We have a collision on method names.  This is rare.
+<i>1072</i>&nbsp;
+<b class="nc"><i>1073</i>&nbsp;        // Check if old and md have the same type.</b>
+<b class="nc"><i>1074</i>&nbsp;        String[] p1 = md.getParamNames();</b>
+<b class="nc"><i>1075</i>&nbsp;        String[] p2 = old.getParamNames();</b>
+<i>1076</i>&nbsp;
+<i>1077</i>&nbsp;        boolean match = false;
+<b class="nc"><i>1078</i>&nbsp;        if (p1.length == p2.length) {</b>
+<b class="nc"><i>1079</i>&nbsp;            match = true;</b>
+<i>1080</i>&nbsp;            for (int i = 0; i &lt; p1.length; i++) {
+<b class="nc"><i>1081</i>&nbsp;                if (p1[i] != p2[i]) {</b>
+<b class="nc"><i>1082</i>&nbsp;                    match = false;</b>
+<b class="nc"><i>1083</i>&nbsp;                    break;</b>
+<b class="nc"><i>1084</i>&nbsp;                }</b>
+<b class="nc"><i>1085</i>&nbsp;            }</b>
+<b class="nc"><i>1086</i>&nbsp;        }</b>
+<i>1087</i>&nbsp;        if (match) {
+<b class="nc"><i>1088</i>&nbsp;            MethodDescriptor composite = new MethodDescriptor(old, md);</b>
+<i>1089</i>&nbsp;            methods.put(name, composite);
+<i>1090</i>&nbsp;            return;
+<b class="nc"><i>1091</i>&nbsp;        }</b>
+<b class="nc"><i>1092</i>&nbsp;</b>
+<b class="nc"><i>1093</i>&nbsp;        // We have a collision on method names with different type signatures.</b>
+<b class="nc"><i>1094</i>&nbsp;        // This is very rare.</b>
+<b class="nc"><i>1095</i>&nbsp;</b>
+<i>1096</i>&nbsp;        String longKey = makeQualifiedMethodName(name, p1);
+<i>1097</i>&nbsp;        old = methods.get(longKey);
+<b class="nc"><i>1098</i>&nbsp;        if (old == null) {</b>
+<b class="nc"><i>1099</i>&nbsp;            methods.put(longKey, md);</b>
+<i>1100</i>&nbsp;            return;
+<i>1101</i>&nbsp;        }
+<b class="nc"><i>1102</i>&nbsp;        MethodDescriptor composite = new MethodDescriptor(old, md);</b>
+<i>1103</i>&nbsp;        methods.put(longKey, composite);
+<b class="nc"><i>1104</i>&nbsp;    }</b>
+<i>1105</i>&nbsp;
+<i>1106</i>&nbsp;    /**
+<i>1107</i>&nbsp;     * Creates a key for a method in a method cache.
+<i>1108</i>&nbsp;     */
+<i>1109</i>&nbsp;    private static String makeQualifiedMethodName(String name, String[] params) {
+<i>1110</i>&nbsp;        StringBuilder sb = new StringBuilder(name);
+<b class="nc"><i>1111</i>&nbsp;        sb.append(&#39;=&#39;);</b>
+<i>1112</i>&nbsp;        for (int i = 0; i &lt; params.length; i++) {
+<b class="nc"><i>1113</i>&nbsp;            sb.append(&#39;:&#39;);</b>
+<i>1114</i>&nbsp;            sb.append(params[i]);
+<b class="nc"><i>1115</i>&nbsp;        }</b>
+<b class="nc"><i>1116</i>&nbsp;        return sb.toString();</b>
+<i>1117</i>&nbsp;    }
+<i>1118</i>&nbsp;
+<i>1119</i>&nbsp;    private int getTargetDefaultEventIndex() {
+<b class="nc"><i>1120</i>&nbsp;        return defaultEventIndex;</b>
+<b class="nc"><i>1121</i>&nbsp;    }</b>
+<i>1122</i>&nbsp;
+<i>1123</i>&nbsp;    private int getTargetDefaultPropertyIndex() {
+<b class="nc"><i>1124</i>&nbsp;        return defaultPropertyIndex;</b>
+<b class="nc"><i>1125</i>&nbsp;    }</b>
+<i>1126</i>&nbsp;
+<i>1127</i>&nbsp;    private BeanDescriptor getTargetBeanDescriptor() {
+<b class="nc"><i>1128</i>&nbsp;        // Use explicit info, if available,</b>
+<b class="nc"><i>1129</i>&nbsp;        if (explicitBeanInfo != null) {</b>
+<b class="nc"><i>1130</i>&nbsp;            BeanDescriptor bd = explicitBeanInfo.getBeanDescriptor();</b>
+<b class="nc"><i>1131</i>&nbsp;            if (bd != null) {</b>
+<i>1132</i>&nbsp;                return (bd);
+<i>1133</i>&nbsp;            }
+<i>1134</i>&nbsp;        }
+<i>1135</i>&nbsp;        // OK, fabricate a default BeanDescriptor.
+<b class="nc"><i>1136</i>&nbsp;        return new BeanDescriptor(this.beanClass, findCustomizerClass(this.beanClass));</b>
+<i>1137</i>&nbsp;    }
+<i>1138</i>&nbsp;
+<i>1139</i>&nbsp;    private static Class&lt;?&gt; findCustomizerClass(Class&lt;?&gt; type) {
+<b class="nc"><i>1140</i>&nbsp;        String name = type.getName() + &quot;Customizer&quot;;</b>
+<b class="nc"><i>1141</i>&nbsp;        try {</b>
+<b class="nc"><i>1142</i>&nbsp;            type = ClassFinder.findClass(name, type.getClassLoader());</b>
+<i>1143</i>&nbsp;            // Each customizer should inherit java.awt.Component and implement java.beans.Customizer
+<b class="nc"><i>1144</i>&nbsp;            // according to the section 9.3 of JavaBeans&amp;trade; specification</b>
+<b class="nc"><i>1145</i>&nbsp;            if (Component.class.isAssignableFrom(type) &amp;&amp; Customizer.class.isAssignableFrom(type)) {</b>
+<b class="nc"><i>1146</i>&nbsp;                return type;</b>
+<i>1147</i>&nbsp;            }
+<i>1148</i>&nbsp;        }
+<b class="nc"><i>1149</i>&nbsp;        catch (Exception exception) {</b>
+<b class="nc"><i>1150</i>&nbsp;            // ignore any exceptions</b>
+<i>1151</i>&nbsp;        }
+<i>1152</i>&nbsp;        return null;
+<i>1153</i>&nbsp;    }
+<i>1154</i>&nbsp;
+<i>1155</i>&nbsp;    private boolean isEventHandler(Method m) {
+<i>1156</i>&nbsp;        // We assume that a method is an event handler if it has a single
+<i>1157</i>&nbsp;        // argument, whose type inherit from java.util.Event.
+<b class="nc"><i>1158</i>&nbsp;        Type argTypes[] = m.getGenericParameterTypes();</b>
+<b class="nc"><i>1159</i>&nbsp;        if (argTypes.length != 1) {</b>
+<i>1160</i>&nbsp;            return false;
+<i>1161</i>&nbsp;        }
+<i>1162</i>&nbsp;        return isSubclass(TypeResolver.erase(TypeResolver.resolveInClass(beanClass, argTypes[0])), EventObject.class);
+<i>1163</i>&nbsp;    }
+<b class="nc"><i>1164</i>&nbsp;</b>
+<b class="nc"><i>1165</i>&nbsp;    //======================================================================</b>
+<b class="nc"><i>1166</i>&nbsp;    // Package private support methods.</b>
+<i>1167</i>&nbsp;    //======================================================================
+<i>1168</i>&nbsp;
+<b class="nc"><i>1169</i>&nbsp;    /**</b>
+<i>1170</i>&nbsp;     * Internal support for finding a target methodName with a given
+<b class="nc"><i>1171</i>&nbsp;     * parameter list on a given class.</b>
+<b class="nc"><i>1172</i>&nbsp;     */</b>
+<b class="nc"><i>1173</i>&nbsp;    private static Method internalFindMethod(Class&lt;?&gt; start, String methodName,</b>
+<i>1174</i>&nbsp;                                                 int argCount, Class&lt;?&gt; args[]) {
+<i>1175</i>&nbsp;        // For overriden methods we need to find the most derived version.
+<i>1176</i>&nbsp;        // So we start with the given class and walk up the superclass chain.
+<b class="nc"><i>1177</i>&nbsp;        for (Class&lt;?&gt; cl = start; cl != null; cl = cl.getSuperclass()) {</b>
+<b class="nc"><i>1178</i>&nbsp;            for (Method method : ClassInfo.get(cl).getMethods()) {</b>
+<b class="nc"><i>1179</i>&nbsp;                // make sure method signature matches.</b>
+<b class="nc"><i>1180</i>&nbsp;                if (method.getName().equals(methodName)) {</b>
+<b class="nc"><i>1181</i>&nbsp;                    Type[] params = method.getGenericParameterTypes();</b>
+<i>1182</i>&nbsp;                    if (params.length == argCount) {
+<i>1183</i>&nbsp;                        if (args != null) {
+<i>1184</i>&nbsp;                            boolean different = false;
+<i>1185</i>&nbsp;                            if (argCount &gt; 0) {
+<b class="nc"><i>1186</i>&nbsp;                                for (int j = 0; j &lt; argCount; j++) {</b>
+<i>1187</i>&nbsp;                                    if (TypeResolver.erase(TypeResolver.resolveInClass(start, params[j])) != args[j]) {
+<b class="nc"><i>1188</i>&nbsp;                                        different = true;</b>
+<b class="nc"><i>1189</i>&nbsp;                                        continue;</b>
+<i>1190</i>&nbsp;                                    }
+<i>1191</i>&nbsp;                                }
+<i>1192</i>&nbsp;                                if (different) {
+<i>1193</i>&nbsp;                                    continue;
+<i>1194</i>&nbsp;                                }
+<i>1195</i>&nbsp;                            }
+<i>1196</i>&nbsp;                        }
+<b class="nc"><i>1197</i>&nbsp;                        return method;</b>
+<i>1198</i>&nbsp;                    }
+<i>1199</i>&nbsp;                }
+<b class="nc"><i>1200</i>&nbsp;            }</b>
+<b class="nc"><i>1201</i>&nbsp;        }</b>
+<b class="nc"><i>1202</i>&nbsp;        // Now check any inherited interfaces.  This is necessary both when</b>
+<b class="nc"><i>1203</i>&nbsp;        // the argument class is itself an interface, and when the argument</b>
+<i>1204</i>&nbsp;        // class is an abstract class.
+<b class="nc"><i>1205</i>&nbsp;        Class&lt;?&gt;[] ifcs = start.getInterfaces();</b>
+<b class="nc"><i>1206</i>&nbsp;        for (int i = 0 ; i &lt; ifcs.length; i++) {</b>
+<i>1207</i>&nbsp;            // Note: The original implementation had both methods calling
+<i>1208</i>&nbsp;            // the 3 arg method. This is preserved but perhaps it should
+<i>1209</i>&nbsp;            // pass the args array instead of null.
+<i>1210</i>&nbsp;            Method method = internalFindMethod(ifcs[i], methodName, argCount, null);
+<b class="nc"><i>1211</i>&nbsp;            if (method != null) {</b>
+<b class="nc"><i>1212</i>&nbsp;                return method;</b>
+<i>1213</i>&nbsp;            }
+<b class="nc"><i>1214</i>&nbsp;        }</b>
+<i>1215</i>&nbsp;        return null;
+<i>1216</i>&nbsp;    }
+<i>1217</i>&nbsp;
+<i>1218</i>&nbsp;    /**
+<i>1219</i>&nbsp;     * Find a target methodName on a given class.
+<i>1220</i>&nbsp;     */
+<b class="nc"><i>1221</i>&nbsp;    static Method findMethod(Class&lt;?&gt; cls, String methodName, int argCount) {</b>
+<i>1222</i>&nbsp;        return findMethod(cls, methodName, argCount, null);
+<b class="nc"><i>1223</i>&nbsp;    }</b>
+<b class="nc"><i>1224</i>&nbsp;</b>
+<i>1225</i>&nbsp;    /**
+<b class="nc"><i>1226</i>&nbsp;     * Find a target methodName with specific parameter list on a given class.</b>
+<i>1227</i>&nbsp;     * &lt;p&gt;
+<i>1228</i>&nbsp;     * Used in the contructors of the EventSetDescriptor,
+<i>1229</i>&nbsp;     * PropertyDescriptor and the IndexedPropertyDescriptor.
+<i>1230</i>&nbsp;     * &lt;p&gt;
+<i>1231</i>&nbsp;     * @param cls The Class object on which to retrieve the method.
+<i>1232</i>&nbsp;     * @param methodName Name of the method.
+<b class="nc"><i>1233</i>&nbsp;     * @param argCount Number of arguments for the desired method.</b>
+<b class="nc"><i>1234</i>&nbsp;     * @param args Array of argument types for the method.</b>
+<i>1235</i>&nbsp;     * @return the method or null if not found
+<b class="nc"><i>1236</i>&nbsp;     */</b>
+<b class="nc"><i>1237</i>&nbsp;    static Method findMethod(Class&lt;?&gt; cls, String methodName, int argCount,</b>
+<b class="nc"><i>1238</i>&nbsp;                             Class&lt;?&gt;[] args) {</b>
+<b class="nc"><i>1239</i>&nbsp;        if (methodName == null) {</b>
+<b class="nc"><i>1240</i>&nbsp;            return null;</b>
+<b class="nc"><i>1241</i>&nbsp;        }</b>
+<b class="nc"><i>1242</i>&nbsp;        return internalFindMethod(cls, methodName, argCount, args);</b>
+<i>1243</i>&nbsp;    }
+<i>1244</i>&nbsp;
+<i>1245</i>&nbsp;    /**
+<b class="nc"><i>1246</i>&nbsp;     * Return true if class a is either equivalent to class b, or</b>
+<b class="nc"><i>1247</i>&nbsp;     * if class a is a subclass of class b, i.e. if a either &quot;extends&quot;</b>
+<b class="nc"><i>1248</i>&nbsp;     * or &quot;implements&quot; b.</b>
+<i>1249</i>&nbsp;     * Note tht either or both &quot;Class&quot; objects may represent interfaces.
+<i>1250</i>&nbsp;     */
+<i>1251</i>&nbsp;    static  boolean isSubclass(Class&lt;?&gt; a, Class&lt;?&gt; b) {
+<i>1252</i>&nbsp;        // We rely on the fact that for any given java class or
+<i>1253</i>&nbsp;        // primtitive type there is a unqiue Class object, so
+<i>1254</i>&nbsp;        // we can use object equivalence in the comparisons.
+<b class="nc"><i>1255</i>&nbsp;        if (a == b) {</b>
+<b class="nc"><i>1256</i>&nbsp;            return true;</b>
+<b class="nc"><i>1257</i>&nbsp;        }</b>
+<b class="nc"><i>1258</i>&nbsp;        if (a == null || b == null) {</b>
+<i>1259</i>&nbsp;            return false;
+<i>1260</i>&nbsp;        }
+<b class="nc"><i>1261</i>&nbsp;        for (Class&lt;?&gt; x = a; x != null; x = x.getSuperclass()) {</b>
+<b class="nc"><i>1262</i>&nbsp;            if (x == b) {</b>
+<i>1263</i>&nbsp;                return true;
+<i>1264</i>&nbsp;            }
+<i>1265</i>&nbsp;            if (b.isInterface()) {
+<i>1266</i>&nbsp;                Class&lt;?&gt;[] interfaces = x.getInterfaces();
+<i>1267</i>&nbsp;                for (int i = 0; i &lt; interfaces.length; i++) {
+<i>1268</i>&nbsp;                    if (isSubclass(interfaces[i], b)) {
+<b class="nc"><i>1269</i>&nbsp;                        return true;</b>
+<b class="nc"><i>1270</i>&nbsp;                    }</b>
+<b class="nc"><i>1271</i>&nbsp;                }</b>
+<b class="nc"><i>1272</i>&nbsp;            }</b>
+<b class="nc"><i>1273</i>&nbsp;        }</b>
+<i>1274</i>&nbsp;        return false;
+<b class="nc"><i>1275</i>&nbsp;    }</b>
+<i>1276</i>&nbsp;
+<i>1277</i>&nbsp;    /**
+<i>1278</i>&nbsp;     * Try to create an instance of a named class.
+<b class="nc"><i>1279</i>&nbsp;     * First try the classloader of &quot;sibling&quot;, then try the system</b>
+<i>1280</i>&nbsp;     * classloader then the class loader of the current Thread.
+<i>1281</i>&nbsp;     */
+<i>1282</i>&nbsp;    @SuppressWarnings(&quot;deprecation&quot;)
+<b class="nc"><i>1283</i>&nbsp;    static Object instantiate(Class&lt;?&gt; sibling, String className)</b>
+<i>1284</i>&nbsp;                 throws InstantiationException, IllegalAccessException,
+<i>1285</i>&nbsp;                        NoSuchMethodException, InvocationTargetException,
+<i>1286</i>&nbsp;                                                ClassNotFoundException {
+<i>1287</i>&nbsp;        // First check with sibling&#39;s classloader (if any).
+<b class="nc"><i>1288</i>&nbsp;        ClassLoader cl = sibling.getClassLoader();</b>
+<b class="nc"><i>1289</i>&nbsp;        Class&lt;?&gt; cls = ClassFinder.findClass(className, cl);</b>
+<b class="nc"><i>1290</i>&nbsp;        return cls.newInstance();</b>
+<b class="nc"><i>1291</i>&nbsp;    }</b>
+<i>1292</i>&nbsp;
+<i>1293</i>&nbsp;} // end class Introspector
+<i>1294</i>&nbsp;
+<b class="nc"><i>1295</i>&nbsp;//===========================================================================</b>
+<i>1296</i>&nbsp;
+<i>1297</i>&nbsp;/**
+<i>1298</i>&nbsp; * Package private implementation support class for Introspector&#39;s
+<b class="nc"><i>1299</i>&nbsp; * internal use.</b>
+<i>1300</i>&nbsp; * &lt;p&gt;
+<b class="nc"><i>1301</i>&nbsp; * Mostly this is used as a placeholder for the descriptors.</b>
+<i>1302</i>&nbsp; */
+<i>1303</i>&nbsp;
+<b class="nc"><i>1304</i>&nbsp;class GenericBeanInfo extends SimpleBeanInfo {</b>
+<b class="nc"><i>1305</i>&nbsp;</b>
+<i>1306</i>&nbsp;    private BeanDescriptor beanDescriptor;
+<i>1307</i>&nbsp;    private EventSetDescriptor[] events;
+<b class="nc"><i>1308</i>&nbsp;    private int defaultEvent;</b>
+<i>1309</i>&nbsp;    private PropertyDescriptor[] properties;
+<b class="nc"><i>1310</i>&nbsp;    private int defaultProperty;</b>
+<b class="nc"><i>1311</i>&nbsp;    private MethodDescriptor[] methods;</b>
+<i>1312</i>&nbsp;    private Reference&lt;BeanInfo&gt; targetBeanInfoRef;
+<i>1313</i>&nbsp;
+<i>1314</i>&nbsp;    public GenericBeanInfo(BeanDescriptor beanDescriptor,
+<i>1315</i>&nbsp;                EventSetDescriptor[] events, int defaultEvent,
+<i>1316</i>&nbsp;                PropertyDescriptor[] properties, int defaultProperty,
+<b class="nc"><i>1317</i>&nbsp;                MethodDescriptor[] methods, BeanInfo targetBeanInfo) {</b>
+<b class="nc"><i>1318</i>&nbsp;        this.beanDescriptor = beanDescriptor;</b>
+<b class="nc"><i>1319</i>&nbsp;        this.events = events;</b>
+<i>1320</i>&nbsp;        this.defaultEvent = defaultEvent;
+<b class="nc"><i>1321</i>&nbsp;        this.properties = properties;</b>
+<i>1322</i>&nbsp;        this.defaultProperty = defaultProperty;
+<i>1323</i>&nbsp;        this.methods = methods;
+<i>1324</i>&nbsp;        this.targetBeanInfoRef = (targetBeanInfo != null)
+<i>1325</i>&nbsp;                ? new SoftReference&lt;&gt;(targetBeanInfo)
+<i>1326</i>&nbsp;                : null;
+<i>1327</i>&nbsp;    }
+<i>1328</i>&nbsp;
+<i>1329</i>&nbsp;    /**
+<b class="nc"><i>1330</i>&nbsp;     * Package-private dup constructor</b>
+<b class="nc"><i>1331</i>&nbsp;     * This must isolate the new object from any changes to the old object.</b>
+<i>1332</i>&nbsp;     */
+<b class="nc"><i>1333</i>&nbsp;    GenericBeanInfo(GenericBeanInfo old) {</b>
+<b class="nc"><i>1334</i>&nbsp;</b>
+<b class="nc"><i>1335</i>&nbsp;        beanDescriptor = new BeanDescriptor(old.beanDescriptor);</b>
+<b class="nc"><i>1336</i>&nbsp;        if (old.events != null) {</b>
+<b class="nc"><i>1337</i>&nbsp;            int len = old.events.length;</b>
+<b class="nc"><i>1338</i>&nbsp;            events = new EventSetDescriptor[len];</b>
+<b class="nc"><i>1339</i>&nbsp;            for (int i = 0; i &lt; len; i++) {</b>
+<b class="nc"><i>1340</i>&nbsp;                events[i] = new EventSetDescriptor(old.events[i]);</b>
+<i>1341</i>&nbsp;            }
+<i>1342</i>&nbsp;        }
+<i>1343</i>&nbsp;        defaultEvent = old.defaultEvent;
+<b class="nc"><i>1344</i>&nbsp;        if (old.properties != null) {</b>
+<b class="nc"><i>1345</i>&nbsp;            int len = old.properties.length;</b>
+<b class="nc"><i>1346</i>&nbsp;            properties = new PropertyDescriptor[len];</b>
+<i>1347</i>&nbsp;            for (int i = 0; i &lt; len; i++) {
+<i>1348</i>&nbsp;                PropertyDescriptor oldp = old.properties[i];
+<i>1349</i>&nbsp;                if (oldp instanceof IndexedPropertyDescriptor) {
+<b class="nc"><i>1350</i>&nbsp;                    properties[i] = new IndexedPropertyDescriptor(</b>
+<i>1351</i>&nbsp;                                        (IndexedPropertyDescriptor) oldp);
+<i>1352</i>&nbsp;                } else {
+<b class="nc"><i>1353</i>&nbsp;                    properties[i] = new PropertyDescriptor(oldp);</b>
+<i>1354</i>&nbsp;                }
+<i>1355</i>&nbsp;            }
+<b class="nc"><i>1356</i>&nbsp;        }</b>
+<i>1357</i>&nbsp;        defaultProperty = old.defaultProperty;
+<b class="nc"><i>1358</i>&nbsp;        if (old.methods != null) {</b>
+<b class="nc"><i>1359</i>&nbsp;            int len = old.methods.length;</b>
+<i>1360</i>&nbsp;            methods = new MethodDescriptor[len];
+<i>1361</i>&nbsp;            for (int i = 0; i &lt; len; i++) {
+<i>1362</i>&nbsp;                methods[i] = new MethodDescriptor(old.methods[i]);
+<i>1363</i>&nbsp;            }
+<i>1364</i>&nbsp;        }
+<i>1365</i>&nbsp;        this.targetBeanInfoRef = old.targetBeanInfoRef;
+<i>1366</i>&nbsp;    }
+<i>1367</i>&nbsp;
+<i>1368</i>&nbsp;    public PropertyDescriptor[] getPropertyDescriptors() {
+<i>1369</i>&nbsp;        return properties;
+<i>1370</i>&nbsp;    }
+<i>1371</i>&nbsp;
+<i>1372</i>&nbsp;    public int getDefaultPropertyIndex() {
+<i>1373</i>&nbsp;        return defaultProperty;
+<i>1374</i>&nbsp;    }
+<b class="nc"><i>1375</i>&nbsp;</b>
+<i>1376</i>&nbsp;    public EventSetDescriptor[] getEventSetDescriptors() {
+<b class="nc"><i>1377</i>&nbsp;        return events;</b>
+<b class="nc"><i>1378</i>&nbsp;    }</b>
+<b class="nc"><i>1379</i>&nbsp;</b>
+<b class="nc"><i>1380</i>&nbsp;    public int getDefaultEventIndex() {</b>
+<b class="nc"><i>1381</i>&nbsp;        return defaultEvent;</b>
+<b class="nc"><i>1382</i>&nbsp;    }</b>
+<i>1383</i>&nbsp;
+<i>1384</i>&nbsp;    public MethodDescriptor[] getMethodDescriptors() {
+<i>1385</i>&nbsp;        return methods;
+<b class="nc"><i>1386</i>&nbsp;    }</b>
+<b class="nc"><i>1387</i>&nbsp;</b>
+<b class="nc"><i>1388</i>&nbsp;    public BeanDescriptor getBeanDescriptor() {</b>
+<b class="nc"><i>1389</i>&nbsp;        return beanDescriptor;</b>
+<b class="nc"><i>1390</i>&nbsp;    }</b>
+<b class="nc"><i>1391</i>&nbsp;</b>
+<b class="nc"><i>1392</i>&nbsp;    public java.awt.Image getIcon(int iconKind) {</b>
+<b class="nc"><i>1393</i>&nbsp;        BeanInfo targetBeanInfo = getTargetBeanInfo();</b>
+<b class="nc"><i>1394</i>&nbsp;        if (targetBeanInfo != null) {</b>
+<i>1395</i>&nbsp;            return targetBeanInfo.getIcon(iconKind);
+<i>1396</i>&nbsp;        }
+<i>1397</i>&nbsp;        return super.getIcon(iconKind);
+<b class="nc"><i>1398</i>&nbsp;    }</b>
+<b class="nc"><i>1399</i>&nbsp;</b>
+<i>1400</i>&nbsp;    private BeanInfo getTargetBeanInfo() {
+<i>1401</i>&nbsp;        if (this.targetBeanInfoRef == null) {
+<i>1402</i>&nbsp;            return null;
+<b class="nc"><i>1403</i>&nbsp;        }</b>
+<i>1404</i>&nbsp;        BeanInfo targetBeanInfo = this.targetBeanInfoRef.get();
+<i>1405</i>&nbsp;        if (targetBeanInfo == null) {
+<i>1406</i>&nbsp;            targetBeanInfo = ThreadGroupContext.getContext().getBeanInfoFinder()
+<i>1407</i>&nbsp;                    .find(this.beanDescriptor.getBeanClass());
+<b class="nc"><i>1408</i>&nbsp;            if (targetBeanInfo != null) {</b>
+<i>1409</i>&nbsp;                this.targetBeanInfoRef = new SoftReference&lt;&gt;(targetBeanInfo);
+<i>1410</i>&nbsp;            }
+<i>1411</i>&nbsp;        }
+<i>1412</i>&nbsp;        return targetBeanInfo;
+<b class="nc"><i>1413</i>&nbsp;    }</b>
+<b class="nc"><i>1414</i>&nbsp;}</b>
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

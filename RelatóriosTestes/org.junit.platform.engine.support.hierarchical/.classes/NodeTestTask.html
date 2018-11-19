@@ -1,0 +1,241 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: NodeTestTask</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">org.junit.platform.engine.support.hierarchical</a> ]
+</div>
+
+<h1>Coverage Summary for Class: NodeTestTask (org.junit.platform.engine.support.hierarchical)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">NodeTestTask</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    69,2%
+  </span>
+  <span class="absValue">
+    (9/ 13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    70,8%
+  </span>
+  <span class="absValue">
+    (46/ 65)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright 2015-2018 the original author or authors.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; * All rights reserved. This program and the accompanying materials are
+<i>5</i>&nbsp; * made available under the terms of the Eclipse Public License v2.0 which
+<i>6</i>&nbsp; * accompanies this distribution and is available at
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; * http://www.eclipse.org/legal/epl-v20.html
+<i>9</i>&nbsp; */
+<i>10</i>&nbsp;
+<i>11</i>&nbsp;package org.junit.platform.engine.support.hierarchical;
+<i>12</i>&nbsp;
+<i>13</i>&nbsp;import static java.util.stream.Collectors.toCollection;
+<i>14</i>&nbsp;import static org.junit.platform.engine.TestExecutionResult.failed;
+<i>15</i>&nbsp;
+<i>16</i>&nbsp;import java.util.ArrayList;
+<i>17</i>&nbsp;import java.util.List;
+<i>18</i>&nbsp;import java.util.Set;
+<i>19</i>&nbsp;import java.util.concurrent.Future;
+<i>20</i>&nbsp;
+<i>21</i>&nbsp;import org.junit.platform.commons.JUnitException;
+<i>22</i>&nbsp;import org.junit.platform.engine.TestDescriptor;
+<i>23</i>&nbsp;import org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutorService.TestTask;
+<i>24</i>&nbsp;import org.junit.platform.engine.support.hierarchical.Node.ExecutionMode;
+<i>25</i>&nbsp;import org.junit.platform.engine.support.hierarchical.Node.SkipResult;
+<i>26</i>&nbsp;
+<i>27</i>&nbsp;/**
+<i>28</i>&nbsp; * @since 1.3
+<i>29</i>&nbsp; */
+<i>30</i>&nbsp;class NodeTestTask&lt;C extends EngineExecutionContext&gt; implements TestTask {
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;	private final NodeTestTaskContext taskContext;
+<i>33</i>&nbsp;	private final TestDescriptor testDescriptor;
+<i>34</i>&nbsp;	private final Node&lt;C&gt; node;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;	private C parentContext;
+<i>37</i>&nbsp;	private C context;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;	private SkipResult skipResult;
+<i>40</i>&nbsp;	private boolean started;
+<i>41</i>&nbsp;	private ThrowableCollector throwableCollector;
+<i>42</i>&nbsp;
+<b class="fc"><i>43</i>&nbsp;	NodeTestTask(NodeTestTaskContext taskContext, TestDescriptor testDescriptor) {</b>
+<b class="fc"><i>44</i>&nbsp;		this.taskContext = taskContext;</b>
+<b class="fc"><i>45</i>&nbsp;		this.testDescriptor = testDescriptor;</b>
+<b class="fc"><i>46</i>&nbsp;		this.node = NodeUtils.asNode(testDescriptor);</b>
+<b class="fc"><i>47</i>&nbsp;	}</b>
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;	@Override
+<i>50</i>&nbsp;	public ResourceLock getResourceLock() {
+<b class="nc"><i>51</i>&nbsp;		return taskContext.getExecutionAdvisor().getResourceLock(testDescriptor);</b>
+<i>52</i>&nbsp;	}
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;	@Override
+<i>55</i>&nbsp;	public ExecutionMode getExecutionMode() {
+<b class="nc"><i>56</i>&nbsp;		return taskContext.getExecutionAdvisor().getForcedExecutionMode(testDescriptor).orElse(node.getExecutionMode());</b>
+<i>57</i>&nbsp;	}
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;	void setParentContext(C parentContext) {
+<b class="fc"><i>60</i>&nbsp;		this.parentContext = parentContext;</b>
+<b class="fc"><i>61</i>&nbsp;	}</b>
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;	@Override
+<i>64</i>&nbsp;	public void execute() {
+<b class="fc"><i>65</i>&nbsp;		throwableCollector = taskContext.getThrowableCollectorFactory().create();</b>
+<b class="fc"><i>66</i>&nbsp;		prepare();</b>
+<b class="fc"><i>67</i>&nbsp;		if (throwableCollector.isEmpty()) {</b>
+<b class="fc"><i>68</i>&nbsp;			checkWhetherSkipped();</b>
+<i>69</i>&nbsp;		}
+<b class="fc"><i>70</i>&nbsp;		if (throwableCollector.isEmpty() &amp;&amp; !skipResult.isSkipped()) {</b>
+<b class="fc"><i>71</i>&nbsp;			executeRecursively();</b>
+<i>72</i>&nbsp;		}
+<b class="fc"><i>73</i>&nbsp;		if (context != null) {</b>
+<b class="fc"><i>74</i>&nbsp;			cleanUp();</b>
+<i>75</i>&nbsp;		}
+<b class="fc"><i>76</i>&nbsp;		reportCompletion();</b>
+<b class="fc"><i>77</i>&nbsp;	}</b>
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;	private void prepare() {
+<b class="fc"><i>80</i>&nbsp;		throwableCollector.execute(() -&gt; context = node.prepare(parentContext));</b>
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;		// Clear reference to parent context to allow it to be garbage collected.
+<i>83</i>&nbsp;		// See https://github.com/junit-team/junit5/issues/1578
+<b class="fc"><i>84</i>&nbsp;		parentContext = null;</b>
+<b class="fc"><i>85</i>&nbsp;	}</b>
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;	private void checkWhetherSkipped() {
+<b class="fc"><i>88</i>&nbsp;		throwableCollector.execute(() -&gt; skipResult = node.shouldBeSkipped(context));</b>
+<b class="fc"><i>89</i>&nbsp;	}</b>
+<i>90</i>&nbsp;
+<i>91</i>&nbsp;	private void executeRecursively() {
+<b class="fc"><i>92</i>&nbsp;		taskContext.getListener().executionStarted(testDescriptor);</b>
+<b class="fc"><i>93</i>&nbsp;		started = true;</b>
+<i>94</i>&nbsp;
+<b class="fc"><i>95</i>&nbsp;		throwableCollector.execute(() -&gt; {</b>
+<i>96</i>&nbsp;			// @formatter:off
+<b class="fc"><i>97</i>&nbsp;			List&lt;NodeTestTask&lt;C&gt;&gt; children = testDescriptor.getChildren().stream()</b>
+<b class="fc"><i>98</i>&nbsp;					.map(descriptor -&gt; new NodeTestTask&lt;C&gt;(taskContext, descriptor))</b>
+<b class="fc"><i>99</i>&nbsp;					.collect(toCollection(ArrayList::new));</b>
+<i>100</i>&nbsp;			// @formatter:on
+<i>101</i>&nbsp;
+<b class="fc"><i>102</i>&nbsp;			context = node.before(context);</b>
+<i>103</i>&nbsp;
+<b class="fc"><i>104</i>&nbsp;			List&lt;Future&lt;?&gt;&gt; futures = new ArrayList&lt;&gt;();</b>
+<b class="fc"><i>105</i>&nbsp;			context = node.execute(context,</b>
+<b class="nc"><i>106</i>&nbsp;				dynamicTestDescriptor -&gt; executeDynamicTest(dynamicTestDescriptor, futures));</b>
+<i>107</i>&nbsp;
+<b class="fc"><i>108</i>&nbsp;			if (!children.isEmpty()) {</b>
+<b class="fc"><i>109</i>&nbsp;				children.forEach(child -&gt; child.setParentContext(context));</b>
+<b class="fc"><i>110</i>&nbsp;				taskContext.getExecutorService().invokeAll(children);</b>
+<i>111</i>&nbsp;			}
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;			// using a for loop for the sake for ForkJoinPool&#39;s work stealing
+<b class="fc"><i>114</i>&nbsp;			for (Future&lt;?&gt; future : futures) {</b>
+<b class="nc"><i>115</i>&nbsp;				future.get();</b>
+<b class="nc"><i>116</i>&nbsp;			}</b>
+<b class="fc"><i>117</i>&nbsp;		});</b>
+<i>118</i>&nbsp;
+<b class="fc"><i>119</i>&nbsp;		throwableCollector.execute(() -&gt; node.after(context));</b>
+<b class="fc"><i>120</i>&nbsp;	}</b>
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;	private void executeDynamicTest(TestDescriptor dynamicTestDescriptor, List&lt;Future&lt;?&gt;&gt; futures) {
+<b class="nc"><i>123</i>&nbsp;		taskContext.getListener().dynamicTestRegistered(dynamicTestDescriptor);</b>
+<b class="nc"><i>124</i>&nbsp;		Set&lt;ExclusiveResource&gt; exclusiveResources = NodeUtils.asNode(dynamicTestDescriptor).getExclusiveResources();</b>
+<b class="nc"><i>125</i>&nbsp;		if (!exclusiveResources.isEmpty()) {</b>
+<b class="nc"><i>126</i>&nbsp;			taskContext.getListener().executionStarted(dynamicTestDescriptor);</b>
+<b class="nc"><i>127</i>&nbsp;			String message = &quot;Dynamic test descriptors must not declare exclusive resources: &quot; + exclusiveResources;</b>
+<b class="nc"><i>128</i>&nbsp;			taskContext.getListener().executionFinished(dynamicTestDescriptor, failed(new JUnitException(message)));</b>
+<b class="nc"><i>129</i>&nbsp;		}</b>
+<i>130</i>&nbsp;		else {
+<b class="nc"><i>131</i>&nbsp;			NodeTestTask&lt;C&gt; nodeTestTask = new NodeTestTask&lt;&gt;(taskContext, dynamicTestDescriptor);</b>
+<b class="nc"><i>132</i>&nbsp;			nodeTestTask.setParentContext(context);</b>
+<b class="nc"><i>133</i>&nbsp;			futures.add(taskContext.getExecutorService().submit(nodeTestTask));</b>
+<i>134</i>&nbsp;		}
+<b class="nc"><i>135</i>&nbsp;	}</b>
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;	private void cleanUp() {
+<b class="fc"><i>138</i>&nbsp;		throwableCollector.execute(() -&gt; node.cleanUp(context));</b>
+<i>139</i>&nbsp;
+<i>140</i>&nbsp;		// Clear reference to context to allow it to be garbage collected.
+<i>141</i>&nbsp;		// See https://github.com/junit-team/junit5/issues/1578
+<b class="fc"><i>142</i>&nbsp;		context = null;</b>
+<b class="fc"><i>143</i>&nbsp;	}</b>
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;	private void reportCompletion() {
+<b class="fc"><i>146</i>&nbsp;		if (throwableCollector.isEmpty() &amp;&amp; skipResult.isSkipped()) {</b>
+<b class="nc"><i>147</i>&nbsp;			taskContext.getListener().executionSkipped(testDescriptor, skipResult.getReason().orElse(&quot;&lt;unknown&gt;&quot;));</b>
+<b class="nc"><i>148</i>&nbsp;			return;</b>
+<i>149</i>&nbsp;		}
+<b class="fc"><i>150</i>&nbsp;		if (!started) {</b>
+<i>151</i>&nbsp;			// Call executionStarted first to comply with the contract of EngineExecutionListener.
+<b class="nc"><i>152</i>&nbsp;			taskContext.getListener().executionStarted(testDescriptor);</b>
+<i>153</i>&nbsp;		}
+<b class="fc"><i>154</i>&nbsp;		taskContext.getListener().executionFinished(testDescriptor, throwableCollector.toTestExecutionResult());</b>
+<b class="fc"><i>155</i>&nbsp;		throwableCollector = null;</b>
+<b class="fc"><i>156</i>&nbsp;	}</b>
+<i>157</i>&nbsp;
+<i>158</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

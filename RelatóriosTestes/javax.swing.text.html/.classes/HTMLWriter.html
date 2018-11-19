@@ -1,0 +1,1379 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: HTMLWriter</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">javax.swing.text.html</a> ]
+</div>
+
+<h1>Coverage Summary for Class: HTMLWriter (javax.swing.text.html)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">HTMLWriter</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 36)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 554)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1998, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;package javax.swing.text.html;
+<i>26</i>&nbsp;
+<i>27</i>&nbsp;import javax.swing.text.*;
+<i>28</i>&nbsp;import java.io.Writer;
+<i>29</i>&nbsp;import java.util.Stack;
+<i>30</i>&nbsp;import java.util.Enumeration;
+<i>31</i>&nbsp;import java.util.Vector;
+<i>32</i>&nbsp;import java.io.IOException;
+<i>33</i>&nbsp;import java.util.StringTokenizer;
+<i>34</i>&nbsp;import java.util.NoSuchElementException;
+<i>35</i>&nbsp;import java.net.URL;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;/**
+<i>38</i>&nbsp; * This is a writer for HTMLDocuments.
+<i>39</i>&nbsp; *
+<i>40</i>&nbsp; * @author  Sunita Mani
+<i>41</i>&nbsp; */
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;public class HTMLWriter extends AbstractWriter {
+<i>45</i>&nbsp;    /*
+<i>46</i>&nbsp;     * Stores all elements for which end tags have to
+<i>47</i>&nbsp;     * be emitted.
+<i>48</i>&nbsp;     */
+<b class="nc"><i>49</i>&nbsp;    private Stack&lt;Element&gt; blockElementStack = new Stack&lt;Element&gt;();</b>
+<b class="nc"><i>50</i>&nbsp;    private boolean inContent = false;</b>
+<b class="nc"><i>51</i>&nbsp;    private boolean inPre = false;</b>
+<i>52</i>&nbsp;    /** When inPre is true, this will indicate the end offset of the pre
+<i>53</i>&nbsp;     * element. */
+<i>54</i>&nbsp;    private int preEndOffset;
+<b class="nc"><i>55</i>&nbsp;    private boolean inTextArea = false;</b>
+<b class="nc"><i>56</i>&nbsp;    private boolean newlineOutputed = false;</b>
+<i>57</i>&nbsp;    private boolean completeDoc;
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    /*
+<i>60</i>&nbsp;     * Stores all embedded tags. Embedded tags are tags that are
+<i>61</i>&nbsp;     * stored as attributes in other tags. Generally they&#39;re
+<i>62</i>&nbsp;     * character level attributes.  Examples include
+<i>63</i>&nbsp;     * &amp;lt;b&amp;gt;, &amp;lt;i&amp;gt;, &amp;lt;font&amp;gt;, and &amp;lt;a&amp;gt;.
+<i>64</i>&nbsp;     */
+<b class="nc"><i>65</i>&nbsp;    private Vector&lt;HTML.Tag&gt; tags = new Vector&lt;HTML.Tag&gt;(10);</b>
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;    /**
+<i>68</i>&nbsp;     * Values for the tags.
+<i>69</i>&nbsp;     */
+<b class="nc"><i>70</i>&nbsp;    private Vector&lt;Object&gt; tagValues = new Vector&lt;Object&gt;(10);</b>
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    /**
+<i>73</i>&nbsp;     * Used when writing out content.
+<i>74</i>&nbsp;     */
+<i>75</i>&nbsp;    private Segment segment;
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    /*
+<i>78</i>&nbsp;     * This is used in closeOutUnwantedEmbeddedTags.
+<i>79</i>&nbsp;     */
+<b class="nc"><i>80</i>&nbsp;    private Vector&lt;HTML.Tag&gt; tagsToRemove = new Vector&lt;HTML.Tag&gt;(10);</b>
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;    /**
+<i>83</i>&nbsp;     * Set to true after the head has been output.
+<i>84</i>&nbsp;     */
+<i>85</i>&nbsp;    private boolean wroteHead;
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    /**
+<i>88</i>&nbsp;     * Set to true when entities (such as &amp;lt;) should be replaced.
+<i>89</i>&nbsp;     */
+<i>90</i>&nbsp;    private boolean replaceEntities;
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    /**
+<i>93</i>&nbsp;     * Temporary buffer.
+<i>94</i>&nbsp;     */
+<i>95</i>&nbsp;    private char[] tempChars;
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    /**
+<i>99</i>&nbsp;     * Creates a new HTMLWriter.
+<i>100</i>&nbsp;     *
+<i>101</i>&nbsp;     * @param w   a Writer
+<i>102</i>&nbsp;     * @param doc  an HTMLDocument
+<i>103</i>&nbsp;     *
+<i>104</i>&nbsp;     */
+<i>105</i>&nbsp;    public HTMLWriter(Writer w, HTMLDocument doc) {
+<b class="nc"><i>106</i>&nbsp;        this(w, doc, 0, doc.getLength());</b>
+<i>107</i>&nbsp;    }
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    /**
+<i>110</i>&nbsp;     * Creates a new HTMLWriter.
+<i>111</i>&nbsp;     *
+<i>112</i>&nbsp;     * @param w  a Writer
+<i>113</i>&nbsp;     * @param doc an HTMLDocument
+<i>114</i>&nbsp;     * @param pos the document location from which to fetch the content
+<i>115</i>&nbsp;     * @param len the amount to write out
+<i>116</i>&nbsp;     */
+<i>117</i>&nbsp;    public HTMLWriter(Writer w, HTMLDocument doc, int pos, int len) {
+<b class="nc"><i>118</i>&nbsp;        super(w, doc, pos, len);</b>
+<b class="nc"><i>119</i>&nbsp;        completeDoc = (pos == 0 &amp;&amp; len == doc.getLength());</b>
+<b class="nc"><i>120</i>&nbsp;        setLineLength(80);</b>
+<i>121</i>&nbsp;    }
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;    /**
+<i>124</i>&nbsp;     * Iterates over the
+<i>125</i>&nbsp;     * Element tree and controls the writing out of
+<i>126</i>&nbsp;     * all the tags and its attributes.
+<i>127</i>&nbsp;     *
+<i>128</i>&nbsp;     * @exception IOException on any I/O error
+<i>129</i>&nbsp;     * @exception BadLocationException if pos represents an invalid
+<i>130</i>&nbsp;     *            location within the document.
+<i>131</i>&nbsp;     *
+<i>132</i>&nbsp;     */
+<i>133</i>&nbsp;    public void write() throws IOException, BadLocationException {
+<b class="nc"><i>134</i>&nbsp;        ElementIterator it = getElementIterator();</b>
+<b class="nc"><i>135</i>&nbsp;        Element current = null;</b>
+<i>136</i>&nbsp;        Element next;
+<i>137</i>&nbsp;
+<b class="nc"><i>138</i>&nbsp;        wroteHead = false;</b>
+<b class="nc"><i>139</i>&nbsp;        setCurrentLineLength(0);</b>
+<b class="nc"><i>140</i>&nbsp;        replaceEntities = false;</b>
+<b class="nc"><i>141</i>&nbsp;        setCanWrapLines(false);</b>
+<b class="nc"><i>142</i>&nbsp;        if (segment == null) {</b>
+<b class="nc"><i>143</i>&nbsp;            segment = new Segment();</b>
+<i>144</i>&nbsp;        }
+<b class="nc"><i>145</i>&nbsp;        inPre = false;</b>
+<b class="nc"><i>146</i>&nbsp;        boolean forcedBody = false;</b>
+<b class="nc"><i>147</i>&nbsp;        while ((next = it.next()) != null) {</b>
+<b class="nc"><i>148</i>&nbsp;            if (!inRange(next)) {</b>
+<b class="nc"><i>149</i>&nbsp;                if (completeDoc &amp;&amp; next.getAttributes().getAttribute(</b>
+<i>150</i>&nbsp;                        StyleConstants.NameAttribute) == HTML.Tag.BODY) {
+<b class="nc"><i>151</i>&nbsp;                    forcedBody = true;</b>
+<i>152</i>&nbsp;                }
+<i>153</i>&nbsp;                else {
+<i>154</i>&nbsp;                    continue;
+<i>155</i>&nbsp;                }
+<i>156</i>&nbsp;            }
+<b class="nc"><i>157</i>&nbsp;            if (current != null) {</b>
+<i>158</i>&nbsp;
+<i>159</i>&nbsp;                /*
+<i>160</i>&nbsp;                  if next is child of current increment indent
+<i>161</i>&nbsp;                */
+<i>162</i>&nbsp;
+<b class="nc"><i>163</i>&nbsp;                if (indentNeedsIncrementing(current, next)) {</b>
+<b class="nc"><i>164</i>&nbsp;                    incrIndent();</b>
+<b class="nc"><i>165</i>&nbsp;                } else if (current.getParentElement() != next.getParentElement()) {</b>
+<i>166</i>&nbsp;                    /*
+<i>167</i>&nbsp;                       next and current are not siblings
+<i>168</i>&nbsp;                       so emit end tags for items on the stack until the
+<i>169</i>&nbsp;                       item on top of the stack, is the parent of the
+<i>170</i>&nbsp;                       next.
+<i>171</i>&nbsp;                    */
+<b class="nc"><i>172</i>&nbsp;                    Element top = blockElementStack.peek();</b>
+<b class="nc"><i>173</i>&nbsp;                    while (top != next.getParentElement()) {</b>
+<i>174</i>&nbsp;                        /*
+<i>175</i>&nbsp;                           pop() will return top.
+<i>176</i>&nbsp;                        */
+<b class="nc"><i>177</i>&nbsp;                        blockElementStack.pop();</b>
+<b class="nc"><i>178</i>&nbsp;                        if (!synthesizedElement(top)) {</b>
+<b class="nc"><i>179</i>&nbsp;                            AttributeSet attrs = top.getAttributes();</b>
+<b class="nc"><i>180</i>&nbsp;                            if (!matchNameAttribute(attrs, HTML.Tag.PRE) &amp;&amp;</b>
+<b class="nc"><i>181</i>&nbsp;                                !isFormElementWithContent(attrs) &amp;&amp;</b>
+<b class="nc"><i>182</i>&nbsp;                                !isPreTagWithParagraphTag(attrs)) {</b>
+<i>183</i>&nbsp;                                decrIndent();
+<b class="nc"><i>184</i>&nbsp;                            }</b>
+<i>185</i>&nbsp;                            endTag(top);
+<b class="nc"><i>186</i>&nbsp;                        }</b>
+<i>187</i>&nbsp;                        top = blockElementStack.peek();
+<b class="nc"><i>188</i>&nbsp;                    }</b>
+<i>189</i>&nbsp;                } else if (current.getParentElement() == next.getParentElement()) {
+<i>190</i>&nbsp;                    /*
+<i>191</i>&nbsp;                       if next and current are siblings the indent level
+<i>192</i>&nbsp;                       is correct.  But, we need to make sure that if current is
+<i>193</i>&nbsp;                       on the stack, we pop it off, and put out its end tag.
+<b class="nc"><i>194</i>&nbsp;                    */</b>
+<b class="nc"><i>195</i>&nbsp;                    Element top = blockElementStack.peek();</b>
+<b class="nc"><i>196</i>&nbsp;                    if (top == current) {</b>
+<b class="nc"><i>197</i>&nbsp;                        blockElementStack.pop();</b>
+<i>198</i>&nbsp;                        endTag(top);
+<i>199</i>&nbsp;                    }
+<i>200</i>&nbsp;                }
+<b class="nc"><i>201</i>&nbsp;            }</b>
+<b class="nc"><i>202</i>&nbsp;            if (!next.isLeaf() || isFormElementWithContent(next.getAttributes())) {</b>
+<b class="nc"><i>203</i>&nbsp;                blockElementStack.push(next);</b>
+<i>204</i>&nbsp;                startTag(next);
+<b class="nc"><i>205</i>&nbsp;            } else {</b>
+<i>206</i>&nbsp;                emptyTag(next);
+<b class="nc"><i>207</i>&nbsp;            }</b>
+<i>208</i>&nbsp;            current = next;
+<i>209</i>&nbsp;        }
+<i>210</i>&nbsp;        /* Emit all remaining end tags */
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;        /* A null parameter ensures that all embedded tags
+<i>213</i>&nbsp;           currently in the tags vector have their
+<i>214</i>&nbsp;           corresponding end tags written out.
+<b class="nc"><i>215</i>&nbsp;        */</b>
+<i>216</i>&nbsp;        closeOutUnwantedEmbeddedTags(null);
+<b class="nc"><i>217</i>&nbsp;</b>
+<b class="nc"><i>218</i>&nbsp;        if (forcedBody) {</b>
+<b class="nc"><i>219</i>&nbsp;            blockElementStack.pop();</b>
+<i>220</i>&nbsp;            endTag(current);
+<b class="nc"><i>221</i>&nbsp;        }</b>
+<b class="nc"><i>222</i>&nbsp;        while (!blockElementStack.empty()) {</b>
+<b class="nc"><i>223</i>&nbsp;            current = blockElementStack.pop();</b>
+<b class="nc"><i>224</i>&nbsp;            if (!synthesizedElement(current)) {</b>
+<b class="nc"><i>225</i>&nbsp;                AttributeSet attrs = current.getAttributes();</b>
+<b class="nc"><i>226</i>&nbsp;                if (!matchNameAttribute(attrs, HTML.Tag.PRE) &amp;&amp;</b>
+<b class="nc"><i>227</i>&nbsp;                              !isFormElementWithContent(attrs) &amp;&amp;</b>
+<i>228</i>&nbsp;                              !isPreTagWithParagraphTag(attrs)) {
+<b class="nc"><i>229</i>&nbsp;                    decrIndent();</b>
+<b class="nc"><i>230</i>&nbsp;                }</b>
+<i>231</i>&nbsp;                endTag(current);
+<i>232</i>&nbsp;            }
+<b class="nc"><i>233</i>&nbsp;        }</b>
+<b class="nc"><i>234</i>&nbsp;</b>
+<i>235</i>&nbsp;        if (completeDoc) {
+<i>236</i>&nbsp;            writeAdditionalComments();
+<b class="nc"><i>237</i>&nbsp;        }</b>
+<i>238</i>&nbsp;
+<i>239</i>&nbsp;        segment.array = null;
+<i>240</i>&nbsp;    }
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;
+<i>243</i>&nbsp;    /**
+<i>244</i>&nbsp;     * Writes out the attribute set.  Ignores all
+<i>245</i>&nbsp;     * attributes with a key of type HTML.Tag,
+<i>246</i>&nbsp;     * attributes with a key of type StyleConstants,
+<i>247</i>&nbsp;     * and attributes with a key of type
+<i>248</i>&nbsp;     * HTML.Attribute.ENDTAG.
+<i>249</i>&nbsp;     *
+<i>250</i>&nbsp;     * @param attr   an AttributeSet
+<i>251</i>&nbsp;     * @exception IOException on any I/O error
+<i>252</i>&nbsp;     *
+<i>253</i>&nbsp;     */
+<b class="nc"><i>254</i>&nbsp;    protected void writeAttributes(AttributeSet attr) throws IOException {</b>
+<b class="nc"><i>255</i>&nbsp;        // translate css attributes to html</b>
+<i>256</i>&nbsp;        convAttr.removeAttributes(convAttr);
+<b class="nc"><i>257</i>&nbsp;        convertToHTML32(attr, convAttr);</b>
+<b class="nc"><i>258</i>&nbsp;</b>
+<b class="nc"><i>259</i>&nbsp;        Enumeration&lt;?&gt; names = convAttr.getAttributeNames();</b>
+<b class="nc"><i>260</i>&nbsp;        while (names.hasMoreElements()) {</b>
+<i>261</i>&nbsp;            Object name = names.nextElement();
+<i>262</i>&nbsp;            if (name instanceof HTML.Tag ||
+<b class="nc"><i>263</i>&nbsp;                name instanceof StyleConstants ||</b>
+<i>264</i>&nbsp;                name == HTML.Attribute.ENDTAG) {
+<b class="nc"><i>265</i>&nbsp;                continue;</b>
+<b class="nc"><i>266</i>&nbsp;            }</b>
+<i>267</i>&nbsp;            write(&quot; &quot; + name + &quot;=\&quot;&quot; + convAttr.getAttribute(name) + &quot;\&quot;&quot;);
+<i>268</i>&nbsp;        }
+<i>269</i>&nbsp;    }
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;    /**
+<i>272</i>&nbsp;     * Writes out all empty elements (all tags that have no
+<i>273</i>&nbsp;     * corresponding end tag).
+<i>274</i>&nbsp;     *
+<i>275</i>&nbsp;     * @param elem   an Element
+<i>276</i>&nbsp;     * @exception IOException on any I/O error
+<i>277</i>&nbsp;     * @exception BadLocationException if pos represents an invalid
+<i>278</i>&nbsp;     *            location within the document.
+<i>279</i>&nbsp;     */
+<b class="nc"><i>280</i>&nbsp;    protected void emptyTag(Element elem) throws BadLocationException, IOException {</b>
+<b class="nc"><i>281</i>&nbsp;</b>
+<i>282</i>&nbsp;        if (!inContent &amp;&amp; !inPre) {
+<i>283</i>&nbsp;            indentSmart();
+<b class="nc"><i>284</i>&nbsp;        }</b>
+<b class="nc"><i>285</i>&nbsp;</b>
+<b class="nc"><i>286</i>&nbsp;        AttributeSet attr = elem.getAttributes();</b>
+<i>287</i>&nbsp;        closeOutUnwantedEmbeddedTags(attr);
+<b class="nc"><i>288</i>&nbsp;        writeEmbeddedTags(attr);</b>
+<b class="nc"><i>289</i>&nbsp;</b>
+<b class="nc"><i>290</i>&nbsp;        if (matchNameAttribute(attr, HTML.Tag.CONTENT)) {</b>
+<b class="nc"><i>291</i>&nbsp;            inContent = true;</b>
+<b class="nc"><i>292</i>&nbsp;            text(elem);</b>
+<i>293</i>&nbsp;        } else if (matchNameAttribute(attr, HTML.Tag.COMMENT)) {
+<b class="nc"><i>294</i>&nbsp;            comment(elem);</b>
+<b class="nc"><i>295</i>&nbsp;        }  else {</b>
+<b class="nc"><i>296</i>&nbsp;            boolean isBlock = isBlockTag(elem.getAttributes());</b>
+<b class="nc"><i>297</i>&nbsp;            if (inContent &amp;&amp; isBlock ) {</b>
+<i>298</i>&nbsp;                writeLineSeparator();
+<i>299</i>&nbsp;                indentSmart();
+<b class="nc"><i>300</i>&nbsp;            }</b>
+<b class="nc"><i>301</i>&nbsp;</b>
+<b class="nc"><i>302</i>&nbsp;            Object nameTag = (attr != null) ? attr.getAttribute</b>
+<b class="nc"><i>303</i>&nbsp;                              (StyleConstants.NameAttribute) : null;</b>
+<i>304</i>&nbsp;            Object endTag = (attr != null) ? attr.getAttribute
+<b class="nc"><i>305</i>&nbsp;                              (HTML.Attribute.ENDTAG) : null;</b>
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;            boolean outputEndTag = false;
+<i>308</i>&nbsp;            // If an instance of an UNKNOWN Tag, or an instance of a
+<b class="nc"><i>309</i>&nbsp;            // tag that is only visible during editing</b>
+<i>310</i>&nbsp;            //
+<b class="nc"><i>311</i>&nbsp;            if (nameTag != null &amp;&amp; endTag != null &amp;&amp;</b>
+<b class="nc"><i>312</i>&nbsp;                (endTag instanceof String) &amp;&amp;</b>
+<i>313</i>&nbsp;                endTag.equals(&quot;true&quot;)) {
+<i>314</i>&nbsp;                outputEndTag = true;
+<b class="nc"><i>315</i>&nbsp;            }</b>
+<b class="nc"><i>316</i>&nbsp;</b>
+<i>317</i>&nbsp;            if (completeDoc &amp;&amp; matchNameAttribute(attr, HTML.Tag.HEAD)) {
+<b class="nc"><i>318</i>&nbsp;                if (outputEndTag) {</b>
+<i>319</i>&nbsp;                    // Write out any styles.
+<b class="nc"><i>320</i>&nbsp;                    writeStyles(((HTMLDocument)getDocument()).getStyleSheet());</b>
+<i>321</i>&nbsp;                }
+<i>322</i>&nbsp;                wroteHead = true;
+<b class="nc"><i>323</i>&nbsp;            }</b>
+<b class="nc"><i>324</i>&nbsp;</b>
+<b class="nc"><i>325</i>&nbsp;            write(&#39;&lt;&#39;);</b>
+<i>326</i>&nbsp;            if (outputEndTag) {
+<b class="nc"><i>327</i>&nbsp;                write(&#39;/&#39;);</b>
+<b class="nc"><i>328</i>&nbsp;            }</b>
+<b class="nc"><i>329</i>&nbsp;            write(elem.getName());</b>
+<b class="nc"><i>330</i>&nbsp;            writeAttributes(attr);</b>
+<b class="nc"><i>331</i>&nbsp;            write(&#39;&gt;&#39;);</b>
+<b class="nc"><i>332</i>&nbsp;            if (matchNameAttribute(attr, HTML.Tag.TITLE) &amp;&amp; !outputEndTag) {</b>
+<b class="nc"><i>333</i>&nbsp;                Document doc = elem.getDocument();</b>
+<b class="nc"><i>334</i>&nbsp;                String title = (String)doc.getProperty(Document.TitleProperty);</b>
+<b class="nc"><i>335</i>&nbsp;                write(title);</b>
+<b class="nc"><i>336</i>&nbsp;            } else if (!inContent || isBlock) {</b>
+<b class="nc"><i>337</i>&nbsp;                writeLineSeparator();</b>
+<i>338</i>&nbsp;                if (isBlock &amp;&amp; inContent) {
+<i>339</i>&nbsp;                    indentSmart();
+<i>340</i>&nbsp;                }
+<i>341</i>&nbsp;            }
+<i>342</i>&nbsp;        }
+<i>343</i>&nbsp;    }
+<i>344</i>&nbsp;
+<i>345</i>&nbsp;    /**
+<i>346</i>&nbsp;     * Determines if the HTML.Tag associated with the
+<i>347</i>&nbsp;     * element is a block tag.
+<i>348</i>&nbsp;     *
+<i>349</i>&nbsp;     * @param attr  an AttributeSet
+<i>350</i>&nbsp;     * @return  true if tag is block tag, false otherwise.
+<b class="nc"><i>351</i>&nbsp;     */</b>
+<b class="nc"><i>352</i>&nbsp;    protected boolean isBlockTag(AttributeSet attr) {</b>
+<b class="nc"><i>353</i>&nbsp;        Object o = attr.getAttribute(StyleConstants.NameAttribute);</b>
+<b class="nc"><i>354</i>&nbsp;        if (o instanceof HTML.Tag) {</b>
+<i>355</i>&nbsp;            HTML.Tag name = (HTML.Tag) o;
+<b class="nc"><i>356</i>&nbsp;            return name.isBlock();</b>
+<i>357</i>&nbsp;        }
+<i>358</i>&nbsp;        return false;
+<i>359</i>&nbsp;    }
+<i>360</i>&nbsp;
+<i>361</i>&nbsp;
+<i>362</i>&nbsp;    /**
+<i>363</i>&nbsp;     * Writes out a start tag for the element.
+<i>364</i>&nbsp;     * Ignores all synthesized elements.
+<i>365</i>&nbsp;     *
+<i>366</i>&nbsp;     * @param elem an Element
+<i>367</i>&nbsp;     * @throws IOException on any I/O error
+<i>368</i>&nbsp;     * @throws BadLocationException if pos represents an invalid
+<b class="nc"><i>369</i>&nbsp;     *            location within the document.</b>
+<i>370</i>&nbsp;     */
+<i>371</i>&nbsp;    protected void startTag(Element elem) throws IOException, BadLocationException {
+<i>372</i>&nbsp;
+<i>373</i>&nbsp;        if (synthesizedElement(elem)) {
+<b class="nc"><i>374</i>&nbsp;            return;</b>
+<b class="nc"><i>375</i>&nbsp;        }</b>
+<i>376</i>&nbsp;
+<b class="nc"><i>377</i>&nbsp;        // Determine the name, as an HTML.Tag.</b>
+<b class="nc"><i>378</i>&nbsp;        AttributeSet attr = elem.getAttributes();</b>
+<i>379</i>&nbsp;        Object nameAttribute = attr.getAttribute(StyleConstants.NameAttribute);
+<i>380</i>&nbsp;        HTML.Tag name;
+<b class="nc"><i>381</i>&nbsp;        if (nameAttribute instanceof HTML.Tag) {</b>
+<i>382</i>&nbsp;            name = (HTML.Tag)nameAttribute;
+<i>383</i>&nbsp;        }
+<b class="nc"><i>384</i>&nbsp;        else {</b>
+<b class="nc"><i>385</i>&nbsp;            name = null;</b>
+<b class="nc"><i>386</i>&nbsp;        }</b>
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;        if (name == HTML.Tag.PRE) {
+<i>389</i>&nbsp;            inPre = true;
+<b class="nc"><i>390</i>&nbsp;            preEndOffset = elem.getEndOffset();</b>
+<i>391</i>&nbsp;        }
+<b class="nc"><i>392</i>&nbsp;</b>
+<b class="nc"><i>393</i>&nbsp;        // write out end tags for item on stack</b>
+<b class="nc"><i>394</i>&nbsp;        closeOutUnwantedEmbeddedTags(attr);</b>
+<b class="nc"><i>395</i>&nbsp;</b>
+<i>396</i>&nbsp;        if (inContent) {
+<i>397</i>&nbsp;            writeLineSeparator();
+<b class="nc"><i>398</i>&nbsp;            inContent = false;</b>
+<i>399</i>&nbsp;            newlineOutputed = false;
+<b class="nc"><i>400</i>&nbsp;        }</b>
+<b class="nc"><i>401</i>&nbsp;</b>
+<b class="nc"><i>402</i>&nbsp;        if (completeDoc &amp;&amp; name == HTML.Tag.BODY &amp;&amp; !wroteHead) {</b>
+<b class="nc"><i>403</i>&nbsp;            // If the head has not been output, output it and the styles.</b>
+<b class="nc"><i>404</i>&nbsp;            wroteHead = true;</b>
+<b class="nc"><i>405</i>&nbsp;            indentSmart();</b>
+<b class="nc"><i>406</i>&nbsp;            write(&quot;&lt;head&gt;&quot;);</b>
+<b class="nc"><i>407</i>&nbsp;            writeLineSeparator();</b>
+<b class="nc"><i>408</i>&nbsp;            incrIndent();</b>
+<b class="nc"><i>409</i>&nbsp;            writeStyles(((HTMLDocument)getDocument()).getStyleSheet());</b>
+<b class="nc"><i>410</i>&nbsp;            decrIndent();</b>
+<i>411</i>&nbsp;            writeLineSeparator();
+<i>412</i>&nbsp;            indentSmart();
+<b class="nc"><i>413</i>&nbsp;            write(&quot;&lt;/head&gt;&quot;);</b>
+<b class="nc"><i>414</i>&nbsp;            writeLineSeparator();</b>
+<b class="nc"><i>415</i>&nbsp;        }</b>
+<b class="nc"><i>416</i>&nbsp;</b>
+<b class="nc"><i>417</i>&nbsp;        indentSmart();</b>
+<b class="nc"><i>418</i>&nbsp;        write(&#39;&lt;&#39;);</b>
+<b class="nc"><i>419</i>&nbsp;        write(elem.getName());</b>
+<i>420</i>&nbsp;        writeAttributes(attr);
+<i>421</i>&nbsp;        write(&#39;&gt;&#39;);
+<b class="nc"><i>422</i>&nbsp;        if (name != HTML.Tag.PRE) {</b>
+<b class="nc"><i>423</i>&nbsp;            writeLineSeparator();</b>
+<b class="nc"><i>424</i>&nbsp;        }</b>
+<b class="nc"><i>425</i>&nbsp;</b>
+<b class="nc"><i>426</i>&nbsp;        if (name == HTML.Tag.TEXTAREA) {</b>
+<i>427</i>&nbsp;            textAreaContent(elem.getAttributes());
+<i>428</i>&nbsp;        } else if (name == HTML.Tag.SELECT) {
+<b class="nc"><i>429</i>&nbsp;            selectContent(elem.getAttributes());</b>
+<i>430</i>&nbsp;        } else if (completeDoc &amp;&amp; name == HTML.Tag.BODY) {
+<b class="nc"><i>431</i>&nbsp;            // Write out the maps, which is not stored as Elements in</b>
+<b class="nc"><i>432</i>&nbsp;            // the Document.</b>
+<b class="nc"><i>433</i>&nbsp;            writeMaps(((HTMLDocument)getDocument()).getMaps());</b>
+<b class="nc"><i>434</i>&nbsp;        }</b>
+<b class="nc"><i>435</i>&nbsp;        else if (name == HTML.Tag.HEAD) {</b>
+<b class="nc"><i>436</i>&nbsp;            HTMLDocument document = (HTMLDocument)getDocument();</b>
+<b class="nc"><i>437</i>&nbsp;            wroteHead = true;</b>
+<b class="nc"><i>438</i>&nbsp;            incrIndent();</b>
+<b class="nc"><i>439</i>&nbsp;            writeStyles(document.getStyleSheet());</b>
+<i>440</i>&nbsp;            if (document.hasBaseTag()) {
+<b class="nc"><i>441</i>&nbsp;                indentSmart();</b>
+<i>442</i>&nbsp;                write(&quot;&lt;base href=\&quot;&quot; + document.getBase() + &quot;\&quot;&gt;&quot;);
+<i>443</i>&nbsp;                writeLineSeparator();
+<i>444</i>&nbsp;            }
+<i>445</i>&nbsp;            decrIndent();
+<i>446</i>&nbsp;        }
+<i>447</i>&nbsp;
+<i>448</i>&nbsp;    }
+<i>449</i>&nbsp;
+<i>450</i>&nbsp;
+<i>451</i>&nbsp;    /**
+<i>452</i>&nbsp;     * Writes out text that is contained in a TEXTAREA form
+<i>453</i>&nbsp;     * element.
+<i>454</i>&nbsp;     *
+<i>455</i>&nbsp;     * @param attr  an AttributeSet
+<i>456</i>&nbsp;     * @exception IOException on any I/O error
+<b class="nc"><i>457</i>&nbsp;     * @exception BadLocationException if pos represents an invalid</b>
+<b class="nc"><i>458</i>&nbsp;     *            location within the document.</b>
+<b class="nc"><i>459</i>&nbsp;     */</b>
+<b class="nc"><i>460</i>&nbsp;    protected void textAreaContent(AttributeSet attr) throws BadLocationException, IOException {</b>
+<i>461</i>&nbsp;        Document doc = (Document)attr.getAttribute(StyleConstants.ModelAttribute);
+<b class="nc"><i>462</i>&nbsp;        if (doc != null &amp;&amp; doc.getLength() &gt; 0) {</b>
+<b class="nc"><i>463</i>&nbsp;            if (segment == null) {</b>
+<b class="nc"><i>464</i>&nbsp;                segment = new Segment();</b>
+<b class="nc"><i>465</i>&nbsp;            }</b>
+<b class="nc"><i>466</i>&nbsp;            doc.getText(0, doc.getLength(), segment);</b>
+<b class="nc"><i>467</i>&nbsp;            if (segment.count &gt; 0) {</b>
+<b class="nc"><i>468</i>&nbsp;                inTextArea = true;</b>
+<b class="nc"><i>469</i>&nbsp;                incrIndent();</b>
+<b class="nc"><i>470</i>&nbsp;                indentSmart();</b>
+<b class="nc"><i>471</i>&nbsp;                setCanWrapLines(true);</b>
+<b class="nc"><i>472</i>&nbsp;                replaceEntities = true;</b>
+<b class="nc"><i>473</i>&nbsp;                write(segment.array, segment.offset, segment.count);</b>
+<b class="nc"><i>474</i>&nbsp;                replaceEntities = false;</b>
+<i>475</i>&nbsp;                setCanWrapLines(false);
+<i>476</i>&nbsp;                writeLineSeparator();
+<i>477</i>&nbsp;                inTextArea = false;
+<i>478</i>&nbsp;                decrIndent();
+<i>479</i>&nbsp;            }
+<i>480</i>&nbsp;        }
+<i>481</i>&nbsp;    }
+<i>482</i>&nbsp;
+<i>483</i>&nbsp;
+<i>484</i>&nbsp;    /**
+<i>485</i>&nbsp;     * Writes out text.  If a range is specified when the constructor
+<i>486</i>&nbsp;     * is invoked, then only the appropriate range of text is written
+<i>487</i>&nbsp;     * out.
+<i>488</i>&nbsp;     *
+<i>489</i>&nbsp;     * @param elem   an Element
+<i>490</i>&nbsp;     * @exception IOException on any I/O error
+<b class="nc"><i>491</i>&nbsp;     * @exception BadLocationException if pos represents an invalid</b>
+<b class="nc"><i>492</i>&nbsp;     *            location within the document.</b>
+<b class="nc"><i>493</i>&nbsp;     */</b>
+<b class="nc"><i>494</i>&nbsp;    protected void text(Element elem) throws BadLocationException, IOException {</b>
+<b class="nc"><i>495</i>&nbsp;        int start = Math.max(getStartOffset(), elem.getStartOffset());</b>
+<i>496</i>&nbsp;        int end = Math.min(getEndOffset(), elem.getEndOffset());
+<b class="nc"><i>497</i>&nbsp;        if (start &lt; end) {</b>
+<b class="nc"><i>498</i>&nbsp;            if (segment == null) {</b>
+<b class="nc"><i>499</i>&nbsp;                segment = new Segment();</b>
+<b class="nc"><i>500</i>&nbsp;            }</b>
+<b class="nc"><i>501</i>&nbsp;            getDocument().getText(start, end - start, segment);</b>
+<i>502</i>&nbsp;            newlineOutputed = false;
+<b class="nc"><i>503</i>&nbsp;            if (segment.count &gt; 0) {</b>
+<b class="nc"><i>504</i>&nbsp;                if (segment.array[segment.offset + segment.count - 1] == &#39;\n&#39;){</b>
+<b class="nc"><i>505</i>&nbsp;                    newlineOutputed = true;</b>
+<i>506</i>&nbsp;                }
+<i>507</i>&nbsp;                if (inPre &amp;&amp; end == preEndOffset) {
+<i>508</i>&nbsp;                    if (segment.count &gt; 1) {
+<i>509</i>&nbsp;                        segment.count--;
+<i>510</i>&nbsp;                    }
+<b class="nc"><i>511</i>&nbsp;                    else {</b>
+<b class="nc"><i>512</i>&nbsp;                        return;</b>
+<b class="nc"><i>513</i>&nbsp;                    }</b>
+<b class="nc"><i>514</i>&nbsp;                }</b>
+<b class="nc"><i>515</i>&nbsp;                replaceEntities = true;</b>
+<i>516</i>&nbsp;                setCanWrapLines(!inPre);
+<i>517</i>&nbsp;                write(segment.array, segment.offset, segment.count);
+<i>518</i>&nbsp;                setCanWrapLines(false);
+<i>519</i>&nbsp;                replaceEntities = false;
+<i>520</i>&nbsp;            }
+<i>521</i>&nbsp;        }
+<i>522</i>&nbsp;    }
+<i>523</i>&nbsp;
+<i>524</i>&nbsp;    /**
+<i>525</i>&nbsp;     * Writes out the content of the SELECT form element.
+<i>526</i>&nbsp;     *
+<b class="nc"><i>527</i>&nbsp;     * @param attr the AttributeSet associated with the form element</b>
+<b class="nc"><i>528</i>&nbsp;     * @exception IOException on any I/O error</b>
+<b class="nc"><i>529</i>&nbsp;     */</b>
+<b class="nc"><i>530</i>&nbsp;    protected void selectContent(AttributeSet attr) throws IOException {</b>
+<b class="nc"><i>531</i>&nbsp;        Object model = attr.getAttribute(StyleConstants.ModelAttribute);</b>
+<b class="nc"><i>532</i>&nbsp;        incrIndent();</b>
+<b class="nc"><i>533</i>&nbsp;        if (model instanceof OptionListModel) {</b>
+<b class="nc"><i>534</i>&nbsp;            @SuppressWarnings(&quot;unchecked&quot;)</b>
+<i>535</i>&nbsp;            OptionListModel&lt;Option&gt; listModel = (OptionListModel&lt;Option&gt;) model;
+<b class="nc"><i>536</i>&nbsp;            int size = listModel.getSize();</b>
+<b class="nc"><i>537</i>&nbsp;            for (int i = 0; i &lt; size; i++) {</b>
+<b class="nc"><i>538</i>&nbsp;                Option option = listModel.getElementAt(i);</b>
+<b class="nc"><i>539</i>&nbsp;                writeOption(option);</b>
+<b class="nc"><i>540</i>&nbsp;            }</b>
+<b class="nc"><i>541</i>&nbsp;        } else if (model instanceof OptionComboBoxModel) {</b>
+<i>542</i>&nbsp;            @SuppressWarnings(&quot;unchecked&quot;)
+<i>543</i>&nbsp;            OptionComboBoxModel&lt;Option&gt; comboBoxModel = (OptionComboBoxModel&lt;Option&gt;) model;
+<b class="nc"><i>544</i>&nbsp;            int size = comboBoxModel.getSize();</b>
+<i>545</i>&nbsp;            for (int i = 0; i &lt; size; i++) {
+<i>546</i>&nbsp;                Option option = comboBoxModel.getElementAt(i);
+<i>547</i>&nbsp;                writeOption(option);
+<i>548</i>&nbsp;            }
+<i>549</i>&nbsp;        }
+<i>550</i>&nbsp;        decrIndent();
+<i>551</i>&nbsp;    }
+<i>552</i>&nbsp;
+<i>553</i>&nbsp;
+<i>554</i>&nbsp;    /**
+<i>555</i>&nbsp;     * Writes out the content of the Option form element.
+<b class="nc"><i>556</i>&nbsp;     * @param option  an Option</b>
+<b class="nc"><i>557</i>&nbsp;     * @exception IOException on any I/O error</b>
+<b class="nc"><i>558</i>&nbsp;     *</b>
+<i>559</i>&nbsp;     */
+<b class="nc"><i>560</i>&nbsp;    protected void writeOption(Option option) throws IOException {</b>
+<b class="nc"><i>561</i>&nbsp;</b>
+<b class="nc"><i>562</i>&nbsp;        indentSmart();</b>
+<b class="nc"><i>563</i>&nbsp;        write(&#39;&lt;&#39;);</b>
+<i>564</i>&nbsp;        write(&quot;option&quot;);
+<b class="nc"><i>565</i>&nbsp;        // PENDING: should this be changed to check for null first?</b>
+<b class="nc"><i>566</i>&nbsp;        Object value = option.getAttributes().getAttribute</b>
+<i>567</i>&nbsp;                              (HTML.Attribute.VALUE);
+<b class="nc"><i>568</i>&nbsp;        if (value != null) {</b>
+<b class="nc"><i>569</i>&nbsp;            write(&quot; value=&quot;+ value);</b>
+<b class="nc"><i>570</i>&nbsp;        }</b>
+<i>571</i>&nbsp;        if (option.isSelected()) {
+<b class="nc"><i>572</i>&nbsp;            write(&quot; selected&quot;);</b>
+<i>573</i>&nbsp;        }
+<i>574</i>&nbsp;        write(&#39;&gt;&#39;);
+<i>575</i>&nbsp;        if (option.getLabel() != null) {
+<i>576</i>&nbsp;            write(option.getLabel());
+<i>577</i>&nbsp;        }
+<i>578</i>&nbsp;        writeLineSeparator();
+<i>579</i>&nbsp;    }
+<i>580</i>&nbsp;
+<i>581</i>&nbsp;    /**
+<b class="nc"><i>582</i>&nbsp;     * Writes out an end tag for the element.</b>
+<i>583</i>&nbsp;     *
+<i>584</i>&nbsp;     * @param elem    an Element
+<i>585</i>&nbsp;     * @exception IOException on any I/O error
+<i>586</i>&nbsp;     */
+<b class="nc"><i>587</i>&nbsp;    protected void endTag(Element elem) throws IOException {</b>
+<b class="nc"><i>588</i>&nbsp;        if (synthesizedElement(elem)) {</b>
+<b class="nc"><i>589</i>&nbsp;            return;</b>
+<b class="nc"><i>590</i>&nbsp;        }</b>
+<i>591</i>&nbsp;
+<b class="nc"><i>592</i>&nbsp;        // write out end tags for item on stack</b>
+<b class="nc"><i>593</i>&nbsp;        closeOutUnwantedEmbeddedTags(elem.getAttributes());</b>
+<i>594</i>&nbsp;        if (inContent) {
+<b class="nc"><i>595</i>&nbsp;            if (!newlineOutputed &amp;&amp; !inPre) {</b>
+<b class="nc"><i>596</i>&nbsp;                writeLineSeparator();</b>
+<i>597</i>&nbsp;            }
+<b class="nc"><i>598</i>&nbsp;            newlineOutputed = false;</b>
+<b class="nc"><i>599</i>&nbsp;            inContent = false;</b>
+<i>600</i>&nbsp;        }
+<b class="nc"><i>601</i>&nbsp;        if (!inPre) {</b>
+<b class="nc"><i>602</i>&nbsp;            indentSmart();</b>
+<b class="nc"><i>603</i>&nbsp;        }</b>
+<b class="nc"><i>604</i>&nbsp;        if (matchNameAttribute(elem.getAttributes(), HTML.Tag.PRE)) {</b>
+<b class="nc"><i>605</i>&nbsp;            inPre = false;</b>
+<i>606</i>&nbsp;        }
+<i>607</i>&nbsp;        write(&#39;&lt;&#39;);
+<i>608</i>&nbsp;        write(&#39;/&#39;);
+<i>609</i>&nbsp;        write(elem.getName());
+<i>610</i>&nbsp;        write(&#39;&gt;&#39;);
+<i>611</i>&nbsp;        writeLineSeparator();
+<i>612</i>&nbsp;    }
+<i>613</i>&nbsp;
+<i>614</i>&nbsp;
+<i>615</i>&nbsp;
+<i>616</i>&nbsp;    /**
+<i>617</i>&nbsp;     * Writes out comments.
+<i>618</i>&nbsp;     *
+<b class="nc"><i>619</i>&nbsp;     * @param elem    an Element</b>
+<b class="nc"><i>620</i>&nbsp;     * @exception IOException on any I/O error</b>
+<b class="nc"><i>621</i>&nbsp;     * @exception BadLocationException if pos represents an invalid</b>
+<b class="nc"><i>622</i>&nbsp;     *            location within the document.</b>
+<b class="nc"><i>623</i>&nbsp;     */</b>
+<i>624</i>&nbsp;    protected void comment(Element elem) throws BadLocationException, IOException {
+<i>625</i>&nbsp;        AttributeSet as = elem.getAttributes();
+<b class="nc"><i>626</i>&nbsp;        if (matchNameAttribute(as, HTML.Tag.COMMENT)) {</b>
+<i>627</i>&nbsp;            Object comment = as.getAttribute(HTML.Attribute.COMMENT);
+<i>628</i>&nbsp;            if (comment instanceof String) {
+<i>629</i>&nbsp;                writeComment((String)comment);
+<i>630</i>&nbsp;            }
+<i>631</i>&nbsp;            else {
+<i>632</i>&nbsp;                writeComment(null);
+<i>633</i>&nbsp;            }
+<i>634</i>&nbsp;        }
+<i>635</i>&nbsp;    }
+<i>636</i>&nbsp;
+<i>637</i>&nbsp;
+<i>638</i>&nbsp;    /**
+<i>639</i>&nbsp;     * Writes out comment string.
+<i>640</i>&nbsp;     *
+<b class="nc"><i>641</i>&nbsp;     * @param string   the comment</b>
+<b class="nc"><i>642</i>&nbsp;     * @exception IOException on any I/O error</b>
+<b class="nc"><i>643</i>&nbsp;     * @exception BadLocationException if pos represents an invalid</b>
+<i>644</i>&nbsp;     *            location within the document.
+<b class="nc"><i>645</i>&nbsp;     */</b>
+<b class="nc"><i>646</i>&nbsp;    void writeComment(String string) throws IOException {</b>
+<b class="nc"><i>647</i>&nbsp;        write(&quot;&lt;!--&quot;);</b>
+<i>648</i>&nbsp;        if (string != null) {
+<i>649</i>&nbsp;            write(string);
+<i>650</i>&nbsp;        }
+<i>651</i>&nbsp;        write(&quot;--&gt;&quot;);
+<i>652</i>&nbsp;        writeLineSeparator();
+<i>653</i>&nbsp;        indentSmart();
+<i>654</i>&nbsp;    }
+<i>655</i>&nbsp;
+<b class="nc"><i>656</i>&nbsp;</b>
+<b class="nc"><i>657</i>&nbsp;    /**</b>
+<i>658</i>&nbsp;     * Writes out any additional comments (comments outside of the body)
+<b class="nc"><i>659</i>&nbsp;     * stored under the property HTMLDocument.AdditionalComments.</b>
+<b class="nc"><i>660</i>&nbsp;     */</b>
+<b class="nc"><i>661</i>&nbsp;    void writeAdditionalComments() throws IOException {</b>
+<b class="nc"><i>662</i>&nbsp;        Object comments = getDocument().getProperty</b>
+<b class="nc"><i>663</i>&nbsp;                                        (HTMLDocument.AdditionalComments);</b>
+<i>664</i>&nbsp;
+<i>665</i>&nbsp;        if (comments instanceof Vector) {
+<i>666</i>&nbsp;            Vector&lt;?&gt; v = (Vector)comments;
+<i>667</i>&nbsp;            for (int counter = 0, maxCounter = v.size(); counter &lt; maxCounter;
+<i>668</i>&nbsp;                 counter++) {
+<i>669</i>&nbsp;                writeComment(v.elementAt(counter).toString());
+<i>670</i>&nbsp;            }
+<i>671</i>&nbsp;        }
+<i>672</i>&nbsp;    }
+<i>673</i>&nbsp;
+<i>674</i>&nbsp;
+<b class="nc"><i>675</i>&nbsp;    /**</b>
+<b class="nc"><i>676</i>&nbsp;     * Returns {@code true} if the element is a</b>
+<i>677</i>&nbsp;     * synthesized element.  Currently we are only testing
+<b class="nc"><i>678</i>&nbsp;     * for the p-implied tag.</b>
+<i>679</i>&nbsp;     *
+<i>680</i>&nbsp;     * @param elem an element
+<i>681</i>&nbsp;     * @return {@code true} if the element is a synthesized element.
+<i>682</i>&nbsp;     */
+<i>683</i>&nbsp;    protected boolean synthesizedElement(Element elem) {
+<i>684</i>&nbsp;        if (matchNameAttribute(elem.getAttributes(), HTML.Tag.IMPLIED)) {
+<i>685</i>&nbsp;            return true;
+<i>686</i>&nbsp;        }
+<b class="nc"><i>687</i>&nbsp;        return false;</b>
+<b class="nc"><i>688</i>&nbsp;    }</b>
+<b class="nc"><i>689</i>&nbsp;</b>
+<b class="nc"><i>690</i>&nbsp;</b>
+<b class="nc"><i>691</i>&nbsp;    /**</b>
+<i>692</i>&nbsp;     * Returns true if the StyleConstants.NameAttribute is
+<i>693</i>&nbsp;     * equal to the tag that is passed in as a parameter.
+<b class="nc"><i>694</i>&nbsp;     *</b>
+<i>695</i>&nbsp;     * @param attr a set of attributes
+<i>696</i>&nbsp;     * @param tag an HTML tag
+<i>697</i>&nbsp;     * @return {@code true} if the StyleConstants.NameAttribute is equal to the tag that is passed in as a parameter.
+<i>698</i>&nbsp;     */
+<i>699</i>&nbsp;    protected boolean matchNameAttribute(AttributeSet attr, HTML.Tag tag) {
+<i>700</i>&nbsp;        Object o = attr.getAttribute(StyleConstants.NameAttribute);
+<i>701</i>&nbsp;        if (o instanceof HTML.Tag) {
+<i>702</i>&nbsp;            HTML.Tag name = (HTML.Tag) o;
+<i>703</i>&nbsp;            if (name == tag) {
+<i>704</i>&nbsp;                return true;
+<i>705</i>&nbsp;            }
+<i>706</i>&nbsp;        }
+<i>707</i>&nbsp;        return false;
+<b class="nc"><i>708</i>&nbsp;    }</b>
+<i>709</i>&nbsp;
+<b class="nc"><i>710</i>&nbsp;    /**</b>
+<b class="nc"><i>711</i>&nbsp;     * Searches for embedded tags in the AttributeSet</b>
+<b class="nc"><i>712</i>&nbsp;     * and writes them out.  It also stores these tags in a vector</b>
+<b class="nc"><i>713</i>&nbsp;     * so that when appropriate the corresponding end tags can be</b>
+<b class="nc"><i>714</i>&nbsp;     * written out.</b>
+<b class="nc"><i>715</i>&nbsp;     *</b>
+<b class="nc"><i>716</i>&nbsp;     * @param attr a set of attributes</b>
+<i>717</i>&nbsp;     * @exception IOException on any I/O error
+<b class="nc"><i>718</i>&nbsp;     */</b>
+<b class="nc"><i>719</i>&nbsp;    protected void writeEmbeddedTags(AttributeSet attr) throws IOException {</b>
+<b class="nc"><i>720</i>&nbsp;</b>
+<b class="nc"><i>721</i>&nbsp;        // translate css attributes to html</b>
+<b class="nc"><i>722</i>&nbsp;        attr = convertToHTML(attr, oConvAttr);</b>
+<i>723</i>&nbsp;
+<b class="nc"><i>724</i>&nbsp;        Enumeration&lt;?&gt; names = attr.getAttributeNames();</b>
+<b class="nc"><i>725</i>&nbsp;        while (names.hasMoreElements()) {</b>
+<b class="nc"><i>726</i>&nbsp;            Object name = names.nextElement();</b>
+<i>727</i>&nbsp;            if (name instanceof HTML.Tag) {
+<b class="nc"><i>728</i>&nbsp;                HTML.Tag tag = (HTML.Tag)name;</b>
+<i>729</i>&nbsp;                if (tag == HTML.Tag.FORM || tags.contains(tag)) {
+<i>730</i>&nbsp;                    continue;
+<i>731</i>&nbsp;                }
+<i>732</i>&nbsp;                write(&#39;&lt;&#39;);
+<i>733</i>&nbsp;                write(tag.toString());
+<i>734</i>&nbsp;                Object o = attr.getAttribute(tag);
+<i>735</i>&nbsp;                if (o != null &amp;&amp; o instanceof AttributeSet) {
+<i>736</i>&nbsp;                    writeAttributes((AttributeSet)o);
+<i>737</i>&nbsp;                }
+<i>738</i>&nbsp;                write(&#39;&gt;&#39;);
+<b class="nc"><i>739</i>&nbsp;                tags.addElement(tag);</b>
+<b class="nc"><i>740</i>&nbsp;                tagValues.addElement(o);</b>
+<i>741</i>&nbsp;            }
+<b class="nc"><i>742</i>&nbsp;        }</b>
+<b class="nc"><i>743</i>&nbsp;    }</b>
+<b class="nc"><i>744</i>&nbsp;</b>
+<i>745</i>&nbsp;
+<i>746</i>&nbsp;    /**
+<b class="nc"><i>747</i>&nbsp;     * Searches the attribute set for a tag, both of which</b>
+<i>748</i>&nbsp;     * are passed in as a parameter.  Returns true if no match is found
+<i>749</i>&nbsp;     * and false otherwise.
+<i>750</i>&nbsp;     */
+<i>751</i>&nbsp;    private boolean noMatchForTagInAttributes(AttributeSet attr, HTML.Tag t,
+<i>752</i>&nbsp;                                              Object tagValue) {
+<i>753</i>&nbsp;        if (attr != null &amp;&amp; attr.isDefined(t)) {
+<i>754</i>&nbsp;            Object newValue = attr.getAttribute(t);
+<i>755</i>&nbsp;
+<i>756</i>&nbsp;            if ((tagValue == null) ? (newValue == null) :
+<i>757</i>&nbsp;                (newValue != null &amp;&amp; tagValue.equals(newValue))) {
+<i>758</i>&nbsp;                return false;
+<i>759</i>&nbsp;            }
+<i>760</i>&nbsp;        }
+<b class="nc"><i>761</i>&nbsp;        return true;</b>
+<i>762</i>&nbsp;    }
+<i>763</i>&nbsp;
+<b class="nc"><i>764</i>&nbsp;</b>
+<i>765</i>&nbsp;    /**
+<i>766</i>&nbsp;     * Searches the attribute set and for each tag
+<i>767</i>&nbsp;     * that is stored in the tag vector.  If the tag is not found,
+<b class="nc"><i>768</i>&nbsp;     * then the tag is removed from the vector and a corresponding</b>
+<b class="nc"><i>769</i>&nbsp;     * end tag is written out.</b>
+<i>770</i>&nbsp;     *
+<b class="nc"><i>771</i>&nbsp;     * @param attr a set of attributes</b>
+<b class="nc"><i>772</i>&nbsp;     * @exception IOException on any I/O error</b>
+<b class="nc"><i>773</i>&nbsp;     */</b>
+<b class="nc"><i>774</i>&nbsp;    protected void closeOutUnwantedEmbeddedTags(AttributeSet attr) throws IOException {</b>
+<b class="nc"><i>775</i>&nbsp;</b>
+<b class="nc"><i>776</i>&nbsp;        tagsToRemove.removeAllElements();</b>
+<i>777</i>&nbsp;
+<i>778</i>&nbsp;        // translate css attributes to html
+<b class="nc"><i>779</i>&nbsp;        attr = convertToHTML(attr, null);</b>
+<i>780</i>&nbsp;
+<b class="nc"><i>781</i>&nbsp;        HTML.Tag t;</b>
+<b class="nc"><i>782</i>&nbsp;        Object tValue;</b>
+<b class="nc"><i>783</i>&nbsp;        int firstIndex = -1;</b>
+<b class="nc"><i>784</i>&nbsp;        int size = tags.size();</b>
+<b class="nc"><i>785</i>&nbsp;        // First, find all the tags that need to be removed.</b>
+<b class="nc"><i>786</i>&nbsp;        for (int i = size - 1; i &gt;= 0; i--) {</b>
+<i>787</i>&nbsp;            t = tags.elementAt(i);
+<b class="nc"><i>788</i>&nbsp;            tValue = tagValues.elementAt(i);</b>
+<b class="nc"><i>789</i>&nbsp;            if ((attr == null) || noMatchForTagInAttributes(attr, t, tValue)) {</b>
+<b class="nc"><i>790</i>&nbsp;                firstIndex = i;</b>
+<b class="nc"><i>791</i>&nbsp;                tagsToRemove.addElement(t);</b>
+<i>792</i>&nbsp;            }
+<i>793</i>&nbsp;        }
+<i>794</i>&nbsp;        if (firstIndex != -1) {
+<b class="nc"><i>795</i>&nbsp;            // Then close them out.</b>
+<b class="nc"><i>796</i>&nbsp;            boolean removeAll = ((size - firstIndex) == tagsToRemove.size());</b>
+<b class="nc"><i>797</i>&nbsp;            for (int i = size - 1; i &gt;= firstIndex; i--) {</b>
+<b class="nc"><i>798</i>&nbsp;                t = tags.elementAt(i);</b>
+<b class="nc"><i>799</i>&nbsp;                if (removeAll || tagsToRemove.contains(t)) {</b>
+<b class="nc"><i>800</i>&nbsp;                    tags.removeElementAt(i);</b>
+<b class="nc"><i>801</i>&nbsp;                    tagValues.removeElementAt(i);</b>
+<b class="nc"><i>802</i>&nbsp;                }</b>
+<i>803</i>&nbsp;                write(&#39;&lt;&#39;);
+<b class="nc"><i>804</i>&nbsp;                write(&#39;/&#39;);</b>
+<i>805</i>&nbsp;                write(t.toString());
+<i>806</i>&nbsp;                write(&#39;&gt;&#39;);
+<i>807</i>&nbsp;            }
+<i>808</i>&nbsp;            // Have to output any tags after firstIndex that still remaing,
+<i>809</i>&nbsp;            // as we closed them out, but they should remain open.
+<i>810</i>&nbsp;            size = tags.size();
+<i>811</i>&nbsp;            for (int i = firstIndex; i &lt; size; i++) {
+<i>812</i>&nbsp;                t = tags.elementAt(i);
+<i>813</i>&nbsp;                write(&#39;&lt;&#39;);
+<i>814</i>&nbsp;                write(t.toString());
+<i>815</i>&nbsp;                Object o = tagValues.elementAt(i);
+<b class="nc"><i>816</i>&nbsp;                if (o != null &amp;&amp; o instanceof AttributeSet) {</b>
+<b class="nc"><i>817</i>&nbsp;                    writeAttributes((AttributeSet)o);</b>
+<i>818</i>&nbsp;                }
+<i>819</i>&nbsp;                write(&#39;&gt;&#39;);
+<i>820</i>&nbsp;            }
+<i>821</i>&nbsp;        }
+<i>822</i>&nbsp;    }
+<i>823</i>&nbsp;
+<i>824</i>&nbsp;
+<i>825</i>&nbsp;    /**
+<i>826</i>&nbsp;     * Determines if the element associated with the attributeset
+<i>827</i>&nbsp;     * is a TEXTAREA or SELECT.  If true, returns true else
+<i>828</i>&nbsp;     * false
+<i>829</i>&nbsp;     */
+<i>830</i>&nbsp;    private boolean isFormElementWithContent(AttributeSet attr) {
+<i>831</i>&nbsp;        return matchNameAttribute(attr, HTML.Tag.TEXTAREA) ||
+<b class="nc"><i>832</i>&nbsp;                matchNameAttribute(attr, HTML.Tag.SELECT);</b>
+<i>833</i>&nbsp;    }
+<b class="nc"><i>834</i>&nbsp;</b>
+<b class="nc"><i>835</i>&nbsp;    /**</b>
+<b class="nc"><i>836</i>&nbsp;     * Determines if the element associated with the attributeset</b>
+<b class="nc"><i>837</i>&nbsp;     * is a P tag and it is within Pre tag.  If true, returns true else</b>
+<b class="nc"><i>838</i>&nbsp;     * false</b>
+<b class="nc"><i>839</i>&nbsp;     */</b>
+<b class="nc"><i>840</i>&nbsp;    private boolean isPreTagWithParagraphTag(AttributeSet attr) {</b>
+<b class="nc"><i>841</i>&nbsp;        return inPre &amp;&amp; matchNameAttribute(attr, HTML.Tag.P);</b>
+<i>842</i>&nbsp;    }
+<i>843</i>&nbsp;
+<b class="nc"><i>844</i>&nbsp;    /**</b>
+<i>845</i>&nbsp;     * Determines whether a the indentation needs to be
+<i>846</i>&nbsp;     * incremented.  Basically, if next is a child of current, and
+<i>847</i>&nbsp;     * next is NOT a synthesized element, the indent level will be
+<i>848</i>&nbsp;     * incremented.  If there is a parent-child relationship and &quot;next&quot;
+<i>849</i>&nbsp;     * is a synthesized element, then its children must be indented.
+<i>850</i>&nbsp;     * This state is maintained by the indentNext boolean.
+<i>851</i>&nbsp;     *
+<b class="nc"><i>852</i>&nbsp;     * @return boolean that&#39;s true if indent level</b>
+<b class="nc"><i>853</i>&nbsp;     *         needs incrementing.</b>
+<b class="nc"><i>854</i>&nbsp;     */</b>
+<b class="nc"><i>855</i>&nbsp;    private boolean indentNext = false;</b>
+<i>856</i>&nbsp;    private boolean indentNeedsIncrementing(Element current, Element next) {
+<b class="nc"><i>857</i>&nbsp;        if ((next.getParentElement() == current) &amp;&amp; !inPre) {</b>
+<b class="nc"><i>858</i>&nbsp;            if (indentNext) {</b>
+<b class="nc"><i>859</i>&nbsp;                indentNext = false;</b>
+<b class="nc"><i>860</i>&nbsp;                return true;</b>
+<b class="nc"><i>861</i>&nbsp;            } else if (synthesizedElement(next)) {</b>
+<b class="nc"><i>862</i>&nbsp;                indentNext = true;</b>
+<b class="nc"><i>863</i>&nbsp;            } else if (!synthesizedElement(current)){</b>
+<i>864</i>&nbsp;                return true;
+<i>865</i>&nbsp;            }
+<b class="nc"><i>866</i>&nbsp;        }</b>
+<i>867</i>&nbsp;        return false;
+<b class="nc"><i>868</i>&nbsp;    }</b>
+<b class="nc"><i>869</i>&nbsp;</b>
+<i>870</i>&nbsp;    /**
+<i>871</i>&nbsp;     * Outputs the maps as elements. Maps are not stored as elements in
+<b class="nc"><i>872</i>&nbsp;     * the document, and as such this is used to output them.</b>
+<b class="nc"><i>873</i>&nbsp;     */</b>
+<b class="nc"><i>874</i>&nbsp;    void writeMaps(Enumeration&lt;?&gt; maps) throws IOException {</b>
+<b class="nc"><i>875</i>&nbsp;        if (maps != null) {</b>
+<b class="nc"><i>876</i>&nbsp;            while(maps.hasMoreElements()) {</b>
+<b class="nc"><i>877</i>&nbsp;                Map map = (Map)maps.nextElement();</b>
+<b class="nc"><i>878</i>&nbsp;                String name = map.getName();</b>
+<b class="nc"><i>879</i>&nbsp;</b>
+<b class="nc"><i>880</i>&nbsp;                incrIndent();</b>
+<i>881</i>&nbsp;                indentSmart();
+<i>882</i>&nbsp;                write(&quot;&lt;map&quot;);
+<b class="nc"><i>883</i>&nbsp;                if (name != null) {</b>
+<b class="nc"><i>884</i>&nbsp;                    write(&quot; name=\&quot;&quot;);</b>
+<b class="nc"><i>885</i>&nbsp;                    write(name);</b>
+<b class="nc"><i>886</i>&nbsp;                    write(&quot;\&quot;&gt;&quot;);</b>
+<b class="nc"><i>887</i>&nbsp;                }</b>
+<b class="nc"><i>888</i>&nbsp;                else {</b>
+<i>889</i>&nbsp;                    write(&#39;&gt;&#39;);
+<i>890</i>&nbsp;                }
+<i>891</i>&nbsp;                writeLineSeparator();
+<i>892</i>&nbsp;                incrIndent();
+<i>893</i>&nbsp;
+<i>894</i>&nbsp;                // Output the areas
+<i>895</i>&nbsp;                AttributeSet[] areas = map.getAreas();
+<i>896</i>&nbsp;                if (areas != null) {
+<i>897</i>&nbsp;                    for (int counter = 0, maxCounter = areas.length;
+<b class="nc"><i>898</i>&nbsp;                         counter &lt; maxCounter; counter++) {</b>
+<b class="nc"><i>899</i>&nbsp;                        indentSmart();</b>
+<b class="nc"><i>900</i>&nbsp;                        write(&quot;&lt;area&quot;);</b>
+<b class="nc"><i>901</i>&nbsp;                        writeAttributes(areas[counter]);</b>
+<b class="nc"><i>902</i>&nbsp;                        write(&quot;&gt;&lt;/area&gt;&quot;);</b>
+<b class="nc"><i>903</i>&nbsp;                        writeLineSeparator();</b>
+<i>904</i>&nbsp;                    }
+<b class="nc"><i>905</i>&nbsp;                }</b>
+<b class="nc"><i>906</i>&nbsp;                decrIndent();</b>
+<b class="nc"><i>907</i>&nbsp;                indentSmart();</b>
+<i>908</i>&nbsp;                write(&quot;&lt;/map&gt;&quot;);
+<b class="nc"><i>909</i>&nbsp;                writeLineSeparator();</b>
+<b class="nc"><i>910</i>&nbsp;                decrIndent();</b>
+<b class="nc"><i>911</i>&nbsp;            }</b>
+<i>912</i>&nbsp;        }
+<i>913</i>&nbsp;    }
+<i>914</i>&nbsp;
+<i>915</i>&nbsp;    /**
+<i>916</i>&nbsp;     * Outputs the styles as a single element. Styles are not stored as
+<i>917</i>&nbsp;     * elements, but part of the document. For the time being styles are
+<i>918</i>&nbsp;     * written out as a comment, inside a style tag.
+<i>919</i>&nbsp;     */
+<i>920</i>&nbsp;    void writeStyles(StyleSheet sheet) throws IOException {
+<i>921</i>&nbsp;        if (sheet != null) {
+<i>922</i>&nbsp;            Enumeration&lt;?&gt; styles = sheet.getStyleNames();
+<i>923</i>&nbsp;            if (styles != null) {
+<b class="nc"><i>924</i>&nbsp;                boolean outputStyle = false;</b>
+<b class="nc"><i>925</i>&nbsp;                while (styles.hasMoreElements()) {</b>
+<b class="nc"><i>926</i>&nbsp;                    String name = (String)styles.nextElement();</b>
+<b class="nc"><i>927</i>&nbsp;                    // Don&#39;t write out the default style.</b>
+<b class="nc"><i>928</i>&nbsp;                    if (!StyleContext.DEFAULT_STYLE.equals(name) &amp;&amp;</b>
+<b class="nc"><i>929</i>&nbsp;                        writeStyle(name, sheet.getStyle(name), outputStyle)) {</b>
+<b class="nc"><i>930</i>&nbsp;                        outputStyle = true;</b>
+<b class="nc"><i>931</i>&nbsp;                    }</b>
+<b class="nc"><i>932</i>&nbsp;                }</b>
+<b class="nc"><i>933</i>&nbsp;                if (outputStyle) {</b>
+<b class="nc"><i>934</i>&nbsp;                    writeStyleEndTag();</b>
+<i>935</i>&nbsp;                }
+<b class="nc"><i>936</i>&nbsp;            }</b>
+<b class="nc"><i>937</i>&nbsp;        }</b>
+<b class="nc"><i>938</i>&nbsp;    }</b>
+<b class="nc"><i>939</i>&nbsp;</b>
+<b class="nc"><i>940</i>&nbsp;    /**</b>
+<i>941</i>&nbsp;     * Outputs the named style. &lt;code&gt;outputStyle&lt;/code&gt; indicates
+<i>942</i>&nbsp;     * whether or not a style has been output yet. This will return
+<b class="nc"><i>943</i>&nbsp;     * true if a style is written.</b>
+<i>944</i>&nbsp;     */
+<b class="nc"><i>945</i>&nbsp;    boolean writeStyle(String name, Style style, boolean outputStyle)</b>
+<b class="nc"><i>946</i>&nbsp;                 throws IOException{</b>
+<b class="nc"><i>947</i>&nbsp;        boolean didOutputStyle = false;</b>
+<b class="nc"><i>948</i>&nbsp;        Enumeration&lt;?&gt; attributes = style.getAttributeNames();</b>
+<i>949</i>&nbsp;        if (attributes != null) {
+<i>950</i>&nbsp;            while (attributes.hasMoreElements()) {
+<b class="nc"><i>951</i>&nbsp;                Object attribute = attributes.nextElement();</b>
+<i>952</i>&nbsp;                if (attribute instanceof CSS.Attribute) {
+<b class="nc"><i>953</i>&nbsp;                    String value = style.getAttribute(attribute).toString();</b>
+<b class="nc"><i>954</i>&nbsp;                    if (value != null) {</b>
+<b class="nc"><i>955</i>&nbsp;                        if (!outputStyle) {</b>
+<i>956</i>&nbsp;                            writeStyleStartTag();
+<b class="nc"><i>957</i>&nbsp;                            outputStyle = true;</b>
+<i>958</i>&nbsp;                        }
+<i>959</i>&nbsp;                        if (!didOutputStyle) {
+<i>960</i>&nbsp;                            didOutputStyle = true;
+<b class="nc"><i>961</i>&nbsp;                            indentSmart();</b>
+<b class="nc"><i>962</i>&nbsp;                            write(name);</b>
+<b class="nc"><i>963</i>&nbsp;                            write(&quot; {&quot;);</b>
+<b class="nc"><i>964</i>&nbsp;                        }</b>
+<b class="nc"><i>965</i>&nbsp;                        else {</b>
+<b class="nc"><i>966</i>&nbsp;                            write(&quot;;&quot;);</b>
+<b class="nc"><i>967</i>&nbsp;                        }</b>
+<b class="nc"><i>968</i>&nbsp;                        write(&#39; &#39;);</b>
+<i>969</i>&nbsp;                        write(attribute.toString());
+<i>970</i>&nbsp;                        write(&quot;: &quot;);
+<i>971</i>&nbsp;                        write(value);
+<b class="nc"><i>972</i>&nbsp;                    }</b>
+<b class="nc"><i>973</i>&nbsp;                }</b>
+<b class="nc"><i>974</i>&nbsp;            }</b>
+<b class="nc"><i>975</i>&nbsp;        }</b>
+<b class="nc"><i>976</i>&nbsp;        if (didOutputStyle) {</b>
+<b class="nc"><i>977</i>&nbsp;            write(&quot; }&quot;);</b>
+<b class="nc"><i>978</i>&nbsp;            writeLineSeparator();</b>
+<b class="nc"><i>979</i>&nbsp;        }</b>
+<b class="nc"><i>980</i>&nbsp;        return didOutputStyle;</b>
+<i>981</i>&nbsp;    }
+<i>982</i>&nbsp;
+<i>983</i>&nbsp;    void writeStyleStartTag() throws IOException {
+<i>984</i>&nbsp;        indentSmart();
+<i>985</i>&nbsp;        write(&quot;&lt;style type=\&quot;text/css\&quot;&gt;&quot;);
+<i>986</i>&nbsp;        incrIndent();
+<i>987</i>&nbsp;        writeLineSeparator();
+<i>988</i>&nbsp;        indentSmart();
+<i>989</i>&nbsp;        write(&quot;&lt;!--&quot;);
+<i>990</i>&nbsp;        incrIndent();
+<i>991</i>&nbsp;        writeLineSeparator();
+<i>992</i>&nbsp;    }
+<i>993</i>&nbsp;
+<i>994</i>&nbsp;    void writeStyleEndTag() throws IOException {
+<b class="nc"><i>995</i>&nbsp;        decrIndent();</b>
+<b class="nc"><i>996</i>&nbsp;        indentSmart();</b>
+<i>997</i>&nbsp;        write(&quot;--&gt;&quot;);
+<b class="nc"><i>998</i>&nbsp;        writeLineSeparator();</b>
+<b class="nc"><i>999</i>&nbsp;        decrIndent();</b>
+<b class="nc"><i>1000</i>&nbsp;        indentSmart();</b>
+<i>1001</i>&nbsp;        write(&quot;&lt;/style&gt;&quot;);
+<b class="nc"><i>1002</i>&nbsp;        writeLineSeparator();</b>
+<i>1003</i>&nbsp;        indentSmart();
+<b class="nc"><i>1004</i>&nbsp;    }</b>
+<i>1005</i>&nbsp;
+<i>1006</i>&nbsp;    // --- conversion support ---------------------------
+<i>1007</i>&nbsp;
+<i>1008</i>&nbsp;    /**
+<i>1009</i>&nbsp;     * Convert the give set of attributes to be html for
+<i>1010</i>&nbsp;     * the purpose of writing them out.  Any keys that
+<i>1011</i>&nbsp;     * have been converted will not appear in the resultant
+<b class="nc"><i>1012</i>&nbsp;     * set.  Any keys not converted will appear in the</b>
+<i>1013</i>&nbsp;     * resultant set the same as the received set.&lt;p&gt;
+<i>1014</i>&nbsp;     * This will put the converted values into &lt;code&gt;to&lt;/code&gt;, unless
+<i>1015</i>&nbsp;     * it is null in which case a temporary AttributeSet will be returned.
+<i>1016</i>&nbsp;     */
+<b class="nc"><i>1017</i>&nbsp;    AttributeSet convertToHTML(AttributeSet from, MutableAttributeSet to) {</b>
+<i>1018</i>&nbsp;        if (to == null) {
+<i>1019</i>&nbsp;            to = convAttr;
+<i>1020</i>&nbsp;        }
+<i>1021</i>&nbsp;        to.removeAttributes(to);
+<i>1022</i>&nbsp;        if (writeCSS) {
+<b class="nc"><i>1023</i>&nbsp;            convertToHTML40(from, to);</b>
+<i>1024</i>&nbsp;        } else {
+<i>1025</i>&nbsp;            convertToHTML32(from, to);
+<i>1026</i>&nbsp;        }
+<i>1027</i>&nbsp;        return to;
+<i>1028</i>&nbsp;    }
+<i>1029</i>&nbsp;
+<i>1030</i>&nbsp;    /**
+<i>1031</i>&nbsp;     * If true, the writer will emit CSS attributes in preference
+<b class="nc"><i>1032</i>&nbsp;     * to HTML tags/attributes (i.e. It will emit an HTML 4.0</b>
+<i>1033</i>&nbsp;     * style).
+<i>1034</i>&nbsp;     */
+<b class="nc"><i>1035</i>&nbsp;    private boolean writeCSS = false;</b>
+<b class="nc"><i>1036</i>&nbsp;</b>
+<b class="nc"><i>1037</i>&nbsp;    /**</b>
+<b class="nc"><i>1038</i>&nbsp;     * Buffer for the purpose of attribute conversion</b>
+<b class="nc"><i>1039</i>&nbsp;     */</b>
+<b class="nc"><i>1040</i>&nbsp;    private MutableAttributeSet convAttr = new SimpleAttributeSet();</b>
+<i>1041</i>&nbsp;
+<i>1042</i>&nbsp;    /**
+<i>1043</i>&nbsp;     * Buffer for the purpose of attribute conversion. This can be
+<b class="nc"><i>1044</i>&nbsp;     * used if convAttr is being used.</b>
+<b class="nc"><i>1045</i>&nbsp;     */</b>
+<i>1046</i>&nbsp;    private MutableAttributeSet oConvAttr = new SimpleAttributeSet();
+<b class="nc"><i>1047</i>&nbsp;</b>
+<b class="nc"><i>1048</i>&nbsp;    /**</b>
+<b class="nc"><i>1049</i>&nbsp;     * Create an older style of HTML attributes.  This will</b>
+<b class="nc"><i>1050</i>&nbsp;     * convert character level attributes that have a StyleConstants</b>
+<i>1051</i>&nbsp;     * mapping over to an HTML tag/attribute.  Other CSS attributes
+<b class="nc"><i>1052</i>&nbsp;     * will be placed in an HTML style attribute.</b>
+<b class="nc"><i>1053</i>&nbsp;     */</b>
+<b class="nc"><i>1054</i>&nbsp;    private static void convertToHTML32(AttributeSet from, MutableAttributeSet to) {</b>
+<b class="nc"><i>1055</i>&nbsp;        if (from == null) {</b>
+<i>1056</i>&nbsp;            return;
+<b class="nc"><i>1057</i>&nbsp;        }</b>
+<b class="nc"><i>1058</i>&nbsp;        Enumeration&lt;?&gt; keys = from.getAttributeNames();</b>
+<b class="nc"><i>1059</i>&nbsp;        String value = &quot;&quot;;</b>
+<b class="nc"><i>1060</i>&nbsp;        while (keys.hasMoreElements()) {</b>
+<i>1061</i>&nbsp;            Object key = keys.nextElement();
+<b class="nc"><i>1062</i>&nbsp;            if (key instanceof CSS.Attribute) {</b>
+<b class="nc"><i>1063</i>&nbsp;                if ((key == CSS.Attribute.FONT_FAMILY) ||</b>
+<i>1064</i>&nbsp;                    (key == CSS.Attribute.FONT_SIZE) ||
+<b class="nc"><i>1065</i>&nbsp;                    (key == CSS.Attribute.COLOR)) {</b>
+<b class="nc"><i>1066</i>&nbsp;</b>
+<b class="nc"><i>1067</i>&nbsp;                    createFontAttribute((CSS.Attribute)key, from, to);</b>
+<b class="nc"><i>1068</i>&nbsp;                } else if (key == CSS.Attribute.FONT_WEIGHT) {</b>
+<i>1069</i>&nbsp;                    // add a bold tag is weight is bold
+<b class="nc"><i>1070</i>&nbsp;                    CSS.FontWeight weightValue = (CSS.FontWeight)</b>
+<b class="nc"><i>1071</i>&nbsp;                        from.getAttribute(CSS.Attribute.FONT_WEIGHT);</b>
+<i>1072</i>&nbsp;                    if ((weightValue != null) &amp;&amp; (weightValue.getValue() &gt; 400)) {
+<b class="nc"><i>1073</i>&nbsp;                        addAttribute(to, HTML.Tag.B, SimpleAttributeSet.EMPTY);</b>
+<b class="nc"><i>1074</i>&nbsp;                    }</b>
+<b class="nc"><i>1075</i>&nbsp;                } else if (key == CSS.Attribute.FONT_STYLE) {</b>
+<i>1076</i>&nbsp;                    String s = from.getAttribute(key).toString();
+<i>1077</i>&nbsp;                    if (s.indexOf(&quot;italic&quot;) &gt;= 0) {
+<b class="nc"><i>1078</i>&nbsp;                        addAttribute(to, HTML.Tag.I, SimpleAttributeSet.EMPTY);</b>
+<b class="nc"><i>1079</i>&nbsp;                    }</b>
+<i>1080</i>&nbsp;                } else if (key == CSS.Attribute.TEXT_DECORATION) {
+<b class="nc"><i>1081</i>&nbsp;                    String decor = from.getAttribute(key).toString();</b>
+<i>1082</i>&nbsp;                    if (decor.indexOf(&quot;underline&quot;) &gt;= 0) {
+<i>1083</i>&nbsp;                        addAttribute(to, HTML.Tag.U, SimpleAttributeSet.EMPTY);
+<b class="nc"><i>1084</i>&nbsp;                    }</b>
+<b class="nc"><i>1085</i>&nbsp;                    if (decor.indexOf(&quot;line-through&quot;) &gt;= 0) {</b>
+<b class="nc"><i>1086</i>&nbsp;                        addAttribute(to, HTML.Tag.STRIKE, SimpleAttributeSet.EMPTY);</b>
+<i>1087</i>&nbsp;                    }
+<b class="nc"><i>1088</i>&nbsp;                } else if (key == CSS.Attribute.VERTICAL_ALIGN) {</b>
+<i>1089</i>&nbsp;                    String vAlign = from.getAttribute(key).toString();
+<b class="nc"><i>1090</i>&nbsp;                    if (vAlign.indexOf(&quot;sup&quot;) &gt;= 0) {</b>
+<b class="nc"><i>1091</i>&nbsp;                        addAttribute(to, HTML.Tag.SUP, SimpleAttributeSet.EMPTY);</b>
+<b class="nc"><i>1092</i>&nbsp;                    }</b>
+<i>1093</i>&nbsp;                    if (vAlign.indexOf(&quot;sub&quot;) &gt;= 0) {
+<i>1094</i>&nbsp;                        addAttribute(to, HTML.Tag.SUB, SimpleAttributeSet.EMPTY);
+<i>1095</i>&nbsp;                    }
+<i>1096</i>&nbsp;                } else if (key == CSS.Attribute.TEXT_ALIGN) {
+<i>1097</i>&nbsp;                    addAttribute(to, HTML.Attribute.ALIGN,
+<i>1098</i>&nbsp;                                    from.getAttribute(key).toString());
+<i>1099</i>&nbsp;                } else {
+<i>1100</i>&nbsp;                    // default is to store in a HTML style attribute
+<b class="nc"><i>1101</i>&nbsp;                    if (value.length() &gt; 0) {</b>
+<b class="nc"><i>1102</i>&nbsp;                        value = value + &quot;; &quot;;</b>
+<b class="nc"><i>1103</i>&nbsp;                    }</b>
+<i>1104</i>&nbsp;                    value = value + key + &quot;: &quot; + from.getAttribute(key);
+<b class="nc"><i>1105</i>&nbsp;                }</b>
+<i>1106</i>&nbsp;            } else {
+<b class="nc"><i>1107</i>&nbsp;                Object attr = from.getAttribute(key);</b>
+<i>1108</i>&nbsp;                if (attr instanceof AttributeSet) {
+<i>1109</i>&nbsp;                    attr = ((AttributeSet)attr).copyAttributes();
+<i>1110</i>&nbsp;                }
+<i>1111</i>&nbsp;                addAttribute(to, key, attr);
+<i>1112</i>&nbsp;            }
+<i>1113</i>&nbsp;        }
+<i>1114</i>&nbsp;        if (value.length() &gt; 0) {
+<i>1115</i>&nbsp;            to.addAttribute(HTML.Attribute.STYLE, value);
+<i>1116</i>&nbsp;        }
+<i>1117</i>&nbsp;    }
+<i>1118</i>&nbsp;
+<b class="nc"><i>1119</i>&nbsp;    /**</b>
+<b class="nc"><i>1120</i>&nbsp;     * Add an attribute only if it doesn&#39;t exist so that we don&#39;t</b>
+<b class="nc"><i>1121</i>&nbsp;     * loose information replacing it with SimpleAttributeSet.EMPTY</b>
+<b class="nc"><i>1122</i>&nbsp;     */</b>
+<b class="nc"><i>1123</i>&nbsp;    private static void addAttribute(MutableAttributeSet to, Object key, Object value) {</b>
+<i>1124</i>&nbsp;        Object attr = to.getAttribute(key);
+<i>1125</i>&nbsp;        if (attr == null || attr == SimpleAttributeSet.EMPTY) {
+<b class="nc"><i>1126</i>&nbsp;            to.addAttribute(key, value);</b>
+<b class="nc"><i>1127</i>&nbsp;        } else {</b>
+<b class="nc"><i>1128</i>&nbsp;            if (attr instanceof MutableAttributeSet &amp;&amp;</b>
+<b class="nc"><i>1129</i>&nbsp;                value instanceof AttributeSet) {</b>
+<b class="nc"><i>1130</i>&nbsp;                ((MutableAttributeSet)attr).addAttributes((AttributeSet)value);</b>
+<b class="nc"><i>1131</i>&nbsp;            }</b>
+<b class="nc"><i>1132</i>&nbsp;        }</b>
+<i>1133</i>&nbsp;    }
+<i>1134</i>&nbsp;
+<i>1135</i>&nbsp;    /**
+<i>1136</i>&nbsp;     * Create/update an HTML &amp;lt;font&amp;gt; tag attribute.  The
+<i>1137</i>&nbsp;     * value of the attribute should be a MutableAttributeSet so
+<i>1138</i>&nbsp;     * that the attributes can be updated as they are discovered.
+<i>1139</i>&nbsp;     */
+<i>1140</i>&nbsp;    private static void createFontAttribute(CSS.Attribute a, AttributeSet from,
+<i>1141</i>&nbsp;                                    MutableAttributeSet to) {
+<b class="nc"><i>1142</i>&nbsp;        MutableAttributeSet fontAttr = (MutableAttributeSet)</b>
+<b class="nc"><i>1143</i>&nbsp;            to.getAttribute(HTML.Tag.FONT);</b>
+<b class="nc"><i>1144</i>&nbsp;        if (fontAttr == null) {</b>
+<b class="nc"><i>1145</i>&nbsp;            fontAttr = new SimpleAttributeSet();</b>
+<b class="nc"><i>1146</i>&nbsp;            to.addAttribute(HTML.Tag.FONT, fontAttr);</b>
+<b class="nc"><i>1147</i>&nbsp;        }</b>
+<i>1148</i>&nbsp;        // edit the parameters to the font tag
+<b class="nc"><i>1149</i>&nbsp;        String htmlValue = from.getAttribute(a).toString();</b>
+<i>1150</i>&nbsp;        if (a == CSS.Attribute.FONT_FAMILY) {
+<b class="nc"><i>1151</i>&nbsp;            fontAttr.addAttribute(HTML.Attribute.FACE, htmlValue);</b>
+<b class="nc"><i>1152</i>&nbsp;        } else if (a == CSS.Attribute.FONT_SIZE) {</b>
+<b class="nc"><i>1153</i>&nbsp;            fontAttr.addAttribute(HTML.Attribute.SIZE, htmlValue);</b>
+<i>1154</i>&nbsp;        } else if (a == CSS.Attribute.COLOR) {
+<i>1155</i>&nbsp;            fontAttr.addAttribute(HTML.Attribute.COLOR, htmlValue);
+<i>1156</i>&nbsp;        }
+<i>1157</i>&nbsp;    }
+<i>1158</i>&nbsp;
+<i>1159</i>&nbsp;    /**
+<i>1160</i>&nbsp;     * Copies the given AttributeSet to a new set, converting
+<i>1161</i>&nbsp;     * any CSS attributes found to arguments of an HTML style
+<i>1162</i>&nbsp;     * attribute.
+<i>1163</i>&nbsp;     */
+<i>1164</i>&nbsp;    private static void convertToHTML40(AttributeSet from, MutableAttributeSet to) {
+<i>1165</i>&nbsp;        Enumeration&lt;?&gt; keys = from.getAttributeNames();
+<i>1166</i>&nbsp;        String value = &quot;&quot;;
+<i>1167</i>&nbsp;        while (keys.hasMoreElements()) {
+<i>1168</i>&nbsp;            Object key = keys.nextElement();
+<i>1169</i>&nbsp;            if (key instanceof CSS.Attribute) {
+<b class="nc"><i>1170</i>&nbsp;                value = value + &quot; &quot; + key + &quot;=&quot; + from.getAttribute(key) + &quot;;&quot;;</b>
+<b class="nc"><i>1171</i>&nbsp;            } else {</b>
+<b class="nc"><i>1172</i>&nbsp;                to.addAttribute(key, from.getAttribute(key));</b>
+<b class="nc"><i>1173</i>&nbsp;            }</b>
+<b class="nc"><i>1174</i>&nbsp;        }</b>
+<i>1175</i>&nbsp;        if (value.length() &gt; 0) {
+<i>1176</i>&nbsp;            to.addAttribute(HTML.Attribute.STYLE, value);
+<i>1177</i>&nbsp;        }
+<i>1178</i>&nbsp;    }
+<i>1179</i>&nbsp;
+<i>1180</i>&nbsp;    //
+<i>1181</i>&nbsp;    // Overrides the writing methods to only break a string when
+<i>1182</i>&nbsp;    // canBreakString is true.
+<i>1183</i>&nbsp;    // In a future release it is likely AbstractWriter will get this
+<i>1184</i>&nbsp;    // functionality.
+<b class="nc"><i>1185</i>&nbsp;    //</b>
+<b class="nc"><i>1186</i>&nbsp;</b>
+<i>1187</i>&nbsp;    /**
+<i>1188</i>&nbsp;     * Writes the line separator. This is overriden to make sure we don&#39;t
+<b class="nc"><i>1189</i>&nbsp;     * replace the newline content in case it is outside normal ascii.</b>
+<b class="nc"><i>1190</i>&nbsp;     * @since 1.3</b>
+<b class="nc"><i>1191</i>&nbsp;     */</b>
+<i>1192</i>&nbsp;    protected void writeLineSeparator() throws IOException {
+<i>1193</i>&nbsp;        boolean oldReplace = replaceEntities;
+<b class="nc"><i>1194</i>&nbsp;        replaceEntities = false;</b>
+<i>1195</i>&nbsp;        super.writeLineSeparator();
+<i>1196</i>&nbsp;        replaceEntities = oldReplace;
+<b class="nc"><i>1197</i>&nbsp;        indented = false;</b>
+<b class="nc"><i>1198</i>&nbsp;    }</b>
+<i>1199</i>&nbsp;
+<b class="nc"><i>1200</i>&nbsp;    /**</b>
+<b class="nc"><i>1201</i>&nbsp;     * This method is overriden to map any character entities, such as</b>
+<b class="nc"><i>1202</i>&nbsp;     * &amp;lt; to &amp;amp;lt;. &lt;code&gt;super.output&lt;/code&gt; will be invoked to</b>
+<i>1203</i>&nbsp;     * write the content.
+<b class="nc"><i>1204</i>&nbsp;     * @since 1.3</b>
+<b class="nc"><i>1205</i>&nbsp;     */</b>
+<i>1206</i>&nbsp;    protected void output(char[] chars, int start, int length)
+<b class="nc"><i>1207</i>&nbsp;                   throws IOException {</b>
+<b class="nc"><i>1208</i>&nbsp;        if (!replaceEntities) {</b>
+<b class="nc"><i>1209</i>&nbsp;            super.output(chars, start, length);</b>
+<i>1210</i>&nbsp;            return;
+<b class="nc"><i>1211</i>&nbsp;        }</b>
+<b class="nc"><i>1212</i>&nbsp;        int last = start;</b>
+<i>1213</i>&nbsp;        length += start;
+<b class="nc"><i>1214</i>&nbsp;        for (int counter = start; counter &lt; length; counter++) {</b>
+<b class="nc"><i>1215</i>&nbsp;            // This will change, we need better support character level</b>
+<b class="nc"><i>1216</i>&nbsp;            // entities.</b>
+<i>1217</i>&nbsp;            switch(chars[counter]) {
+<b class="nc"><i>1218</i>&nbsp;                // Character level entities.</b>
+<b class="nc"><i>1219</i>&nbsp;            case &#39;&lt;&#39;:</b>
+<i>1220</i>&nbsp;                if (counter &gt; last) {
+<b class="nc"><i>1221</i>&nbsp;                    super.output(chars, last, counter - last);</b>
+<b class="nc"><i>1222</i>&nbsp;                }</b>
+<b class="nc"><i>1223</i>&nbsp;                last = counter + 1;</b>
+<i>1224</i>&nbsp;                output(&quot;&amp;lt;&quot;);
+<i>1225</i>&nbsp;                break;
+<i>1226</i>&nbsp;            case &#39;&gt;&#39;:
+<i>1227</i>&nbsp;                if (counter &gt; last) {
+<b class="nc"><i>1228</i>&nbsp;                    super.output(chars, last, counter - last);</b>
+<i>1229</i>&nbsp;                }
+<b class="nc"><i>1230</i>&nbsp;                last = counter + 1;</b>
+<b class="nc"><i>1231</i>&nbsp;                output(&quot;&amp;gt;&quot;);</b>
+<b class="nc"><i>1232</i>&nbsp;                break;</b>
+<i>1233</i>&nbsp;            case &#39;&amp;&#39;:
+<b class="nc"><i>1234</i>&nbsp;                if (counter &gt; last) {</b>
+<i>1235</i>&nbsp;                    super.output(chars, last, counter - last);
+<i>1236</i>&nbsp;                }
+<b class="nc"><i>1237</i>&nbsp;                last = counter + 1;</b>
+<b class="nc"><i>1238</i>&nbsp;                output(&quot;&amp;amp;&quot;);</b>
+<b class="nc"><i>1239</i>&nbsp;                break;</b>
+<i>1240</i>&nbsp;            case &#39;&quot;&#39;:
+<i>1241</i>&nbsp;                if (counter &gt; last) {
+<i>1242</i>&nbsp;                    super.output(chars, last, counter - last);
+<i>1243</i>&nbsp;                }
+<b class="nc"><i>1244</i>&nbsp;                last = counter + 1;</b>
+<b class="nc"><i>1245</i>&nbsp;                output(&quot;&amp;quot;&quot;);</b>
+<i>1246</i>&nbsp;                break;
+<i>1247</i>&nbsp;                // Special characters
+<i>1248</i>&nbsp;            case &#39;\n&#39;:
+<i>1249</i>&nbsp;            case &#39;\t&#39;:
+<i>1250</i>&nbsp;            case &#39;\r&#39;:
+<i>1251</i>&nbsp;                break;
+<i>1252</i>&nbsp;            default:
+<i>1253</i>&nbsp;                if (chars[counter] &lt; &#39; &#39; || chars[counter] &gt; 127) {
+<b class="nc"><i>1254</i>&nbsp;                    if (counter &gt; last) {</b>
+<b class="nc"><i>1255</i>&nbsp;                        super.output(chars, last, counter - last);</b>
+<b class="nc"><i>1256</i>&nbsp;                    }</b>
+<i>1257</i>&nbsp;                    last = counter + 1;
+<b class="nc"><i>1258</i>&nbsp;                    // If the character is outside of ascii, write the</b>
+<b class="nc"><i>1259</i>&nbsp;                    // numeric value.</b>
+<i>1260</i>&nbsp;                    output(&quot;&amp;#&quot;);
+<i>1261</i>&nbsp;                    output(String.valueOf((int)chars[counter]));
+<b class="nc"><i>1262</i>&nbsp;                    output(&quot;;&quot;);</b>
+<i>1263</i>&nbsp;                }
+<i>1264</i>&nbsp;                break;
+<i>1265</i>&nbsp;            }
+<i>1266</i>&nbsp;        }
+<i>1267</i>&nbsp;        if (last &lt; length) {
+<b class="nc"><i>1268</i>&nbsp;            super.output(chars, last, length - last);</b>
+<b class="nc"><i>1269</i>&nbsp;        }</b>
+<b class="nc"><i>1270</i>&nbsp;    }</b>
+<i>1271</i>&nbsp;
+<i>1272</i>&nbsp;    /**
+<i>1273</i>&nbsp;     * This directly invokes super&#39;s &lt;code&gt;output&lt;/code&gt; after converting
+<i>1274</i>&nbsp;     * &lt;code&gt;string&lt;/code&gt; to a char[].
+<i>1275</i>&nbsp;     */
+<i>1276</i>&nbsp;    private void output(String string) throws IOException {
+<i>1277</i>&nbsp;        int length = string.length();
+<i>1278</i>&nbsp;        if (tempChars == null || tempChars.length &lt; length) {
+<i>1279</i>&nbsp;            tempChars = new char[length];
+<i>1280</i>&nbsp;        }
+<i>1281</i>&nbsp;        string.getChars(0, length, tempChars, 0);
+<i>1282</i>&nbsp;        super.output(tempChars, 0, length);
+<i>1283</i>&nbsp;    }
+<i>1284</i>&nbsp;
+<i>1285</i>&nbsp;    private boolean indented = false;
+<i>1286</i>&nbsp;
+<i>1287</i>&nbsp;    /**
+<i>1288</i>&nbsp;     * Writes indent only once per line.
+<i>1289</i>&nbsp;     */
+<i>1290</i>&nbsp;    private void indentSmart() throws IOException {
+<i>1291</i>&nbsp;        if (!indented) {
+<i>1292</i>&nbsp;            indent();
+<i>1293</i>&nbsp;            indented = true;
+<i>1294</i>&nbsp;        }
+<i>1295</i>&nbsp;    }
+<i>1296</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

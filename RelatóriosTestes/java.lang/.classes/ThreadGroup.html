@@ -1,0 +1,1171 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ThreadGroup</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.lang</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ThreadGroup (java.lang)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ThreadGroup</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 40)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 272)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1995, 2012, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.lang;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.PrintStream;
+<i>29</i>&nbsp;import java.util.Arrays;
+<i>30</i>&nbsp;import jdk.internal.misc.VM;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;/**
+<i>33</i>&nbsp; * A thread group represents a set of threads. In addition, a thread
+<i>34</i>&nbsp; * group can also include other thread groups. The thread groups form
+<i>35</i>&nbsp; * a tree in which every thread group except the initial thread group
+<i>36</i>&nbsp; * has a parent.
+<i>37</i>&nbsp; * &lt;p&gt;
+<i>38</i>&nbsp; * A thread is allowed to access information about its own thread
+<i>39</i>&nbsp; * group, but not to access information about its thread group&#39;s
+<i>40</i>&nbsp; * parent thread group or any other thread groups.
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * @author  unascribed
+<i>43</i>&nbsp; * @since   1.0
+<i>44</i>&nbsp; */
+<i>45</i>&nbsp;/* The locking strategy for this code is to try to lock only one level of the
+<i>46</i>&nbsp; * tree wherever possible, but otherwise to lock from the bottom up.
+<i>47</i>&nbsp; * That is, from child thread groups to parents.
+<i>48</i>&nbsp; * This has the advantage of limiting the number of locks that need to be held
+<i>49</i>&nbsp; * and in particular avoids having to grab the lock for the root thread group,
+<i>50</i>&nbsp; * (or a global lock) which would be a source of contention on a
+<i>51</i>&nbsp; * multi-processor system with many thread groups.
+<i>52</i>&nbsp; * This policy often leads to taking a snapshot of the state of a thread group
+<i>53</i>&nbsp; * and working off of that snapshot, rather than holding the thread group locked
+<i>54</i>&nbsp; * while we work on the children.
+<i>55</i>&nbsp; */
+<i>56</i>&nbsp;public
+<i>57</i>&nbsp;class ThreadGroup implements Thread.UncaughtExceptionHandler {
+<i>58</i>&nbsp;    private final ThreadGroup parent;
+<i>59</i>&nbsp;    String name;
+<i>60</i>&nbsp;    int maxPriority;
+<i>61</i>&nbsp;    boolean destroyed;
+<i>62</i>&nbsp;    boolean daemon;
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    int nUnstartedThreads = 0;
+<b class="nc"><i>65</i>&nbsp;    int nthreads;</b>
+<i>66</i>&nbsp;    Thread threads[];
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    int ngroups;
+<i>69</i>&nbsp;    ThreadGroup groups[];
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;    /**
+<i>72</i>&nbsp;     * Creates an empty Thread group that is not in any Thread group.
+<i>73</i>&nbsp;     * This method is used to create the system Thread group.
+<i>74</i>&nbsp;     */
+<i>75</i>&nbsp;    private ThreadGroup() {     // called from C code
+<b class="nc"><i>76</i>&nbsp;        this.name = &quot;system&quot;;</b>
+<b class="nc"><i>77</i>&nbsp;        this.maxPriority = Thread.MAX_PRIORITY;</b>
+<b class="nc"><i>78</i>&nbsp;        this.parent = null;</b>
+<b class="nc"><i>79</i>&nbsp;    }</b>
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    /**
+<i>82</i>&nbsp;     * Constructs a new thread group. The parent of this new group is
+<i>83</i>&nbsp;     * the thread group of the currently running thread.
+<i>84</i>&nbsp;     * &lt;p&gt;
+<i>85</i>&nbsp;     * The {@code checkAccess} method of the parent thread group is
+<i>86</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>87</i>&nbsp;     *
+<i>88</i>&nbsp;     * @param   name   the name of the new thread group.
+<i>89</i>&nbsp;     * @throws  SecurityException  if the current thread cannot create a
+<i>90</i>&nbsp;     *               thread in the specified thread group.
+<i>91</i>&nbsp;     * @see     java.lang.ThreadGroup#checkAccess()
+<i>92</i>&nbsp;     * @since   1.0
+<i>93</i>&nbsp;     */
+<i>94</i>&nbsp;    public ThreadGroup(String name) {
+<i>95</i>&nbsp;        this(Thread.currentThread().getThreadGroup(), name);
+<b class="nc"><i>96</i>&nbsp;    }</b>
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    /**
+<i>99</i>&nbsp;     * Creates a new thread group. The parent of this new group is the
+<i>100</i>&nbsp;     * specified thread group.
+<i>101</i>&nbsp;     * &lt;p&gt;
+<i>102</i>&nbsp;     * The {@code checkAccess} method of the parent thread group is
+<i>103</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>104</i>&nbsp;     *
+<i>105</i>&nbsp;     * @param     parent   the parent thread group.
+<i>106</i>&nbsp;     * @param     name     the name of the new thread group.
+<i>107</i>&nbsp;     * @throws    NullPointerException  if the thread group argument is
+<i>108</i>&nbsp;     *               {@code null}.
+<i>109</i>&nbsp;     * @throws    SecurityException  if the current thread cannot create a
+<i>110</i>&nbsp;     *               thread in the specified thread group.
+<i>111</i>&nbsp;     * @see     java.lang.SecurityException
+<i>112</i>&nbsp;     * @see     java.lang.ThreadGroup#checkAccess()
+<i>113</i>&nbsp;     * @since   1.0
+<i>114</i>&nbsp;     */
+<i>115</i>&nbsp;    public ThreadGroup(ThreadGroup parent, String name) {
+<i>116</i>&nbsp;        this(checkParentAccess(parent), parent, name);
+<b class="nc"><i>117</i>&nbsp;    }</b>
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;    private ThreadGroup(Void unused, ThreadGroup parent, String name) {
+<b class="nc"><i>120</i>&nbsp;        this.name = name;</b>
+<b class="nc"><i>121</i>&nbsp;        this.maxPriority = parent.maxPriority;</b>
+<b class="nc"><i>122</i>&nbsp;        this.daemon = parent.daemon;</b>
+<b class="nc"><i>123</i>&nbsp;        this.parent = parent;</b>
+<b class="nc"><i>124</i>&nbsp;        parent.add(this);</b>
+<b class="nc"><i>125</i>&nbsp;    }</b>
+<b class="nc"><i>126</i>&nbsp;</b>
+<i>127</i>&nbsp;    /*
+<i>128</i>&nbsp;     * @throws  NullPointerException  if the parent argument is {@code null}
+<i>129</i>&nbsp;     * @throws  SecurityException     if the current thread cannot create a
+<i>130</i>&nbsp;     *                                thread in the specified thread group.
+<i>131</i>&nbsp;     */
+<i>132</i>&nbsp;    private static Void checkParentAccess(ThreadGroup parent) {
+<i>133</i>&nbsp;        parent.checkAccess();
+<i>134</i>&nbsp;        return null;
+<b class="nc"><i>135</i>&nbsp;    }</b>
+<b class="nc"><i>136</i>&nbsp;</b>
+<i>137</i>&nbsp;    /**
+<i>138</i>&nbsp;     * Returns the name of this thread group.
+<i>139</i>&nbsp;     *
+<i>140</i>&nbsp;     * @return  the name of this thread group.
+<i>141</i>&nbsp;     * @since   1.0
+<i>142</i>&nbsp;     */
+<i>143</i>&nbsp;    public final String getName() {
+<i>144</i>&nbsp;        return name;
+<i>145</i>&nbsp;    }
+<b class="nc"><i>146</i>&nbsp;</b>
+<i>147</i>&nbsp;    /**
+<i>148</i>&nbsp;     * Returns the parent of this thread group.
+<i>149</i>&nbsp;     * &lt;p&gt;
+<i>150</i>&nbsp;     * First, if the parent is not {@code null}, the
+<i>151</i>&nbsp;     * {@code checkAccess} method of the parent thread group is
+<i>152</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>153</i>&nbsp;     *
+<i>154</i>&nbsp;     * @return  the parent of this thread group. The top-level thread group
+<i>155</i>&nbsp;     *          is the only thread group whose parent is {@code null}.
+<i>156</i>&nbsp;     * @throws  SecurityException  if the current thread cannot modify
+<i>157</i>&nbsp;     *               this thread group.
+<i>158</i>&nbsp;     * @see        java.lang.ThreadGroup#checkAccess()
+<i>159</i>&nbsp;     * @see        java.lang.SecurityException
+<i>160</i>&nbsp;     * @see        java.lang.RuntimePermission
+<i>161</i>&nbsp;     * @since   1.0
+<i>162</i>&nbsp;     */
+<i>163</i>&nbsp;    public final ThreadGroup getParent() {
+<i>164</i>&nbsp;        if (parent != null)
+<i>165</i>&nbsp;            parent.checkAccess();
+<b class="nc"><i>166</i>&nbsp;        return parent;</b>
+<b class="nc"><i>167</i>&nbsp;    }</b>
+<b class="nc"><i>168</i>&nbsp;</b>
+<i>169</i>&nbsp;    /**
+<i>170</i>&nbsp;     * Returns the maximum priority of this thread group. Threads that are
+<i>171</i>&nbsp;     * part of this group cannot have a higher priority than the maximum
+<i>172</i>&nbsp;     * priority.
+<i>173</i>&nbsp;     *
+<i>174</i>&nbsp;     * @return  the maximum priority that a thread in this thread group
+<i>175</i>&nbsp;     *          can have.
+<i>176</i>&nbsp;     * @see     #setMaxPriority
+<i>177</i>&nbsp;     * @since   1.0
+<i>178</i>&nbsp;     */
+<i>179</i>&nbsp;    public final int getMaxPriority() {
+<i>180</i>&nbsp;        return maxPriority;
+<i>181</i>&nbsp;    }
+<b class="nc"><i>182</i>&nbsp;</b>
+<i>183</i>&nbsp;    /**
+<i>184</i>&nbsp;     * Tests if this thread group is a daemon thread group. A
+<i>185</i>&nbsp;     * daemon thread group is automatically destroyed when its last
+<i>186</i>&nbsp;     * thread is stopped or its last thread group is destroyed.
+<i>187</i>&nbsp;     *
+<i>188</i>&nbsp;     * @return  {@code true} if this thread group is a daemon thread group;
+<i>189</i>&nbsp;     *          {@code false} otherwise.
+<i>190</i>&nbsp;     * @since   1.0
+<i>191</i>&nbsp;     */
+<i>192</i>&nbsp;    public final boolean isDaemon() {
+<i>193</i>&nbsp;        return daemon;
+<i>194</i>&nbsp;    }
+<b class="nc"><i>195</i>&nbsp;</b>
+<i>196</i>&nbsp;    /**
+<i>197</i>&nbsp;     * Tests if this thread group has been destroyed.
+<i>198</i>&nbsp;     *
+<i>199</i>&nbsp;     * @return  true if this object is destroyed
+<i>200</i>&nbsp;     * @since   1.1
+<i>201</i>&nbsp;     */
+<i>202</i>&nbsp;    public synchronized boolean isDestroyed() {
+<i>203</i>&nbsp;        return destroyed;
+<i>204</i>&nbsp;    }
+<b class="nc"><i>205</i>&nbsp;</b>
+<i>206</i>&nbsp;    /**
+<i>207</i>&nbsp;     * Changes the daemon status of this thread group.
+<i>208</i>&nbsp;     * &lt;p&gt;
+<i>209</i>&nbsp;     * First, the {@code checkAccess} method of this thread group is
+<i>210</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>211</i>&nbsp;     * &lt;p&gt;
+<i>212</i>&nbsp;     * A daemon thread group is automatically destroyed when its last
+<i>213</i>&nbsp;     * thread is stopped or its last thread group is destroyed.
+<i>214</i>&nbsp;     *
+<i>215</i>&nbsp;     * @param      daemon   if {@code true}, marks this thread group as
+<i>216</i>&nbsp;     *                      a daemon thread group; otherwise, marks this
+<i>217</i>&nbsp;     *                      thread group as normal.
+<i>218</i>&nbsp;     * @throws     SecurityException  if the current thread cannot modify
+<i>219</i>&nbsp;     *               this thread group.
+<i>220</i>&nbsp;     * @see        java.lang.SecurityException
+<i>221</i>&nbsp;     * @see        java.lang.ThreadGroup#checkAccess()
+<i>222</i>&nbsp;     * @since      1.0
+<i>223</i>&nbsp;     */
+<i>224</i>&nbsp;    public final void setDaemon(boolean daemon) {
+<i>225</i>&nbsp;        checkAccess();
+<i>226</i>&nbsp;        this.daemon = daemon;
+<b class="nc"><i>227</i>&nbsp;    }</b>
+<b class="nc"><i>228</i>&nbsp;</b>
+<i>229</i>&nbsp;    /**
+<i>230</i>&nbsp;     * Sets the maximum priority of the group. Threads in the thread
+<i>231</i>&nbsp;     * group that already have a higher priority are not affected.
+<i>232</i>&nbsp;     * &lt;p&gt;
+<i>233</i>&nbsp;     * First, the {@code checkAccess} method of this thread group is
+<i>234</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>235</i>&nbsp;     * &lt;p&gt;
+<i>236</i>&nbsp;     * If the {@code pri} argument is less than
+<i>237</i>&nbsp;     * {@link Thread#MIN_PRIORITY} or greater than
+<i>238</i>&nbsp;     * {@link Thread#MAX_PRIORITY}, the maximum priority of the group
+<i>239</i>&nbsp;     * remains unchanged.
+<i>240</i>&nbsp;     * &lt;p&gt;
+<i>241</i>&nbsp;     * Otherwise, the priority of this ThreadGroup object is set to the
+<i>242</i>&nbsp;     * smaller of the specified {@code pri} and the maximum permitted
+<i>243</i>&nbsp;     * priority of the parent of this thread group. (If this thread group
+<i>244</i>&nbsp;     * is the system thread group, which has no parent, then its maximum
+<i>245</i>&nbsp;     * priority is simply set to {@code pri}.) Then this method is
+<i>246</i>&nbsp;     * called recursively, with {@code pri} as its argument, for
+<i>247</i>&nbsp;     * every thread group that belongs to this thread group.
+<i>248</i>&nbsp;     *
+<i>249</i>&nbsp;     * @param      pri   the new priority of the thread group.
+<i>250</i>&nbsp;     * @throws     SecurityException  if the current thread cannot modify
+<i>251</i>&nbsp;     *               this thread group.
+<i>252</i>&nbsp;     * @see        #getMaxPriority
+<i>253</i>&nbsp;     * @see        java.lang.SecurityException
+<i>254</i>&nbsp;     * @see        java.lang.ThreadGroup#checkAccess()
+<i>255</i>&nbsp;     * @since      1.0
+<i>256</i>&nbsp;     */
+<i>257</i>&nbsp;    public final void setMaxPriority(int pri) {
+<i>258</i>&nbsp;        int ngroupsSnapshot;
+<i>259</i>&nbsp;        ThreadGroup[] groupsSnapshot;
+<i>260</i>&nbsp;        synchronized (this) {
+<i>261</i>&nbsp;            checkAccess();
+<b class="nc"><i>262</i>&nbsp;            if (pri &lt; Thread.MIN_PRIORITY || pri &gt; Thread.MAX_PRIORITY) {</b>
+<b class="nc"><i>263</i>&nbsp;                return;</b>
+<b class="nc"><i>264</i>&nbsp;            }</b>
+<b class="nc"><i>265</i>&nbsp;            maxPriority = (parent != null) ? Math.min(pri, parent.maxPriority) : pri;</b>
+<i>266</i>&nbsp;            ngroupsSnapshot = ngroups;
+<b class="nc"><i>267</i>&nbsp;            if (groups != null) {</b>
+<b class="nc"><i>268</i>&nbsp;                groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>269</i>&nbsp;            } else {</b>
+<b class="nc"><i>270</i>&nbsp;                groupsSnapshot = null;</b>
+<i>271</i>&nbsp;            }
+<b class="nc"><i>272</i>&nbsp;        }</b>
+<i>273</i>&nbsp;        for (int i = 0 ; i &lt; ngroupsSnapshot ; i++) {
+<b class="nc"><i>274</i>&nbsp;            groupsSnapshot[i].setMaxPriority(pri);</b>
+<b class="nc"><i>275</i>&nbsp;        }</b>
+<b class="nc"><i>276</i>&nbsp;    }</b>
+<i>277</i>&nbsp;
+<i>278</i>&nbsp;    /**
+<i>279</i>&nbsp;     * Tests if this thread group is either the thread group
+<i>280</i>&nbsp;     * argument or one of its ancestor thread groups.
+<i>281</i>&nbsp;     *
+<i>282</i>&nbsp;     * @param   g   a thread group.
+<i>283</i>&nbsp;     * @return  {@code true} if this thread group is the thread group
+<i>284</i>&nbsp;     *          argument or one of its ancestor thread groups;
+<i>285</i>&nbsp;     *          {@code false} otherwise.
+<i>286</i>&nbsp;     * @since   1.0
+<i>287</i>&nbsp;     */
+<i>288</i>&nbsp;    public final boolean parentOf(ThreadGroup g) {
+<i>289</i>&nbsp;        for (; g != null ; g = g.parent) {
+<i>290</i>&nbsp;            if (g == this) {
+<b class="nc"><i>291</i>&nbsp;                return true;</b>
+<b class="nc"><i>292</i>&nbsp;            }</b>
+<b class="nc"><i>293</i>&nbsp;        }</b>
+<i>294</i>&nbsp;        return false;
+<i>295</i>&nbsp;    }
+<b class="nc"><i>296</i>&nbsp;</b>
+<i>297</i>&nbsp;    /**
+<i>298</i>&nbsp;     * Determines if the currently running thread has permission to
+<i>299</i>&nbsp;     * modify this thread group.
+<i>300</i>&nbsp;     * &lt;p&gt;
+<i>301</i>&nbsp;     * If there is a security manager, its {@code checkAccess} method
+<i>302</i>&nbsp;     * is called with this thread group as its argument. This may result
+<i>303</i>&nbsp;     * in throwing a {@code SecurityException}.
+<i>304</i>&nbsp;     *
+<i>305</i>&nbsp;     * @throws     SecurityException  if the current thread is not allowed to
+<i>306</i>&nbsp;     *               access this thread group.
+<i>307</i>&nbsp;     * @see        java.lang.SecurityManager#checkAccess(java.lang.ThreadGroup)
+<i>308</i>&nbsp;     * @since      1.0
+<i>309</i>&nbsp;     */
+<i>310</i>&nbsp;    public final void checkAccess() {
+<i>311</i>&nbsp;        SecurityManager security = System.getSecurityManager();
+<i>312</i>&nbsp;        if (security != null) {
+<b class="nc"><i>313</i>&nbsp;            security.checkAccess(this);</b>
+<b class="nc"><i>314</i>&nbsp;        }</b>
+<b class="nc"><i>315</i>&nbsp;    }</b>
+<i>316</i>&nbsp;
+<i>317</i>&nbsp;    /**
+<i>318</i>&nbsp;     * Returns an estimate of the number of active threads in this thread
+<i>319</i>&nbsp;     * group and its subgroups. Recursively iterates over all subgroups in
+<i>320</i>&nbsp;     * this thread group.
+<i>321</i>&nbsp;     *
+<i>322</i>&nbsp;     * &lt;p&gt; The value returned is only an estimate because the number of
+<i>323</i>&nbsp;     * threads may change dynamically while this method traverses internal
+<i>324</i>&nbsp;     * data structures, and might be affected by the presence of certain
+<i>325</i>&nbsp;     * system threads. This method is intended primarily for debugging
+<i>326</i>&nbsp;     * and monitoring purposes.
+<i>327</i>&nbsp;     *
+<i>328</i>&nbsp;     * @return  an estimate of the number of active threads in this thread
+<i>329</i>&nbsp;     *          group and in any other thread group that has this thread
+<i>330</i>&nbsp;     *          group as an ancestor
+<i>331</i>&nbsp;     *
+<i>332</i>&nbsp;     * @since   1.0
+<i>333</i>&nbsp;     */
+<i>334</i>&nbsp;    public int activeCount() {
+<i>335</i>&nbsp;        int result;
+<i>336</i>&nbsp;        // Snapshot sub-group data so we don&#39;t hold this lock
+<i>337</i>&nbsp;        // while our children are computing.
+<i>338</i>&nbsp;        int ngroupsSnapshot;
+<i>339</i>&nbsp;        ThreadGroup[] groupsSnapshot;
+<i>340</i>&nbsp;        synchronized (this) {
+<i>341</i>&nbsp;            if (destroyed) {
+<b class="nc"><i>342</i>&nbsp;                return 0;</b>
+<b class="nc"><i>343</i>&nbsp;            }</b>
+<b class="nc"><i>344</i>&nbsp;            result = nthreads;</b>
+<i>345</i>&nbsp;            ngroupsSnapshot = ngroups;
+<b class="nc"><i>346</i>&nbsp;            if (groups != null) {</b>
+<b class="nc"><i>347</i>&nbsp;                groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>348</i>&nbsp;            } else {</b>
+<b class="nc"><i>349</i>&nbsp;                groupsSnapshot = null;</b>
+<i>350</i>&nbsp;            }
+<b class="nc"><i>351</i>&nbsp;        }</b>
+<i>352</i>&nbsp;        for (int i = 0 ; i &lt; ngroupsSnapshot ; i++) {
+<b class="nc"><i>353</i>&nbsp;            result += groupsSnapshot[i].activeCount();</b>
+<b class="nc"><i>354</i>&nbsp;        }</b>
+<b class="nc"><i>355</i>&nbsp;        return result;</b>
+<i>356</i>&nbsp;    }
+<b class="nc"><i>357</i>&nbsp;</b>
+<i>358</i>&nbsp;    /**
+<i>359</i>&nbsp;     * Copies into the specified array every active thread in this
+<i>360</i>&nbsp;     * thread group and its subgroups.
+<i>361</i>&nbsp;     *
+<i>362</i>&nbsp;     * &lt;p&gt; An invocation of this method behaves in exactly the same
+<i>363</i>&nbsp;     * way as the invocation
+<i>364</i>&nbsp;     *
+<i>365</i>&nbsp;     * &lt;blockquote&gt;
+<i>366</i>&nbsp;     * {@linkplain #enumerate(Thread[], boolean) enumerate}{@code (list, true)}
+<i>367</i>&nbsp;     * &lt;/blockquote&gt;
+<i>368</i>&nbsp;     *
+<i>369</i>&nbsp;     * @param  list
+<i>370</i>&nbsp;     *         an array into which to put the list of threads
+<i>371</i>&nbsp;     *
+<i>372</i>&nbsp;     * @return  the number of threads put into the array
+<i>373</i>&nbsp;     *
+<i>374</i>&nbsp;     * @throws  SecurityException
+<i>375</i>&nbsp;     *          if {@linkplain #checkAccess checkAccess} determines that
+<i>376</i>&nbsp;     *          the current thread cannot access this thread group
+<i>377</i>&nbsp;     *
+<i>378</i>&nbsp;     * @since   1.0
+<i>379</i>&nbsp;     */
+<i>380</i>&nbsp;    public int enumerate(Thread list[]) {
+<i>381</i>&nbsp;        checkAccess();
+<i>382</i>&nbsp;        return enumerate(list, 0, true);
+<b class="nc"><i>383</i>&nbsp;    }</b>
+<b class="nc"><i>384</i>&nbsp;</b>
+<i>385</i>&nbsp;    /**
+<i>386</i>&nbsp;     * Copies into the specified array every active thread in this
+<i>387</i>&nbsp;     * thread group. If {@code recurse} is {@code true},
+<i>388</i>&nbsp;     * this method recursively enumerates all subgroups of this
+<i>389</i>&nbsp;     * thread group and references to every active thread in these
+<i>390</i>&nbsp;     * subgroups are also included. If the array is too short to
+<i>391</i>&nbsp;     * hold all the threads, the extra threads are silently ignored.
+<i>392</i>&nbsp;     *
+<i>393</i>&nbsp;     * &lt;p&gt; An application might use the {@linkplain #activeCount activeCount}
+<i>394</i>&nbsp;     * method to get an estimate of how big the array should be, however
+<i>395</i>&nbsp;     * &lt;i&gt;if the array is too short to hold all the threads, the extra threads
+<i>396</i>&nbsp;     * are silently ignored.&lt;/i&gt;  If it is critical to obtain every active
+<i>397</i>&nbsp;     * thread in this thread group, the caller should verify that the returned
+<i>398</i>&nbsp;     * int value is strictly less than the length of {@code list}.
+<i>399</i>&nbsp;     *
+<i>400</i>&nbsp;     * &lt;p&gt; Due to the inherent race condition in this method, it is recommended
+<i>401</i>&nbsp;     * that the method only be used for debugging and monitoring purposes.
+<i>402</i>&nbsp;     *
+<i>403</i>&nbsp;     * @param  list
+<i>404</i>&nbsp;     *         an array into which to put the list of threads
+<i>405</i>&nbsp;     *
+<i>406</i>&nbsp;     * @param  recurse
+<i>407</i>&nbsp;     *         if {@code true}, recursively enumerate all subgroups of this
+<i>408</i>&nbsp;     *         thread group
+<i>409</i>&nbsp;     *
+<i>410</i>&nbsp;     * @return  the number of threads put into the array
+<i>411</i>&nbsp;     *
+<i>412</i>&nbsp;     * @throws  SecurityException
+<i>413</i>&nbsp;     *          if {@linkplain #checkAccess checkAccess} determines that
+<i>414</i>&nbsp;     *          the current thread cannot access this thread group
+<i>415</i>&nbsp;     *
+<i>416</i>&nbsp;     * @since   1.0
+<i>417</i>&nbsp;     */
+<i>418</i>&nbsp;    public int enumerate(Thread list[], boolean recurse) {
+<i>419</i>&nbsp;        checkAccess();
+<i>420</i>&nbsp;        return enumerate(list, 0, recurse);
+<b class="nc"><i>421</i>&nbsp;    }</b>
+<b class="nc"><i>422</i>&nbsp;</b>
+<i>423</i>&nbsp;    private int enumerate(Thread list[], int n, boolean recurse) {
+<i>424</i>&nbsp;        int ngroupsSnapshot = 0;
+<i>425</i>&nbsp;        ThreadGroup[] groupsSnapshot = null;
+<b class="nc"><i>426</i>&nbsp;        synchronized (this) {</b>
+<b class="nc"><i>427</i>&nbsp;            if (destroyed) {</b>
+<b class="nc"><i>428</i>&nbsp;                return 0;</b>
+<b class="nc"><i>429</i>&nbsp;            }</b>
+<b class="nc"><i>430</i>&nbsp;            int nt = nthreads;</b>
+<i>431</i>&nbsp;            if (nt &gt; list.length - n) {
+<b class="nc"><i>432</i>&nbsp;                nt = list.length - n;</b>
+<b class="nc"><i>433</i>&nbsp;            }</b>
+<b class="nc"><i>434</i>&nbsp;            for (int i = 0; i &lt; nt; i++) {</b>
+<i>435</i>&nbsp;                if (threads[i].isAlive()) {
+<b class="nc"><i>436</i>&nbsp;                    list[n++] = threads[i];</b>
+<b class="nc"><i>437</i>&nbsp;                }</b>
+<b class="nc"><i>438</i>&nbsp;            }</b>
+<i>439</i>&nbsp;            if (recurse) {
+<i>440</i>&nbsp;                ngroupsSnapshot = ngroups;
+<b class="nc"><i>441</i>&nbsp;                if (groups != null) {</b>
+<b class="nc"><i>442</i>&nbsp;                    groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>443</i>&nbsp;                } else {</b>
+<b class="nc"><i>444</i>&nbsp;                    groupsSnapshot = null;</b>
+<i>445</i>&nbsp;                }
+<b class="nc"><i>446</i>&nbsp;            }</b>
+<i>447</i>&nbsp;        }
+<i>448</i>&nbsp;        if (recurse) {
+<b class="nc"><i>449</i>&nbsp;            for (int i = 0 ; i &lt; ngroupsSnapshot ; i++) {</b>
+<b class="nc"><i>450</i>&nbsp;                n = groupsSnapshot[i].enumerate(list, n, true);</b>
+<b class="nc"><i>451</i>&nbsp;            }</b>
+<b class="nc"><i>452</i>&nbsp;        }</b>
+<i>453</i>&nbsp;        return n;
+<i>454</i>&nbsp;    }
+<b class="nc"><i>455</i>&nbsp;</b>
+<i>456</i>&nbsp;    /**
+<i>457</i>&nbsp;     * Returns an estimate of the number of active groups in this
+<i>458</i>&nbsp;     * thread group and its subgroups. Recursively iterates over
+<i>459</i>&nbsp;     * all subgroups in this thread group.
+<i>460</i>&nbsp;     *
+<i>461</i>&nbsp;     * &lt;p&gt; The value returned is only an estimate because the number of
+<i>462</i>&nbsp;     * thread groups may change dynamically while this method traverses
+<i>463</i>&nbsp;     * internal data structures. This method is intended primarily for
+<i>464</i>&nbsp;     * debugging and monitoring purposes.
+<i>465</i>&nbsp;     *
+<i>466</i>&nbsp;     * @return  the number of active thread groups with this thread group as
+<i>467</i>&nbsp;     *          an ancestor
+<i>468</i>&nbsp;     *
+<i>469</i>&nbsp;     * @since   1.0
+<i>470</i>&nbsp;     */
+<i>471</i>&nbsp;    public int activeGroupCount() {
+<i>472</i>&nbsp;        int ngroupsSnapshot;
+<i>473</i>&nbsp;        ThreadGroup[] groupsSnapshot;
+<i>474</i>&nbsp;        synchronized (this) {
+<i>475</i>&nbsp;            if (destroyed) {
+<b class="nc"><i>476</i>&nbsp;                return 0;</b>
+<b class="nc"><i>477</i>&nbsp;            }</b>
+<b class="nc"><i>478</i>&nbsp;            ngroupsSnapshot = ngroups;</b>
+<i>479</i>&nbsp;            if (groups != null) {
+<b class="nc"><i>480</i>&nbsp;                groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>481</i>&nbsp;            } else {</b>
+<b class="nc"><i>482</i>&nbsp;                groupsSnapshot = null;</b>
+<i>483</i>&nbsp;            }
+<b class="nc"><i>484</i>&nbsp;        }</b>
+<i>485</i>&nbsp;        int n = ngroupsSnapshot;
+<b class="nc"><i>486</i>&nbsp;        for (int i = 0 ; i &lt; ngroupsSnapshot ; i++) {</b>
+<b class="nc"><i>487</i>&nbsp;            n += groupsSnapshot[i].activeGroupCount();</b>
+<b class="nc"><i>488</i>&nbsp;        }</b>
+<b class="nc"><i>489</i>&nbsp;        return n;</b>
+<i>490</i>&nbsp;    }
+<b class="nc"><i>491</i>&nbsp;</b>
+<i>492</i>&nbsp;    /**
+<i>493</i>&nbsp;     * Copies into the specified array references to every active
+<i>494</i>&nbsp;     * subgroup in this thread group and its subgroups.
+<i>495</i>&nbsp;     *
+<i>496</i>&nbsp;     * &lt;p&gt; An invocation of this method behaves in exactly the same
+<i>497</i>&nbsp;     * way as the invocation
+<i>498</i>&nbsp;     *
+<i>499</i>&nbsp;     * &lt;blockquote&gt;
+<i>500</i>&nbsp;     * {@linkplain #enumerate(ThreadGroup[], boolean) enumerate}{@code (list, true)}
+<i>501</i>&nbsp;     * &lt;/blockquote&gt;
+<i>502</i>&nbsp;     *
+<i>503</i>&nbsp;     * @param  list
+<i>504</i>&nbsp;     *         an array into which to put the list of thread groups
+<i>505</i>&nbsp;     *
+<i>506</i>&nbsp;     * @return  the number of thread groups put into the array
+<i>507</i>&nbsp;     *
+<i>508</i>&nbsp;     * @throws  SecurityException
+<i>509</i>&nbsp;     *          if {@linkplain #checkAccess checkAccess} determines that
+<i>510</i>&nbsp;     *          the current thread cannot access this thread group
+<i>511</i>&nbsp;     *
+<i>512</i>&nbsp;     * @since   1.0
+<i>513</i>&nbsp;     */
+<i>514</i>&nbsp;    public int enumerate(ThreadGroup list[]) {
+<i>515</i>&nbsp;        checkAccess();
+<i>516</i>&nbsp;        return enumerate(list, 0, true);
+<b class="nc"><i>517</i>&nbsp;    }</b>
+<b class="nc"><i>518</i>&nbsp;</b>
+<i>519</i>&nbsp;    /**
+<i>520</i>&nbsp;     * Copies into the specified array references to every active
+<i>521</i>&nbsp;     * subgroup in this thread group. If {@code recurse} is
+<i>522</i>&nbsp;     * {@code true}, this method recursively enumerates all subgroups of this
+<i>523</i>&nbsp;     * thread group and references to every active thread group in these
+<i>524</i>&nbsp;     * subgroups are also included.
+<i>525</i>&nbsp;     *
+<i>526</i>&nbsp;     * &lt;p&gt; An application might use the
+<i>527</i>&nbsp;     * {@linkplain #activeGroupCount activeGroupCount} method to
+<i>528</i>&nbsp;     * get an estimate of how big the array should be, however &lt;i&gt;if the
+<i>529</i>&nbsp;     * array is too short to hold all the thread groups, the extra thread
+<i>530</i>&nbsp;     * groups are silently ignored.&lt;/i&gt;  If it is critical to obtain every
+<i>531</i>&nbsp;     * active subgroup in this thread group, the caller should verify that
+<i>532</i>&nbsp;     * the returned int value is strictly less than the length of
+<i>533</i>&nbsp;     * {@code list}.
+<i>534</i>&nbsp;     *
+<i>535</i>&nbsp;     * &lt;p&gt; Due to the inherent race condition in this method, it is recommended
+<i>536</i>&nbsp;     * that the method only be used for debugging and monitoring purposes.
+<i>537</i>&nbsp;     *
+<i>538</i>&nbsp;     * @param  list
+<i>539</i>&nbsp;     *         an array into which to put the list of thread groups
+<i>540</i>&nbsp;     *
+<i>541</i>&nbsp;     * @param  recurse
+<i>542</i>&nbsp;     *         if {@code true}, recursively enumerate all subgroups
+<i>543</i>&nbsp;     *
+<i>544</i>&nbsp;     * @return  the number of thread groups put into the array
+<i>545</i>&nbsp;     *
+<i>546</i>&nbsp;     * @throws  SecurityException
+<i>547</i>&nbsp;     *          if {@linkplain #checkAccess checkAccess} determines that
+<i>548</i>&nbsp;     *          the current thread cannot access this thread group
+<i>549</i>&nbsp;     *
+<i>550</i>&nbsp;     * @since   1.0
+<i>551</i>&nbsp;     */
+<i>552</i>&nbsp;    public int enumerate(ThreadGroup list[], boolean recurse) {
+<i>553</i>&nbsp;        checkAccess();
+<i>554</i>&nbsp;        return enumerate(list, 0, recurse);
+<b class="nc"><i>555</i>&nbsp;    }</b>
+<b class="nc"><i>556</i>&nbsp;</b>
+<i>557</i>&nbsp;    private int enumerate(ThreadGroup list[], int n, boolean recurse) {
+<i>558</i>&nbsp;        int ngroupsSnapshot = 0;
+<i>559</i>&nbsp;        ThreadGroup[] groupsSnapshot = null;
+<b class="nc"><i>560</i>&nbsp;        synchronized (this) {</b>
+<b class="nc"><i>561</i>&nbsp;            if (destroyed) {</b>
+<b class="nc"><i>562</i>&nbsp;                return 0;</b>
+<b class="nc"><i>563</i>&nbsp;            }</b>
+<b class="nc"><i>564</i>&nbsp;            int ng = ngroups;</b>
+<i>565</i>&nbsp;            if (ng &gt; list.length - n) {
+<b class="nc"><i>566</i>&nbsp;                ng = list.length - n;</b>
+<b class="nc"><i>567</i>&nbsp;            }</b>
+<b class="nc"><i>568</i>&nbsp;            if (ng &gt; 0) {</b>
+<i>569</i>&nbsp;                System.arraycopy(groups, 0, list, n, ng);
+<b class="nc"><i>570</i>&nbsp;                n += ng;</b>
+<b class="nc"><i>571</i>&nbsp;            }</b>
+<b class="nc"><i>572</i>&nbsp;            if (recurse) {</b>
+<i>573</i>&nbsp;                ngroupsSnapshot = ngroups;
+<b class="nc"><i>574</i>&nbsp;                if (groups != null) {</b>
+<b class="nc"><i>575</i>&nbsp;                    groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>576</i>&nbsp;                } else {</b>
+<b class="nc"><i>577</i>&nbsp;                    groupsSnapshot = null;</b>
+<i>578</i>&nbsp;                }
+<b class="nc"><i>579</i>&nbsp;            }</b>
+<i>580</i>&nbsp;        }
+<i>581</i>&nbsp;        if (recurse) {
+<b class="nc"><i>582</i>&nbsp;            for (int i = 0 ; i &lt; ngroupsSnapshot ; i++) {</b>
+<b class="nc"><i>583</i>&nbsp;                n = groupsSnapshot[i].enumerate(list, n, true);</b>
+<b class="nc"><i>584</i>&nbsp;            }</b>
+<b class="nc"><i>585</i>&nbsp;        }</b>
+<i>586</i>&nbsp;        return n;
+<i>587</i>&nbsp;    }
+<b class="nc"><i>588</i>&nbsp;</b>
+<i>589</i>&nbsp;    /**
+<i>590</i>&nbsp;     * Stops all threads in this thread group.
+<i>591</i>&nbsp;     * &lt;p&gt;
+<i>592</i>&nbsp;     * First, the {@code checkAccess} method of this thread group is
+<i>593</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>594</i>&nbsp;     * &lt;p&gt;
+<i>595</i>&nbsp;     * This method then calls the {@code stop} method on all the
+<i>596</i>&nbsp;     * threads in this thread group and in all of its subgroups.
+<i>597</i>&nbsp;     *
+<i>598</i>&nbsp;     * @throws     SecurityException  if the current thread is not allowed
+<i>599</i>&nbsp;     *               to access this thread group or any of the threads in
+<i>600</i>&nbsp;     *               the thread group.
+<i>601</i>&nbsp;     * @see        java.lang.SecurityException
+<i>602</i>&nbsp;     * @see        java.lang.Thread#stop()
+<i>603</i>&nbsp;     * @see        java.lang.ThreadGroup#checkAccess()
+<i>604</i>&nbsp;     * @since      1.0
+<i>605</i>&nbsp;     * @deprecated    This method is inherently unsafe.  See
+<i>606</i>&nbsp;     *     {@link Thread#stop} for details.
+<i>607</i>&nbsp;     */
+<i>608</i>&nbsp;    @Deprecated(since=&quot;1.2&quot;)
+<i>609</i>&nbsp;    public final void stop() {
+<i>610</i>&nbsp;        if (stopOrSuspend(false))
+<i>611</i>&nbsp;            Thread.currentThread().stop();
+<b class="nc"><i>612</i>&nbsp;    }</b>
+<b class="nc"><i>613</i>&nbsp;</b>
+<i>614</i>&nbsp;    /**
+<i>615</i>&nbsp;     * Interrupts all threads in this thread group.
+<i>616</i>&nbsp;     * &lt;p&gt;
+<i>617</i>&nbsp;     * First, the {@code checkAccess} method of this thread group is
+<i>618</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>619</i>&nbsp;     * &lt;p&gt;
+<i>620</i>&nbsp;     * This method then calls the {@code interrupt} method on all the
+<i>621</i>&nbsp;     * threads in this thread group and in all of its subgroups.
+<i>622</i>&nbsp;     *
+<i>623</i>&nbsp;     * @throws     SecurityException  if the current thread is not allowed
+<i>624</i>&nbsp;     *               to access this thread group or any of the threads in
+<i>625</i>&nbsp;     *               the thread group.
+<i>626</i>&nbsp;     * @see        java.lang.Thread#interrupt()
+<i>627</i>&nbsp;     * @see        java.lang.SecurityException
+<i>628</i>&nbsp;     * @see        java.lang.ThreadGroup#checkAccess()
+<i>629</i>&nbsp;     * @since      1.2
+<i>630</i>&nbsp;     */
+<i>631</i>&nbsp;    public final void interrupt() {
+<i>632</i>&nbsp;        int ngroupsSnapshot;
+<i>633</i>&nbsp;        ThreadGroup[] groupsSnapshot;
+<i>634</i>&nbsp;        synchronized (this) {
+<i>635</i>&nbsp;            checkAccess();
+<b class="nc"><i>636</i>&nbsp;            for (int i = 0 ; i &lt; nthreads ; i++) {</b>
+<b class="nc"><i>637</i>&nbsp;                threads[i].interrupt();</b>
+<b class="nc"><i>638</i>&nbsp;            }</b>
+<b class="nc"><i>639</i>&nbsp;            ngroupsSnapshot = ngroups;</b>
+<i>640</i>&nbsp;            if (groups != null) {
+<b class="nc"><i>641</i>&nbsp;                groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>642</i>&nbsp;            } else {</b>
+<b class="nc"><i>643</i>&nbsp;                groupsSnapshot = null;</b>
+<i>644</i>&nbsp;            }
+<b class="nc"><i>645</i>&nbsp;        }</b>
+<i>646</i>&nbsp;        for (int i = 0 ; i &lt; ngroupsSnapshot ; i++) {
+<b class="nc"><i>647</i>&nbsp;            groupsSnapshot[i].interrupt();</b>
+<b class="nc"><i>648</i>&nbsp;        }</b>
+<b class="nc"><i>649</i>&nbsp;    }</b>
+<i>650</i>&nbsp;
+<i>651</i>&nbsp;    /**
+<i>652</i>&nbsp;     * Suspends all threads in this thread group.
+<i>653</i>&nbsp;     * &lt;p&gt;
+<i>654</i>&nbsp;     * First, the {@code checkAccess} method of this thread group is
+<i>655</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>656</i>&nbsp;     * &lt;p&gt;
+<i>657</i>&nbsp;     * This method then calls the {@code suspend} method on all the
+<i>658</i>&nbsp;     * threads in this thread group and in all of its subgroups.
+<i>659</i>&nbsp;     *
+<i>660</i>&nbsp;     * @throws     SecurityException  if the current thread is not allowed
+<i>661</i>&nbsp;     *               to access this thread group or any of the threads in
+<i>662</i>&nbsp;     *               the thread group.
+<i>663</i>&nbsp;     * @see        java.lang.Thread#suspend()
+<i>664</i>&nbsp;     * @see        java.lang.SecurityException
+<i>665</i>&nbsp;     * @see        java.lang.ThreadGroup#checkAccess()
+<i>666</i>&nbsp;     * @since      1.0
+<i>667</i>&nbsp;     * @deprecated    This method is inherently deadlock-prone.  See
+<i>668</i>&nbsp;     *     {@link Thread#suspend} for details.
+<i>669</i>&nbsp;     */
+<i>670</i>&nbsp;    @Deprecated(since=&quot;1.2&quot;)
+<i>671</i>&nbsp;    @SuppressWarnings(&quot;deprecation&quot;)
+<i>672</i>&nbsp;    public final void suspend() {
+<i>673</i>&nbsp;        if (stopOrSuspend(true))
+<i>674</i>&nbsp;            Thread.currentThread().suspend();
+<b class="nc"><i>675</i>&nbsp;    }</b>
+<b class="nc"><i>676</i>&nbsp;</b>
+<i>677</i>&nbsp;    /**
+<i>678</i>&nbsp;     * Helper method: recursively stops or suspends (as directed by the
+<i>679</i>&nbsp;     * boolean argument) all of the threads in this thread group and its
+<i>680</i>&nbsp;     * subgroups, except the current thread.  This method returns true
+<i>681</i>&nbsp;     * if (and only if) the current thread is found to be in this thread
+<i>682</i>&nbsp;     * group or one of its subgroups.
+<i>683</i>&nbsp;     */
+<i>684</i>&nbsp;    @SuppressWarnings(&quot;deprecation&quot;)
+<i>685</i>&nbsp;    private boolean stopOrSuspend(boolean suspend) {
+<i>686</i>&nbsp;        boolean suicide = false;
+<i>687</i>&nbsp;        Thread us = Thread.currentThread();
+<b class="nc"><i>688</i>&nbsp;        int ngroupsSnapshot;</b>
+<b class="nc"><i>689</i>&nbsp;        ThreadGroup[] groupsSnapshot = null;</b>
+<i>690</i>&nbsp;        synchronized (this) {
+<b class="nc"><i>691</i>&nbsp;            checkAccess();</b>
+<b class="nc"><i>692</i>&nbsp;            for (int i = 0 ; i &lt; nthreads ; i++) {</b>
+<b class="nc"><i>693</i>&nbsp;                if (threads[i]==us)</b>
+<b class="nc"><i>694</i>&nbsp;                    suicide = true;</b>
+<b class="nc"><i>695</i>&nbsp;                else if (suspend)</b>
+<b class="nc"><i>696</i>&nbsp;                    threads[i].suspend();</b>
+<b class="nc"><i>697</i>&nbsp;                else</b>
+<b class="nc"><i>698</i>&nbsp;                    threads[i].stop();</b>
+<i>699</i>&nbsp;            }
+<b class="nc"><i>700</i>&nbsp;</b>
+<i>701</i>&nbsp;            ngroupsSnapshot = ngroups;
+<i>702</i>&nbsp;            if (groups != null) {
+<b class="nc"><i>703</i>&nbsp;                groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>704</i>&nbsp;            }</b>
+<b class="nc"><i>705</i>&nbsp;        }</b>
+<i>706</i>&nbsp;        for (int i = 0 ; i &lt; ngroupsSnapshot ; i++)
+<b class="nc"><i>707</i>&nbsp;            suicide = groupsSnapshot[i].stopOrSuspend(suspend) || suicide;</b>
+<b class="nc"><i>708</i>&nbsp;</b>
+<b class="nc"><i>709</i>&nbsp;        return suicide;</b>
+<i>710</i>&nbsp;    }
+<b class="nc"><i>711</i>&nbsp;</b>
+<i>712</i>&nbsp;    /**
+<i>713</i>&nbsp;     * Resumes all threads in this thread group.
+<i>714</i>&nbsp;     * &lt;p&gt;
+<i>715</i>&nbsp;     * First, the {@code checkAccess} method of this thread group is
+<i>716</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>717</i>&nbsp;     * &lt;p&gt;
+<i>718</i>&nbsp;     * This method then calls the {@code resume} method on all the
+<i>719</i>&nbsp;     * threads in this thread group and in all of its sub groups.
+<i>720</i>&nbsp;     *
+<i>721</i>&nbsp;     * @throws     SecurityException  if the current thread is not allowed to
+<i>722</i>&nbsp;     *               access this thread group or any of the threads in the
+<i>723</i>&nbsp;     *               thread group.
+<i>724</i>&nbsp;     * @see        java.lang.SecurityException
+<i>725</i>&nbsp;     * @see        java.lang.Thread#resume()
+<i>726</i>&nbsp;     * @see        java.lang.ThreadGroup#checkAccess()
+<i>727</i>&nbsp;     * @since      1.0
+<i>728</i>&nbsp;     * @deprecated    This method is used solely in conjunction with
+<i>729</i>&nbsp;     *       {@code Thread.suspend} and {@code ThreadGroup.suspend},
+<i>730</i>&nbsp;     *       both of which have been deprecated, as they are inherently
+<i>731</i>&nbsp;     *       deadlock-prone.  See {@link Thread#suspend} for details.
+<i>732</i>&nbsp;     */
+<i>733</i>&nbsp;    @Deprecated(since=&quot;1.2&quot;)
+<i>734</i>&nbsp;    @SuppressWarnings(&quot;deprecation&quot;)
+<i>735</i>&nbsp;    public final void resume() {
+<i>736</i>&nbsp;        int ngroupsSnapshot;
+<i>737</i>&nbsp;        ThreadGroup[] groupsSnapshot;
+<i>738</i>&nbsp;        synchronized (this) {
+<i>739</i>&nbsp;            checkAccess();
+<b class="nc"><i>740</i>&nbsp;            for (int i = 0 ; i &lt; nthreads ; i++) {</b>
+<b class="nc"><i>741</i>&nbsp;                threads[i].resume();</b>
+<b class="nc"><i>742</i>&nbsp;            }</b>
+<b class="nc"><i>743</i>&nbsp;            ngroupsSnapshot = ngroups;</b>
+<i>744</i>&nbsp;            if (groups != null) {
+<b class="nc"><i>745</i>&nbsp;                groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>746</i>&nbsp;            } else {</b>
+<b class="nc"><i>747</i>&nbsp;                groupsSnapshot = null;</b>
+<i>748</i>&nbsp;            }
+<b class="nc"><i>749</i>&nbsp;        }</b>
+<i>750</i>&nbsp;        for (int i = 0 ; i &lt; ngroupsSnapshot ; i++) {
+<b class="nc"><i>751</i>&nbsp;            groupsSnapshot[i].resume();</b>
+<b class="nc"><i>752</i>&nbsp;        }</b>
+<b class="nc"><i>753</i>&nbsp;    }</b>
+<i>754</i>&nbsp;
+<i>755</i>&nbsp;    /**
+<i>756</i>&nbsp;     * Destroys this thread group and all of its subgroups. This thread
+<i>757</i>&nbsp;     * group must be empty, indicating that all threads that had been in
+<i>758</i>&nbsp;     * this thread group have since stopped.
+<i>759</i>&nbsp;     * &lt;p&gt;
+<i>760</i>&nbsp;     * First, the {@code checkAccess} method of this thread group is
+<i>761</i>&nbsp;     * called with no arguments; this may result in a security exception.
+<i>762</i>&nbsp;     *
+<i>763</i>&nbsp;     * @throws     IllegalThreadStateException  if the thread group is not
+<i>764</i>&nbsp;     *               empty or if the thread group has already been destroyed.
+<i>765</i>&nbsp;     * @throws     SecurityException  if the current thread cannot modify this
+<i>766</i>&nbsp;     *               thread group.
+<i>767</i>&nbsp;     * @see        java.lang.ThreadGroup#checkAccess()
+<i>768</i>&nbsp;     * @since      1.0
+<i>769</i>&nbsp;     */
+<i>770</i>&nbsp;    public final void destroy() {
+<i>771</i>&nbsp;        int ngroupsSnapshot;
+<i>772</i>&nbsp;        ThreadGroup[] groupsSnapshot;
+<i>773</i>&nbsp;        synchronized (this) {
+<i>774</i>&nbsp;            checkAccess();
+<b class="nc"><i>775</i>&nbsp;            if (destroyed || (nthreads &gt; 0)) {</b>
+<b class="nc"><i>776</i>&nbsp;                throw new IllegalThreadStateException();</b>
+<b class="nc"><i>777</i>&nbsp;            }</b>
+<b class="nc"><i>778</i>&nbsp;            ngroupsSnapshot = ngroups;</b>
+<i>779</i>&nbsp;            if (groups != null) {
+<b class="nc"><i>780</i>&nbsp;                groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>781</i>&nbsp;            } else {</b>
+<b class="nc"><i>782</i>&nbsp;                groupsSnapshot = null;</b>
+<i>783</i>&nbsp;            }
+<b class="nc"><i>784</i>&nbsp;            if (parent != null) {</b>
+<i>785</i>&nbsp;                destroyed = true;
+<b class="nc"><i>786</i>&nbsp;                ngroups = 0;</b>
+<b class="nc"><i>787</i>&nbsp;                groups = null;</b>
+<b class="nc"><i>788</i>&nbsp;                nthreads = 0;</b>
+<b class="nc"><i>789</i>&nbsp;                threads = null;</b>
+<b class="nc"><i>790</i>&nbsp;            }</b>
+<b class="nc"><i>791</i>&nbsp;        }</b>
+<i>792</i>&nbsp;        for (int i = 0 ; i &lt; ngroupsSnapshot ; i += 1) {
+<b class="nc"><i>793</i>&nbsp;            groupsSnapshot[i].destroy();</b>
+<b class="nc"><i>794</i>&nbsp;        }</b>
+<b class="nc"><i>795</i>&nbsp;        if (parent != null) {</b>
+<i>796</i>&nbsp;            parent.remove(this);
+<b class="nc"><i>797</i>&nbsp;        }</b>
+<b class="nc"><i>798</i>&nbsp;    }</b>
+<i>799</i>&nbsp;
+<i>800</i>&nbsp;    /**
+<i>801</i>&nbsp;     * Adds the specified Thread group to this group.
+<i>802</i>&nbsp;     * @param g the specified Thread group to be added
+<i>803</i>&nbsp;     * @throws  IllegalThreadStateException If the Thread group has been destroyed.
+<i>804</i>&nbsp;     */
+<i>805</i>&nbsp;    private final void add(ThreadGroup g){
+<i>806</i>&nbsp;        synchronized (this) {
+<i>807</i>&nbsp;            if (destroyed) {
+<b class="nc"><i>808</i>&nbsp;                throw new IllegalThreadStateException();</b>
+<b class="nc"><i>809</i>&nbsp;            }</b>
+<b class="nc"><i>810</i>&nbsp;            if (groups == null) {</b>
+<i>811</i>&nbsp;                groups = new ThreadGroup[4];
+<b class="nc"><i>812</i>&nbsp;            } else if (ngroups == groups.length) {</b>
+<b class="nc"><i>813</i>&nbsp;                groups = Arrays.copyOf(groups, ngroups * 2);</b>
+<b class="nc"><i>814</i>&nbsp;            }</b>
+<b class="nc"><i>815</i>&nbsp;            groups[ngroups] = g;</b>
+<i>816</i>&nbsp;
+<b class="nc"><i>817</i>&nbsp;            // This is done last so it doesn&#39;t matter in case the</b>
+<i>818</i>&nbsp;            // thread is killed
+<i>819</i>&nbsp;            ngroups++;
+<i>820</i>&nbsp;        }
+<b class="nc"><i>821</i>&nbsp;    }</b>
+<b class="nc"><i>822</i>&nbsp;</b>
+<i>823</i>&nbsp;    /**
+<i>824</i>&nbsp;     * Removes the specified Thread group from this group.
+<i>825</i>&nbsp;     * @param g the Thread group to be removed
+<i>826</i>&nbsp;     * @return if this Thread has already been destroyed.
+<i>827</i>&nbsp;     */
+<i>828</i>&nbsp;    private void remove(ThreadGroup g) {
+<i>829</i>&nbsp;        synchronized (this) {
+<i>830</i>&nbsp;            if (destroyed) {
+<b class="nc"><i>831</i>&nbsp;                return;</b>
+<b class="nc"><i>832</i>&nbsp;            }</b>
+<b class="nc"><i>833</i>&nbsp;            for (int i = 0 ; i &lt; ngroups ; i++) {</b>
+<i>834</i>&nbsp;                if (groups[i] == g) {
+<b class="nc"><i>835</i>&nbsp;                    ngroups -= 1;</b>
+<b class="nc"><i>836</i>&nbsp;                    System.arraycopy(groups, i + 1, groups, i, ngroups - i);</b>
+<b class="nc"><i>837</i>&nbsp;                    // Zap dangling reference to the dead group so that</b>
+<b class="nc"><i>838</i>&nbsp;                    // the garbage collector will collect it.</b>
+<i>839</i>&nbsp;                    groups[ngroups] = null;
+<i>840</i>&nbsp;                    break;
+<b class="nc"><i>841</i>&nbsp;                }</b>
+<b class="nc"><i>842</i>&nbsp;            }</b>
+<i>843</i>&nbsp;            if (nthreads == 0) {
+<i>844</i>&nbsp;                notifyAll();
+<b class="nc"><i>845</i>&nbsp;            }</b>
+<b class="nc"><i>846</i>&nbsp;            if (daemon &amp;&amp; (nthreads == 0) &amp;&amp;</b>
+<i>847</i>&nbsp;                (nUnstartedThreads == 0) &amp;&amp; (ngroups == 0))
+<b class="nc"><i>848</i>&nbsp;            {</b>
+<i>849</i>&nbsp;                destroy();
+<i>850</i>&nbsp;            }
+<b class="nc"><i>851</i>&nbsp;        }</b>
+<i>852</i>&nbsp;    }
+<b class="nc"><i>853</i>&nbsp;</b>
+<i>854</i>&nbsp;
+<i>855</i>&nbsp;    /**
+<i>856</i>&nbsp;     * Increments the count of unstarted threads in the thread group.
+<i>857</i>&nbsp;     * Unstarted threads are not added to the thread group so that they
+<i>858</i>&nbsp;     * can be collected if they are never started, but they must be
+<i>859</i>&nbsp;     * counted so that daemon thread groups with unstarted threads in
+<i>860</i>&nbsp;     * them are not destroyed.
+<i>861</i>&nbsp;     */
+<i>862</i>&nbsp;    void addUnstarted() {
+<i>863</i>&nbsp;        synchronized(this) {
+<i>864</i>&nbsp;            if (destroyed) {
+<b class="nc"><i>865</i>&nbsp;                throw new IllegalThreadStateException();</b>
+<b class="nc"><i>866</i>&nbsp;            }</b>
+<b class="nc"><i>867</i>&nbsp;            nUnstartedThreads++;</b>
+<i>868</i>&nbsp;        }
+<b class="nc"><i>869</i>&nbsp;    }</b>
+<b class="nc"><i>870</i>&nbsp;</b>
+<i>871</i>&nbsp;    /**
+<i>872</i>&nbsp;     * Adds the specified thread to this thread group.
+<i>873</i>&nbsp;     *
+<i>874</i>&nbsp;     * &lt;p&gt; Note: This method is called from both library code
+<i>875</i>&nbsp;     * and the Virtual Machine. It is called from VM to add
+<i>876</i>&nbsp;     * certain system threads to the system thread group.
+<i>877</i>&nbsp;     *
+<i>878</i>&nbsp;     * @param  t
+<i>879</i>&nbsp;     *         the Thread to be added
+<i>880</i>&nbsp;     *
+<i>881</i>&nbsp;     * @throws IllegalThreadStateException
+<i>882</i>&nbsp;     *          if the Thread group has been destroyed
+<i>883</i>&nbsp;     */
+<i>884</i>&nbsp;    void add(Thread t) {
+<i>885</i>&nbsp;        synchronized (this) {
+<i>886</i>&nbsp;            if (destroyed) {
+<b class="nc"><i>887</i>&nbsp;                throw new IllegalThreadStateException();</b>
+<b class="nc"><i>888</i>&nbsp;            }</b>
+<b class="nc"><i>889</i>&nbsp;            if (threads == null) {</b>
+<i>890</i>&nbsp;                threads = new Thread[4];
+<b class="nc"><i>891</i>&nbsp;            } else if (nthreads == threads.length) {</b>
+<b class="nc"><i>892</i>&nbsp;                threads = Arrays.copyOf(threads, nthreads * 2);</b>
+<b class="nc"><i>893</i>&nbsp;            }</b>
+<b class="nc"><i>894</i>&nbsp;            threads[nthreads] = t;</b>
+<i>895</i>&nbsp;
+<b class="nc"><i>896</i>&nbsp;            // This is done last so it doesn&#39;t matter in case the</b>
+<i>897</i>&nbsp;            // thread is killed
+<i>898</i>&nbsp;            nthreads++;
+<i>899</i>&nbsp;
+<b class="nc"><i>900</i>&nbsp;            // The thread is now a fully fledged member of the group, even</b>
+<i>901</i>&nbsp;            // though it may, or may not, have been started yet. It will prevent
+<i>902</i>&nbsp;            // the group from being destroyed so the unstarted Threads count is
+<i>903</i>&nbsp;            // decremented.
+<i>904</i>&nbsp;            nUnstartedThreads--;
+<i>905</i>&nbsp;        }
+<b class="nc"><i>906</i>&nbsp;    }</b>
+<b class="nc"><i>907</i>&nbsp;</b>
+<i>908</i>&nbsp;    /**
+<i>909</i>&nbsp;     * Notifies the group that the thread {@code t} has failed
+<i>910</i>&nbsp;     * an attempt to start.
+<i>911</i>&nbsp;     *
+<i>912</i>&nbsp;     * &lt;p&gt; The state of this thread group is rolled back as if the
+<i>913</i>&nbsp;     * attempt to start the thread has never occurred. The thread is again
+<i>914</i>&nbsp;     * considered an unstarted member of the thread group, and a subsequent
+<i>915</i>&nbsp;     * attempt to start the thread is permitted.
+<i>916</i>&nbsp;     *
+<i>917</i>&nbsp;     * @param  t
+<i>918</i>&nbsp;     *         the Thread whose start method was invoked
+<i>919</i>&nbsp;     */
+<i>920</i>&nbsp;    void threadStartFailed(Thread t) {
+<i>921</i>&nbsp;        synchronized(this) {
+<i>922</i>&nbsp;            remove(t);
+<b class="nc"><i>923</i>&nbsp;            nUnstartedThreads++;</b>
+<b class="nc"><i>924</i>&nbsp;        }</b>
+<b class="nc"><i>925</i>&nbsp;    }</b>
+<b class="nc"><i>926</i>&nbsp;</b>
+<i>927</i>&nbsp;    /**
+<i>928</i>&nbsp;     * Notifies the group that the thread {@code t} has terminated.
+<i>929</i>&nbsp;     *
+<i>930</i>&nbsp;     * &lt;p&gt; Destroy the group if all of the following conditions are
+<i>931</i>&nbsp;     * true: this is a daemon thread group; there are no more alive
+<i>932</i>&nbsp;     * or unstarted threads in the group; there are no subgroups in
+<i>933</i>&nbsp;     * this thread group.
+<i>934</i>&nbsp;     *
+<i>935</i>&nbsp;     * @param  t
+<i>936</i>&nbsp;     *         the Thread that has terminated
+<i>937</i>&nbsp;     */
+<i>938</i>&nbsp;    void threadTerminated(Thread t) {
+<i>939</i>&nbsp;        synchronized (this) {
+<i>940</i>&nbsp;            remove(t);
+<b class="nc"><i>941</i>&nbsp;</b>
+<b class="nc"><i>942</i>&nbsp;            if (nthreads == 0) {</b>
+<i>943</i>&nbsp;                notifyAll();
+<b class="nc"><i>944</i>&nbsp;            }</b>
+<b class="nc"><i>945</i>&nbsp;            if (daemon &amp;&amp; (nthreads == 0) &amp;&amp;</b>
+<i>946</i>&nbsp;                (nUnstartedThreads == 0) &amp;&amp; (ngroups == 0))
+<b class="nc"><i>947</i>&nbsp;            {</b>
+<i>948</i>&nbsp;                destroy();
+<i>949</i>&nbsp;            }
+<b class="nc"><i>950</i>&nbsp;        }</b>
+<i>951</i>&nbsp;    }
+<b class="nc"><i>952</i>&nbsp;</b>
+<i>953</i>&nbsp;    /**
+<i>954</i>&nbsp;     * Removes the specified Thread from this group. Invoking this method
+<i>955</i>&nbsp;     * on a thread group that has been destroyed has no effect.
+<i>956</i>&nbsp;     *
+<i>957</i>&nbsp;     * @param  t
+<i>958</i>&nbsp;     *         the Thread to be removed
+<i>959</i>&nbsp;     */
+<i>960</i>&nbsp;    private void remove(Thread t) {
+<i>961</i>&nbsp;        synchronized (this) {
+<i>962</i>&nbsp;            if (destroyed) {
+<b class="nc"><i>963</i>&nbsp;                return;</b>
+<b class="nc"><i>964</i>&nbsp;            }</b>
+<b class="nc"><i>965</i>&nbsp;            for (int i = 0 ; i &lt; nthreads ; i++) {</b>
+<i>966</i>&nbsp;                if (threads[i] == t) {
+<b class="nc"><i>967</i>&nbsp;                    System.arraycopy(threads, i + 1, threads, i, --nthreads - i);</b>
+<b class="nc"><i>968</i>&nbsp;                    // Zap dangling reference to the dead thread so that</b>
+<b class="nc"><i>969</i>&nbsp;                    // the garbage collector will collect it.</b>
+<i>970</i>&nbsp;                    threads[nthreads] = null;
+<i>971</i>&nbsp;                    break;
+<b class="nc"><i>972</i>&nbsp;                }</b>
+<b class="nc"><i>973</i>&nbsp;            }</b>
+<i>974</i>&nbsp;        }
+<i>975</i>&nbsp;    }
+<b class="nc"><i>976</i>&nbsp;</b>
+<i>977</i>&nbsp;    /**
+<i>978</i>&nbsp;     * Prints information about this thread group to the standard
+<i>979</i>&nbsp;     * output. This method is useful only for debugging.
+<i>980</i>&nbsp;     *
+<i>981</i>&nbsp;     * @since   1.0
+<i>982</i>&nbsp;     */
+<i>983</i>&nbsp;    public void list() {
+<i>984</i>&nbsp;        list(System.out, 0);
+<i>985</i>&nbsp;    }
+<b class="nc"><i>986</i>&nbsp;    void list(PrintStream out, int indent) {</b>
+<i>987</i>&nbsp;        int ngroupsSnapshot;
+<i>988</i>&nbsp;        ThreadGroup[] groupsSnapshot;
+<i>989</i>&nbsp;        synchronized (this) {
+<i>990</i>&nbsp;            for (int j = 0 ; j &lt; indent ; j++) {
+<b class="nc"><i>991</i>&nbsp;                out.print(&quot; &quot;);</b>
+<b class="nc"><i>992</i>&nbsp;            }</b>
+<b class="nc"><i>993</i>&nbsp;            out.println(this);</b>
+<i>994</i>&nbsp;            indent += 4;
+<b class="nc"><i>995</i>&nbsp;            for (int i = 0 ; i &lt; nthreads ; i++) {</b>
+<b class="nc"><i>996</i>&nbsp;                for (int j = 0 ; j &lt; indent ; j++) {</b>
+<b class="nc"><i>997</i>&nbsp;                    out.print(&quot; &quot;);</b>
+<b class="nc"><i>998</i>&nbsp;                }</b>
+<b class="nc"><i>999</i>&nbsp;                out.println(threads[i]);</b>
+<i>1000</i>&nbsp;            }
+<b class="nc"><i>1001</i>&nbsp;            ngroupsSnapshot = ngroups;</b>
+<i>1002</i>&nbsp;            if (groups != null) {
+<b class="nc"><i>1003</i>&nbsp;                groupsSnapshot = Arrays.copyOf(groups, ngroupsSnapshot);</b>
+<b class="nc"><i>1004</i>&nbsp;            } else {</b>
+<b class="nc"><i>1005</i>&nbsp;                groupsSnapshot = null;</b>
+<i>1006</i>&nbsp;            }
+<b class="nc"><i>1007</i>&nbsp;        }</b>
+<i>1008</i>&nbsp;        for (int i = 0 ; i &lt; ngroupsSnapshot ; i++) {
+<b class="nc"><i>1009</i>&nbsp;            groupsSnapshot[i].list(out, indent);</b>
+<b class="nc"><i>1010</i>&nbsp;        }</b>
+<b class="nc"><i>1011</i>&nbsp;    }</b>
+<i>1012</i>&nbsp;
+<i>1013</i>&nbsp;    /**
+<i>1014</i>&nbsp;     * Called by the Java Virtual Machine when a thread in this
+<i>1015</i>&nbsp;     * thread group stops because of an uncaught exception, and the thread
+<i>1016</i>&nbsp;     * does not have a specific {@link Thread.UncaughtExceptionHandler}
+<i>1017</i>&nbsp;     * installed.
+<i>1018</i>&nbsp;     * &lt;p&gt;
+<i>1019</i>&nbsp;     * The {@code uncaughtException} method of
+<i>1020</i>&nbsp;     * {@code ThreadGroup} does the following:
+<i>1021</i>&nbsp;     * &lt;ul&gt;
+<i>1022</i>&nbsp;     * &lt;li&gt;If this thread group has a parent thread group, the
+<i>1023</i>&nbsp;     *     {@code uncaughtException} method of that parent is called
+<i>1024</i>&nbsp;     *     with the same two arguments.
+<i>1025</i>&nbsp;     * &lt;li&gt;Otherwise, this method checks to see if there is a
+<i>1026</i>&nbsp;     *     {@linkplain Thread#getDefaultUncaughtExceptionHandler default
+<i>1027</i>&nbsp;     *     uncaught exception handler} installed, and if so, its
+<i>1028</i>&nbsp;     *     {@code uncaughtException} method is called with the same
+<i>1029</i>&nbsp;     *     two arguments.
+<i>1030</i>&nbsp;     * &lt;li&gt;Otherwise, this method determines if the {@code Throwable}
+<i>1031</i>&nbsp;     *     argument is an instance of {@link ThreadDeath}. If so, nothing
+<i>1032</i>&nbsp;     *     special is done. Otherwise, a message containing the
+<i>1033</i>&nbsp;     *     thread&#39;s name, as returned from the thread&#39;s {@link
+<i>1034</i>&nbsp;     *     Thread#getName getName} method, and a stack backtrace,
+<i>1035</i>&nbsp;     *     using the {@code Throwable}&#39;s {@link
+<i>1036</i>&nbsp;     *     Throwable#printStackTrace printStackTrace} method, is
+<i>1037</i>&nbsp;     *     printed to the {@linkplain System#err standard error stream}.
+<i>1038</i>&nbsp;     * &lt;/ul&gt;
+<i>1039</i>&nbsp;     * &lt;p&gt;
+<i>1040</i>&nbsp;     * Applications can override this method in subclasses of
+<i>1041</i>&nbsp;     * {@code ThreadGroup} to provide alternative handling of
+<i>1042</i>&nbsp;     * uncaught exceptions.
+<i>1043</i>&nbsp;     *
+<i>1044</i>&nbsp;     * @param   t   the thread that is about to exit.
+<i>1045</i>&nbsp;     * @param   e   the uncaught exception.
+<i>1046</i>&nbsp;     * @since   1.0
+<i>1047</i>&nbsp;     */
+<i>1048</i>&nbsp;    public void uncaughtException(Thread t, Throwable e) {
+<i>1049</i>&nbsp;        if (parent != null) {
+<i>1050</i>&nbsp;            parent.uncaughtException(t, e);
+<b class="nc"><i>1051</i>&nbsp;        } else {</b>
+<b class="nc"><i>1052</i>&nbsp;            Thread.UncaughtExceptionHandler ueh =</b>
+<i>1053</i>&nbsp;                Thread.getDefaultUncaughtExceptionHandler();
+<i>1054</i>&nbsp;            if (ueh != null) {
+<b class="nc"><i>1055</i>&nbsp;                ueh.uncaughtException(t, e);</b>
+<b class="nc"><i>1056</i>&nbsp;            } else if (!(e instanceof ThreadDeath)) {</b>
+<b class="nc"><i>1057</i>&nbsp;                System.err.print(&quot;Exception in thread \&quot;&quot;</b>
+<b class="nc"><i>1058</i>&nbsp;                                 + t.getName() + &quot;\&quot; &quot;);</b>
+<b class="nc"><i>1059</i>&nbsp;                e.printStackTrace(System.err);</b>
+<b class="nc"><i>1060</i>&nbsp;            }</b>
+<b class="nc"><i>1061</i>&nbsp;        }</b>
+<i>1062</i>&nbsp;    }
+<i>1063</i>&nbsp;
+<i>1064</i>&nbsp;    /**
+<i>1065</i>&nbsp;     * Used by VM to control lowmem implicit suspension.
+<i>1066</i>&nbsp;     *
+<i>1067</i>&nbsp;     * @param b boolean to allow or disallow suspension
+<i>1068</i>&nbsp;     * @return true on success
+<i>1069</i>&nbsp;     * @since   1.1
+<i>1070</i>&nbsp;     * @deprecated The definition of this call depends on {@link #suspend},
+<i>1071</i>&nbsp;     *             which is deprecated.  Further, the behavior of this call
+<i>1072</i>&nbsp;     *             was never specified.
+<i>1073</i>&nbsp;     */
+<i>1074</i>&nbsp;    @Deprecated(since=&quot;1.2&quot;)
+<i>1075</i>&nbsp;    public boolean allowThreadSuspension(boolean b) {
+<i>1076</i>&nbsp;        return true;
+<i>1077</i>&nbsp;    }
+<b class="nc"><i>1078</i>&nbsp;</b>
+<b class="nc"><i>1079</i>&nbsp;    /**</b>
+<b class="nc"><i>1080</i>&nbsp;     * Returns a string representation of this Thread group.</b>
+<i>1081</i>&nbsp;     *
+<b class="nc"><i>1082</i>&nbsp;     * @return  a string representation of this thread group.</b>
+<i>1083</i>&nbsp;     * @since   1.0
+<i>1084</i>&nbsp;     */
+<i>1085</i>&nbsp;    public String toString() {
+<i>1086</i>&nbsp;        return getClass().getName() + &quot;[name=&quot; + getName() + &quot;,maxpri=&quot; + maxPriority + &quot;]&quot;;
+<i>1087</i>&nbsp;    }
+<i>1088</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

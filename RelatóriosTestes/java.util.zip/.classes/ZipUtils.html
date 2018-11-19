@@ -1,0 +1,387 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ZipUtils</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.zip</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ZipUtils (java.util.zip)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ZipUtils</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 12)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 23)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.util.zip;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.Buffer;
+<i>29</i>&nbsp;import java.nio.ByteBuffer;
+<i>30</i>&nbsp;import java.nio.file.attribute.FileTime;
+<i>31</i>&nbsp;import java.security.AccessController;
+<b class="nc"><i>32</i>&nbsp;import java.security.PrivilegedAction;</b>
+<i>33</i>&nbsp;import java.time.DateTimeException;
+<i>34</i>&nbsp;import java.time.Instant;
+<i>35</i>&nbsp;import java.time.LocalDateTime;
+<i>36</i>&nbsp;import java.time.ZoneId;
+<i>37</i>&nbsp;import java.util.Date;
+<i>38</i>&nbsp;import java.util.concurrent.TimeUnit;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;import static java.util.zip.ZipConstants.ENDHDR;
+<b class="nc"><i>41</i>&nbsp;</b>
+<i>42</i>&nbsp;import jdk.internal.misc.Unsafe;
+<i>43</i>&nbsp;import sun.nio.ch.DirectBuffer;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;class ZipUtils {
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;    // used to adjust values between Windows and java epoch
+<i>48</i>&nbsp;    private static final long WINDOWS_EPOCH_IN_MICROSECONDS = -11644473600000000L;
+<b class="nc"><i>49</i>&nbsp;</b>
+<i>50</i>&nbsp;    // used to indicate the corresponding windows time is not available
+<i>51</i>&nbsp;    public static final long WINDOWS_TIME_NOT_AVAILABLE = Long.MIN_VALUE;
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;    // static final ByteBuffer defaultBuf = ByteBuffer.allocateDirect(0);
+<i>54</i>&nbsp;    static final ByteBuffer defaultBuf = ByteBuffer.allocate(0);
+<i>55</i>&nbsp;
+<b class="nc"><i>56</i>&nbsp;    /**</b>
+<i>57</i>&nbsp;     * Converts Windows time (in microseconds, UTC/GMT) time to FileTime.
+<i>58</i>&nbsp;     */
+<i>59</i>&nbsp;    public static final FileTime winTimeToFileTime(long wtime) {
+<i>60</i>&nbsp;        return FileTime.from(wtime / 10 + WINDOWS_EPOCH_IN_MICROSECONDS,
+<i>61</i>&nbsp;                             TimeUnit.MICROSECONDS);
+<i>62</i>&nbsp;    }
+<b class="nc"><i>63</i>&nbsp;</b>
+<i>64</i>&nbsp;    /**
+<i>65</i>&nbsp;     * Converts FileTime to Windows time.
+<i>66</i>&nbsp;     */
+<i>67</i>&nbsp;    public static final long fileTimeToWinTime(FileTime ftime) {
+<i>68</i>&nbsp;        return (ftime.to(TimeUnit.MICROSECONDS) - WINDOWS_EPOCH_IN_MICROSECONDS) * 10;
+<i>69</i>&nbsp;    }
+<i>70</i>&nbsp;
+<b class="nc"><i>71</i>&nbsp;    /**</b>
+<i>72</i>&nbsp;     * The upper bound of the 32-bit unix time, the &quot;year 2038 problem&quot;.
+<i>73</i>&nbsp;     */
+<i>74</i>&nbsp;    public static final long UPPER_UNIXTIME_BOUND = 0x7fffffff;
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    /**
+<b class="nc"><i>77</i>&nbsp;     * Converts &quot;standard Unix time&quot;(in seconds, UTC/GMT) to FileTime</b>
+<i>78</i>&nbsp;     */
+<i>79</i>&nbsp;    public static final FileTime unixTimeToFileTime(long utime) {
+<i>80</i>&nbsp;        return FileTime.from(utime, TimeUnit.SECONDS);
+<i>81</i>&nbsp;    }
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;    /**
+<i>84</i>&nbsp;     * Converts FileTime to &quot;standard Unix time&quot;.
+<i>85</i>&nbsp;     */
+<i>86</i>&nbsp;    public static final long fileTimeToUnixTime(FileTime ftime) {
+<i>87</i>&nbsp;        return ftime.to(TimeUnit.SECONDS);
+<b class="nc"><i>88</i>&nbsp;    }</b>
+<b class="nc"><i>89</i>&nbsp;</b>
+<i>90</i>&nbsp;    /**
+<i>91</i>&nbsp;     * Converts DOS time to Java time (number of milliseconds since epoch).
+<i>92</i>&nbsp;     */
+<i>93</i>&nbsp;    public static long dosToJavaTime(long dtime) {
+<i>94</i>&nbsp;        int year = (int) (((dtime &gt;&gt; 25) &amp; 0x7f) + 1980);
+<i>95</i>&nbsp;        int month = (int) ((dtime &gt;&gt; 21) &amp; 0x0f);
+<i>96</i>&nbsp;        int day = (int) ((dtime &gt;&gt; 16) &amp; 0x1f);
+<b class="nc"><i>97</i>&nbsp;        int hour = (int) ((dtime &gt;&gt; 11) &amp; 0x1f);</b>
+<b class="nc"><i>98</i>&nbsp;        int minute = (int) ((dtime &gt;&gt; 5) &amp; 0x3f);</b>
+<b class="nc"><i>99</i>&nbsp;        int second = (int) ((dtime &lt;&lt; 1) &amp; 0x3e);</b>
+<b class="nc"><i>100</i>&nbsp;</b>
+<i>101</i>&nbsp;        if (month &gt; 0 &amp;&amp; month &lt; 13 &amp;&amp; day &gt; 0 &amp;&amp; hour &lt; 24 &amp;&amp; minute &lt; 60 &amp;&amp; second &lt; 60) {
+<b class="nc"><i>102</i>&nbsp;            try {</b>
+<b class="nc"><i>103</i>&nbsp;                LocalDateTime ldt = LocalDateTime.of(year, month, day, hour, minute, second);</b>
+<b class="nc"><i>104</i>&nbsp;                return TimeUnit.MILLISECONDS.convert(ldt.toEpochSecond(</b>
+<i>105</i>&nbsp;                        ZoneId.systemDefault().getRules().getOffset(ldt)), TimeUnit.SECONDS);
+<i>106</i>&nbsp;            } catch (DateTimeException dte) {
+<i>107</i>&nbsp;                // ignore
+<i>108</i>&nbsp;            }
+<i>109</i>&nbsp;        }
+<i>110</i>&nbsp;        return overflowDosToJavaTime(year, month, day, hour, minute, second);
+<i>111</i>&nbsp;    }
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;    /*
+<i>114</i>&nbsp;     * Deal with corner cases where an arguably mal-formed DOS time is used
+<b class="nc"><i>115</i>&nbsp;     */</b>
+<b class="nc"><i>116</i>&nbsp;    @SuppressWarnings(&quot;deprecation&quot;) // Use of Date constructor</b>
+<i>117</i>&nbsp;    private static long overflowDosToJavaTime(int year, int month, int day,
+<b class="nc"><i>118</i>&nbsp;                                              int hour, int minute, int second) {</b>
+<b class="nc"><i>119</i>&nbsp;        return new Date(year - 1900, month - 1, day, hour, minute, second).getTime();</b>
+<i>120</i>&nbsp;    }
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;    /**
+<i>124</i>&nbsp;     * Converts extended DOS time to Java time, where up to 1999 milliseconds
+<i>125</i>&nbsp;     * might be encoded into the upper half of the returned long.
+<i>126</i>&nbsp;     *
+<i>127</i>&nbsp;     * @param xdostime the extended DOS time value
+<i>128</i>&nbsp;     * @return milliseconds since epoch
+<b class="nc"><i>129</i>&nbsp;     */</b>
+<i>130</i>&nbsp;    public static long extendedDosToJavaTime(long xdostime) {
+<i>131</i>&nbsp;        long time = dosToJavaTime(xdostime);
+<i>132</i>&nbsp;        return time + (xdostime &gt;&gt; 32);
+<i>133</i>&nbsp;    }
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;    /**
+<i>136</i>&nbsp;     * Converts Java time to DOS time.
+<b class="nc"><i>137</i>&nbsp;     */</b>
+<i>138</i>&nbsp;    private static long javaToDosTime(long time) {
+<i>139</i>&nbsp;        Instant instant = Instant.ofEpochMilli(time);
+<i>140</i>&nbsp;        LocalDateTime ldt = LocalDateTime.ofInstant(
+<i>141</i>&nbsp;                instant, ZoneId.systemDefault());
+<i>142</i>&nbsp;        int year = ldt.getYear() - 1980;
+<i>143</i>&nbsp;        if (year &lt; 0) {
+<i>144</i>&nbsp;            return (1 &lt;&lt; 21) | (1 &lt;&lt; 16);
+<b class="nc"><i>145</i>&nbsp;        }</b>
+<i>146</i>&nbsp;        return (year &lt;&lt; 25 |
+<i>147</i>&nbsp;            ldt.getMonthValue() &lt;&lt; 21 |
+<i>148</i>&nbsp;            ldt.getDayOfMonth() &lt;&lt; 16 |
+<i>149</i>&nbsp;            ldt.getHour() &lt;&lt; 11 |
+<i>150</i>&nbsp;            ldt.getMinute() &lt;&lt; 5 |
+<i>151</i>&nbsp;            ldt.getSecond() &gt;&gt; 1) &amp; 0xffffffffL;
+<i>152</i>&nbsp;    }
+<i>153</i>&nbsp;
+<i>154</i>&nbsp;    /**
+<i>155</i>&nbsp;     * Converts Java time to DOS time, encoding any milliseconds lost
+<i>156</i>&nbsp;     * in the conversion into the upper half of the returned long.
+<i>157</i>&nbsp;     *
+<i>158</i>&nbsp;     * @param time milliseconds since epoch
+<i>159</i>&nbsp;     * @return DOS time with 2s remainder encoded into upper half
+<i>160</i>&nbsp;     */
+<i>161</i>&nbsp;    public static long javaToExtendedDosTime(long time) {
+<i>162</i>&nbsp;        if (time &lt; 0) {
+<i>163</i>&nbsp;            return ZipEntry.DOSTIME_BEFORE_1980;
+<i>164</i>&nbsp;        }
+<i>165</i>&nbsp;        long dostime = javaToDosTime(time);
+<i>166</i>&nbsp;        return (dostime != ZipEntry.DOSTIME_BEFORE_1980)
+<i>167</i>&nbsp;                ? dostime + ((time % 2000) &lt;&lt; 32)
+<i>168</i>&nbsp;                : ZipEntry.DOSTIME_BEFORE_1980;
+<i>169</i>&nbsp;    }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;    /**
+<i>172</i>&nbsp;     * Fetches unsigned 16-bit value from byte array at specified offset.
+<i>173</i>&nbsp;     * The bytes are assumed to be in Intel (little-endian) byte order.
+<i>174</i>&nbsp;     */
+<i>175</i>&nbsp;    public static final int get16(byte b[], int off) {
+<i>176</i>&nbsp;        return (b[off] &amp; 0xff) | ((b[off + 1] &amp; 0xff) &lt;&lt; 8);
+<i>177</i>&nbsp;    }
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;    /**
+<i>180</i>&nbsp;     * Fetches unsigned 32-bit value from byte array at specified offset.
+<i>181</i>&nbsp;     * The bytes are assumed to be in Intel (little-endian) byte order.
+<i>182</i>&nbsp;     */
+<i>183</i>&nbsp;    public static final long get32(byte b[], int off) {
+<i>184</i>&nbsp;        return (get16(b, off) | ((long)get16(b, off+2) &lt;&lt; 16)) &amp; 0xffffffffL;
+<i>185</i>&nbsp;    }
+<i>186</i>&nbsp;
+<i>187</i>&nbsp;    /**
+<i>188</i>&nbsp;     * Fetches signed 64-bit value from byte array at specified offset.
+<i>189</i>&nbsp;     * The bytes are assumed to be in Intel (little-endian) byte order.
+<i>190</i>&nbsp;     */
+<i>191</i>&nbsp;    public static final long get64(byte b[], int off) {
+<i>192</i>&nbsp;        return get32(b, off) | (get32(b, off+4) &lt;&lt; 32);
+<i>193</i>&nbsp;    }
+<i>194</i>&nbsp;
+<i>195</i>&nbsp;    /**
+<i>196</i>&nbsp;     * Fetches signed 32-bit value from byte array at specified offset.
+<i>197</i>&nbsp;     * The bytes are assumed to be in Intel (little-endian) byte order.
+<i>198</i>&nbsp;     *
+<i>199</i>&nbsp;     */
+<i>200</i>&nbsp;    public static final int get32S(byte b[], int off) {
+<i>201</i>&nbsp;        return (get16(b, off) | (get16(b, off+2) &lt;&lt; 16));
+<i>202</i>&nbsp;    }
+<i>203</i>&nbsp;
+<i>204</i>&nbsp;    // fields access methods
+<i>205</i>&nbsp;    static final int CH(byte[] b, int n) {
+<i>206</i>&nbsp;        return b[n] &amp; 0xff ;
+<i>207</i>&nbsp;    }
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    static final int SH(byte[] b, int n) {
+<i>210</i>&nbsp;        return (b[n] &amp; 0xff) | ((b[n + 1] &amp; 0xff) &lt;&lt; 8);
+<i>211</i>&nbsp;    }
+<i>212</i>&nbsp;
+<i>213</i>&nbsp;    static final long LG(byte[] b, int n) {
+<i>214</i>&nbsp;        return ((SH(b, n)) | (SH(b, n + 2) &lt;&lt; 16)) &amp; 0xffffffffL;
+<i>215</i>&nbsp;    }
+<i>216</i>&nbsp;
+<i>217</i>&nbsp;    static final long LL(byte[] b, int n) {
+<i>218</i>&nbsp;        return (LG(b, n)) | (LG(b, n + 4) &lt;&lt; 32);
+<i>219</i>&nbsp;    }
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;    static final long GETSIG(byte[] b) {
+<i>222</i>&nbsp;        return LG(b, 0);
+<i>223</i>&nbsp;    }
+<i>224</i>&nbsp;
+<i>225</i>&nbsp;    // local file (LOC) header fields
+<i>226</i>&nbsp;    static final long LOCSIG(byte[] b) { return LG(b, 0); } // signature
+<i>227</i>&nbsp;    static final int  LOCVER(byte[] b) { return SH(b, 4); } // version needed to extract
+<i>228</i>&nbsp;    static final int  LOCFLG(byte[] b) { return SH(b, 6); } // general purpose bit flags
+<i>229</i>&nbsp;    static final int  LOCHOW(byte[] b) { return SH(b, 8); } // compression method
+<i>230</i>&nbsp;    static final long LOCTIM(byte[] b) { return LG(b, 10);} // modification time
+<i>231</i>&nbsp;    static final long LOCCRC(byte[] b) { return LG(b, 14);} // crc of uncompressed data
+<i>232</i>&nbsp;    static final long LOCSIZ(byte[] b) { return LG(b, 18);} // compressed data size
+<i>233</i>&nbsp;    static final long LOCLEN(byte[] b) { return LG(b, 22);} // uncompressed data size
+<i>234</i>&nbsp;    static final int  LOCNAM(byte[] b) { return SH(b, 26);} // filename length
+<i>235</i>&nbsp;    static final int  LOCEXT(byte[] b) { return SH(b, 28);} // extra field length
+<i>236</i>&nbsp;
+<i>237</i>&nbsp;    // extra local (EXT) header fields
+<i>238</i>&nbsp;    static final long EXTCRC(byte[] b) { return LG(b, 4);}  // crc of uncompressed data
+<i>239</i>&nbsp;    static final long EXTSIZ(byte[] b) { return LG(b, 8);}  // compressed size
+<i>240</i>&nbsp;    static final long EXTLEN(byte[] b) { return LG(b, 12);} // uncompressed size
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;    // end of central directory header (END) fields
+<i>243</i>&nbsp;    static final int  ENDSUB(byte[] b) { return SH(b, 8); }  // number of entries on this disk
+<i>244</i>&nbsp;    static final int  ENDTOT(byte[] b) { return SH(b, 10);}  // total number of entries
+<i>245</i>&nbsp;    static final long ENDSIZ(byte[] b) { return LG(b, 12);}  // central directory size
+<i>246</i>&nbsp;    static final long ENDOFF(byte[] b) { return LG(b, 16);}  // central directory offset
+<i>247</i>&nbsp;    static final int  ENDCOM(byte[] b) { return SH(b, 20);}  // size of zip file comment
+<i>248</i>&nbsp;    static final int  ENDCOM(byte[] b, int off) { return SH(b, off + 20);}
+<i>249</i>&nbsp;
+<i>250</i>&nbsp;    // zip64 end of central directory recoder fields
+<i>251</i>&nbsp;    static final long ZIP64_ENDTOD(byte[] b) { return LL(b, 24);}  // total number of entries on disk
+<i>252</i>&nbsp;    static final long ZIP64_ENDTOT(byte[] b) { return LL(b, 32);}  // total number of entries
+<i>253</i>&nbsp;    static final long ZIP64_ENDSIZ(byte[] b) { return LL(b, 40);}  // central directory size
+<i>254</i>&nbsp;    static final long ZIP64_ENDOFF(byte[] b) { return LL(b, 48);}  // central directory offset
+<i>255</i>&nbsp;    static final long ZIP64_LOCOFF(byte[] b) { return LL(b, 8);}   // zip64 end offset
+<i>256</i>&nbsp;
+<i>257</i>&nbsp;    // central directory header (CEN) fields
+<i>258</i>&nbsp;    static final long CENSIG(byte[] b, int pos) { return LG(b, pos + 0); }
+<i>259</i>&nbsp;    static final int  CENVEM(byte[] b, int pos) { return SH(b, pos + 4); }
+<i>260</i>&nbsp;    static final int  CENVER(byte[] b, int pos) { return SH(b, pos + 6); }
+<i>261</i>&nbsp;    static final int  CENFLG(byte[] b, int pos) { return SH(b, pos + 8); }
+<i>262</i>&nbsp;    static final int  CENHOW(byte[] b, int pos) { return SH(b, pos + 10);}
+<i>263</i>&nbsp;    static final long CENTIM(byte[] b, int pos) { return LG(b, pos + 12);}
+<i>264</i>&nbsp;    static final long CENCRC(byte[] b, int pos) { return LG(b, pos + 16);}
+<i>265</i>&nbsp;    static final long CENSIZ(byte[] b, int pos) { return LG(b, pos + 20);}
+<i>266</i>&nbsp;    static final long CENLEN(byte[] b, int pos) { return LG(b, pos + 24);}
+<i>267</i>&nbsp;    static final int  CENNAM(byte[] b, int pos) { return SH(b, pos + 28);}
+<i>268</i>&nbsp;    static final int  CENEXT(byte[] b, int pos) { return SH(b, pos + 30);}
+<i>269</i>&nbsp;    static final int  CENCOM(byte[] b, int pos) { return SH(b, pos + 32);}
+<i>270</i>&nbsp;    static final int  CENDSK(byte[] b, int pos) { return SH(b, pos + 34);}
+<i>271</i>&nbsp;    static final int  CENATT(byte[] b, int pos) { return SH(b, pos + 36);}
+<i>272</i>&nbsp;    static final long CENATX(byte[] b, int pos) { return LG(b, pos + 38);}
+<i>273</i>&nbsp;    static final long CENOFF(byte[] b, int pos) { return LG(b, pos + 42);}
+<i>274</i>&nbsp;
+<i>275</i>&nbsp;    // The END header is followed by a variable length comment of size &lt; 64k.
+<i>276</i>&nbsp;    static final long END_MAXLEN = 0xFFFF + ENDHDR;
+<i>277</i>&nbsp;    static final int READBLOCKSZ = 128;
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;    /**
+<i>280</i>&nbsp;     * Loads zip native library, if not already laoded
+<i>281</i>&nbsp;     */
+<i>282</i>&nbsp;    static void loadLibrary() {
+<i>283</i>&nbsp;        SecurityManager sm = System.getSecurityManager();
+<i>284</i>&nbsp;        if (sm == null) {
+<i>285</i>&nbsp;            System.loadLibrary(&quot;zip&quot;);
+<i>286</i>&nbsp;        } else {
+<i>287</i>&nbsp;            PrivilegedAction&lt;Void&gt; pa = () -&gt; { System.loadLibrary(&quot;zip&quot;); return null; };
+<i>288</i>&nbsp;            AccessController.doPrivileged(pa);
+<i>289</i>&nbsp;        }
+<i>290</i>&nbsp;    }
+<i>291</i>&nbsp;
+<i>292</i>&nbsp;    private static final Unsafe unsafe = Unsafe.getUnsafe();
+<i>293</i>&nbsp;
+<i>294</i>&nbsp;    private static final long byteBufferArrayOffset = unsafe.objectFieldOffset(ByteBuffer.class, &quot;hb&quot;);
+<i>295</i>&nbsp;    private static final long byteBufferOffsetOffset = unsafe.objectFieldOffset(ByteBuffer.class, &quot;offset&quot;);
+<i>296</i>&nbsp;
+<i>297</i>&nbsp;    static byte[] getBufferArray(ByteBuffer byteBuffer) {
+<i>298</i>&nbsp;        return (byte[]) unsafe.getObject(byteBuffer, byteBufferArrayOffset);
+<i>299</i>&nbsp;    }
+<i>300</i>&nbsp;
+<i>301</i>&nbsp;    static int getBufferOffset(ByteBuffer byteBuffer) {
+<i>302</i>&nbsp;        return unsafe.getInt(byteBuffer, byteBufferOffsetOffset);
+<i>303</i>&nbsp;    }
+<i>304</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

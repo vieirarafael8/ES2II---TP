@@ -1,0 +1,478 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: FlatteningPathIterator</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.awt.geom</a> ]
+</div>
+
+<h1>Coverage Summary for Class: FlatteningPathIterator (java.awt.geom)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FlatteningPathIterator</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 11)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 112)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.awt.geom;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.*;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;/**
+<i>31</i>&nbsp; * The {@code FlatteningPathIterator} class returns a flattened view of
+<i>32</i>&nbsp; * another {@link PathIterator} object.  Other {@link java.awt.Shape Shape}
+<i>33</i>&nbsp; * classes can use this class to provide flattening behavior for their paths
+<i>34</i>&nbsp; * without having to perform the interpolation calculations themselves.
+<i>35</i>&nbsp; *
+<i>36</i>&nbsp; * @author Jim Graham
+<i>37</i>&nbsp; */
+<i>38</i>&nbsp;public class FlatteningPathIterator implements PathIterator {
+<i>39</i>&nbsp;    static final int GROW_SIZE = 24;    // Multiple of cubic &amp; quad curve size
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;    PathIterator src;                   // The source iterator
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;    double squareflat;                  // Square of the flatness parameter
+<i>44</i>&nbsp;                                        // for testing against squared lengths
+<i>45</i>&nbsp;
+<i>46</i>&nbsp;    int limit;                          // Maximum number of recursion levels
+<i>47</i>&nbsp;
+<b class="nc"><i>48</i>&nbsp;    double hold[] = new double[14];     // The cache of interpolated coords</b>
+<i>49</i>&nbsp;                                        // Note that this must be long enough
+<i>50</i>&nbsp;                                        // to store a full cubic segment and
+<i>51</i>&nbsp;                                        // a relative cubic segment to avoid
+<i>52</i>&nbsp;                                        // aliasing when copying the coords
+<i>53</i>&nbsp;                                        // of a curve to the end of the array.
+<i>54</i>&nbsp;                                        // This is also serendipitously equal
+<i>55</i>&nbsp;                                        // to the size of a full quad segment
+<i>56</i>&nbsp;                                        // and 2 relative quad segments.
+<i>57</i>&nbsp;
+<i>58</i>&nbsp;    double curx, cury;                  // The ending x,y of the last segment
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    double movx, movy;                  // The x,y of the last move segment
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    int holdType;                       // The type of the curve being held
+<i>63</i>&nbsp;                                        // for interpolation
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    int holdEnd;                        // The index of the last curve segment
+<i>66</i>&nbsp;                                        // being held for interpolation
+<i>67</i>&nbsp;
+<i>68</i>&nbsp;    int holdIndex;                      // The index of the curve segment
+<i>69</i>&nbsp;                                        // that was last interpolated.  This
+<i>70</i>&nbsp;                                        // is the curve segment ready to be
+<i>71</i>&nbsp;                                        // returned in the next call to
+<i>72</i>&nbsp;                                        // currentSegment().
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    int levels[];                       // The recursion level at which
+<i>75</i>&nbsp;                                        // each curve being held in storage
+<i>76</i>&nbsp;                                        // was generated.
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    int levelIndex;                     // The index of the entry in the
+<i>79</i>&nbsp;                                        // levels array of the curve segment
+<i>80</i>&nbsp;                                        // at the holdIndex
+<i>81</i>&nbsp;
+<i>82</i>&nbsp;    boolean done;                       // True when iteration is done
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    /**
+<i>85</i>&nbsp;     * Constructs a new {@code FlatteningPathIterator} object that
+<i>86</i>&nbsp;     * flattens a path as it iterates over it.  The iterator does not
+<i>87</i>&nbsp;     * subdivide any curve read from the source iterator to more than
+<i>88</i>&nbsp;     * 10 levels of subdivision which yields a maximum of 1024 line
+<i>89</i>&nbsp;     * segments per curve.
+<i>90</i>&nbsp;     * @param src the original unflattened path being iterated over
+<i>91</i>&nbsp;     * @param flatness the maximum allowable distance between the
+<i>92</i>&nbsp;     * control points and the flattened curve
+<i>93</i>&nbsp;     */
+<i>94</i>&nbsp;    public FlatteningPathIterator(PathIterator src, double flatness) {
+<b class="nc"><i>95</i>&nbsp;        this(src, flatness, 10);</b>
+<i>96</i>&nbsp;    }
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    /**
+<i>99</i>&nbsp;     * Constructs a new {@code FlatteningPathIterator} object
+<i>100</i>&nbsp;     * that flattens a path as it iterates over it.
+<i>101</i>&nbsp;     * The {@code limit} parameter allows you to control the
+<i>102</i>&nbsp;     * maximum number of recursive subdivisions that the iterator
+<i>103</i>&nbsp;     * can make before it assumes that the curve is flat enough
+<i>104</i>&nbsp;     * without measuring against the {@code flatness} parameter.
+<i>105</i>&nbsp;     * The flattened iteration therefore never generates more than
+<i>106</i>&nbsp;     * a maximum of {@code (2^limit)} line segments per curve.
+<i>107</i>&nbsp;     * @param src the original unflattened path being iterated over
+<i>108</i>&nbsp;     * @param flatness the maximum allowable distance between the
+<i>109</i>&nbsp;     * control points and the flattened curve
+<i>110</i>&nbsp;     * @param limit the maximum number of recursive subdivisions
+<i>111</i>&nbsp;     * allowed for any curved segment
+<i>112</i>&nbsp;     * @exception IllegalArgumentException if
+<i>113</i>&nbsp;     *          {@code flatness} or {@code limit}
+<i>114</i>&nbsp;     *          is less than zero
+<i>115</i>&nbsp;     */
+<i>116</i>&nbsp;    public FlatteningPathIterator(PathIterator src, double flatness,
+<b class="nc"><i>117</i>&nbsp;                                  int limit) {</b>
+<b class="nc"><i>118</i>&nbsp;        if (flatness &lt; 0.0) {</b>
+<b class="nc"><i>119</i>&nbsp;            throw new IllegalArgumentException(&quot;flatness must be &gt;= 0&quot;);</b>
+<i>120</i>&nbsp;        }
+<b class="nc"><i>121</i>&nbsp;        if (limit &lt; 0) {</b>
+<b class="nc"><i>122</i>&nbsp;            throw new IllegalArgumentException(&quot;limit must be &gt;= 0&quot;);</b>
+<i>123</i>&nbsp;        }
+<b class="nc"><i>124</i>&nbsp;        this.src = src;</b>
+<b class="nc"><i>125</i>&nbsp;        this.squareflat = flatness * flatness;</b>
+<b class="nc"><i>126</i>&nbsp;        this.limit = limit;</b>
+<b class="nc"><i>127</i>&nbsp;        this.levels = new int[limit + 1];</b>
+<i>128</i>&nbsp;        // prime the first path segment
+<b class="nc"><i>129</i>&nbsp;        next(false);</b>
+<i>130</i>&nbsp;    }
+<i>131</i>&nbsp;
+<i>132</i>&nbsp;    /**
+<i>133</i>&nbsp;     * Returns the flatness of this iterator.
+<i>134</i>&nbsp;     * @return the flatness of this {@code FlatteningPathIterator}.
+<i>135</i>&nbsp;     */
+<i>136</i>&nbsp;    public double getFlatness() {
+<b class="nc"><i>137</i>&nbsp;        return Math.sqrt(squareflat);</b>
+<i>138</i>&nbsp;    }
+<i>139</i>&nbsp;
+<i>140</i>&nbsp;    /**
+<i>141</i>&nbsp;     * Returns the recursion limit of this iterator.
+<i>142</i>&nbsp;     * @return the recursion limit of this
+<i>143</i>&nbsp;     * {@code FlatteningPathIterator}.
+<i>144</i>&nbsp;     */
+<i>145</i>&nbsp;    public int getRecursionLimit() {
+<b class="nc"><i>146</i>&nbsp;        return limit;</b>
+<i>147</i>&nbsp;    }
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;    /**
+<i>150</i>&nbsp;     * Returns the winding rule for determining the interior of the
+<i>151</i>&nbsp;     * path.
+<i>152</i>&nbsp;     * @return the winding rule of the original unflattened path being
+<i>153</i>&nbsp;     * iterated over.
+<i>154</i>&nbsp;     * @see PathIterator#WIND_EVEN_ODD
+<i>155</i>&nbsp;     * @see PathIterator#WIND_NON_ZERO
+<i>156</i>&nbsp;     */
+<i>157</i>&nbsp;    public int getWindingRule() {
+<b class="nc"><i>158</i>&nbsp;        return src.getWindingRule();</b>
+<i>159</i>&nbsp;    }
+<i>160</i>&nbsp;
+<i>161</i>&nbsp;    /**
+<i>162</i>&nbsp;     * Tests if the iteration is complete.
+<i>163</i>&nbsp;     * @return {@code true} if all the segments have
+<i>164</i>&nbsp;     * been read; {@code false} otherwise.
+<i>165</i>&nbsp;     */
+<i>166</i>&nbsp;    public boolean isDone() {
+<b class="nc"><i>167</i>&nbsp;        return done;</b>
+<i>168</i>&nbsp;    }
+<i>169</i>&nbsp;
+<i>170</i>&nbsp;    /*
+<i>171</i>&nbsp;     * Ensures that the hold array can hold up to (want) more values.
+<i>172</i>&nbsp;     * It is currently holding (hold.length - holdIndex) values.
+<i>173</i>&nbsp;     */
+<i>174</i>&nbsp;    void ensureHoldCapacity(int want) {
+<b class="nc"><i>175</i>&nbsp;        if (holdIndex - want &lt; 0) {</b>
+<b class="nc"><i>176</i>&nbsp;            int have = hold.length - holdIndex;</b>
+<b class="nc"><i>177</i>&nbsp;            int newsize = hold.length + GROW_SIZE;</b>
+<b class="nc"><i>178</i>&nbsp;            double newhold[] = new double[newsize];</b>
+<b class="nc"><i>179</i>&nbsp;            System.arraycopy(hold, holdIndex,</b>
+<i>180</i>&nbsp;                             newhold, holdIndex + GROW_SIZE,
+<i>181</i>&nbsp;                             have);
+<b class="nc"><i>182</i>&nbsp;            hold = newhold;</b>
+<b class="nc"><i>183</i>&nbsp;            holdIndex += GROW_SIZE;</b>
+<b class="nc"><i>184</i>&nbsp;            holdEnd += GROW_SIZE;</b>
+<i>185</i>&nbsp;        }
+<i>186</i>&nbsp;    }
+<i>187</i>&nbsp;
+<i>188</i>&nbsp;    /**
+<i>189</i>&nbsp;     * Moves the iterator to the next segment of the path forwards
+<i>190</i>&nbsp;     * along the primary direction of traversal as long as there are
+<i>191</i>&nbsp;     * more points in that direction.
+<i>192</i>&nbsp;     */
+<i>193</i>&nbsp;    public void next() {
+<b class="nc"><i>194</i>&nbsp;        next(true);</b>
+<i>195</i>&nbsp;    }
+<i>196</i>&nbsp;
+<i>197</i>&nbsp;    private void next(boolean doNext) {
+<i>198</i>&nbsp;        int level;
+<i>199</i>&nbsp;
+<b class="nc"><i>200</i>&nbsp;        if (holdIndex &gt;= holdEnd) {</b>
+<b class="nc"><i>201</i>&nbsp;            if (doNext) {</b>
+<b class="nc"><i>202</i>&nbsp;                src.next();</b>
+<i>203</i>&nbsp;            }
+<b class="nc"><i>204</i>&nbsp;            if (src.isDone()) {</b>
+<b class="nc"><i>205</i>&nbsp;                done = true;</b>
+<i>206</i>&nbsp;                return;
+<i>207</i>&nbsp;            }
+<b class="nc"><i>208</i>&nbsp;            holdType = src.currentSegment(hold);</b>
+<b class="nc"><i>209</i>&nbsp;            levelIndex = 0;</b>
+<b class="nc"><i>210</i>&nbsp;            levels[0] = 0;</b>
+<i>211</i>&nbsp;        }
+<i>212</i>&nbsp;
+<b class="nc"><i>213</i>&nbsp;        switch (holdType) {</b>
+<i>214</i>&nbsp;        case SEG_MOVETO:
+<i>215</i>&nbsp;        case SEG_LINETO:
+<b class="nc"><i>216</i>&nbsp;            curx = hold[0];</b>
+<b class="nc"><i>217</i>&nbsp;            cury = hold[1];</b>
+<b class="nc"><i>218</i>&nbsp;            if (holdType == SEG_MOVETO) {</b>
+<b class="nc"><i>219</i>&nbsp;                movx = curx;</b>
+<b class="nc"><i>220</i>&nbsp;                movy = cury;</b>
+<i>221</i>&nbsp;            }
+<b class="nc"><i>222</i>&nbsp;            holdIndex = 0;</b>
+<b class="nc"><i>223</i>&nbsp;            holdEnd = 0;</b>
+<b class="nc"><i>224</i>&nbsp;            break;</b>
+<i>225</i>&nbsp;        case SEG_CLOSE:
+<b class="nc"><i>226</i>&nbsp;            curx = movx;</b>
+<b class="nc"><i>227</i>&nbsp;            cury = movy;</b>
+<b class="nc"><i>228</i>&nbsp;            holdIndex = 0;</b>
+<b class="nc"><i>229</i>&nbsp;            holdEnd = 0;</b>
+<b class="nc"><i>230</i>&nbsp;            break;</b>
+<i>231</i>&nbsp;        case SEG_QUADTO:
+<b class="nc"><i>232</i>&nbsp;            if (holdIndex &gt;= holdEnd) {</b>
+<i>233</i>&nbsp;                // Move the coordinates to the end of the array.
+<b class="nc"><i>234</i>&nbsp;                holdIndex = hold.length - 6;</b>
+<b class="nc"><i>235</i>&nbsp;                holdEnd = hold.length - 2;</b>
+<b class="nc"><i>236</i>&nbsp;                hold[holdIndex + 0] = curx;</b>
+<b class="nc"><i>237</i>&nbsp;                hold[holdIndex + 1] = cury;</b>
+<b class="nc"><i>238</i>&nbsp;                hold[holdIndex + 2] = hold[0];</b>
+<b class="nc"><i>239</i>&nbsp;                hold[holdIndex + 3] = hold[1];</b>
+<b class="nc"><i>240</i>&nbsp;                hold[holdIndex + 4] = curx = hold[2];</b>
+<b class="nc"><i>241</i>&nbsp;                hold[holdIndex + 5] = cury = hold[3];</b>
+<i>242</i>&nbsp;            }
+<i>243</i>&nbsp;
+<b class="nc"><i>244</i>&nbsp;            level = levels[levelIndex];</b>
+<b class="nc"><i>245</i>&nbsp;            while (level &lt; limit) {</b>
+<b class="nc"><i>246</i>&nbsp;                if (QuadCurve2D.getFlatnessSq(hold, holdIndex) &lt; squareflat) {</b>
+<b class="nc"><i>247</i>&nbsp;                    break;</b>
+<i>248</i>&nbsp;                }
+<i>249</i>&nbsp;
+<b class="nc"><i>250</i>&nbsp;                ensureHoldCapacity(4);</b>
+<b class="nc"><i>251</i>&nbsp;                QuadCurve2D.subdivide(hold, holdIndex,</b>
+<i>252</i>&nbsp;                                      hold, holdIndex - 4,
+<i>253</i>&nbsp;                                      hold, holdIndex);
+<b class="nc"><i>254</i>&nbsp;                holdIndex -= 4;</b>
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;                // Now that we have subdivided, we have constructed
+<i>257</i>&nbsp;                // two curves of one depth lower than the original
+<i>258</i>&nbsp;                // curve.  One of those curves is in the place of
+<i>259</i>&nbsp;                // the former curve and one of them is in the next
+<i>260</i>&nbsp;                // set of held coordinate slots.  We now set both
+<i>261</i>&nbsp;                // curves level values to the next higher level.
+<b class="nc"><i>262</i>&nbsp;                level++;</b>
+<b class="nc"><i>263</i>&nbsp;                levels[levelIndex] = level;</b>
+<b class="nc"><i>264</i>&nbsp;                levelIndex++;</b>
+<b class="nc"><i>265</i>&nbsp;                levels[levelIndex] = level;</b>
+<i>266</i>&nbsp;            }
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;            // This curve segment is flat enough, or it is too deep
+<i>269</i>&nbsp;            // in recursion levels to try to flatten any more.  The
+<i>270</i>&nbsp;            // two coordinates at holdIndex+4 and holdIndex+5 now
+<i>271</i>&nbsp;            // contain the endpoint of the curve which can be the
+<i>272</i>&nbsp;            // endpoint of an approximating line segment.
+<b class="nc"><i>273</i>&nbsp;            holdIndex += 4;</b>
+<b class="nc"><i>274</i>&nbsp;            levelIndex--;</b>
+<b class="nc"><i>275</i>&nbsp;            break;</b>
+<i>276</i>&nbsp;        case SEG_CUBICTO:
+<b class="nc"><i>277</i>&nbsp;            if (holdIndex &gt;= holdEnd) {</b>
+<i>278</i>&nbsp;                // Move the coordinates to the end of the array.
+<b class="nc"><i>279</i>&nbsp;                holdIndex = hold.length - 8;</b>
+<b class="nc"><i>280</i>&nbsp;                holdEnd = hold.length - 2;</b>
+<b class="nc"><i>281</i>&nbsp;                hold[holdIndex + 0] = curx;</b>
+<b class="nc"><i>282</i>&nbsp;                hold[holdIndex + 1] = cury;</b>
+<b class="nc"><i>283</i>&nbsp;                hold[holdIndex + 2] = hold[0];</b>
+<b class="nc"><i>284</i>&nbsp;                hold[holdIndex + 3] = hold[1];</b>
+<b class="nc"><i>285</i>&nbsp;                hold[holdIndex + 4] = hold[2];</b>
+<b class="nc"><i>286</i>&nbsp;                hold[holdIndex + 5] = hold[3];</b>
+<b class="nc"><i>287</i>&nbsp;                hold[holdIndex + 6] = curx = hold[4];</b>
+<b class="nc"><i>288</i>&nbsp;                hold[holdIndex + 7] = cury = hold[5];</b>
+<i>289</i>&nbsp;            }
+<i>290</i>&nbsp;
+<b class="nc"><i>291</i>&nbsp;            level = levels[levelIndex];</b>
+<b class="nc"><i>292</i>&nbsp;            while (level &lt; limit) {</b>
+<b class="nc"><i>293</i>&nbsp;                if (CubicCurve2D.getFlatnessSq(hold, holdIndex) &lt; squareflat) {</b>
+<b class="nc"><i>294</i>&nbsp;                    break;</b>
+<i>295</i>&nbsp;                }
+<i>296</i>&nbsp;
+<b class="nc"><i>297</i>&nbsp;                ensureHoldCapacity(6);</b>
+<b class="nc"><i>298</i>&nbsp;                CubicCurve2D.subdivide(hold, holdIndex,</b>
+<i>299</i>&nbsp;                                       hold, holdIndex - 6,
+<i>300</i>&nbsp;                                       hold, holdIndex);
+<b class="nc"><i>301</i>&nbsp;                holdIndex -= 6;</b>
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;                // Now that we have subdivided, we have constructed
+<i>304</i>&nbsp;                // two curves of one depth lower than the original
+<i>305</i>&nbsp;                // curve.  One of those curves is in the place of
+<i>306</i>&nbsp;                // the former curve and one of them is in the next
+<i>307</i>&nbsp;                // set of held coordinate slots.  We now set both
+<i>308</i>&nbsp;                // curves level values to the next higher level.
+<b class="nc"><i>309</i>&nbsp;                level++;</b>
+<b class="nc"><i>310</i>&nbsp;                levels[levelIndex] = level;</b>
+<b class="nc"><i>311</i>&nbsp;                levelIndex++;</b>
+<b class="nc"><i>312</i>&nbsp;                levels[levelIndex] = level;</b>
+<i>313</i>&nbsp;            }
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;            // This curve segment is flat enough, or it is too deep
+<i>316</i>&nbsp;            // in recursion levels to try to flatten any more.  The
+<i>317</i>&nbsp;            // two coordinates at holdIndex+6 and holdIndex+7 now
+<i>318</i>&nbsp;            // contain the endpoint of the curve which can be the
+<i>319</i>&nbsp;            // endpoint of an approximating line segment.
+<b class="nc"><i>320</i>&nbsp;            holdIndex += 6;</b>
+<b class="nc"><i>321</i>&nbsp;            levelIndex--;</b>
+<i>322</i>&nbsp;            break;
+<i>323</i>&nbsp;        }
+<i>324</i>&nbsp;    }
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;    /**
+<i>327</i>&nbsp;     * Returns the coordinates and type of the current path segment in
+<i>328</i>&nbsp;     * the iteration.
+<i>329</i>&nbsp;     * The return value is the path segment type:
+<i>330</i>&nbsp;     * SEG_MOVETO, SEG_LINETO, or SEG_CLOSE.
+<i>331</i>&nbsp;     * A float array of length 6 must be passed in and can be used to
+<i>332</i>&nbsp;     * store the coordinates of the point(s).
+<i>333</i>&nbsp;     * Each point is stored as a pair of float x,y coordinates.
+<i>334</i>&nbsp;     * SEG_MOVETO and SEG_LINETO types return one point,
+<i>335</i>&nbsp;     * and SEG_CLOSE does not return any points.
+<i>336</i>&nbsp;     * @param coords an array that holds the data returned from
+<i>337</i>&nbsp;     * this method
+<i>338</i>&nbsp;     * @return the path segment type of the current path segment.
+<i>339</i>&nbsp;     * @exception NoSuchElementException if there
+<i>340</i>&nbsp;     *          are no more elements in the flattening path to be
+<i>341</i>&nbsp;     *          returned.
+<i>342</i>&nbsp;     * @see PathIterator#SEG_MOVETO
+<i>343</i>&nbsp;     * @see PathIterator#SEG_LINETO
+<i>344</i>&nbsp;     * @see PathIterator#SEG_CLOSE
+<i>345</i>&nbsp;     */
+<i>346</i>&nbsp;    public int currentSegment(float[] coords) {
+<b class="nc"><i>347</i>&nbsp;        if (isDone()) {</b>
+<b class="nc"><i>348</i>&nbsp;            throw new NoSuchElementException(&quot;flattening iterator out of bounds&quot;);</b>
+<i>349</i>&nbsp;        }
+<b class="nc"><i>350</i>&nbsp;        int type = holdType;</b>
+<b class="nc"><i>351</i>&nbsp;        if (type != SEG_CLOSE) {</b>
+<b class="nc"><i>352</i>&nbsp;            coords[0] = (float) hold[holdIndex + 0];</b>
+<b class="nc"><i>353</i>&nbsp;            coords[1] = (float) hold[holdIndex + 1];</b>
+<b class="nc"><i>354</i>&nbsp;            if (type != SEG_MOVETO) {</b>
+<b class="nc"><i>355</i>&nbsp;                type = SEG_LINETO;</b>
+<i>356</i>&nbsp;            }
+<i>357</i>&nbsp;        }
+<b class="nc"><i>358</i>&nbsp;        return type;</b>
+<i>359</i>&nbsp;    }
+<i>360</i>&nbsp;
+<i>361</i>&nbsp;    /**
+<i>362</i>&nbsp;     * Returns the coordinates and type of the current path segment in
+<i>363</i>&nbsp;     * the iteration.
+<i>364</i>&nbsp;     * The return value is the path segment type:
+<i>365</i>&nbsp;     * SEG_MOVETO, SEG_LINETO, or SEG_CLOSE.
+<i>366</i>&nbsp;     * A double array of length 6 must be passed in and can be used to
+<i>367</i>&nbsp;     * store the coordinates of the point(s).
+<i>368</i>&nbsp;     * Each point is stored as a pair of double x,y coordinates.
+<i>369</i>&nbsp;     * SEG_MOVETO and SEG_LINETO types return one point,
+<i>370</i>&nbsp;     * and SEG_CLOSE does not return any points.
+<i>371</i>&nbsp;     * @param coords an array that holds the data returned from
+<i>372</i>&nbsp;     * this method
+<i>373</i>&nbsp;     * @return the path segment type of the current path segment.
+<i>374</i>&nbsp;     * @exception NoSuchElementException if there
+<i>375</i>&nbsp;     *          are no more elements in the flattening path to be
+<i>376</i>&nbsp;     *          returned.
+<i>377</i>&nbsp;     * @see PathIterator#SEG_MOVETO
+<i>378</i>&nbsp;     * @see PathIterator#SEG_LINETO
+<i>379</i>&nbsp;     * @see PathIterator#SEG_CLOSE
+<i>380</i>&nbsp;     */
+<i>381</i>&nbsp;    public int currentSegment(double[] coords) {
+<b class="nc"><i>382</i>&nbsp;        if (isDone()) {</b>
+<b class="nc"><i>383</i>&nbsp;            throw new NoSuchElementException(&quot;flattening iterator out of bounds&quot;);</b>
+<i>384</i>&nbsp;        }
+<b class="nc"><i>385</i>&nbsp;        int type = holdType;</b>
+<b class="nc"><i>386</i>&nbsp;        if (type != SEG_CLOSE) {</b>
+<b class="nc"><i>387</i>&nbsp;            coords[0] = hold[holdIndex + 0];</b>
+<b class="nc"><i>388</i>&nbsp;            coords[1] = hold[holdIndex + 1];</b>
+<b class="nc"><i>389</i>&nbsp;            if (type != SEG_MOVETO) {</b>
+<b class="nc"><i>390</i>&nbsp;                type = SEG_LINETO;</b>
+<i>391</i>&nbsp;            }
+<i>392</i>&nbsp;        }
+<b class="nc"><i>393</i>&nbsp;        return type;</b>
+<i>394</i>&nbsp;    }
+<i>395</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

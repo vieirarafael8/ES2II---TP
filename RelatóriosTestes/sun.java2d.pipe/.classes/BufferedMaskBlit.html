@@ -1,0 +1,246 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: BufferedMaskBlit</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.java2d.pipe</a> ]
+</div>
+
+<h1>Coverage Summary for Class: BufferedMaskBlit (sun.java2d.pipe)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">BufferedMaskBlit</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 30)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2007, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.java2d.pipe;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.awt.AlphaComposite;
+<i>29</i>&nbsp;import java.awt.Composite;
+<i>30</i>&nbsp;import sun.java2d.SurfaceData;
+<i>31</i>&nbsp;import sun.java2d.loops.Blit;
+<i>32</i>&nbsp;import sun.java2d.loops.CompositeType;
+<i>33</i>&nbsp;import sun.java2d.loops.MaskBlit;
+<i>34</i>&nbsp;import sun.java2d.loops.SurfaceType;
+<i>35</i>&nbsp;import static sun.java2d.pipe.BufferedOpCodes.*;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;/**
+<i>38</i>&nbsp; * The MaskBlit operation is expressed as:
+<i>39</i>&nbsp; *   dst = ((src &lt;MODE&gt; dst) * pathA) + (dst * (1 - pathA))
+<i>40</i>&nbsp; *
+<i>41</i>&nbsp; * The OGL/D3D implementation of the MaskBlit operation differs from the above
+<i>42</i>&nbsp; * equation because it is not possible to perform such a complex operation in
+<i>43</i>&nbsp; * OpenGL/Direct3D (without the use of advanced techniques like fragment
+<i>44</i>&nbsp; * shaders and multitexturing).  Therefore, the BufferedMaskBlit operation
+<i>45</i>&nbsp; * is expressed as:
+<i>46</i>&nbsp; *   dst = (src * pathA) &lt;SrcOver&gt; dst
+<i>47</i>&nbsp; *
+<i>48</i>&nbsp; * This simplified formula is only equivalent to the &quot;true&quot; MaskBlit equation
+<i>49</i>&nbsp; * in the following situations:
+<i>50</i>&nbsp; *   - &lt;MODE&gt; is SrcOver
+<i>51</i>&nbsp; *   - &lt;MODE&gt; is Src, extra alpha == 1.0, and the source surface is opaque
+<i>52</i>&nbsp; *
+<i>53</i>&nbsp; * Therefore, we register BufferedMaskBlit primitives for only the SurfaceType
+<i>54</i>&nbsp; * and CompositeType restrictions mentioned above.  In addition for the Src
+<i>55</i>&nbsp; * case, we must override the composite with a SrcOver (no extra alpha)
+<i>56</i>&nbsp; * instance, so that we set up the OpenGL/Direct3D blending mode to match the
+<i>57</i>&nbsp; * BufferedMaskBlit equation.
+<i>58</i>&nbsp; */
+<i>59</i>&nbsp;public abstract class BufferedMaskBlit extends MaskBlit {
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;    private static final int ST_INT_ARGB     = 0;
+<i>62</i>&nbsp;    private static final int ST_INT_ARGB_PRE = 1;
+<i>63</i>&nbsp;    private static final int ST_INT_RGB      = 2;
+<i>64</i>&nbsp;    private static final int ST_INT_BGR      = 3;
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    private final RenderQueue rq;
+<i>67</i>&nbsp;    private final int srcTypeVal;
+<i>68</i>&nbsp;    private Blit blitop;
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    protected BufferedMaskBlit(RenderQueue rq,
+<i>71</i>&nbsp;                               SurfaceType srcType,
+<i>72</i>&nbsp;                               CompositeType compType,
+<i>73</i>&nbsp;                               SurfaceType dstType)
+<i>74</i>&nbsp;    {
+<b class="nc"><i>75</i>&nbsp;        super(srcType, compType, dstType);</b>
+<b class="nc"><i>76</i>&nbsp;        this.rq = rq;</b>
+<b class="nc"><i>77</i>&nbsp;        if (srcType == SurfaceType.IntArgb) {</b>
+<b class="nc"><i>78</i>&nbsp;            this.srcTypeVal = ST_INT_ARGB;</b>
+<b class="nc"><i>79</i>&nbsp;        } else if (srcType == SurfaceType.IntArgbPre) {</b>
+<b class="nc"><i>80</i>&nbsp;            this.srcTypeVal = ST_INT_ARGB_PRE;</b>
+<b class="nc"><i>81</i>&nbsp;        } else if (srcType == SurfaceType.IntRgb) {</b>
+<b class="nc"><i>82</i>&nbsp;            this.srcTypeVal = ST_INT_RGB;</b>
+<b class="nc"><i>83</i>&nbsp;        } else if (srcType == SurfaceType.IntBgr) {</b>
+<b class="nc"><i>84</i>&nbsp;            this.srcTypeVal = ST_INT_BGR;</b>
+<i>85</i>&nbsp;        } else {
+<b class="nc"><i>86</i>&nbsp;            throw new InternalError(&quot;unrecognized source surface type&quot;);</b>
+<i>87</i>&nbsp;        }
+<i>88</i>&nbsp;    }
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    @Override
+<i>91</i>&nbsp;    public void MaskBlit(SurfaceData src, SurfaceData dst,
+<i>92</i>&nbsp;                         Composite comp, Region clip,
+<i>93</i>&nbsp;                         int srcx, int srcy,
+<i>94</i>&nbsp;                         int dstx, int dsty,
+<i>95</i>&nbsp;                         int width, int height,
+<i>96</i>&nbsp;                         byte[] mask, int maskoff, int maskscan)
+<i>97</i>&nbsp;    {
+<b class="nc"><i>98</i>&nbsp;        if (width &lt;= 0 || height &lt;= 0) {</b>
+<i>99</i>&nbsp;            return;
+<i>100</i>&nbsp;        }
+<i>101</i>&nbsp;
+<b class="nc"><i>102</i>&nbsp;        if (mask == null) {</b>
+<i>103</i>&nbsp;            // no mask involved; delegate to regular blit loop
+<b class="nc"><i>104</i>&nbsp;            if (blitop == null) {</b>
+<b class="nc"><i>105</i>&nbsp;                blitop = Blit.getFromCache(src.getSurfaceType(),</b>
+<i>106</i>&nbsp;                                           CompositeType.AnyAlpha,
+<b class="nc"><i>107</i>&nbsp;                                           this.getDestType());</b>
+<i>108</i>&nbsp;            }
+<b class="nc"><i>109</i>&nbsp;            blitop.Blit(src, dst,</b>
+<i>110</i>&nbsp;                        comp, clip,
+<i>111</i>&nbsp;                        srcx, srcy, dstx, dsty,
+<i>112</i>&nbsp;                        width, height);
+<i>113</i>&nbsp;            return;
+<i>114</i>&nbsp;        }
+<i>115</i>&nbsp;
+<b class="nc"><i>116</i>&nbsp;        AlphaComposite acomp = (AlphaComposite)comp;</b>
+<b class="nc"><i>117</i>&nbsp;        if (acomp.getRule() != AlphaComposite.SRC_OVER) {</b>
+<b class="nc"><i>118</i>&nbsp;            comp = AlphaComposite.SrcOver;</b>
+<i>119</i>&nbsp;        }
+<i>120</i>&nbsp;
+<b class="nc"><i>121</i>&nbsp;        rq.lock();</b>
+<i>122</i>&nbsp;        try {
+<b class="nc"><i>123</i>&nbsp;            validateContext(dst, comp, clip);</b>
+<i>124</i>&nbsp;
+<b class="nc"><i>125</i>&nbsp;            RenderBuffer buf = rq.getBuffer();</b>
+<b class="nc"><i>126</i>&nbsp;            int totalBytesRequired = 20 + (width * height * 4);</b>
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;            /*
+<i>129</i>&nbsp;             * REMIND: we should fix this so that it works with tiles that
+<i>130</i>&nbsp;             *         are larger than the entire buffer, but the native
+<i>131</i>&nbsp;             *         OGL/D3DMaskBlit isn&#39;t even prepared for tiles larger
+<i>132</i>&nbsp;             *         than 32x32 pixels, so there&#39;s no urgency here...
+<i>133</i>&nbsp;             */
+<b class="nc"><i>134</i>&nbsp;            rq.ensureCapacity(totalBytesRequired);</b>
+<i>135</i>&nbsp;
+<i>136</i>&nbsp;            // enqueue parameters and tile pixels
+<b class="nc"><i>137</i>&nbsp;            int newpos = enqueueTile(buf.getAddress(), buf.position(),</b>
+<b class="nc"><i>138</i>&nbsp;                                     src, src.getNativeOps(), srcTypeVal,</b>
+<i>139</i>&nbsp;                                     mask, mask.length, maskoff, maskscan,
+<i>140</i>&nbsp;                                     srcx, srcy, dstx, dsty,
+<i>141</i>&nbsp;                                     width, height);
+<i>142</i>&nbsp;
+<b class="nc"><i>143</i>&nbsp;            buf.position(newpos);</b>
+<i>144</i>&nbsp;        } finally {
+<b class="nc"><i>145</i>&nbsp;            rq.unlock();</b>
+<b class="nc"><i>146</i>&nbsp;        }</b>
+<i>147</i>&nbsp;    }
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;    private native int enqueueTile(long buf, int bpos,
+<i>150</i>&nbsp;                                   SurfaceData srcData,
+<i>151</i>&nbsp;                                   long pSrcOps, int srcType,
+<i>152</i>&nbsp;                                   byte[] mask, int masklen,
+<i>153</i>&nbsp;                                   int maskoff, int maskscan,
+<i>154</i>&nbsp;                                   int srcx, int srcy, int dstx, int dsty,
+<i>155</i>&nbsp;                                   int width, int height);
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;    /**
+<i>158</i>&nbsp;     * Validates the context state using the given destination surface
+<i>159</i>&nbsp;     * and composite/clip values.
+<i>160</i>&nbsp;     */
+<i>161</i>&nbsp;    protected abstract void validateContext(SurfaceData dstData,
+<i>162</i>&nbsp;                                            Composite comp, Region clip);
+<i>163</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,829 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: FFT</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.media.sound</a> ]
+</div>
+
+<h1>Coverage Summary for Class: FFT (com.sun.media.sound)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FFT</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 452)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.media.sound;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;/**
+<i>29</i>&nbsp; * Fast Fourier Transformer.
+<i>30</i>&nbsp; *
+<i>31</i>&nbsp; * @author Karl Helgason
+<i>32</i>&nbsp; */
+<i>33</i>&nbsp;public final class FFT {
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;    private final double[] w;
+<i>36</i>&nbsp;    private final int fftFrameSize;
+<i>37</i>&nbsp;    private final int sign;
+<i>38</i>&nbsp;    private final int[] bitm_array;
+<i>39</i>&nbsp;    private final int fftFrameSize2;
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;    // Sign = -1 is FFT, 1 is IFFT (inverse FFT)
+<i>42</i>&nbsp;    // Data = Interlaced double array to be transformed.
+<i>43</i>&nbsp;    // The order is: real (sin), complex (cos)
+<b class="nc"><i>44</i>&nbsp;    // Framesize must be power of 2</b>
+<b class="nc"><i>45</i>&nbsp;    public FFT(int fftFrameSize, int sign) {</b>
+<i>46</i>&nbsp;        w = computeTwiddleFactors(fftFrameSize, sign);
+<b class="nc"><i>47</i>&nbsp;</b>
+<b class="nc"><i>48</i>&nbsp;        this.fftFrameSize = fftFrameSize;</b>
+<b class="nc"><i>49</i>&nbsp;        this.sign = sign;</b>
+<i>50</i>&nbsp;        fftFrameSize2 = fftFrameSize &lt;&lt; 1;
+<i>51</i>&nbsp;
+<b class="nc"><i>52</i>&nbsp;        // Pre-process Bit-Reversal</b>
+<b class="nc"><i>53</i>&nbsp;        bitm_array = new int[fftFrameSize2];</b>
+<i>54</i>&nbsp;        for (int i = 2; i &lt; fftFrameSize2; i += 2) {
+<i>55</i>&nbsp;            int j;
+<b class="nc"><i>56</i>&nbsp;            int bitm;</b>
+<b class="nc"><i>57</i>&nbsp;            for (bitm = 2, j = 0; bitm &lt; fftFrameSize2; bitm &lt;&lt;= 1) {</b>
+<b class="nc"><i>58</i>&nbsp;                if ((i &amp; bitm) != 0)</b>
+<b class="nc"><i>59</i>&nbsp;                    j++;</b>
+<i>60</i>&nbsp;                j &lt;&lt;= 1;
+<b class="nc"><i>61</i>&nbsp;            }</b>
+<i>62</i>&nbsp;            bitm_array[i] = j;
+<i>63</i>&nbsp;        }
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    }
+<i>66</i>&nbsp;
+<b class="nc"><i>67</i>&nbsp;    public void transform(double[] data) {</b>
+<b class="nc"><i>68</i>&nbsp;        bitreversal(data);</b>
+<i>69</i>&nbsp;        calc(fftFrameSize, data, sign, w);
+<i>70</i>&nbsp;    }
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    private static double[] computeTwiddleFactors(int fftFrameSize,
+<i>73</i>&nbsp;            int sign) {
+<b class="nc"><i>74</i>&nbsp;</b>
+<i>75</i>&nbsp;        int imax = (int) (Math.log(fftFrameSize) / Math.log(2.));
+<b class="nc"><i>76</i>&nbsp;</b>
+<b class="nc"><i>77</i>&nbsp;        double[] warray = new double[(fftFrameSize - 1) * 4];</b>
+<i>78</i>&nbsp;        int w_index = 0;
+<b class="nc"><i>79</i>&nbsp;</b>
+<b class="nc"><i>80</i>&nbsp;        for (int i = 0,  nstep = 2; i &lt; imax; i++) {</b>
+<b class="nc"><i>81</i>&nbsp;            int jmax = nstep;</b>
+<i>82</i>&nbsp;            nstep &lt;&lt;= 1;
+<b class="nc"><i>83</i>&nbsp;</b>
+<b class="nc"><i>84</i>&nbsp;            double wr = 1.0;</b>
+<i>85</i>&nbsp;            double wi = 0.0;
+<b class="nc"><i>86</i>&nbsp;</b>
+<b class="nc"><i>87</i>&nbsp;            double arg = Math.PI / (jmax &gt;&gt; 1);</b>
+<b class="nc"><i>88</i>&nbsp;            double wfr = Math.cos(arg);</b>
+<i>89</i>&nbsp;            double wfi = sign * Math.sin(arg);
+<b class="nc"><i>90</i>&nbsp;</b>
+<b class="nc"><i>91</i>&nbsp;            for (int j = 0; j &lt; jmax; j += 2) {</b>
+<b class="nc"><i>92</i>&nbsp;                warray[w_index++] = wr;</b>
+<i>93</i>&nbsp;                warray[w_index++] = wi;
+<b class="nc"><i>94</i>&nbsp;</b>
+<b class="nc"><i>95</i>&nbsp;                double tempr = wr;</b>
+<b class="nc"><i>96</i>&nbsp;                wr = tempr * wfr - wi * wfi;</b>
+<i>97</i>&nbsp;                wi = tempr * wfi + wi * wfr;
+<i>98</i>&nbsp;            }
+<i>99</i>&nbsp;        }
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;        // PRECOMPUTATION of wwr1, wwi1 for factor 4 Decomposition (3 * complex
+<i>102</i>&nbsp;        // operators and 8 +/- complex operators)
+<b class="nc"><i>103</i>&nbsp;        {</b>
+<b class="nc"><i>104</i>&nbsp;            w_index = 0;</b>
+<b class="nc"><i>105</i>&nbsp;            int w_index2 = warray.length &gt;&gt; 1;</b>
+<b class="nc"><i>106</i>&nbsp;            for (int i = 0,  nstep = 2; i &lt; (imax - 1); i++) {</b>
+<b class="nc"><i>107</i>&nbsp;                int jmax = nstep;</b>
+<i>108</i>&nbsp;                nstep *= 2;
+<b class="nc"><i>109</i>&nbsp;</b>
+<b class="nc"><i>110</i>&nbsp;                int ii = w_index + jmax;</b>
+<b class="nc"><i>111</i>&nbsp;                for (int j = 0; j &lt; jmax; j += 2) {</b>
+<b class="nc"><i>112</i>&nbsp;                    double wr = warray[w_index++];</b>
+<b class="nc"><i>113</i>&nbsp;                    double wi = warray[w_index++];</b>
+<b class="nc"><i>114</i>&nbsp;                    double wr1 = warray[ii++];</b>
+<b class="nc"><i>115</i>&nbsp;                    double wi1 = warray[ii++];</b>
+<b class="nc"><i>116</i>&nbsp;                    warray[w_index2++] = wr * wr1 - wi * wi1;</b>
+<i>117</i>&nbsp;                    warray[w_index2++] = wr * wi1 + wi * wr1;
+<i>118</i>&nbsp;                }
+<i>119</i>&nbsp;            }
+<i>120</i>&nbsp;
+<i>121</i>&nbsp;        }
+<b class="nc"><i>122</i>&nbsp;</b>
+<i>123</i>&nbsp;        return warray;
+<i>124</i>&nbsp;    }
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;    private static void calc(int fftFrameSize, double[] data, int sign,
+<i>127</i>&nbsp;            double[] w) {
+<b class="nc"><i>128</i>&nbsp;</b>
+<i>129</i>&nbsp;        final int fftFrameSize2 = fftFrameSize &lt;&lt; 1;
+<b class="nc"><i>130</i>&nbsp;</b>
+<i>131</i>&nbsp;        int nstep = 2;
+<b class="nc"><i>132</i>&nbsp;</b>
+<i>133</i>&nbsp;        if (nstep &gt;= fftFrameSize2)
+<b class="nc"><i>134</i>&nbsp;            return;</b>
+<b class="nc"><i>135</i>&nbsp;        int i = nstep - 2;</b>
+<b class="nc"><i>136</i>&nbsp;        if (sign == -1)</b>
+<i>137</i>&nbsp;            calcF4F(fftFrameSize, data, i, nstep, w);
+<b class="nc"><i>138</i>&nbsp;        else</b>
+<i>139</i>&nbsp;            calcF4I(fftFrameSize, data, i, nstep, w);
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;    }
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;    private static void calcF2E(int fftFrameSize, double[] data, int i,
+<b class="nc"><i>144</i>&nbsp;            int nstep, double[] w) {</b>
+<b class="nc"><i>145</i>&nbsp;        int jmax = nstep;</b>
+<b class="nc"><i>146</i>&nbsp;        for (int n = 0; n &lt; jmax; n += 2) {</b>
+<b class="nc"><i>147</i>&nbsp;            double wr = w[i++];</b>
+<b class="nc"><i>148</i>&nbsp;            double wi = w[i++];</b>
+<b class="nc"><i>149</i>&nbsp;            int m = n + jmax;</b>
+<b class="nc"><i>150</i>&nbsp;            double datam_r = data[m];</b>
+<b class="nc"><i>151</i>&nbsp;            double datam_i = data[m + 1];</b>
+<b class="nc"><i>152</i>&nbsp;            double datan_r = data[n];</b>
+<b class="nc"><i>153</i>&nbsp;            double datan_i = data[n + 1];</b>
+<b class="nc"><i>154</i>&nbsp;            double tempr = datam_r * wr - datam_i * wi;</b>
+<b class="nc"><i>155</i>&nbsp;            double tempi = datam_r * wi + datam_i * wr;</b>
+<b class="nc"><i>156</i>&nbsp;            data[m] = datan_r - tempr;</b>
+<b class="nc"><i>157</i>&nbsp;            data[m + 1] = datan_i - tempi;</b>
+<b class="nc"><i>158</i>&nbsp;            data[n] = datan_r + tempr;</b>
+<i>159</i>&nbsp;            data[n + 1] = datan_i + tempi;
+<i>160</i>&nbsp;        }
+<i>161</i>&nbsp;        return;
+<i>162</i>&nbsp;
+<i>163</i>&nbsp;    }
+<i>164</i>&nbsp;
+<i>165</i>&nbsp;    // Perform Factor-4 Decomposition with 3 * complex operators and 8 +/-
+<i>166</i>&nbsp;    // complex operators
+<i>167</i>&nbsp;    private static void calcF4F(int fftFrameSize, double[] data, int i,
+<b class="nc"><i>168</i>&nbsp;            int nstep, double[] w) {</b>
+<i>169</i>&nbsp;        final int fftFrameSize2 = fftFrameSize &lt;&lt; 1; // 2*fftFrameSize;
+<i>170</i>&nbsp;        // Factor-4 Decomposition
+<b class="nc"><i>171</i>&nbsp;</b>
+<b class="nc"><i>172</i>&nbsp;        int w_len = w.length &gt;&gt; 1;</b>
+<i>173</i>&nbsp;        while (nstep &lt; fftFrameSize2) {
+<b class="nc"><i>174</i>&nbsp;</b>
+<i>175</i>&nbsp;            if (nstep &lt;&lt; 2 == fftFrameSize2) {
+<i>176</i>&nbsp;                // Goto Factor-4 Final Decomposition
+<b class="nc"><i>177</i>&nbsp;                // calcF4E(data, i, nstep, -1, w);</b>
+<i>178</i>&nbsp;                calcF4FE(fftFrameSize, data, i, nstep, w);
+<i>179</i>&nbsp;                return;
+<b class="nc"><i>180</i>&nbsp;            }</b>
+<b class="nc"><i>181</i>&nbsp;            int jmax = nstep;</b>
+<b class="nc"><i>182</i>&nbsp;            int nnstep = nstep &lt;&lt; 1;</b>
+<i>183</i>&nbsp;            if (nnstep == fftFrameSize2) {
+<b class="nc"><i>184</i>&nbsp;                // Factor-4 Decomposition not possible</b>
+<i>185</i>&nbsp;                calcF2E(fftFrameSize, data, i, nstep, w);
+<i>186</i>&nbsp;                return;
+<b class="nc"><i>187</i>&nbsp;            }</b>
+<b class="nc"><i>188</i>&nbsp;            nstep &lt;&lt;= 2;</b>
+<b class="nc"><i>189</i>&nbsp;            int ii = i + jmax;</b>
+<i>190</i>&nbsp;            int iii = i + w_len;
+<i>191</i>&nbsp;
+<b class="nc"><i>192</i>&nbsp;            {</b>
+<b class="nc"><i>193</i>&nbsp;                i += 2;</b>
+<b class="nc"><i>194</i>&nbsp;                ii += 2;</b>
+<i>195</i>&nbsp;                iii += 2;
+<b class="nc"><i>196</i>&nbsp;</b>
+<b class="nc"><i>197</i>&nbsp;                for (int n = 0; n &lt; fftFrameSize2; n += nstep) {</b>
+<i>198</i>&nbsp;                    int m = n + jmax;
+<b class="nc"><i>199</i>&nbsp;</b>
+<b class="nc"><i>200</i>&nbsp;                    double datam1_r = data[m];</b>
+<b class="nc"><i>201</i>&nbsp;                    double datam1_i = data[m + 1];</b>
+<b class="nc"><i>202</i>&nbsp;                    double datan1_r = data[n];</b>
+<i>203</i>&nbsp;                    double datan1_i = data[n + 1];
+<b class="nc"><i>204</i>&nbsp;</b>
+<b class="nc"><i>205</i>&nbsp;                    n += nnstep;</b>
+<b class="nc"><i>206</i>&nbsp;                    m += nnstep;</b>
+<b class="nc"><i>207</i>&nbsp;                    double datam2_r = data[m];</b>
+<b class="nc"><i>208</i>&nbsp;                    double datam2_i = data[m + 1];</b>
+<b class="nc"><i>209</i>&nbsp;                    double datan2_r = data[n];</b>
+<i>210</i>&nbsp;                    double datan2_i = data[n + 1];
+<b class="nc"><i>211</i>&nbsp;</b>
+<b class="nc"><i>212</i>&nbsp;                    double tempr = datam1_r;</b>
+<i>213</i>&nbsp;                    double tempi = datam1_i;
+<b class="nc"><i>214</i>&nbsp;</b>
+<b class="nc"><i>215</i>&nbsp;                    datam1_r = datan1_r - tempr;</b>
+<b class="nc"><i>216</i>&nbsp;                    datam1_i = datan1_i - tempi;</b>
+<b class="nc"><i>217</i>&nbsp;                    datan1_r = datan1_r + tempr;</b>
+<i>218</i>&nbsp;                    datan1_i = datan1_i + tempi;
+<b class="nc"><i>219</i>&nbsp;</b>
+<b class="nc"><i>220</i>&nbsp;                    double n2w1r = datan2_r;</b>
+<b class="nc"><i>221</i>&nbsp;                    double n2w1i = datan2_i;</b>
+<b class="nc"><i>222</i>&nbsp;                    double m2ww1r = datam2_r;</b>
+<i>223</i>&nbsp;                    double m2ww1i = datam2_i;
+<b class="nc"><i>224</i>&nbsp;</b>
+<b class="nc"><i>225</i>&nbsp;                    tempr = m2ww1r - n2w1r;</b>
+<i>226</i>&nbsp;                    tempi = m2ww1i - n2w1i;
+<b class="nc"><i>227</i>&nbsp;</b>
+<b class="nc"><i>228</i>&nbsp;                    datam2_r = datam1_r + tempi;</b>
+<b class="nc"><i>229</i>&nbsp;                    datam2_i = datam1_i - tempr;</b>
+<b class="nc"><i>230</i>&nbsp;                    datam1_r = datam1_r - tempi;</b>
+<i>231</i>&nbsp;                    datam1_i = datam1_i + tempr;
+<b class="nc"><i>232</i>&nbsp;</b>
+<b class="nc"><i>233</i>&nbsp;                    tempr = n2w1r + m2ww1r;</b>
+<i>234</i>&nbsp;                    tempi = n2w1i + m2ww1i;
+<b class="nc"><i>235</i>&nbsp;</b>
+<b class="nc"><i>236</i>&nbsp;                    datan2_r = datan1_r - tempr;</b>
+<b class="nc"><i>237</i>&nbsp;                    datan2_i = datan1_i - tempi;</b>
+<b class="nc"><i>238</i>&nbsp;                    datan1_r = datan1_r + tempr;</b>
+<i>239</i>&nbsp;                    datan1_i = datan1_i + tempi;
+<b class="nc"><i>240</i>&nbsp;</b>
+<b class="nc"><i>241</i>&nbsp;                    data[m] = datam2_r;</b>
+<b class="nc"><i>242</i>&nbsp;                    data[m + 1] = datam2_i;</b>
+<b class="nc"><i>243</i>&nbsp;                    data[n] = datan2_r;</b>
+<i>244</i>&nbsp;                    data[n + 1] = datan2_i;
+<b class="nc"><i>245</i>&nbsp;</b>
+<b class="nc"><i>246</i>&nbsp;                    n -= nnstep;</b>
+<b class="nc"><i>247</i>&nbsp;                    m -= nnstep;</b>
+<b class="nc"><i>248</i>&nbsp;                    data[m] = datam1_r;</b>
+<b class="nc"><i>249</i>&nbsp;                    data[m + 1] = datam1_i;</b>
+<b class="nc"><i>250</i>&nbsp;                    data[n] = datan1_r;</b>
+<i>251</i>&nbsp;                    data[n + 1] = datan1_i;
+<i>252</i>&nbsp;
+<i>253</i>&nbsp;                }
+<i>254</i>&nbsp;            }
+<b class="nc"><i>255</i>&nbsp;</b>
+<b class="nc"><i>256</i>&nbsp;            for (int j = 2; j &lt; jmax; j += 2) {</b>
+<b class="nc"><i>257</i>&nbsp;                double wr = w[i++];</b>
+<b class="nc"><i>258</i>&nbsp;                double wi = w[i++];</b>
+<b class="nc"><i>259</i>&nbsp;                double wr1 = w[ii++];</b>
+<b class="nc"><i>260</i>&nbsp;                double wi1 = w[ii++];</b>
+<b class="nc"><i>261</i>&nbsp;                double wwr1 = w[iii++];</b>
+<i>262</i>&nbsp;                double wwi1 = w[iii++];
+<i>263</i>&nbsp;                // double wwr1 = wr * wr1 - wi * wi1; // these numbers can be
+<i>264</i>&nbsp;                // precomputed!!!
+<i>265</i>&nbsp;                // double wwi1 = wr * wi1 + wi * wr1;
+<b class="nc"><i>266</i>&nbsp;</b>
+<b class="nc"><i>267</i>&nbsp;                for (int n = j; n &lt; fftFrameSize2; n += nstep) {</b>
+<i>268</i>&nbsp;                    int m = n + jmax;
+<b class="nc"><i>269</i>&nbsp;</b>
+<b class="nc"><i>270</i>&nbsp;                    double datam1_r = data[m];</b>
+<b class="nc"><i>271</i>&nbsp;                    double datam1_i = data[m + 1];</b>
+<b class="nc"><i>272</i>&nbsp;                    double datan1_r = data[n];</b>
+<i>273</i>&nbsp;                    double datan1_i = data[n + 1];
+<b class="nc"><i>274</i>&nbsp;</b>
+<b class="nc"><i>275</i>&nbsp;                    n += nnstep;</b>
+<b class="nc"><i>276</i>&nbsp;                    m += nnstep;</b>
+<b class="nc"><i>277</i>&nbsp;                    double datam2_r = data[m];</b>
+<b class="nc"><i>278</i>&nbsp;                    double datam2_i = data[m + 1];</b>
+<b class="nc"><i>279</i>&nbsp;                    double datan2_r = data[n];</b>
+<i>280</i>&nbsp;                    double datan2_i = data[n + 1];
+<b class="nc"><i>281</i>&nbsp;</b>
+<b class="nc"><i>282</i>&nbsp;                    double tempr = datam1_r * wr - datam1_i * wi;</b>
+<i>283</i>&nbsp;                    double tempi = datam1_r * wi + datam1_i * wr;
+<b class="nc"><i>284</i>&nbsp;</b>
+<b class="nc"><i>285</i>&nbsp;                    datam1_r = datan1_r - tempr;</b>
+<b class="nc"><i>286</i>&nbsp;                    datam1_i = datan1_i - tempi;</b>
+<b class="nc"><i>287</i>&nbsp;                    datan1_r = datan1_r + tempr;</b>
+<i>288</i>&nbsp;                    datan1_i = datan1_i + tempi;
+<b class="nc"><i>289</i>&nbsp;</b>
+<b class="nc"><i>290</i>&nbsp;                    double n2w1r = datan2_r * wr1 - datan2_i * wi1;</b>
+<b class="nc"><i>291</i>&nbsp;                    double n2w1i = datan2_r * wi1 + datan2_i * wr1;</b>
+<b class="nc"><i>292</i>&nbsp;                    double m2ww1r = datam2_r * wwr1 - datam2_i * wwi1;</b>
+<i>293</i>&nbsp;                    double m2ww1i = datam2_r * wwi1 + datam2_i * wwr1;
+<b class="nc"><i>294</i>&nbsp;</b>
+<b class="nc"><i>295</i>&nbsp;                    tempr = m2ww1r - n2w1r;</b>
+<i>296</i>&nbsp;                    tempi = m2ww1i - n2w1i;
+<b class="nc"><i>297</i>&nbsp;</b>
+<b class="nc"><i>298</i>&nbsp;                    datam2_r = datam1_r + tempi;</b>
+<b class="nc"><i>299</i>&nbsp;                    datam2_i = datam1_i - tempr;</b>
+<b class="nc"><i>300</i>&nbsp;                    datam1_r = datam1_r - tempi;</b>
+<i>301</i>&nbsp;                    datam1_i = datam1_i + tempr;
+<b class="nc"><i>302</i>&nbsp;</b>
+<b class="nc"><i>303</i>&nbsp;                    tempr = n2w1r + m2ww1r;</b>
+<i>304</i>&nbsp;                    tempi = n2w1i + m2ww1i;
+<b class="nc"><i>305</i>&nbsp;</b>
+<b class="nc"><i>306</i>&nbsp;                    datan2_r = datan1_r - tempr;</b>
+<b class="nc"><i>307</i>&nbsp;                    datan2_i = datan1_i - tempi;</b>
+<b class="nc"><i>308</i>&nbsp;                    datan1_r = datan1_r + tempr;</b>
+<i>309</i>&nbsp;                    datan1_i = datan1_i + tempi;
+<b class="nc"><i>310</i>&nbsp;</b>
+<b class="nc"><i>311</i>&nbsp;                    data[m] = datam2_r;</b>
+<b class="nc"><i>312</i>&nbsp;                    data[m + 1] = datam2_i;</b>
+<b class="nc"><i>313</i>&nbsp;                    data[n] = datan2_r;</b>
+<i>314</i>&nbsp;                    data[n + 1] = datan2_i;
+<b class="nc"><i>315</i>&nbsp;</b>
+<b class="nc"><i>316</i>&nbsp;                    n -= nnstep;</b>
+<b class="nc"><i>317</i>&nbsp;                    m -= nnstep;</b>
+<b class="nc"><i>318</i>&nbsp;                    data[m] = datam1_r;</b>
+<b class="nc"><i>319</i>&nbsp;                    data[m + 1] = datam1_i;</b>
+<b class="nc"><i>320</i>&nbsp;                    data[n] = datan1_r;</b>
+<i>321</i>&nbsp;                    data[n + 1] = datan1_i;
+<i>322</i>&nbsp;                }
+<i>323</i>&nbsp;            }
+<b class="nc"><i>324</i>&nbsp;</b>
+<i>325</i>&nbsp;            i += jmax &lt;&lt; 1;
+<b class="nc"><i>326</i>&nbsp;</b>
+<i>327</i>&nbsp;        }
+<b class="nc"><i>328</i>&nbsp;</b>
+<i>329</i>&nbsp;        calcF2E(fftFrameSize, data, i, nstep, w);
+<i>330</i>&nbsp;
+<i>331</i>&nbsp;    }
+<i>332</i>&nbsp;
+<i>333</i>&nbsp;    // Perform Factor-4 Decomposition with 3 * complex operators and 8 +/-
+<i>334</i>&nbsp;    // complex operators
+<i>335</i>&nbsp;    private static void calcF4I(int fftFrameSize, double[] data, int i,
+<b class="nc"><i>336</i>&nbsp;            int nstep, double[] w) {</b>
+<i>337</i>&nbsp;        final int fftFrameSize2 = fftFrameSize &lt;&lt; 1; // 2*fftFrameSize;
+<i>338</i>&nbsp;        // Factor-4 Decomposition
+<b class="nc"><i>339</i>&nbsp;</b>
+<b class="nc"><i>340</i>&nbsp;        int w_len = w.length &gt;&gt; 1;</b>
+<i>341</i>&nbsp;        while (nstep &lt; fftFrameSize2) {
+<b class="nc"><i>342</i>&nbsp;</b>
+<i>343</i>&nbsp;            if (nstep &lt;&lt; 2 == fftFrameSize2) {
+<i>344</i>&nbsp;                // Goto Factor-4 Final Decomposition
+<b class="nc"><i>345</i>&nbsp;                // calcF4E(data, i, nstep, 1, w);</b>
+<i>346</i>&nbsp;                calcF4IE(fftFrameSize, data, i, nstep, w);
+<i>347</i>&nbsp;                return;
+<b class="nc"><i>348</i>&nbsp;            }</b>
+<b class="nc"><i>349</i>&nbsp;            int jmax = nstep;</b>
+<b class="nc"><i>350</i>&nbsp;            int nnstep = nstep &lt;&lt; 1;</b>
+<i>351</i>&nbsp;            if (nnstep == fftFrameSize2) {
+<b class="nc"><i>352</i>&nbsp;                // Factor-4 Decomposition not possible</b>
+<i>353</i>&nbsp;                calcF2E(fftFrameSize, data, i, nstep, w);
+<i>354</i>&nbsp;                return;
+<b class="nc"><i>355</i>&nbsp;            }</b>
+<b class="nc"><i>356</i>&nbsp;            nstep &lt;&lt;= 2;</b>
+<b class="nc"><i>357</i>&nbsp;            int ii = i + jmax;</b>
+<i>358</i>&nbsp;            int iii = i + w_len;
+<b class="nc"><i>359</i>&nbsp;            {</b>
+<b class="nc"><i>360</i>&nbsp;                i += 2;</b>
+<b class="nc"><i>361</i>&nbsp;                ii += 2;</b>
+<i>362</i>&nbsp;                iii += 2;
+<b class="nc"><i>363</i>&nbsp;</b>
+<b class="nc"><i>364</i>&nbsp;                for (int n = 0; n &lt; fftFrameSize2; n += nstep) {</b>
+<i>365</i>&nbsp;                    int m = n + jmax;
+<b class="nc"><i>366</i>&nbsp;</b>
+<b class="nc"><i>367</i>&nbsp;                    double datam1_r = data[m];</b>
+<b class="nc"><i>368</i>&nbsp;                    double datam1_i = data[m + 1];</b>
+<b class="nc"><i>369</i>&nbsp;                    double datan1_r = data[n];</b>
+<i>370</i>&nbsp;                    double datan1_i = data[n + 1];
+<b class="nc"><i>371</i>&nbsp;</b>
+<b class="nc"><i>372</i>&nbsp;                    n += nnstep;</b>
+<b class="nc"><i>373</i>&nbsp;                    m += nnstep;</b>
+<b class="nc"><i>374</i>&nbsp;                    double datam2_r = data[m];</b>
+<b class="nc"><i>375</i>&nbsp;                    double datam2_i = data[m + 1];</b>
+<b class="nc"><i>376</i>&nbsp;                    double datan2_r = data[n];</b>
+<i>377</i>&nbsp;                    double datan2_i = data[n + 1];
+<b class="nc"><i>378</i>&nbsp;</b>
+<b class="nc"><i>379</i>&nbsp;                    double tempr = datam1_r;</b>
+<i>380</i>&nbsp;                    double tempi = datam1_i;
+<b class="nc"><i>381</i>&nbsp;</b>
+<b class="nc"><i>382</i>&nbsp;                    datam1_r = datan1_r - tempr;</b>
+<b class="nc"><i>383</i>&nbsp;                    datam1_i = datan1_i - tempi;</b>
+<b class="nc"><i>384</i>&nbsp;                    datan1_r = datan1_r + tempr;</b>
+<i>385</i>&nbsp;                    datan1_i = datan1_i + tempi;
+<b class="nc"><i>386</i>&nbsp;</b>
+<b class="nc"><i>387</i>&nbsp;                    double n2w1r = datan2_r;</b>
+<b class="nc"><i>388</i>&nbsp;                    double n2w1i = datan2_i;</b>
+<b class="nc"><i>389</i>&nbsp;                    double m2ww1r = datam2_r;</b>
+<i>390</i>&nbsp;                    double m2ww1i = datam2_i;
+<b class="nc"><i>391</i>&nbsp;</b>
+<b class="nc"><i>392</i>&nbsp;                    tempr = n2w1r - m2ww1r;</b>
+<i>393</i>&nbsp;                    tempi = n2w1i - m2ww1i;
+<b class="nc"><i>394</i>&nbsp;</b>
+<b class="nc"><i>395</i>&nbsp;                    datam2_r = datam1_r + tempi;</b>
+<b class="nc"><i>396</i>&nbsp;                    datam2_i = datam1_i - tempr;</b>
+<b class="nc"><i>397</i>&nbsp;                    datam1_r = datam1_r - tempi;</b>
+<i>398</i>&nbsp;                    datam1_i = datam1_i + tempr;
+<b class="nc"><i>399</i>&nbsp;</b>
+<b class="nc"><i>400</i>&nbsp;                    tempr = n2w1r + m2ww1r;</b>
+<i>401</i>&nbsp;                    tempi = n2w1i + m2ww1i;
+<b class="nc"><i>402</i>&nbsp;</b>
+<b class="nc"><i>403</i>&nbsp;                    datan2_r = datan1_r - tempr;</b>
+<b class="nc"><i>404</i>&nbsp;                    datan2_i = datan1_i - tempi;</b>
+<b class="nc"><i>405</i>&nbsp;                    datan1_r = datan1_r + tempr;</b>
+<i>406</i>&nbsp;                    datan1_i = datan1_i + tempi;
+<b class="nc"><i>407</i>&nbsp;</b>
+<b class="nc"><i>408</i>&nbsp;                    data[m] = datam2_r;</b>
+<b class="nc"><i>409</i>&nbsp;                    data[m + 1] = datam2_i;</b>
+<b class="nc"><i>410</i>&nbsp;                    data[n] = datan2_r;</b>
+<i>411</i>&nbsp;                    data[n + 1] = datan2_i;
+<b class="nc"><i>412</i>&nbsp;</b>
+<b class="nc"><i>413</i>&nbsp;                    n -= nnstep;</b>
+<b class="nc"><i>414</i>&nbsp;                    m -= nnstep;</b>
+<b class="nc"><i>415</i>&nbsp;                    data[m] = datam1_r;</b>
+<b class="nc"><i>416</i>&nbsp;                    data[m + 1] = datam1_i;</b>
+<b class="nc"><i>417</i>&nbsp;                    data[n] = datan1_r;</b>
+<i>418</i>&nbsp;                    data[n + 1] = datan1_i;
+<i>419</i>&nbsp;
+<i>420</i>&nbsp;                }
+<i>421</i>&nbsp;
+<b class="nc"><i>422</i>&nbsp;            }</b>
+<b class="nc"><i>423</i>&nbsp;            for (int j = 2; j &lt; jmax; j += 2) {</b>
+<b class="nc"><i>424</i>&nbsp;                double wr = w[i++];</b>
+<b class="nc"><i>425</i>&nbsp;                double wi = w[i++];</b>
+<b class="nc"><i>426</i>&nbsp;                double wr1 = w[ii++];</b>
+<b class="nc"><i>427</i>&nbsp;                double wi1 = w[ii++];</b>
+<b class="nc"><i>428</i>&nbsp;                double wwr1 = w[iii++];</b>
+<i>429</i>&nbsp;                double wwi1 = w[iii++];
+<i>430</i>&nbsp;                // double wwr1 = wr * wr1 - wi * wi1; // these numbers can be
+<i>431</i>&nbsp;                // precomputed!!!
+<i>432</i>&nbsp;                // double wwi1 = wr * wi1 + wi * wr1;
+<b class="nc"><i>433</i>&nbsp;</b>
+<b class="nc"><i>434</i>&nbsp;                for (int n = j; n &lt; fftFrameSize2; n += nstep) {</b>
+<i>435</i>&nbsp;                    int m = n + jmax;
+<b class="nc"><i>436</i>&nbsp;</b>
+<b class="nc"><i>437</i>&nbsp;                    double datam1_r = data[m];</b>
+<b class="nc"><i>438</i>&nbsp;                    double datam1_i = data[m + 1];</b>
+<b class="nc"><i>439</i>&nbsp;                    double datan1_r = data[n];</b>
+<i>440</i>&nbsp;                    double datan1_i = data[n + 1];
+<b class="nc"><i>441</i>&nbsp;</b>
+<b class="nc"><i>442</i>&nbsp;                    n += nnstep;</b>
+<b class="nc"><i>443</i>&nbsp;                    m += nnstep;</b>
+<b class="nc"><i>444</i>&nbsp;                    double datam2_r = data[m];</b>
+<b class="nc"><i>445</i>&nbsp;                    double datam2_i = data[m + 1];</b>
+<b class="nc"><i>446</i>&nbsp;                    double datan2_r = data[n];</b>
+<i>447</i>&nbsp;                    double datan2_i = data[n + 1];
+<b class="nc"><i>448</i>&nbsp;</b>
+<b class="nc"><i>449</i>&nbsp;                    double tempr = datam1_r * wr - datam1_i * wi;</b>
+<i>450</i>&nbsp;                    double tempi = datam1_r * wi + datam1_i * wr;
+<b class="nc"><i>451</i>&nbsp;</b>
+<b class="nc"><i>452</i>&nbsp;                    datam1_r = datan1_r - tempr;</b>
+<b class="nc"><i>453</i>&nbsp;                    datam1_i = datan1_i - tempi;</b>
+<b class="nc"><i>454</i>&nbsp;                    datan1_r = datan1_r + tempr;</b>
+<i>455</i>&nbsp;                    datan1_i = datan1_i + tempi;
+<b class="nc"><i>456</i>&nbsp;</b>
+<b class="nc"><i>457</i>&nbsp;                    double n2w1r = datan2_r * wr1 - datan2_i * wi1;</b>
+<b class="nc"><i>458</i>&nbsp;                    double n2w1i = datan2_r * wi1 + datan2_i * wr1;</b>
+<b class="nc"><i>459</i>&nbsp;                    double m2ww1r = datam2_r * wwr1 - datam2_i * wwi1;</b>
+<i>460</i>&nbsp;                    double m2ww1i = datam2_r * wwi1 + datam2_i * wwr1;
+<b class="nc"><i>461</i>&nbsp;</b>
+<b class="nc"><i>462</i>&nbsp;                    tempr = n2w1r - m2ww1r;</b>
+<i>463</i>&nbsp;                    tempi = n2w1i - m2ww1i;
+<b class="nc"><i>464</i>&nbsp;</b>
+<b class="nc"><i>465</i>&nbsp;                    datam2_r = datam1_r + tempi;</b>
+<b class="nc"><i>466</i>&nbsp;                    datam2_i = datam1_i - tempr;</b>
+<b class="nc"><i>467</i>&nbsp;                    datam1_r = datam1_r - tempi;</b>
+<i>468</i>&nbsp;                    datam1_i = datam1_i + tempr;
+<b class="nc"><i>469</i>&nbsp;</b>
+<b class="nc"><i>470</i>&nbsp;                    tempr = n2w1r + m2ww1r;</b>
+<i>471</i>&nbsp;                    tempi = n2w1i + m2ww1i;
+<b class="nc"><i>472</i>&nbsp;</b>
+<b class="nc"><i>473</i>&nbsp;                    datan2_r = datan1_r - tempr;</b>
+<b class="nc"><i>474</i>&nbsp;                    datan2_i = datan1_i - tempi;</b>
+<b class="nc"><i>475</i>&nbsp;                    datan1_r = datan1_r + tempr;</b>
+<i>476</i>&nbsp;                    datan1_i = datan1_i + tempi;
+<b class="nc"><i>477</i>&nbsp;</b>
+<b class="nc"><i>478</i>&nbsp;                    data[m] = datam2_r;</b>
+<b class="nc"><i>479</i>&nbsp;                    data[m + 1] = datam2_i;</b>
+<b class="nc"><i>480</i>&nbsp;                    data[n] = datan2_r;</b>
+<i>481</i>&nbsp;                    data[n + 1] = datan2_i;
+<b class="nc"><i>482</i>&nbsp;</b>
+<b class="nc"><i>483</i>&nbsp;                    n -= nnstep;</b>
+<b class="nc"><i>484</i>&nbsp;                    m -= nnstep;</b>
+<b class="nc"><i>485</i>&nbsp;                    data[m] = datam1_r;</b>
+<b class="nc"><i>486</i>&nbsp;                    data[m + 1] = datam1_i;</b>
+<b class="nc"><i>487</i>&nbsp;                    data[n] = datan1_r;</b>
+<i>488</i>&nbsp;                    data[n + 1] = datan1_i;
+<i>489</i>&nbsp;
+<i>490</i>&nbsp;                }
+<i>491</i>&nbsp;            }
+<b class="nc"><i>492</i>&nbsp;</b>
+<i>493</i>&nbsp;            i += jmax &lt;&lt; 1;
+<b class="nc"><i>494</i>&nbsp;</b>
+<i>495</i>&nbsp;        }
+<b class="nc"><i>496</i>&nbsp;</b>
+<i>497</i>&nbsp;        calcF2E(fftFrameSize, data, i, nstep, w);
+<i>498</i>&nbsp;
+<i>499</i>&nbsp;    }
+<i>500</i>&nbsp;
+<i>501</i>&nbsp;    // Perform Factor-4 Decomposition with 3 * complex operators and 8 +/-
+<i>502</i>&nbsp;    // complex operators
+<i>503</i>&nbsp;    private static void calcF4FE(int fftFrameSize, double[] data, int i,
+<b class="nc"><i>504</i>&nbsp;            int nstep, double[] w) {</b>
+<i>505</i>&nbsp;        final int fftFrameSize2 = fftFrameSize &lt;&lt; 1; // 2*fftFrameSize;
+<i>506</i>&nbsp;        // Factor-4 Decomposition
+<b class="nc"><i>507</i>&nbsp;</b>
+<b class="nc"><i>508</i>&nbsp;        int w_len = w.length &gt;&gt; 1;</b>
+<i>509</i>&nbsp;        while (nstep &lt; fftFrameSize2) {
+<b class="nc"><i>510</i>&nbsp;</b>
+<b class="nc"><i>511</i>&nbsp;            int jmax = nstep;</b>
+<b class="nc"><i>512</i>&nbsp;            int nnstep = nstep &lt;&lt; 1;</b>
+<i>513</i>&nbsp;            if (nnstep == fftFrameSize2) {
+<b class="nc"><i>514</i>&nbsp;                // Factor-4 Decomposition not possible</b>
+<i>515</i>&nbsp;                calcF2E(fftFrameSize, data, i, nstep, w);
+<i>516</i>&nbsp;                return;
+<b class="nc"><i>517</i>&nbsp;            }</b>
+<b class="nc"><i>518</i>&nbsp;            nstep &lt;&lt;= 2;</b>
+<b class="nc"><i>519</i>&nbsp;            int ii = i + jmax;</b>
+<b class="nc"><i>520</i>&nbsp;            int iii = i + w_len;</b>
+<b class="nc"><i>521</i>&nbsp;            for (int n = 0; n &lt; jmax; n += 2) {</b>
+<b class="nc"><i>522</i>&nbsp;                double wr = w[i++];</b>
+<b class="nc"><i>523</i>&nbsp;                double wi = w[i++];</b>
+<b class="nc"><i>524</i>&nbsp;                double wr1 = w[ii++];</b>
+<b class="nc"><i>525</i>&nbsp;                double wi1 = w[ii++];</b>
+<b class="nc"><i>526</i>&nbsp;                double wwr1 = w[iii++];</b>
+<i>527</i>&nbsp;                double wwi1 = w[iii++];
+<i>528</i>&nbsp;                // double wwr1 = wr * wr1 - wi * wi1; // these numbers can be
+<i>529</i>&nbsp;                // precomputed!!!
+<i>530</i>&nbsp;                // double wwi1 = wr * wi1 + wi * wr1;
+<b class="nc"><i>531</i>&nbsp;</b>
+<i>532</i>&nbsp;                int m = n + jmax;
+<b class="nc"><i>533</i>&nbsp;</b>
+<b class="nc"><i>534</i>&nbsp;                double datam1_r = data[m];</b>
+<b class="nc"><i>535</i>&nbsp;                double datam1_i = data[m + 1];</b>
+<b class="nc"><i>536</i>&nbsp;                double datan1_r = data[n];</b>
+<i>537</i>&nbsp;                double datan1_i = data[n + 1];
+<b class="nc"><i>538</i>&nbsp;</b>
+<b class="nc"><i>539</i>&nbsp;                n += nnstep;</b>
+<b class="nc"><i>540</i>&nbsp;                m += nnstep;</b>
+<b class="nc"><i>541</i>&nbsp;                double datam2_r = data[m];</b>
+<b class="nc"><i>542</i>&nbsp;                double datam2_i = data[m + 1];</b>
+<b class="nc"><i>543</i>&nbsp;                double datan2_r = data[n];</b>
+<i>544</i>&nbsp;                double datan2_i = data[n + 1];
+<b class="nc"><i>545</i>&nbsp;</b>
+<b class="nc"><i>546</i>&nbsp;                double tempr = datam1_r * wr - datam1_i * wi;</b>
+<i>547</i>&nbsp;                double tempi = datam1_r * wi + datam1_i * wr;
+<b class="nc"><i>548</i>&nbsp;</b>
+<b class="nc"><i>549</i>&nbsp;                datam1_r = datan1_r - tempr;</b>
+<b class="nc"><i>550</i>&nbsp;                datam1_i = datan1_i - tempi;</b>
+<b class="nc"><i>551</i>&nbsp;                datan1_r = datan1_r + tempr;</b>
+<i>552</i>&nbsp;                datan1_i = datan1_i + tempi;
+<b class="nc"><i>553</i>&nbsp;</b>
+<b class="nc"><i>554</i>&nbsp;                double n2w1r = datan2_r * wr1 - datan2_i * wi1;</b>
+<b class="nc"><i>555</i>&nbsp;                double n2w1i = datan2_r * wi1 + datan2_i * wr1;</b>
+<b class="nc"><i>556</i>&nbsp;                double m2ww1r = datam2_r * wwr1 - datam2_i * wwi1;</b>
+<i>557</i>&nbsp;                double m2ww1i = datam2_r * wwi1 + datam2_i * wwr1;
+<b class="nc"><i>558</i>&nbsp;</b>
+<b class="nc"><i>559</i>&nbsp;                tempr = m2ww1r - n2w1r;</b>
+<i>560</i>&nbsp;                tempi = m2ww1i - n2w1i;
+<b class="nc"><i>561</i>&nbsp;</b>
+<b class="nc"><i>562</i>&nbsp;                datam2_r = datam1_r + tempi;</b>
+<b class="nc"><i>563</i>&nbsp;                datam2_i = datam1_i - tempr;</b>
+<b class="nc"><i>564</i>&nbsp;                datam1_r = datam1_r - tempi;</b>
+<i>565</i>&nbsp;                datam1_i = datam1_i + tempr;
+<b class="nc"><i>566</i>&nbsp;</b>
+<b class="nc"><i>567</i>&nbsp;                tempr = n2w1r + m2ww1r;</b>
+<i>568</i>&nbsp;                tempi = n2w1i + m2ww1i;
+<b class="nc"><i>569</i>&nbsp;</b>
+<b class="nc"><i>570</i>&nbsp;                datan2_r = datan1_r - tempr;</b>
+<b class="nc"><i>571</i>&nbsp;                datan2_i = datan1_i - tempi;</b>
+<b class="nc"><i>572</i>&nbsp;                datan1_r = datan1_r + tempr;</b>
+<i>573</i>&nbsp;                datan1_i = datan1_i + tempi;
+<b class="nc"><i>574</i>&nbsp;</b>
+<b class="nc"><i>575</i>&nbsp;                data[m] = datam2_r;</b>
+<b class="nc"><i>576</i>&nbsp;                data[m + 1] = datam2_i;</b>
+<b class="nc"><i>577</i>&nbsp;                data[n] = datan2_r;</b>
+<i>578</i>&nbsp;                data[n + 1] = datan2_i;
+<b class="nc"><i>579</i>&nbsp;</b>
+<b class="nc"><i>580</i>&nbsp;                n -= nnstep;</b>
+<b class="nc"><i>581</i>&nbsp;                m -= nnstep;</b>
+<b class="nc"><i>582</i>&nbsp;                data[m] = datam1_r;</b>
+<b class="nc"><i>583</i>&nbsp;                data[m + 1] = datam1_i;</b>
+<b class="nc"><i>584</i>&nbsp;                data[n] = datan1_r;</b>
+<i>585</i>&nbsp;                data[n + 1] = datan1_i;
+<i>586</i>&nbsp;
+<i>587</i>&nbsp;            }
+<b class="nc"><i>588</i>&nbsp;</b>
+<i>589</i>&nbsp;            i += jmax &lt;&lt; 1;
+<b class="nc"><i>590</i>&nbsp;</b>
+<i>591</i>&nbsp;        }
+<i>592</i>&nbsp;    }
+<i>593</i>&nbsp;
+<i>594</i>&nbsp;    // Perform Factor-4 Decomposition with 3 * complex operators and 8 +/-
+<i>595</i>&nbsp;    // complex operators
+<i>596</i>&nbsp;    private static void calcF4IE(int fftFrameSize, double[] data, int i,
+<i>597</i>&nbsp;            int nstep, double[] w) {
+<b class="nc"><i>598</i>&nbsp;        final int fftFrameSize2 = fftFrameSize &lt;&lt; 1; // 2*fftFrameSize;</b>
+<i>599</i>&nbsp;        // Factor-4 Decomposition
+<i>600</i>&nbsp;
+<b class="nc"><i>601</i>&nbsp;        int w_len = w.length &gt;&gt; 1;</b>
+<b class="nc"><i>602</i>&nbsp;        while (nstep &lt; fftFrameSize2) {</b>
+<i>603</i>&nbsp;
+<b class="nc"><i>604</i>&nbsp;            int jmax = nstep;</b>
+<b class="nc"><i>605</i>&nbsp;            int nnstep = nstep &lt;&lt; 1;</b>
+<b class="nc"><i>606</i>&nbsp;            if (nnstep == fftFrameSize2) {</b>
+<i>607</i>&nbsp;                // Factor-4 Decomposition not possible
+<b class="nc"><i>608</i>&nbsp;                calcF2E(fftFrameSize, data, i, nstep, w);</b>
+<i>609</i>&nbsp;                return;
+<i>610</i>&nbsp;            }
+<b class="nc"><i>611</i>&nbsp;            nstep &lt;&lt;= 2;</b>
+<b class="nc"><i>612</i>&nbsp;            int ii = i + jmax;</b>
+<b class="nc"><i>613</i>&nbsp;            int iii = i + w_len;</b>
+<b class="nc"><i>614</i>&nbsp;            for (int n = 0; n &lt; jmax; n += 2) {</b>
+<b class="nc"><i>615</i>&nbsp;                double wr = w[i++];</b>
+<b class="nc"><i>616</i>&nbsp;                double wi = w[i++];</b>
+<b class="nc"><i>617</i>&nbsp;                double wr1 = w[ii++];</b>
+<b class="nc"><i>618</i>&nbsp;                double wi1 = w[ii++];</b>
+<b class="nc"><i>619</i>&nbsp;                double wwr1 = w[iii++];</b>
+<b class="nc"><i>620</i>&nbsp;                double wwi1 = w[iii++];</b>
+<i>621</i>&nbsp;                // double wwr1 = wr * wr1 - wi * wi1; // these numbers can be
+<i>622</i>&nbsp;                // precomputed!!!
+<i>623</i>&nbsp;                // double wwi1 = wr * wi1 + wi * wr1;
+<i>624</i>&nbsp;
+<b class="nc"><i>625</i>&nbsp;                int m = n + jmax;</b>
+<i>626</i>&nbsp;
+<b class="nc"><i>627</i>&nbsp;                double datam1_r = data[m];</b>
+<b class="nc"><i>628</i>&nbsp;                double datam1_i = data[m + 1];</b>
+<b class="nc"><i>629</i>&nbsp;                double datan1_r = data[n];</b>
+<b class="nc"><i>630</i>&nbsp;                double datan1_i = data[n + 1];</b>
+<i>631</i>&nbsp;
+<b class="nc"><i>632</i>&nbsp;                n += nnstep;</b>
+<b class="nc"><i>633</i>&nbsp;                m += nnstep;</b>
+<b class="nc"><i>634</i>&nbsp;                double datam2_r = data[m];</b>
+<b class="nc"><i>635</i>&nbsp;                double datam2_i = data[m + 1];</b>
+<b class="nc"><i>636</i>&nbsp;                double datan2_r = data[n];</b>
+<b class="nc"><i>637</i>&nbsp;                double datan2_i = data[n + 1];</b>
+<i>638</i>&nbsp;
+<b class="nc"><i>639</i>&nbsp;                double tempr = datam1_r * wr - datam1_i * wi;</b>
+<b class="nc"><i>640</i>&nbsp;                double tempi = datam1_r * wi + datam1_i * wr;</b>
+<i>641</i>&nbsp;
+<b class="nc"><i>642</i>&nbsp;                datam1_r = datan1_r - tempr;</b>
+<b class="nc"><i>643</i>&nbsp;                datam1_i = datan1_i - tempi;</b>
+<b class="nc"><i>644</i>&nbsp;                datan1_r = datan1_r + tempr;</b>
+<b class="nc"><i>645</i>&nbsp;                datan1_i = datan1_i + tempi;</b>
+<i>646</i>&nbsp;
+<b class="nc"><i>647</i>&nbsp;                double n2w1r = datan2_r * wr1 - datan2_i * wi1;</b>
+<b class="nc"><i>648</i>&nbsp;                double n2w1i = datan2_r * wi1 + datan2_i * wr1;</b>
+<b class="nc"><i>649</i>&nbsp;                double m2ww1r = datam2_r * wwr1 - datam2_i * wwi1;</b>
+<b class="nc"><i>650</i>&nbsp;                double m2ww1i = datam2_r * wwi1 + datam2_i * wwr1;</b>
+<i>651</i>&nbsp;
+<b class="nc"><i>652</i>&nbsp;                tempr = n2w1r - m2ww1r;</b>
+<b class="nc"><i>653</i>&nbsp;                tempi = n2w1i - m2ww1i;</b>
+<i>654</i>&nbsp;
+<b class="nc"><i>655</i>&nbsp;                datam2_r = datam1_r + tempi;</b>
+<b class="nc"><i>656</i>&nbsp;                datam2_i = datam1_i - tempr;</b>
+<b class="nc"><i>657</i>&nbsp;                datam1_r = datam1_r - tempi;</b>
+<b class="nc"><i>658</i>&nbsp;                datam1_i = datam1_i + tempr;</b>
+<i>659</i>&nbsp;
+<b class="nc"><i>660</i>&nbsp;                tempr = n2w1r + m2ww1r;</b>
+<b class="nc"><i>661</i>&nbsp;                tempi = n2w1i + m2ww1i;</b>
+<i>662</i>&nbsp;
+<b class="nc"><i>663</i>&nbsp;                datan2_r = datan1_r - tempr;</b>
+<b class="nc"><i>664</i>&nbsp;                datan2_i = datan1_i - tempi;</b>
+<b class="nc"><i>665</i>&nbsp;                datan1_r = datan1_r + tempr;</b>
+<b class="nc"><i>666</i>&nbsp;                datan1_i = datan1_i + tempi;</b>
+<i>667</i>&nbsp;
+<b class="nc"><i>668</i>&nbsp;                data[m] = datam2_r;</b>
+<b class="nc"><i>669</i>&nbsp;                data[m + 1] = datam2_i;</b>
+<b class="nc"><i>670</i>&nbsp;                data[n] = datan2_r;</b>
+<b class="nc"><i>671</i>&nbsp;                data[n + 1] = datan2_i;</b>
+<i>672</i>&nbsp;
+<b class="nc"><i>673</i>&nbsp;                n -= nnstep;</b>
+<b class="nc"><i>674</i>&nbsp;                m -= nnstep;</b>
+<b class="nc"><i>675</i>&nbsp;                data[m] = datam1_r;</b>
+<b class="nc"><i>676</i>&nbsp;                data[m + 1] = datam1_i;</b>
+<b class="nc"><i>677</i>&nbsp;                data[n] = datan1_r;</b>
+<b class="nc"><i>678</i>&nbsp;                data[n + 1] = datan1_i;</b>
+<i>679</i>&nbsp;
+<i>680</i>&nbsp;            }
+<i>681</i>&nbsp;
+<b class="nc"><i>682</i>&nbsp;            i += jmax &lt;&lt; 1;</b>
+<i>683</i>&nbsp;
+<b class="nc"><i>684</i>&nbsp;        }</b>
+<i>685</i>&nbsp;    }
+<i>686</i>&nbsp;
+<i>687</i>&nbsp;    private void bitreversal(double[] data) {
+<i>688</i>&nbsp;        if (fftFrameSize &lt; 4)
+<b class="nc"><i>689</i>&nbsp;            return;</b>
+<i>690</i>&nbsp;
+<i>691</i>&nbsp;        int inverse = fftFrameSize2 - 2;
+<b class="nc"><i>692</i>&nbsp;        for (int i = 0; i &lt; fftFrameSize; i += 4) {</b>
+<b class="nc"><i>693</i>&nbsp;            int j = bitm_array[i];</b>
+<b class="nc"><i>694</i>&nbsp;</b>
+<i>695</i>&nbsp;            // Performing Bit-Reversal, even v.s. even, O(2N)
+<i>696</i>&nbsp;            if (i &lt; j) {
+<b class="nc"><i>697</i>&nbsp;</b>
+<i>698</i>&nbsp;                int n = i;
+<b class="nc"><i>699</i>&nbsp;                int m = j;</b>
+<b class="nc"><i>700</i>&nbsp;</b>
+<i>701</i>&nbsp;                // COMPLEX: SWAP(data[n], data[m])
+<i>702</i>&nbsp;                // Real Part
+<i>703</i>&nbsp;                double tempr = data[n];
+<b class="nc"><i>704</i>&nbsp;                data[n] = data[m];</b>
+<b class="nc"><i>705</i>&nbsp;                data[m] = tempr;</b>
+<b class="nc"><i>706</i>&nbsp;                // Imagery Part</b>
+<i>707</i>&nbsp;                n++;
+<b class="nc"><i>708</i>&nbsp;                m++;</b>
+<b class="nc"><i>709</i>&nbsp;                double tempi = data[n];</b>
+<b class="nc"><i>710</i>&nbsp;                data[n] = data[m];</b>
+<b class="nc"><i>711</i>&nbsp;                data[m] = tempi;</b>
+<b class="nc"><i>712</i>&nbsp;</b>
+<i>713</i>&nbsp;                n = inverse - i;
+<b class="nc"><i>714</i>&nbsp;                m = inverse - j;</b>
+<b class="nc"><i>715</i>&nbsp;</b>
+<i>716</i>&nbsp;                // COMPLEX: SWAP(data[n], data[m])
+<i>717</i>&nbsp;                // Real Part
+<i>718</i>&nbsp;                tempr = data[n];
+<b class="nc"><i>719</i>&nbsp;                data[n] = data[m];</b>
+<b class="nc"><i>720</i>&nbsp;                data[m] = tempr;</b>
+<b class="nc"><i>721</i>&nbsp;                // Imagery Part</b>
+<i>722</i>&nbsp;                n++;
+<b class="nc"><i>723</i>&nbsp;                m++;</b>
+<b class="nc"><i>724</i>&nbsp;                tempi = data[n];</b>
+<b class="nc"><i>725</i>&nbsp;                data[n] = data[m];</b>
+<b class="nc"><i>726</i>&nbsp;                data[m] = tempi;</b>
+<b class="nc"><i>727</i>&nbsp;            }</b>
+<i>728</i>&nbsp;
+<i>729</i>&nbsp;            // Performing Bit-Reversal, odd v.s. even, O(N)
+<i>730</i>&nbsp;
+<i>731</i>&nbsp;            int m = j + fftFrameSize; // bitm_array[i+2];
+<b class="nc"><i>732</i>&nbsp;            // COMPLEX: SWAP(data[n], data[m])</b>
+<i>733</i>&nbsp;            // Real Part
+<i>734</i>&nbsp;            int n = i + 2;
+<b class="nc"><i>735</i>&nbsp;            double tempr = data[n];</b>
+<b class="nc"><i>736</i>&nbsp;            data[n] = data[m];</b>
+<b class="nc"><i>737</i>&nbsp;            data[m] = tempr;</b>
+<b class="nc"><i>738</i>&nbsp;            // Imagery Part</b>
+<i>739</i>&nbsp;            n++;
+<b class="nc"><i>740</i>&nbsp;            m++;</b>
+<b class="nc"><i>741</i>&nbsp;            double tempi = data[n];</b>
+<b class="nc"><i>742</i>&nbsp;            data[n] = data[m];</b>
+<b class="nc"><i>743</i>&nbsp;            data[m] = tempi;</b>
+<b class="nc"><i>744</i>&nbsp;        }</b>
+<i>745</i>&nbsp;    }
+<i>746</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

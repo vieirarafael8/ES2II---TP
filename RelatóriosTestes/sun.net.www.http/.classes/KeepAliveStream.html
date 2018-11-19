@@ -1,0 +1,305 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: KeepAliveStream</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.net.www.http</a> ]
+</div>
+
+<h1>Coverage Summary for Class: KeepAliveStream (sun.net.www.http)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">KeepAliveStream</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 56)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">KeepAliveStream$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 11)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 12)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 67)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2012, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.net.www.http;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.*;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;import sun.net.ProgressSource;
+<i>31</i>&nbsp;import sun.net.www.MeteredStream;
+<i>32</i>&nbsp;import jdk.internal.misc.InnocuousThread;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;/**
+<i>35</i>&nbsp; * A stream that has the property of being able to be kept alive for
+<i>36</i>&nbsp; * multiple downloads from the same server.
+<i>37</i>&nbsp; *
+<i>38</i>&nbsp; * @author Stephen R. Pietrowicz (NCSA)
+<i>39</i>&nbsp; * @author Dave Brown
+<b class="nc"><i>40</i>&nbsp; */</b>
+<i>41</i>&nbsp;public
+<i>42</i>&nbsp;class KeepAliveStream extends MeteredStream implements Hurryable {
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;    // instance variables
+<i>45</i>&nbsp;    HttpClient hc;
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;    boolean hurried;
+<b class="nc"><i>48</i>&nbsp;</b>
+<i>49</i>&nbsp;    // has this KeepAliveStream been put on the queue for asynchronous cleanup.
+<b class="nc"><i>50</i>&nbsp;    protected boolean queuedForCleanup = false;</b>
+<i>51</i>&nbsp;
+<i>52</i>&nbsp;    private static final KeepAliveStreamCleaner queue = new KeepAliveStreamCleaner();
+<i>53</i>&nbsp;    private static Thread cleanerThread; // null
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;    /**
+<i>56</i>&nbsp;     * Constructor
+<b class="nc"><i>57</i>&nbsp;     */</b>
+<b class="nc"><i>58</i>&nbsp;    public KeepAliveStream(InputStream is, ProgressSource pi, long expected, HttpClient hc)  {</b>
+<i>59</i>&nbsp;        super(is, pi, expected);
+<i>60</i>&nbsp;        this.hc = hc;
+<i>61</i>&nbsp;    }
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    /**
+<i>64</i>&nbsp;     * Attempt to cache this connection
+<i>65</i>&nbsp;     */
+<b class="nc"><i>66</i>&nbsp;    public void close() throws IOException  {</b>
+<i>67</i>&nbsp;        // If the inputstream is closed already, just return.
+<i>68</i>&nbsp;        if (closed) {
+<i>69</i>&nbsp;            return;
+<i>70</i>&nbsp;        }
+<b class="nc"><i>71</i>&nbsp;</b>
+<i>72</i>&nbsp;        // If this stream has already been queued for cleanup.
+<i>73</i>&nbsp;        if (queuedForCleanup) {
+<i>74</i>&nbsp;            return;
+<i>75</i>&nbsp;        }
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;        // Skip past the data that&#39;s left in the Inputstream because
+<i>78</i>&nbsp;        // some sort of error may have occurred.
+<i>79</i>&nbsp;        // Do this ONLY if the skip won&#39;t block. The stream may have
+<i>80</i>&nbsp;        // been closed at the beginning of a big file and we don&#39;t want
+<i>81</i>&nbsp;        // to hang around for nothing. So if we can&#39;t skip without blocking
+<i>82</i>&nbsp;        // we just close the socket and, therefore, terminate the keepAlive
+<b class="nc"><i>83</i>&nbsp;        // NOTE: Don&#39;t close super class</b>
+<b class="nc"><i>84</i>&nbsp;        try {</b>
+<b class="nc"><i>85</i>&nbsp;            if (expected &gt; count) {</b>
+<b class="nc"><i>86</i>&nbsp;                long nskip = expected - count;</b>
+<b class="nc"><i>87</i>&nbsp;                if (nskip &lt;= available()) {</b>
+<b class="nc"><i>88</i>&nbsp;                    do {} while ((nskip = (expected - count)) &gt; 0L</b>
+<i>89</i>&nbsp;                                 &amp;&amp; skip(Math.min(nskip, available())) &gt; 0L);
+<i>90</i>&nbsp;                } else if (expected &lt;= KeepAliveStreamCleaner.MAX_DATA_REMAINING &amp;&amp; !hurried) {
+<b class="nc"><i>91</i>&nbsp;                    //put this KeepAliveStream on the queue so that the data remaining</b>
+<i>92</i>&nbsp;                    //on the socket can be cleanup asyncronously.
+<b class="nc"><i>93</i>&nbsp;                    queueForCleanup(new KeepAliveCleanerEntry(this, hc));</b>
+<i>94</i>&nbsp;                } else {
+<i>95</i>&nbsp;                    hc.closeServer();
+<b class="nc"><i>96</i>&nbsp;                }</b>
+<b class="nc"><i>97</i>&nbsp;            }</b>
+<i>98</i>&nbsp;            if (!closed &amp;&amp; !hurried &amp;&amp; !queuedForCleanup) {
+<i>99</i>&nbsp;                hc.finished();
+<b class="nc"><i>100</i>&nbsp;            }</b>
+<b class="nc"><i>101</i>&nbsp;        } finally {</b>
+<i>102</i>&nbsp;            if (pi != null)
+<b class="nc"><i>103</i>&nbsp;                pi.finishTracking();</b>
+<i>104</i>&nbsp;
+<i>105</i>&nbsp;            if (!queuedForCleanup) {
+<b class="nc"><i>106</i>&nbsp;                // nulling out the underlying inputstream as well as</b>
+<b class="nc"><i>107</i>&nbsp;                // httpClient to let gc collect the memories faster</b>
+<b class="nc"><i>108</i>&nbsp;                in = null;</b>
+<i>109</i>&nbsp;                hc = null;
+<i>110</i>&nbsp;                closed = true;
+<i>111</i>&nbsp;            }
+<i>112</i>&nbsp;        }
+<i>113</i>&nbsp;    }
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;    /* we explicitly do not support mark/reset */
+<b class="nc"><i>116</i>&nbsp;</b>
+<i>117</i>&nbsp;    public boolean markSupported()  {
+<i>118</i>&nbsp;        return false;
+<i>119</i>&nbsp;    }
+<i>120</i>&nbsp;
+<i>121</i>&nbsp;    public void mark(int limit) {}
+<b class="nc"><i>122</i>&nbsp;</b>
+<i>123</i>&nbsp;    public void reset() throws IOException {
+<i>124</i>&nbsp;        throw new IOException(&quot;mark/reset not supported&quot;);
+<i>125</i>&nbsp;    }
+<i>126</i>&nbsp;
+<i>127</i>&nbsp;    public synchronized boolean hurry() {
+<b class="nc"><i>128</i>&nbsp;        try {</b>
+<b class="nc"><i>129</i>&nbsp;            /* CASE 0: we&#39;re actually already done */</b>
+<b class="nc"><i>130</i>&nbsp;            if (closed || count &gt;= expected) {</b>
+<i>131</i>&nbsp;                return false;
+<b class="nc"><i>132</i>&nbsp;            } else if (in.available() &lt; (expected - count)) {</b>
+<i>133</i>&nbsp;                /* CASE I: can&#39;t meet the demand */
+<i>134</i>&nbsp;                return false;
+<i>135</i>&nbsp;            } else {
+<i>136</i>&nbsp;                /* CASE II: fill our internal buffer
+<b class="nc"><i>137</i>&nbsp;                 * Remind: possibly check memory here</b>
+<b class="nc"><i>138</i>&nbsp;                 */</b>
+<b class="nc"><i>139</i>&nbsp;                int size = (int) (expected - count);</b>
+<b class="nc"><i>140</i>&nbsp;                byte[] buf = new byte[size];</b>
+<b class="nc"><i>141</i>&nbsp;                DataInputStream dis = new DataInputStream(in);</b>
+<b class="nc"><i>142</i>&nbsp;                dis.readFully(buf);</b>
+<b class="nc"><i>143</i>&nbsp;                in = new ByteArrayInputStream(buf);</b>
+<i>144</i>&nbsp;                hurried = true;
+<b class="nc"><i>145</i>&nbsp;                return true;</b>
+<i>146</i>&nbsp;            }
+<b class="nc"><i>147</i>&nbsp;        } catch (IOException e) {</b>
+<i>148</i>&nbsp;            // e.printStackTrace();
+<i>149</i>&nbsp;            return false;
+<i>150</i>&nbsp;        }
+<i>151</i>&nbsp;    }
+<b class="nc"><i>152</i>&nbsp;</b>
+<b class="nc"><i>153</i>&nbsp;    private static void queueForCleanup(KeepAliveCleanerEntry kace) {</b>
+<b class="nc"><i>154</i>&nbsp;        synchronized(queue) {</b>
+<b class="nc"><i>155</i>&nbsp;            if(!kace.getQueuedForCleanup()) {</b>
+<b class="nc"><i>156</i>&nbsp;                if (!queue.offer(kace)) {</b>
+<i>157</i>&nbsp;                    kace.getHttpClient().closeServer();
+<i>158</i>&nbsp;                    return;
+<b class="nc"><i>159</i>&nbsp;                }</b>
+<b class="nc"><i>160</i>&nbsp;</b>
+<i>161</i>&nbsp;                kace.setQueuedForCleanup();
+<i>162</i>&nbsp;                queue.notifyAll();
+<b class="nc"><i>163</i>&nbsp;            }</b>
+<b class="nc"><i>164</i>&nbsp;</b>
+<b class="nc"><i>165</i>&nbsp;            boolean startCleanupThread = (cleanerThread == null);</b>
+<b class="nc"><i>166</i>&nbsp;            if (!startCleanupThread) {</b>
+<i>167</i>&nbsp;                if (!cleanerThread.isAlive()) {
+<i>168</i>&nbsp;                    startCleanupThread = true;
+<i>169</i>&nbsp;                }
+<b class="nc"><i>170</i>&nbsp;            }</b>
+<b class="nc"><i>171</i>&nbsp;</b>
+<b class="nc"><i>172</i>&nbsp;            if (startCleanupThread) {</b>
+<i>173</i>&nbsp;                java.security.AccessController.doPrivileged(
+<i>174</i>&nbsp;                    new java.security.PrivilegedAction&lt;Void&gt;() {
+<i>175</i>&nbsp;                    public Void run() {
+<b class="nc"><i>176</i>&nbsp;                        cleanerThread = InnocuousThread.newSystemThread(&quot;Keep-Alive-SocketCleaner&quot;, queue);</b>
+<b class="nc"><i>177</i>&nbsp;                        cleanerThread.setDaemon(true);</b>
+<b class="nc"><i>178</i>&nbsp;                        cleanerThread.setPriority(Thread.MAX_PRIORITY - 2);</b>
+<b class="nc"><i>179</i>&nbsp;                        cleanerThread.start();</b>
+<i>180</i>&nbsp;                        return null;
+<i>181</i>&nbsp;                    }
+<b class="nc"><i>182</i>&nbsp;                });</b>
+<b class="nc"><i>183</i>&nbsp;            }</b>
+<b class="nc"><i>184</i>&nbsp;        } // queue</b>
+<i>185</i>&nbsp;    }
+<i>186</i>&nbsp;
+<b class="nc"><i>187</i>&nbsp;    protected long remainingToRead() {</b>
+<b class="nc"><i>188</i>&nbsp;        return expected - count;</b>
+<b class="nc"><i>189</i>&nbsp;    }</b>
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;    protected void setClosed() {
+<i>192</i>&nbsp;        in = null;
+<b class="nc"><i>193</i>&nbsp;        hc = null;</b>
+<i>194</i>&nbsp;        closed = true;
+<i>195</i>&nbsp;    }
+<i>196</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

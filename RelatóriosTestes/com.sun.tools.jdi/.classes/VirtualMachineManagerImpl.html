@@ -1,0 +1,357 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: VirtualMachineManagerImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.tools.jdi</a> ]
+</div>
+
+<h1>Coverage Summary for Class: VirtualMachineManagerImpl (com.sun.tools.jdi)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">VirtualMachineManagerImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 20)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 111)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1998, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.tools.jdi;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.util.ArrayList;
+<i>30</i>&nbsp;import java.util.Collections;
+<i>31</i>&nbsp;import java.util.Iterator;
+<i>32</i>&nbsp;import java.util.List;
+<i>33</i>&nbsp;import java.util.ResourceBundle;
+<i>34</i>&nbsp;import java.util.ServiceLoader;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import com.sun.jdi.JDIPermission;
+<i>37</i>&nbsp;import com.sun.jdi.VMDisconnectedException;
+<i>38</i>&nbsp;import com.sun.jdi.VirtualMachine;
+<i>39</i>&nbsp;import com.sun.jdi.VirtualMachineManager;
+<i>40</i>&nbsp;import com.sun.jdi.connect.AttachingConnector;
+<i>41</i>&nbsp;import com.sun.jdi.connect.Connector;
+<i>42</i>&nbsp;import com.sun.jdi.connect.LaunchingConnector;
+<i>43</i>&nbsp;import com.sun.jdi.connect.ListeningConnector;
+<b class="nc"><i>44</i>&nbsp;import com.sun.jdi.connect.spi.Connection;</b>
+<b class="nc"><i>45</i>&nbsp;import com.sun.jdi.connect.spi.TransportService;</b>
+<b class="nc"><i>46</i>&nbsp;</b>
+<i>47</i>&nbsp;/* Public for use by com.sun.jdi.Bootstrap */
+<b class="nc"><i>48</i>&nbsp;public class VirtualMachineManagerImpl implements VirtualMachineManagerService {</b>
+<b class="nc"><i>49</i>&nbsp;    private List&lt;Connector&gt; connectors = new ArrayList&lt;&gt;();</b>
+<i>50</i>&nbsp;    private LaunchingConnector defaultConnector = null;
+<i>51</i>&nbsp;    private List&lt;VirtualMachine&gt; targets = new ArrayList&lt;&gt;();
+<i>52</i>&nbsp;    private final ThreadGroup mainGroupForJDI;
+<b class="nc"><i>53</i>&nbsp;    private ResourceBundle messages = null;</b>
+<i>54</i>&nbsp;    private int vmSequenceNumber = 0;
+<i>55</i>&nbsp;    private static final int majorVersion = 11;
+<i>56</i>&nbsp;    private static final int minorVersion = 0;
+<b class="nc"><i>57</i>&nbsp;</b>
+<b class="nc"><i>58</i>&nbsp;    private static final Object lock = new Object();</b>
+<b class="nc"><i>59</i>&nbsp;    private static VirtualMachineManagerImpl vmm;</b>
+<i>60</i>&nbsp;
+<b class="nc"><i>61</i>&nbsp;    public static VirtualMachineManager virtualMachineManager() {</b>
+<i>62</i>&nbsp;        SecurityManager sm = System.getSecurityManager();
+<b class="nc"><i>63</i>&nbsp;        if (sm != null) {</b>
+<b class="nc"><i>64</i>&nbsp;            JDIPermission vmmPermission =</b>
+<b class="nc"><i>65</i>&nbsp;                new JDIPermission(&quot;virtualMachineManager&quot;);</b>
+<i>66</i>&nbsp;            sm.checkPermission(vmmPermission);
+<b class="nc"><i>67</i>&nbsp;        }</b>
+<b class="nc"><i>68</i>&nbsp;        synchronized (lock) {</b>
+<i>69</i>&nbsp;            if (vmm == null) {
+<i>70</i>&nbsp;                vmm = new VirtualMachineManagerImpl();
+<b class="nc"><i>71</i>&nbsp;            }</b>
+<i>72</i>&nbsp;        }
+<i>73</i>&nbsp;        return vmm;
+<i>74</i>&nbsp;    }
+<i>75</i>&nbsp;
+<b class="nc"><i>76</i>&nbsp;    protected VirtualMachineManagerImpl() {</b>
+<b class="nc"><i>77</i>&nbsp;</b>
+<b class="nc"><i>78</i>&nbsp;        /*</b>
+<b class="nc"><i>79</i>&nbsp;         * Create a top-level thread group</b>
+<i>80</i>&nbsp;         */
+<b class="nc"><i>81</i>&nbsp;        ThreadGroup top = Thread.currentThread().getThreadGroup();</b>
+<i>82</i>&nbsp;        ThreadGroup parent = null;
+<i>83</i>&nbsp;        while ((parent = top.getParent()) != null) {
+<i>84</i>&nbsp;            top = parent;
+<i>85</i>&nbsp;        }
+<b class="nc"><i>86</i>&nbsp;        mainGroupForJDI = new ThreadGroup(top, &quot;JDI main&quot;);</b>
+<b class="nc"><i>87</i>&nbsp;</b>
+<i>88</i>&nbsp;        /*
+<b class="nc"><i>89</i>&nbsp;         * Load the connectors</b>
+<i>90</i>&nbsp;         */
+<b class="nc"><i>91</i>&nbsp;        ServiceLoader&lt;Connector&gt; connectorLoader =</b>
+<i>92</i>&nbsp;            ServiceLoader.load(Connector.class, Connector.class.getClassLoader());
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;        Iterator&lt;Connector&gt; connectors = connectorLoader.iterator();
+<b class="nc"><i>95</i>&nbsp;</b>
+<b class="nc"><i>96</i>&nbsp;        while (connectors.hasNext()) {</b>
+<b class="nc"><i>97</i>&nbsp;            Connector connector;</b>
+<b class="nc"><i>98</i>&nbsp;</b>
+<b class="nc"><i>99</i>&nbsp;            try {</b>
+<b class="nc"><i>100</i>&nbsp;                connector = connectors.next();</b>
+<b class="nc"><i>101</i>&nbsp;            } catch (ThreadDeath x) {</b>
+<b class="nc"><i>102</i>&nbsp;                throw x;</b>
+<b class="nc"><i>103</i>&nbsp;            } catch (Exception x) {</b>
+<b class="nc"><i>104</i>&nbsp;                System.err.println(x);</b>
+<i>105</i>&nbsp;                continue;
+<b class="nc"><i>106</i>&nbsp;            } catch (Error x) {</b>
+<b class="nc"><i>107</i>&nbsp;                System.err.println(x);</b>
+<i>108</i>&nbsp;                continue;
+<i>109</i>&nbsp;            }
+<i>110</i>&nbsp;
+<i>111</i>&nbsp;            addConnector(connector);
+<i>112</i>&nbsp;        }
+<b class="nc"><i>113</i>&nbsp;</b>
+<b class="nc"><i>114</i>&nbsp;        /*</b>
+<b class="nc"><i>115</i>&nbsp;         * Load any transport services and encapsulate them with</b>
+<i>116</i>&nbsp;         * an attaching and listening connector.
+<b class="nc"><i>117</i>&nbsp;         */</b>
+<b class="nc"><i>118</i>&nbsp;        ServiceLoader&lt;TransportService&gt; transportLoader =</b>
+<i>119</i>&nbsp;            ServiceLoader.load(TransportService.class,
+<b class="nc"><i>120</i>&nbsp;                               TransportService.class.getClassLoader());</b>
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;        Iterator&lt;TransportService&gt; transportServices =
+<i>123</i>&nbsp;            transportLoader.iterator();
+<b class="nc"><i>124</i>&nbsp;</b>
+<b class="nc"><i>125</i>&nbsp;        while (transportServices.hasNext()) {</b>
+<b class="nc"><i>126</i>&nbsp;            TransportService transportService;</b>
+<b class="nc"><i>127</i>&nbsp;</b>
+<b class="nc"><i>128</i>&nbsp;            try {</b>
+<b class="nc"><i>129</i>&nbsp;                transportService = transportServices.next();</b>
+<b class="nc"><i>130</i>&nbsp;            } catch (ThreadDeath x) {</b>
+<b class="nc"><i>131</i>&nbsp;                throw x;</b>
+<b class="nc"><i>132</i>&nbsp;            } catch (Exception x) {</b>
+<b class="nc"><i>133</i>&nbsp;                System.err.println(x);</b>
+<i>134</i>&nbsp;                continue;
+<b class="nc"><i>135</i>&nbsp;            } catch (Error x) {</b>
+<b class="nc"><i>136</i>&nbsp;                System.err.println(x);</b>
+<b class="nc"><i>137</i>&nbsp;                continue;</b>
+<i>138</i>&nbsp;            }
+<i>139</i>&nbsp;
+<b class="nc"><i>140</i>&nbsp;            addConnector(GenericAttachingConnector.create(transportService));</b>
+<b class="nc"><i>141</i>&nbsp;            addConnector(GenericListeningConnector.create(transportService));</b>
+<i>142</i>&nbsp;        }
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;        // no connectors found
+<i>145</i>&nbsp;        if (allConnectors().size() == 0) {
+<i>146</i>&nbsp;            throw new Error(&quot;no Connectors loaded&quot;);
+<i>147</i>&nbsp;        }
+<i>148</i>&nbsp;
+<b class="nc"><i>149</i>&nbsp;        // Set the default launcher. In order to be compatible</b>
+<b class="nc"><i>150</i>&nbsp;        // 1.2/1.3/1.4 we try to make the default launcher</b>
+<b class="nc"><i>151</i>&nbsp;        // &quot;com.sun.jdi.CommandLineLaunch&quot;. If this connector</b>
+<b class="nc"><i>152</i>&nbsp;        // isn&#39;t found then we arbitarly pick the first connector.</b>
+<b class="nc"><i>153</i>&nbsp;        //</b>
+<b class="nc"><i>154</i>&nbsp;        boolean found = false;</b>
+<b class="nc"><i>155</i>&nbsp;        List&lt;LaunchingConnector&gt; launchers = launchingConnectors();</b>
+<i>156</i>&nbsp;        for (LaunchingConnector lc: launchers) {
+<b class="nc"><i>157</i>&nbsp;            if (lc.name().equals(&quot;com.sun.jdi.CommandLineLaunch&quot;)) {</b>
+<b class="nc"><i>158</i>&nbsp;                setDefaultConnector(lc);</b>
+<b class="nc"><i>159</i>&nbsp;                found = true;</b>
+<i>160</i>&nbsp;                break;
+<i>161</i>&nbsp;            }
+<i>162</i>&nbsp;        }
+<i>163</i>&nbsp;        if (!found &amp;&amp; launchers.size() &gt; 0) {
+<i>164</i>&nbsp;            setDefaultConnector(launchers.get(0));
+<b class="nc"><i>165</i>&nbsp;        }</b>
+<b class="nc"><i>166</i>&nbsp;    }</b>
+<i>167</i>&nbsp;
+<b class="nc"><i>168</i>&nbsp;    public LaunchingConnector defaultConnector() {</b>
+<i>169</i>&nbsp;        if (defaultConnector == null) {
+<i>170</i>&nbsp;            throw new Error(&quot;no default LaunchingConnector&quot;);
+<i>171</i>&nbsp;        }
+<b class="nc"><i>172</i>&nbsp;        return defaultConnector;</b>
+<i>173</i>&nbsp;    }
+<i>174</i>&nbsp;
+<i>175</i>&nbsp;    public void setDefaultConnector(LaunchingConnector connector) {
+<b class="nc"><i>176</i>&nbsp;        defaultConnector = connector;</b>
+<b class="nc"><i>177</i>&nbsp;    }</b>
+<b class="nc"><i>178</i>&nbsp;</b>
+<b class="nc"><i>179</i>&nbsp;    public List&lt;LaunchingConnector&gt; launchingConnectors() {</b>
+<i>180</i>&nbsp;        List&lt;LaunchingConnector&gt; launchingConnectors = new ArrayList&lt;&gt;(connectors.size());
+<b class="nc"><i>181</i>&nbsp;        for (Connector connector: connectors) {</b>
+<b class="nc"><i>182</i>&nbsp;            if (connector instanceof LaunchingConnector) {</b>
+<i>183</i>&nbsp;                launchingConnectors.add((LaunchingConnector)connector);
+<i>184</i>&nbsp;            }
+<i>185</i>&nbsp;        }
+<b class="nc"><i>186</i>&nbsp;        return Collections.unmodifiableList(launchingConnectors);</b>
+<b class="nc"><i>187</i>&nbsp;    }</b>
+<b class="nc"><i>188</i>&nbsp;</b>
+<b class="nc"><i>189</i>&nbsp;    public List&lt;AttachingConnector&gt; attachingConnectors() {</b>
+<i>190</i>&nbsp;        List&lt;AttachingConnector&gt; attachingConnectors = new ArrayList&lt;&gt;(connectors.size());
+<b class="nc"><i>191</i>&nbsp;        for (Connector connector: connectors) {</b>
+<b class="nc"><i>192</i>&nbsp;            if (connector instanceof AttachingConnector) {</b>
+<i>193</i>&nbsp;                attachingConnectors.add((AttachingConnector)connector);
+<i>194</i>&nbsp;            }
+<i>195</i>&nbsp;        }
+<b class="nc"><i>196</i>&nbsp;        return Collections.unmodifiableList(attachingConnectors);</b>
+<b class="nc"><i>197</i>&nbsp;    }</b>
+<b class="nc"><i>198</i>&nbsp;</b>
+<b class="nc"><i>199</i>&nbsp;    public List&lt;ListeningConnector&gt; listeningConnectors() {</b>
+<i>200</i>&nbsp;        List&lt;ListeningConnector&gt; listeningConnectors = new ArrayList&lt;&gt;(connectors.size());
+<b class="nc"><i>201</i>&nbsp;        for (Connector connector: connectors) {</b>
+<b class="nc"><i>202</i>&nbsp;            if (connector instanceof ListeningConnector) {</b>
+<i>203</i>&nbsp;                listeningConnectors.add((ListeningConnector)connector);
+<i>204</i>&nbsp;            }
+<i>205</i>&nbsp;        }
+<b class="nc"><i>206</i>&nbsp;        return Collections.unmodifiableList(listeningConnectors);</b>
+<i>207</i>&nbsp;    }
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    public List&lt;Connector&gt; allConnectors() {
+<b class="nc"><i>210</i>&nbsp;        return Collections.unmodifiableList(connectors);</b>
+<i>211</i>&nbsp;    }
+<i>212</i>&nbsp;
+<i>213</i>&nbsp;    public List&lt;VirtualMachine&gt; connectedVirtualMachines() {
+<b class="nc"><i>214</i>&nbsp;        return Collections.unmodifiableList(targets);</b>
+<i>215</i>&nbsp;    }
+<i>216</i>&nbsp;
+<i>217</i>&nbsp;    public void addConnector(Connector connector) {
+<b class="nc"><i>218</i>&nbsp;        connectors.add(connector);</b>
+<i>219</i>&nbsp;    }
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;    public void removeConnector(Connector connector) {
+<i>222</i>&nbsp;        connectors.remove(connector);
+<i>223</i>&nbsp;    }
+<i>224</i>&nbsp;
+<b class="nc"><i>225</i>&nbsp;    public synchronized VirtualMachine createVirtualMachine(</b>
+<b class="nc"><i>226</i>&nbsp;                                        Connection connection,</b>
+<i>227</i>&nbsp;                                        Process process) throws IOException {
+<i>228</i>&nbsp;
+<i>229</i>&nbsp;        if (!connection.isOpen()) {
+<i>230</i>&nbsp;            throw new IllegalStateException(&quot;connection is not open&quot;);
+<b class="nc"><i>231</i>&nbsp;        }</b>
+<i>232</i>&nbsp;
+<b class="nc"><i>233</i>&nbsp;        VirtualMachine vm;</b>
+<b class="nc"><i>234</i>&nbsp;        try {</b>
+<b class="nc"><i>235</i>&nbsp;            vm = new VirtualMachineImpl(this, connection, process,</b>
+<b class="nc"><i>236</i>&nbsp;                                                   ++vmSequenceNumber);</b>
+<b class="nc"><i>237</i>&nbsp;        } catch (VMDisconnectedException e) {</b>
+<i>238</i>&nbsp;            throw new IOException(e.getMessage());
+<i>239</i>&nbsp;        }
+<i>240</i>&nbsp;        targets.add(vm);
+<b class="nc"><i>241</i>&nbsp;        return vm;</b>
+<i>242</i>&nbsp;    }
+<i>243</i>&nbsp;
+<i>244</i>&nbsp;    public VirtualMachine createVirtualMachine(Connection connection) throws IOException {
+<b class="nc"><i>245</i>&nbsp;        return createVirtualMachine(connection, null);</b>
+<i>246</i>&nbsp;    }
+<i>247</i>&nbsp;
+<i>248</i>&nbsp;    public void addVirtualMachine(VirtualMachine vm) {
+<b class="nc"><i>249</i>&nbsp;        targets.add(vm);</b>
+<i>250</i>&nbsp;    }
+<i>251</i>&nbsp;
+<i>252</i>&nbsp;    void disposeVirtualMachine(VirtualMachine vm) {
+<b class="nc"><i>253</i>&nbsp;        targets.remove(vm);</b>
+<i>254</i>&nbsp;    }
+<i>255</i>&nbsp;
+<i>256</i>&nbsp;    public int majorInterfaceVersion() {
+<b class="nc"><i>257</i>&nbsp;        return majorVersion;</b>
+<i>258</i>&nbsp;    }
+<i>259</i>&nbsp;
+<i>260</i>&nbsp;    public int minorInterfaceVersion() {
+<b class="nc"><i>261</i>&nbsp;        return minorVersion;</b>
+<i>262</i>&nbsp;    }
+<i>263</i>&nbsp;
+<i>264</i>&nbsp;    ThreadGroup mainGroupForJDI() {
+<b class="nc"><i>265</i>&nbsp;        return mainGroupForJDI;</b>
+<b class="nc"><i>266</i>&nbsp;    }</b>
+<i>267</i>&nbsp;
+<b class="nc"><i>268</i>&nbsp;    String getString(String key) {</b>
+<i>269</i>&nbsp;        if (messages == null) {
+<i>270</i>&nbsp;            messages = ResourceBundle.getBundle(&quot;com.sun.tools.jdi.resources.jdi&quot;);
+<i>271</i>&nbsp;        }
+<i>272</i>&nbsp;        return messages.getString(key);
+<i>273</i>&nbsp;    }
+<i>274</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

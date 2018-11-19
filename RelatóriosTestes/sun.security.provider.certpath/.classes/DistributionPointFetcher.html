@@ -1,0 +1,876 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: DistributionPointFetcher</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.provider.certpath</a> ]
+</div>
+
+<h1>Coverage Summary for Class: DistributionPointFetcher (sun.security.provider.certpath)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">DistributionPointFetcher</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 11)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 351)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2002, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.provider.certpath;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.*;
+<i>29</i>&nbsp;import java.net.URI;
+<i>30</i>&nbsp;import java.security.*;
+<i>31</i>&nbsp;import java.security.cert.*;
+<i>32</i>&nbsp;import javax.security.auth.x500.X500Principal;
+<i>33</i>&nbsp;import java.util.*;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;import sun.security.util.Debug;
+<i>36</i>&nbsp;import sun.security.validator.Validator;
+<i>37</i>&nbsp;import static sun.security.x509.PKIXExtensions.*;
+<i>38</i>&nbsp;import sun.security.x509.*;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;/**
+<i>41</i>&nbsp; * Class to obtain CRLs via the CRLDistributionPoints extension.
+<i>42</i>&nbsp; * Note that the functionality of this class must be explicitly enabled
+<i>43</i>&nbsp; * via a system property, see the USE_CRLDP variable below.
+<i>44</i>&nbsp; *
+<i>45</i>&nbsp; * This class uses the URICertStore class to fetch CRLs. The URICertStore
+<i>46</i>&nbsp; * class also implements CRL caching: see the class description for more
+<i>47</i>&nbsp; * information.
+<i>48</i>&nbsp; *
+<i>49</i>&nbsp; * @author Andreas Sterbenz
+<i>50</i>&nbsp; * @author Sean Mullan
+<i>51</i>&nbsp; * @since 1.4.2
+<i>52</i>&nbsp; */
+<i>53</i>&nbsp;public class DistributionPointFetcher {
+<i>54</i>&nbsp;
+<b class="nc"><i>55</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;certpath&quot;);</b>
+<i>56</i>&nbsp;
+<b class="nc"><i>57</i>&nbsp;    private static final boolean[] ALL_REASONS =</b>
+<i>58</i>&nbsp;        {true, true, true, true, true, true, true, true, true};
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    /**
+<i>61</i>&nbsp;     * Private instantiation only.
+<i>62</i>&nbsp;     */
+<b class="nc"><i>63</i>&nbsp;    private DistributionPointFetcher() {}</b>
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    /**
+<i>66</i>&nbsp;     * Return the X509CRLs matching this selector. The selector must be
+<i>67</i>&nbsp;     * an X509CRLSelector with certificateChecking set.
+<i>68</i>&nbsp;     */
+<i>69</i>&nbsp;    public static Collection&lt;X509CRL&gt; getCRLs(X509CRLSelector selector,
+<i>70</i>&nbsp;            boolean signFlag, PublicKey prevKey, String provider,
+<i>71</i>&nbsp;            List&lt;CertStore&gt; certStores, boolean[] reasonsMask,
+<i>72</i>&nbsp;            Set&lt;TrustAnchor&gt; trustAnchors, Date validity, String variant)
+<i>73</i>&nbsp;            throws CertStoreException
+<i>74</i>&nbsp;    {
+<b class="nc"><i>75</i>&nbsp;        return getCRLs(selector, signFlag, prevKey, null, provider, certStores,</b>
+<i>76</i>&nbsp;                reasonsMask, trustAnchors, validity, variant);
+<i>77</i>&nbsp;    }
+<i>78</i>&nbsp;    /**
+<i>79</i>&nbsp;     * Return the X509CRLs matching this selector. The selector must be
+<i>80</i>&nbsp;     * an X509CRLSelector with certificateChecking set.
+<i>81</i>&nbsp;     */
+<i>82</i>&nbsp;    // Called by com.sun.deploy.security.RevocationChecker
+<i>83</i>&nbsp;    public static Collection&lt;X509CRL&gt; getCRLs(X509CRLSelector selector,
+<i>84</i>&nbsp;                                              boolean signFlag,
+<i>85</i>&nbsp;                                              PublicKey prevKey,
+<i>86</i>&nbsp;                                              String provider,
+<i>87</i>&nbsp;                                              List&lt;CertStore&gt; certStores,
+<i>88</i>&nbsp;                                              boolean[] reasonsMask,
+<i>89</i>&nbsp;                                              Set&lt;TrustAnchor&gt; trustAnchors,
+<i>90</i>&nbsp;                                              Date validity)
+<i>91</i>&nbsp;        throws CertStoreException
+<i>92</i>&nbsp;    {
+<b class="nc"><i>93</i>&nbsp;        return getCRLs(selector, signFlag, prevKey, null, provider, certStores,</b>
+<i>94</i>&nbsp;                reasonsMask, trustAnchors, validity, Validator.VAR_GENERIC);
+<i>95</i>&nbsp;    }
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    /**
+<i>98</i>&nbsp;     * Return the X509CRLs matching this selector. The selector must be
+<i>99</i>&nbsp;     * an X509CRLSelector with certificateChecking set.
+<i>100</i>&nbsp;     */
+<i>101</i>&nbsp;    public static Collection&lt;X509CRL&gt; getCRLs(X509CRLSelector selector,
+<i>102</i>&nbsp;                                              boolean signFlag,
+<i>103</i>&nbsp;                                              PublicKey prevKey,
+<i>104</i>&nbsp;                                              X509Certificate prevCert,
+<i>105</i>&nbsp;                                              String provider,
+<i>106</i>&nbsp;                                              List&lt;CertStore&gt; certStores,
+<i>107</i>&nbsp;                                              boolean[] reasonsMask,
+<i>108</i>&nbsp;                                              Set&lt;TrustAnchor&gt; trustAnchors,
+<i>109</i>&nbsp;                                              Date validity,
+<i>110</i>&nbsp;                                              String variant)
+<i>111</i>&nbsp;        throws CertStoreException
+<i>112</i>&nbsp;    {
+<b class="nc"><i>113</i>&nbsp;        X509Certificate cert = selector.getCertificateChecking();</b>
+<b class="nc"><i>114</i>&nbsp;        if (cert == null) {</b>
+<b class="nc"><i>115</i>&nbsp;            return Collections.emptySet();</b>
+<i>116</i>&nbsp;        }
+<i>117</i>&nbsp;        try {
+<b class="nc"><i>118</i>&nbsp;            X509CertImpl certImpl = X509CertImpl.toImpl(cert);</b>
+<b class="nc"><i>119</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>120</i>&nbsp;                debug.println(&quot;DistributionPointFetcher.getCRLs: Checking &quot;</b>
+<b class="nc"><i>121</i>&nbsp;                        + &quot;CRLDPs for &quot; + certImpl.getSubjectX500Principal());</b>
+<i>122</i>&nbsp;            }
+<b class="nc"><i>123</i>&nbsp;            CRLDistributionPointsExtension ext =</b>
+<b class="nc"><i>124</i>&nbsp;                certImpl.getCRLDistributionPointsExtension();</b>
+<b class="nc"><i>125</i>&nbsp;            if (ext == null) {</b>
+<b class="nc"><i>126</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>127</i>&nbsp;                    debug.println(&quot;No CRLDP ext&quot;);</b>
+<i>128</i>&nbsp;                }
+<b class="nc"><i>129</i>&nbsp;                return Collections.emptySet();</b>
+<i>130</i>&nbsp;            }
+<b class="nc"><i>131</i>&nbsp;            List&lt;DistributionPoint&gt; points =</b>
+<b class="nc"><i>132</i>&nbsp;                    ext.get(CRLDistributionPointsExtension.POINTS);</b>
+<b class="nc"><i>133</i>&nbsp;            Set&lt;X509CRL&gt; results = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>134</i>&nbsp;            for (Iterator&lt;DistributionPoint&gt; t = points.iterator();</b>
+<b class="nc"><i>135</i>&nbsp;                 t.hasNext() &amp;&amp; !Arrays.equals(reasonsMask, ALL_REASONS); ) {</b>
+<b class="nc"><i>136</i>&nbsp;                DistributionPoint point = t.next();</b>
+<b class="nc"><i>137</i>&nbsp;                Collection&lt;X509CRL&gt; crls = getCRLs(selector, certImpl,</b>
+<i>138</i>&nbsp;                    point, reasonsMask, signFlag, prevKey, prevCert, provider,
+<i>139</i>&nbsp;                    certStores, trustAnchors, validity, variant);
+<b class="nc"><i>140</i>&nbsp;                results.addAll(crls);</b>
+<b class="nc"><i>141</i>&nbsp;            }</b>
+<b class="nc"><i>142</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>143</i>&nbsp;                debug.println(&quot;Returning &quot; + results.size() + &quot; CRLs&quot;);</b>
+<i>144</i>&nbsp;            }
+<b class="nc"><i>145</i>&nbsp;            return results;</b>
+<b class="nc"><i>146</i>&nbsp;        } catch (CertificateException | IOException e) {</b>
+<b class="nc"><i>147</i>&nbsp;            return Collections.emptySet();</b>
+<i>148</i>&nbsp;        }
+<i>149</i>&nbsp;    }
+<i>150</i>&nbsp;
+<i>151</i>&nbsp;    /**
+<i>152</i>&nbsp;     * Download CRLs from the given distribution point, verify and return them.
+<i>153</i>&nbsp;     * See the top of the class for current limitations.
+<i>154</i>&nbsp;     *
+<i>155</i>&nbsp;     * @throws CertStoreException if there is an error retrieving the CRLs
+<i>156</i>&nbsp;     *         from one of the GeneralNames and no other CRLs are retrieved from
+<i>157</i>&nbsp;     *         the other GeneralNames. If more than one GeneralName throws an
+<i>158</i>&nbsp;     *         exception then the one from the last GeneralName is thrown.
+<i>159</i>&nbsp;     */
+<i>160</i>&nbsp;    private static Collection&lt;X509CRL&gt; getCRLs(X509CRLSelector selector,
+<i>161</i>&nbsp;        X509CertImpl certImpl, DistributionPoint point, boolean[] reasonsMask,
+<i>162</i>&nbsp;        boolean signFlag, PublicKey prevKey, X509Certificate prevCert,
+<i>163</i>&nbsp;        String provider, List&lt;CertStore&gt; certStores,
+<i>164</i>&nbsp;        Set&lt;TrustAnchor&gt; trustAnchors, Date validity, String variant)
+<i>165</i>&nbsp;            throws CertStoreException {
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;        // check for full name
+<b class="nc"><i>168</i>&nbsp;        GeneralNames fullName = point.getFullName();</b>
+<b class="nc"><i>169</i>&nbsp;        if (fullName == null) {</b>
+<i>170</i>&nbsp;            // check for relative name
+<b class="nc"><i>171</i>&nbsp;            RDN relativeName = point.getRelativeName();</b>
+<b class="nc"><i>172</i>&nbsp;            if (relativeName == null) {</b>
+<b class="nc"><i>173</i>&nbsp;                return Collections.emptySet();</b>
+<i>174</i>&nbsp;            }
+<i>175</i>&nbsp;            try {
+<b class="nc"><i>176</i>&nbsp;                GeneralNames crlIssuers = point.getCRLIssuer();</b>
+<b class="nc"><i>177</i>&nbsp;                if (crlIssuers == null) {</b>
+<b class="nc"><i>178</i>&nbsp;                    fullName = getFullNames</b>
+<b class="nc"><i>179</i>&nbsp;                        ((X500Name) certImpl.getIssuerDN(), relativeName);</b>
+<i>180</i>&nbsp;                } else {
+<i>181</i>&nbsp;                    // should only be one CRL Issuer
+<b class="nc"><i>182</i>&nbsp;                    if (crlIssuers.size() != 1) {</b>
+<b class="nc"><i>183</i>&nbsp;                        return Collections.emptySet();</b>
+<i>184</i>&nbsp;                    } else {
+<b class="nc"><i>185</i>&nbsp;                        fullName = getFullNames</b>
+<b class="nc"><i>186</i>&nbsp;                            ((X500Name) crlIssuers.get(0).getName(), relativeName);</b>
+<i>187</i>&nbsp;                    }
+<i>188</i>&nbsp;                }
+<b class="nc"><i>189</i>&nbsp;            } catch (IOException ioe) {</b>
+<b class="nc"><i>190</i>&nbsp;                return Collections.emptySet();</b>
+<b class="nc"><i>191</i>&nbsp;            }</b>
+<i>192</i>&nbsp;        }
+<b class="nc"><i>193</i>&nbsp;        Collection&lt;X509CRL&gt; possibleCRLs = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>194</i>&nbsp;        CertStoreException savedCSE = null;</b>
+<b class="nc"><i>195</i>&nbsp;        for (Iterator&lt;GeneralName&gt; t = fullName.iterator(); t.hasNext(); ) {</b>
+<i>196</i>&nbsp;            try {
+<b class="nc"><i>197</i>&nbsp;                GeneralName name = t.next();</b>
+<b class="nc"><i>198</i>&nbsp;                if (name.getType() == GeneralNameInterface.NAME_DIRECTORY) {</b>
+<b class="nc"><i>199</i>&nbsp;                    X500Name x500Name = (X500Name) name.getName();</b>
+<b class="nc"><i>200</i>&nbsp;                    possibleCRLs.addAll(</b>
+<b class="nc"><i>201</i>&nbsp;                        getCRLs(x500Name, certImpl.getIssuerX500Principal(),</b>
+<i>202</i>&nbsp;                                certStores));
+<b class="nc"><i>203</i>&nbsp;                } else if (name.getType() == GeneralNameInterface.NAME_URI) {</b>
+<b class="nc"><i>204</i>&nbsp;                    URIName uriName = (URIName)name.getName();</b>
+<b class="nc"><i>205</i>&nbsp;                    X509CRL crl = getCRL(uriName);</b>
+<b class="nc"><i>206</i>&nbsp;                    if (crl != null) {</b>
+<b class="nc"><i>207</i>&nbsp;                        possibleCRLs.add(crl);</b>
+<i>208</i>&nbsp;                    }
+<i>209</i>&nbsp;                }
+<b class="nc"><i>210</i>&nbsp;            } catch (CertStoreException cse) {</b>
+<b class="nc"><i>211</i>&nbsp;                savedCSE = cse;</b>
+<b class="nc"><i>212</i>&nbsp;            }</b>
+<i>213</i>&nbsp;        }
+<i>214</i>&nbsp;        // only throw CertStoreException if no CRLs are retrieved
+<b class="nc"><i>215</i>&nbsp;        if (possibleCRLs.isEmpty() &amp;&amp; savedCSE != null) {</b>
+<b class="nc"><i>216</i>&nbsp;            throw savedCSE;</b>
+<i>217</i>&nbsp;        }
+<i>218</i>&nbsp;
+<b class="nc"><i>219</i>&nbsp;        Collection&lt;X509CRL&gt; crls = new ArrayList&lt;&gt;(2);</b>
+<b class="nc"><i>220</i>&nbsp;        for (X509CRL crl : possibleCRLs) {</b>
+<i>221</i>&nbsp;            try {
+<i>222</i>&nbsp;                // make sure issuer is not set
+<i>223</i>&nbsp;                // we check the issuer in verifyCRLs method
+<b class="nc"><i>224</i>&nbsp;                selector.setIssuerNames(null);</b>
+<b class="nc"><i>225</i>&nbsp;                if (selector.match(crl) &amp;&amp; verifyCRL(certImpl, point, crl,</b>
+<i>226</i>&nbsp;                        reasonsMask, signFlag, prevKey, prevCert, provider,
+<i>227</i>&nbsp;                        trustAnchors, certStores, validity, variant)) {
+<b class="nc"><i>228</i>&nbsp;                    crls.add(crl);</b>
+<i>229</i>&nbsp;                }
+<b class="nc"><i>230</i>&nbsp;            } catch (IOException | CRLException e) {</b>
+<i>231</i>&nbsp;                // don&#39;t add the CRL
+<b class="nc"><i>232</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>233</i>&nbsp;                    debug.println(&quot;Exception verifying CRL: &quot; + e.getMessage());</b>
+<b class="nc"><i>234</i>&nbsp;                    e.printStackTrace();</b>
+<i>235</i>&nbsp;                }
+<b class="nc"><i>236</i>&nbsp;            }</b>
+<b class="nc"><i>237</i>&nbsp;        }</b>
+<b class="nc"><i>238</i>&nbsp;        return crls;</b>
+<i>239</i>&nbsp;    }
+<i>240</i>&nbsp;
+<i>241</i>&nbsp;    /**
+<i>242</i>&nbsp;     * Download CRL from given URI.
+<i>243</i>&nbsp;     */
+<i>244</i>&nbsp;    private static X509CRL getCRL(URIName name) throws CertStoreException {
+<b class="nc"><i>245</i>&nbsp;        URI uri = name.getURI();</b>
+<b class="nc"><i>246</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>247</i>&nbsp;            debug.println(&quot;Trying to fetch CRL from DP &quot; + uri);</b>
+<i>248</i>&nbsp;        }
+<b class="nc"><i>249</i>&nbsp;        CertStore ucs = null;</b>
+<i>250</i>&nbsp;        try {
+<b class="nc"><i>251</i>&nbsp;            ucs = URICertStore.getInstance(new URICertStoreParameters(uri));</b>
+<b class="nc"><i>252</i>&nbsp;        } catch (InvalidAlgorithmParameterException |</b>
+<b class="nc"><i>253</i>&nbsp;                 NoSuchAlgorithmException e) {</b>
+<i>254</i>&nbsp;            if (debug != null) {
+<b class="nc"><i>255</i>&nbsp;                debug.println(&quot;Can&#39;t create URICertStore: &quot; + e.getMessage());</b>
+<b class="nc"><i>256</i>&nbsp;            }</b>
+<i>257</i>&nbsp;            return null;
+<b class="nc"><i>258</i>&nbsp;        }</b>
+<b class="nc"><i>259</i>&nbsp;</b>
+<i>260</i>&nbsp;        Collection&lt;? extends CRL&gt; crls = ucs.getCRLs(null);
+<b class="nc"><i>261</i>&nbsp;        if (crls.isEmpty()) {</b>
+<b class="nc"><i>262</i>&nbsp;            return null;</b>
+<b class="nc"><i>263</i>&nbsp;        } else {</b>
+<i>264</i>&nbsp;            return (X509CRL) crls.iterator().next();
+<b class="nc"><i>265</i>&nbsp;        }</b>
+<i>266</i>&nbsp;    }
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;    /**
+<i>269</i>&nbsp;     * Fetch CRLs from certStores.
+<i>270</i>&nbsp;     *
+<i>271</i>&nbsp;     * @throws CertStoreException if there is an error retrieving the CRLs from
+<i>272</i>&nbsp;     *         one of the CertStores and no other CRLs are retrieved from
+<i>273</i>&nbsp;     *         the other CertStores. If more than one CertStore throws an
+<i>274</i>&nbsp;     *         exception then the one from the last CertStore is thrown.
+<i>275</i>&nbsp;     */
+<i>276</i>&nbsp;    private static Collection&lt;X509CRL&gt; getCRLs(X500Name name,
+<i>277</i>&nbsp;                                               X500Principal certIssuer,
+<i>278</i>&nbsp;                                               List&lt;CertStore&gt; certStores)
+<i>279</i>&nbsp;        throws CertStoreException
+<i>280</i>&nbsp;    {
+<i>281</i>&nbsp;        if (debug != null) {
+<b class="nc"><i>282</i>&nbsp;            debug.println(&quot;Trying to fetch CRL from DP &quot; + name);</b>
+<b class="nc"><i>283</i>&nbsp;        }</b>
+<i>284</i>&nbsp;        X509CRLSelector xcs = new X509CRLSelector();
+<b class="nc"><i>285</i>&nbsp;        xcs.addIssuer(name.asX500Principal());</b>
+<b class="nc"><i>286</i>&nbsp;        xcs.addIssuer(certIssuer);</b>
+<b class="nc"><i>287</i>&nbsp;        Collection&lt;X509CRL&gt; crls = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>288</i>&nbsp;        CertStoreException savedCSE = null;</b>
+<b class="nc"><i>289</i>&nbsp;        for (CertStore store : certStores) {</b>
+<b class="nc"><i>290</i>&nbsp;            try {</b>
+<i>291</i>&nbsp;                for (CRL crl : store.getCRLs(xcs)) {
+<b class="nc"><i>292</i>&nbsp;                    crls.add((X509CRL)crl);</b>
+<b class="nc"><i>293</i>&nbsp;                }</b>
+<b class="nc"><i>294</i>&nbsp;            } catch (CertStoreException cse) {</b>
+<b class="nc"><i>295</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>296</i>&nbsp;                    debug.println(&quot;Exception while retrieving &quot; +</b>
+<b class="nc"><i>297</i>&nbsp;                        &quot;CRLs: &quot; + cse);</b>
+<i>298</i>&nbsp;                    cse.printStackTrace();
+<b class="nc"><i>299</i>&nbsp;                }</b>
+<i>300</i>&nbsp;                savedCSE = new PKIX.CertStoreTypeException(store.getType(),cse);
+<b class="nc"><i>301</i>&nbsp;            }</b>
+<b class="nc"><i>302</i>&nbsp;        }</b>
+<b class="nc"><i>303</i>&nbsp;        // only throw CertStoreException if no CRLs are retrieved</b>
+<i>304</i>&nbsp;        if (crls.isEmpty() &amp;&amp; savedCSE != null) {
+<b class="nc"><i>305</i>&nbsp;            throw savedCSE;</b>
+<b class="nc"><i>306</i>&nbsp;        } else {</b>
+<i>307</i>&nbsp;            return crls;
+<b class="nc"><i>308</i>&nbsp;        }</b>
+<i>309</i>&nbsp;    }
+<i>310</i>&nbsp;
+<i>311</i>&nbsp;    /**
+<i>312</i>&nbsp;     * Verifies a CRL for the given certificate&#39;s Distribution Point to
+<i>313</i>&nbsp;     * ensure it is appropriate for checking the revocation status.
+<i>314</i>&nbsp;     *
+<i>315</i>&nbsp;     * @param certImpl the certificate whose revocation status is being checked
+<i>316</i>&nbsp;     * @param point one of the distribution points of the certificate
+<i>317</i>&nbsp;     * @param crl the CRL
+<i>318</i>&nbsp;     * @param reasonsMask the interim reasons mask
+<i>319</i>&nbsp;     * @param signFlag true if prevKey can be used to verify the CRL
+<i>320</i>&nbsp;     * @param prevKey the public key that verifies the certificate&#39;s signature
+<i>321</i>&nbsp;     * @param prevCert the certificate whose public key verifies
+<i>322</i>&nbsp;     *        {@code certImpl}&#39;s signature
+<i>323</i>&nbsp;     * @param provider the Signature provider to use
+<i>324</i>&nbsp;     * @param trustAnchors a {@code Set} of {@code TrustAnchor}s
+<i>325</i>&nbsp;     * @param certStores a {@code List} of {@code CertStore}s to be used in
+<i>326</i>&nbsp;     *        finding certificates and CRLs
+<i>327</i>&nbsp;     * @param validity the time for which the validity of the CRL issuer&#39;s
+<i>328</i>&nbsp;     *        certification path should be determined
+<i>329</i>&nbsp;     * @return true if ok, false if not
+<i>330</i>&nbsp;     */
+<i>331</i>&nbsp;    static boolean verifyCRL(X509CertImpl certImpl, DistributionPoint point,
+<i>332</i>&nbsp;        X509CRL crl, boolean[] reasonsMask, boolean signFlag,
+<i>333</i>&nbsp;        PublicKey prevKey, X509Certificate prevCert, String provider,
+<i>334</i>&nbsp;        Set&lt;TrustAnchor&gt; trustAnchors, List&lt;CertStore&gt; certStores,
+<i>335</i>&nbsp;        Date validity, String variant) throws CRLException, IOException {
+<i>336</i>&nbsp;
+<i>337</i>&nbsp;        if (debug != null) {
+<b class="nc"><i>338</i>&nbsp;            debug.println(&quot;DistributionPointFetcher.verifyCRL: &quot; +</b>
+<b class="nc"><i>339</i>&nbsp;                &quot;checking revocation status for&quot; +</b>
+<i>340</i>&nbsp;                &quot;\n  SN: &quot; + Debug.toHexString(certImpl.getSerialNumber()) +
+<b class="nc"><i>341</i>&nbsp;                &quot;\n  Subject: &quot; + certImpl.getSubjectX500Principal() +</b>
+<b class="nc"><i>342</i>&nbsp;                &quot;\n  Issuer: &quot; + certImpl.getIssuerX500Principal());</b>
+<b class="nc"><i>343</i>&nbsp;        }</b>
+<i>344</i>&nbsp;
+<i>345</i>&nbsp;        boolean indirectCRL = false;
+<b class="nc"><i>346</i>&nbsp;        X509CRLImpl crlImpl = X509CRLImpl.toImpl(crl);</b>
+<b class="nc"><i>347</i>&nbsp;        IssuingDistributionPointExtension idpExt =</b>
+<b class="nc"><i>348</i>&nbsp;            crlImpl.getIssuingDistributionPointExtension();</b>
+<b class="nc"><i>349</i>&nbsp;        X500Name certIssuer = (X500Name) certImpl.getIssuerDN();</b>
+<b class="nc"><i>350</i>&nbsp;        X500Name crlIssuer = (X500Name) crlImpl.getIssuerDN();</b>
+<b class="nc"><i>351</i>&nbsp;</b>
+<i>352</i>&nbsp;        // if crlIssuer is set, verify that it matches the issuer of the
+<i>353</i>&nbsp;        // CRL and the CRL contains an IDP extension with the indirectCRL
+<i>354</i>&nbsp;        // boolean asserted. Otherwise, verify that the CRL issuer matches the
+<i>355</i>&nbsp;        // certificate issuer.
+<i>356</i>&nbsp;        GeneralNames pointCrlIssuers = point.getCRLIssuer();
+<b class="nc"><i>357</i>&nbsp;        X500Name pointCrlIssuer = null;</b>
+<b class="nc"><i>358</i>&nbsp;        if (pointCrlIssuers != null) {</b>
+<b class="nc"><i>359</i>&nbsp;            if (idpExt == null ||</b>
+<b class="nc"><i>360</i>&nbsp;                ((Boolean) idpExt.get</b>
+<i>361</i>&nbsp;                    (IssuingDistributionPointExtension.INDIRECT_CRL)).equals
+<b class="nc"><i>362</i>&nbsp;                        (Boolean.FALSE)) {</b>
+<b class="nc"><i>363</i>&nbsp;                return false;</b>
+<b class="nc"><i>364</i>&nbsp;            }</b>
+<i>365</i>&nbsp;            boolean match = false;
+<b class="nc"><i>366</i>&nbsp;            for (Iterator&lt;GeneralName&gt; t = pointCrlIssuers.iterator();</b>
+<b class="nc"><i>367</i>&nbsp;                 !match &amp;&amp; t.hasNext(); ) {</b>
+<b class="nc"><i>368</i>&nbsp;                GeneralNameInterface name = t.next().getName();</b>
+<b class="nc"><i>369</i>&nbsp;                if (crlIssuer.equals(name) == true) {</b>
+<b class="nc"><i>370</i>&nbsp;                    pointCrlIssuer = (X500Name) name;</b>
+<b class="nc"><i>371</i>&nbsp;                    match = true;</b>
+<b class="nc"><i>372</i>&nbsp;                }</b>
+<i>373</i>&nbsp;            }
+<b class="nc"><i>374</i>&nbsp;            if (match == false) {</b>
+<b class="nc"><i>375</i>&nbsp;                return false;</b>
+<b class="nc"><i>376</i>&nbsp;            }</b>
+<i>377</i>&nbsp;
+<i>378</i>&nbsp;            // we accept the case that a CRL issuer provide status
+<i>379</i>&nbsp;            // information for itself.
+<i>380</i>&nbsp;            if (issues(certImpl, crlImpl, provider)) {
+<b class="nc"><i>381</i>&nbsp;                // reset the public key used to verify the CRL&#39;s signature</b>
+<i>382</i>&nbsp;                prevKey = certImpl.getPublicKey();
+<b class="nc"><i>383</i>&nbsp;            } else {</b>
+<i>384</i>&nbsp;                indirectCRL = true;
+<b class="nc"><i>385</i>&nbsp;            }</b>
+<i>386</i>&nbsp;        } else if (crlIssuer.equals(certIssuer) == false) {
+<b class="nc"><i>387</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>388</i>&nbsp;                debug.println(&quot;crl issuer does not equal cert issuer.\n&quot; +</b>
+<b class="nc"><i>389</i>&nbsp;                              &quot;crl issuer: &quot; + crlIssuer + &quot;\n&quot; +</b>
+<i>390</i>&nbsp;                              &quot;cert issuer: &quot; + certIssuer);
+<i>391</i>&nbsp;            }
+<i>392</i>&nbsp;            return false;
+<b class="nc"><i>393</i>&nbsp;        } else {</b>
+<i>394</i>&nbsp;            // in case of self-issued indirect CRL issuer.
+<i>395</i>&nbsp;            KeyIdentifier certAKID = certImpl.getAuthKeyId();
+<b class="nc"><i>396</i>&nbsp;            KeyIdentifier crlAKID = crlImpl.getAuthKeyId();</b>
+<b class="nc"><i>397</i>&nbsp;</b>
+<i>398</i>&nbsp;            if (certAKID == null || crlAKID == null) {
+<b class="nc"><i>399</i>&nbsp;                // cannot recognize indirect CRL without AKID</b>
+<i>400</i>&nbsp;
+<i>401</i>&nbsp;                // we accept the case that a CRL issuer provide status
+<i>402</i>&nbsp;                // information for itself.
+<i>403</i>&nbsp;                if (issues(certImpl, crlImpl, provider)) {
+<b class="nc"><i>404</i>&nbsp;                    // reset the public key used to verify the CRL&#39;s signature</b>
+<i>405</i>&nbsp;                    prevKey = certImpl.getPublicKey();
+<b class="nc"><i>406</i>&nbsp;                }</b>
+<i>407</i>&nbsp;            } else if (!certAKID.equals(crlAKID)) {
+<b class="nc"><i>408</i>&nbsp;                // we accept the case that a CRL issuer provide status</b>
+<i>409</i>&nbsp;                // information for itself.
+<i>410</i>&nbsp;                if (issues(certImpl, crlImpl, provider)) {
+<b class="nc"><i>411</i>&nbsp;                    // reset the public key used to verify the CRL&#39;s signature</b>
+<i>412</i>&nbsp;                    prevKey = certImpl.getPublicKey();
+<b class="nc"><i>413</i>&nbsp;                } else {</b>
+<i>414</i>&nbsp;                    indirectCRL = true;
+<b class="nc"><i>415</i>&nbsp;                }</b>
+<i>416</i>&nbsp;            }
+<i>417</i>&nbsp;        }
+<i>418</i>&nbsp;
+<i>419</i>&nbsp;        if (!indirectCRL &amp;&amp; !signFlag) {
+<b class="nc"><i>420</i>&nbsp;            // cert&#39;s key cannot be used to verify the CRL</b>
+<i>421</i>&nbsp;            return false;
+<b class="nc"><i>422</i>&nbsp;        }</b>
+<i>423</i>&nbsp;
+<i>424</i>&nbsp;        if (idpExt != null) {
+<b class="nc"><i>425</i>&nbsp;            DistributionPointName idpPoint = (DistributionPointName)</b>
+<b class="nc"><i>426</i>&nbsp;                idpExt.get(IssuingDistributionPointExtension.POINT);</b>
+<b class="nc"><i>427</i>&nbsp;            if (idpPoint != null) {</b>
+<b class="nc"><i>428</i>&nbsp;                GeneralNames idpNames = idpPoint.getFullName();</b>
+<b class="nc"><i>429</i>&nbsp;                if (idpNames == null) {</b>
+<b class="nc"><i>430</i>&nbsp;                    RDN relativeName = idpPoint.getRelativeName();</b>
+<b class="nc"><i>431</i>&nbsp;                    if (relativeName == null) {</b>
+<b class="nc"><i>432</i>&nbsp;                        if (debug != null) {</b>
+<b class="nc"><i>433</i>&nbsp;                           debug.println(&quot;IDP must be relative or full DN&quot;);</b>
+<b class="nc"><i>434</i>&nbsp;                        }</b>
+<i>435</i>&nbsp;                        return false;
+<b class="nc"><i>436</i>&nbsp;                    }</b>
+<i>437</i>&nbsp;                    if (debug != null) {
+<b class="nc"><i>438</i>&nbsp;                        debug.println(&quot;IDP relativeName:&quot; + relativeName);</b>
+<b class="nc"><i>439</i>&nbsp;                    }</b>
+<i>440</i>&nbsp;                    idpNames = getFullNames(crlIssuer, relativeName);
+<b class="nc"><i>441</i>&nbsp;                }</b>
+<i>442</i>&nbsp;                // if the DP name is present in the IDP CRL extension and the
+<i>443</i>&nbsp;                // DP field is present in the DP, then verify that one of the
+<i>444</i>&nbsp;                // names in the IDP matches one of the names in the DP
+<i>445</i>&nbsp;                if (point.getFullName() != null ||
+<b class="nc"><i>446</i>&nbsp;                    point.getRelativeName() != null) {</b>
+<b class="nc"><i>447</i>&nbsp;                    GeneralNames pointNames = point.getFullName();</b>
+<b class="nc"><i>448</i>&nbsp;                    if (pointNames == null) {</b>
+<b class="nc"><i>449</i>&nbsp;                        RDN relativeName = point.getRelativeName();</b>
+<b class="nc"><i>450</i>&nbsp;                        if (relativeName == null) {</b>
+<b class="nc"><i>451</i>&nbsp;                            if (debug != null) {</b>
+<b class="nc"><i>452</i>&nbsp;                                debug.println(&quot;DP must be relative or full DN&quot;);</b>
+<b class="nc"><i>453</i>&nbsp;                            }</b>
+<i>454</i>&nbsp;                            return false;
+<b class="nc"><i>455</i>&nbsp;                        }</b>
+<i>456</i>&nbsp;                        if (debug != null) {
+<b class="nc"><i>457</i>&nbsp;                            debug.println(&quot;DP relativeName:&quot; + relativeName);</b>
+<b class="nc"><i>458</i>&nbsp;                        }</b>
+<i>459</i>&nbsp;                        if (indirectCRL) {
+<b class="nc"><i>460</i>&nbsp;                            if (pointCrlIssuers.size() != 1) {</b>
+<b class="nc"><i>461</i>&nbsp;                                // RFC 5280: there must be only 1 CRL issuer</b>
+<i>462</i>&nbsp;                                // name when relativeName is present
+<i>463</i>&nbsp;                                if (debug != null) {
+<b class="nc"><i>464</i>&nbsp;                                    debug.println(&quot;must only be one CRL &quot; +</b>
+<b class="nc"><i>465</i>&nbsp;                                        &quot;issuer when relative name present&quot;);</b>
+<i>466</i>&nbsp;                                }
+<i>467</i>&nbsp;                                return false;
+<b class="nc"><i>468</i>&nbsp;                            }</b>
+<i>469</i>&nbsp;                            pointNames = getFullNames
+<b class="nc"><i>470</i>&nbsp;                                (pointCrlIssuer, relativeName);</b>
+<b class="nc"><i>471</i>&nbsp;                        } else {</b>
+<i>472</i>&nbsp;                            pointNames = getFullNames(certIssuer, relativeName);
+<b class="nc"><i>473</i>&nbsp;                        }</b>
+<i>474</i>&nbsp;                    }
+<i>475</i>&nbsp;                    boolean match = false;
+<b class="nc"><i>476</i>&nbsp;                    for (Iterator&lt;GeneralName&gt; i = idpNames.iterator();</b>
+<b class="nc"><i>477</i>&nbsp;                         !match &amp;&amp; i.hasNext(); ) {</b>
+<b class="nc"><i>478</i>&nbsp;                        GeneralNameInterface idpName = i.next().getName();</b>
+<b class="nc"><i>479</i>&nbsp;                        if (debug != null) {</b>
+<b class="nc"><i>480</i>&nbsp;                            debug.println(&quot;idpName: &quot; + idpName);</b>
+<b class="nc"><i>481</i>&nbsp;                        }</b>
+<i>482</i>&nbsp;                        for (Iterator&lt;GeneralName&gt; p = pointNames.iterator();
+<b class="nc"><i>483</i>&nbsp;                             !match &amp;&amp; p.hasNext(); ) {</b>
+<b class="nc"><i>484</i>&nbsp;                            GeneralNameInterface pointName = p.next().getName();</b>
+<b class="nc"><i>485</i>&nbsp;                            if (debug != null) {</b>
+<b class="nc"><i>486</i>&nbsp;                                debug.println(&quot;pointName: &quot; + pointName);</b>
+<b class="nc"><i>487</i>&nbsp;                            }</b>
+<i>488</i>&nbsp;                            match = idpName.equals(pointName);
+<b class="nc"><i>489</i>&nbsp;                        }</b>
+<b class="nc"><i>490</i>&nbsp;                    }</b>
+<b class="nc"><i>491</i>&nbsp;                    if (!match) {</b>
+<b class="nc"><i>492</i>&nbsp;                        if (debug != null) {</b>
+<b class="nc"><i>493</i>&nbsp;                            debug.println(&quot;IDP name does not match DP name&quot;);</b>
+<b class="nc"><i>494</i>&nbsp;                        }</b>
+<i>495</i>&nbsp;                        return false;
+<b class="nc"><i>496</i>&nbsp;                    }</b>
+<i>497</i>&nbsp;                // if the DP name is present in the IDP CRL extension and the
+<i>498</i>&nbsp;                // DP field is absent from the DP, then verify that one of the
+<i>499</i>&nbsp;                // names in the IDP matches one of the names in the crlIssuer
+<i>500</i>&nbsp;                // field of the DP
+<i>501</i>&nbsp;                } else {
+<b class="nc"><i>502</i>&nbsp;                    // verify that one of the names in the IDP matches one of</b>
+<i>503</i>&nbsp;                    // the names in the cRLIssuer of the cert&#39;s DP
+<i>504</i>&nbsp;                    boolean match = false;
+<b class="nc"><i>505</i>&nbsp;                    for (Iterator&lt;GeneralName&gt; t = pointCrlIssuers.iterator();</b>
+<b class="nc"><i>506</i>&nbsp;                         !match &amp;&amp; t.hasNext(); ) {</b>
+<b class="nc"><i>507</i>&nbsp;                        GeneralNameInterface crlIssuerName = t.next().getName();</b>
+<b class="nc"><i>508</i>&nbsp;                        for (Iterator&lt;GeneralName&gt; i = idpNames.iterator();</b>
+<b class="nc"><i>509</i>&nbsp;                             !match &amp;&amp; i.hasNext(); ) {</b>
+<b class="nc"><i>510</i>&nbsp;                            GeneralNameInterface idpName = i.next().getName();</b>
+<b class="nc"><i>511</i>&nbsp;                            match = crlIssuerName.equals(idpName);</b>
+<b class="nc"><i>512</i>&nbsp;                        }</b>
+<b class="nc"><i>513</i>&nbsp;                    }</b>
+<b class="nc"><i>514</i>&nbsp;                    if (!match) {</b>
+<b class="nc"><i>515</i>&nbsp;                        return false;</b>
+<b class="nc"><i>516</i>&nbsp;                    }</b>
+<i>517</i>&nbsp;                }
+<i>518</i>&nbsp;            }
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;            // if the onlyContainsUserCerts boolean is asserted, verify that the
+<i>521</i>&nbsp;            // cert is not a CA cert
+<i>522</i>&nbsp;            Boolean b = (Boolean)
+<b class="nc"><i>523</i>&nbsp;                idpExt.get(IssuingDistributionPointExtension.ONLY_USER_CERTS);</b>
+<b class="nc"><i>524</i>&nbsp;            if (b.equals(Boolean.TRUE) &amp;&amp; certImpl.getBasicConstraints() != -1) {</b>
+<b class="nc"><i>525</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>526</i>&nbsp;                    debug.println(&quot;cert must be a EE cert&quot;);</b>
+<b class="nc"><i>527</i>&nbsp;                }</b>
+<i>528</i>&nbsp;                return false;
+<b class="nc"><i>529</i>&nbsp;            }</b>
+<i>530</i>&nbsp;
+<i>531</i>&nbsp;            // if the onlyContainsCACerts boolean is asserted, verify that the
+<i>532</i>&nbsp;            // cert is a CA cert
+<i>533</i>&nbsp;            b = (Boolean)
+<b class="nc"><i>534</i>&nbsp;                idpExt.get(IssuingDistributionPointExtension.ONLY_CA_CERTS);</b>
+<b class="nc"><i>535</i>&nbsp;            if (b.equals(Boolean.TRUE) &amp;&amp; certImpl.getBasicConstraints() == -1) {</b>
+<b class="nc"><i>536</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>537</i>&nbsp;                    debug.println(&quot;cert must be a CA cert&quot;);</b>
+<b class="nc"><i>538</i>&nbsp;                }</b>
+<i>539</i>&nbsp;                return false;
+<b class="nc"><i>540</i>&nbsp;            }</b>
+<i>541</i>&nbsp;
+<i>542</i>&nbsp;            // verify that the onlyContainsAttributeCerts boolean is not
+<i>543</i>&nbsp;            // asserted
+<i>544</i>&nbsp;            b = (Boolean) idpExt.get
+<b class="nc"><i>545</i>&nbsp;                (IssuingDistributionPointExtension.ONLY_ATTRIBUTE_CERTS);</b>
+<b class="nc"><i>546</i>&nbsp;            if (b.equals(Boolean.TRUE)) {</b>
+<b class="nc"><i>547</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>548</i>&nbsp;                    debug.println(&quot;cert must not be an AA cert&quot;);</b>
+<b class="nc"><i>549</i>&nbsp;                }</b>
+<i>550</i>&nbsp;                return false;
+<b class="nc"><i>551</i>&nbsp;            }</b>
+<i>552</i>&nbsp;        }
+<i>553</i>&nbsp;
+<i>554</i>&nbsp;        // compute interim reasons mask
+<i>555</i>&nbsp;        boolean[] interimReasonsMask = new boolean[9];
+<b class="nc"><i>556</i>&nbsp;        ReasonFlags reasons = null;</b>
+<b class="nc"><i>557</i>&nbsp;        if (idpExt != null) {</b>
+<b class="nc"><i>558</i>&nbsp;            reasons = (ReasonFlags)</b>
+<b class="nc"><i>559</i>&nbsp;                idpExt.get(IssuingDistributionPointExtension.REASONS);</b>
+<b class="nc"><i>560</i>&nbsp;        }</b>
+<i>561</i>&nbsp;
+<i>562</i>&nbsp;        boolean[] pointReasonFlags = point.getReasonFlags();
+<b class="nc"><i>563</i>&nbsp;        if (reasons != null) {</b>
+<b class="nc"><i>564</i>&nbsp;            if (pointReasonFlags != null) {</b>
+<b class="nc"><i>565</i>&nbsp;                // set interim reasons mask to the intersection of</b>
+<i>566</i>&nbsp;                // reasons in the DP and onlySomeReasons in the IDP
+<i>567</i>&nbsp;                boolean[] idpReasonFlags = reasons.getFlags();
+<b class="nc"><i>568</i>&nbsp;                for (int i = 0; i &lt; interimReasonsMask.length; i++) {</b>
+<b class="nc"><i>569</i>&nbsp;                    interimReasonsMask[i] =</b>
+<b class="nc"><i>570</i>&nbsp;                        (i &lt; idpReasonFlags.length &amp;&amp; idpReasonFlags[i]) &amp;&amp;</b>
+<i>571</i>&nbsp;                        (i &lt; pointReasonFlags.length &amp;&amp; pointReasonFlags[i]);
+<i>572</i>&nbsp;                }
+<i>573</i>&nbsp;            } else {
+<b class="nc"><i>574</i>&nbsp;                // set interim reasons mask to the value of</b>
+<i>575</i>&nbsp;                // onlySomeReasons in the IDP (and clone it since we may
+<i>576</i>&nbsp;                // modify it)
+<i>577</i>&nbsp;                interimReasonsMask = reasons.getFlags().clone();
+<b class="nc"><i>578</i>&nbsp;            }</b>
+<i>579</i>&nbsp;        } else if (idpExt == null || reasons == null) {
+<b class="nc"><i>580</i>&nbsp;            if (pointReasonFlags != null) {</b>
+<b class="nc"><i>581</i>&nbsp;                // set interim reasons mask to the value of DP reasons</b>
+<i>582</i>&nbsp;                interimReasonsMask = pointReasonFlags.clone();
+<b class="nc"><i>583</i>&nbsp;            } else {</b>
+<i>584</i>&nbsp;                // set interim reasons mask to the special value all-reasons
+<i>585</i>&nbsp;                Arrays.fill(interimReasonsMask, true);
+<b class="nc"><i>586</i>&nbsp;            }</b>
+<i>587</i>&nbsp;        }
+<i>588</i>&nbsp;
+<i>589</i>&nbsp;        // verify that interim reasons mask includes one or more reasons
+<i>590</i>&nbsp;        // not included in the reasons mask
+<i>591</i>&nbsp;        boolean oneOrMore = false;
+<b class="nc"><i>592</i>&nbsp;        for (int i = 0; i &lt; interimReasonsMask.length &amp;&amp; !oneOrMore; i++) {</b>
+<b class="nc"><i>593</i>&nbsp;            if (interimReasonsMask[i] &amp;&amp;</b>
+<b class="nc"><i>594</i>&nbsp;                    !(i &lt; reasonsMask.length &amp;&amp; reasonsMask[i]))</b>
+<i>595</i>&nbsp;            {
+<i>596</i>&nbsp;                oneOrMore = true;
+<b class="nc"><i>597</i>&nbsp;            }</b>
+<i>598</i>&nbsp;        }
+<i>599</i>&nbsp;        if (!oneOrMore) {
+<b class="nc"><i>600</i>&nbsp;            return false;</b>
+<b class="nc"><i>601</i>&nbsp;        }</b>
+<i>602</i>&nbsp;
+<i>603</i>&nbsp;        // Obtain and validate the certification path for the complete
+<i>604</i>&nbsp;        // CRL issuer (if indirect CRL). If a key usage extension is present
+<i>605</i>&nbsp;        // in the CRL issuer&#39;s certificate, verify that the cRLSign bit is set.
+<i>606</i>&nbsp;        if (indirectCRL) {
+<b class="nc"><i>607</i>&nbsp;            X509CertSelector certSel = new X509CertSelector();</b>
+<b class="nc"><i>608</i>&nbsp;            certSel.setSubject(crlIssuer.asX500Principal());</b>
+<b class="nc"><i>609</i>&nbsp;            boolean[] crlSign = {false,false,false,false,false,false,true};</b>
+<b class="nc"><i>610</i>&nbsp;            certSel.setKeyUsage(crlSign);</b>
+<b class="nc"><i>611</i>&nbsp;</b>
+<i>612</i>&nbsp;            // Currently by default, forward builder does not enable
+<i>613</i>&nbsp;            // subject/authority key identifier identifying for target
+<i>614</i>&nbsp;            // certificate, instead, it only compares the CRL issuer and
+<i>615</i>&nbsp;            // the target certificate subject. If the certificate of the
+<i>616</i>&nbsp;            // delegated CRL issuer is a self-issued certificate, the
+<i>617</i>&nbsp;            // builder is unable to find the proper CRL issuer by issuer
+<i>618</i>&nbsp;            // name only, there is a potential dead loop on finding the
+<i>619</i>&nbsp;            // proper issuer. It is of great help to narrow the target
+<i>620</i>&nbsp;            // scope down to aware of authority key identifiers in the
+<i>621</i>&nbsp;            // selector, for the purposes of breaking the dead loop.
+<i>622</i>&nbsp;            AuthorityKeyIdentifierExtension akidext =
+<b class="nc"><i>623</i>&nbsp;                                            crlImpl.getAuthKeyIdExtension();</b>
+<b class="nc"><i>624</i>&nbsp;            if (akidext != null) {</b>
+<b class="nc"><i>625</i>&nbsp;                byte[] kid = akidext.getEncodedKeyIdentifier();</b>
+<b class="nc"><i>626</i>&nbsp;                if (kid != null) {</b>
+<b class="nc"><i>627</i>&nbsp;                    certSel.setSubjectKeyIdentifier(kid);</b>
+<b class="nc"><i>628</i>&nbsp;                }</b>
+<i>629</i>&nbsp;
+<i>630</i>&nbsp;                SerialNumber asn = (SerialNumber)akidext.get(
+<b class="nc"><i>631</i>&nbsp;                        AuthorityKeyIdentifierExtension.SERIAL_NUMBER);</b>
+<i>632</i>&nbsp;                if (asn != null) {
+<b class="nc"><i>633</i>&nbsp;                    certSel.setSerialNumber(asn.getNumber());</b>
+<b class="nc"><i>634</i>&nbsp;                }</b>
+<i>635</i>&nbsp;                // the subject criterion will be set by builder automatically.
+<i>636</i>&nbsp;            }
+<i>637</i>&nbsp;
+<i>638</i>&nbsp;            // By now, we have validated the previous certificate, so we can
+<i>639</i>&nbsp;            // trust it during the validation of the CRL issuer.
+<i>640</i>&nbsp;            // In addition to the performance improvement, another benefit is to
+<i>641</i>&nbsp;            // break the dead loop while looking for the issuer back and forth
+<i>642</i>&nbsp;            // between the delegated self-issued certificate and its issuer.
+<i>643</i>&nbsp;            Set&lt;TrustAnchor&gt; newTrustAnchors = new HashSet&lt;&gt;(trustAnchors);
+<b class="nc"><i>644</i>&nbsp;</b>
+<i>645</i>&nbsp;            if (prevKey != null) {
+<b class="nc"><i>646</i>&nbsp;                // Add the previous certificate as a trust anchor.</b>
+<i>647</i>&nbsp;                // If prevCert is not null, we want to construct a TrustAnchor
+<i>648</i>&nbsp;                // using the cert object because when the certpath for the CRL
+<i>649</i>&nbsp;                // is built later, the CertSelector will make comparisons with
+<i>650</i>&nbsp;                // the TrustAnchor&#39;s trustedCert member rather than its pubKey.
+<i>651</i>&nbsp;                TrustAnchor temporary;
+<i>652</i>&nbsp;                if (prevCert != null) {
+<b class="nc"><i>653</i>&nbsp;                    temporary = new TrustAnchor(prevCert, null);</b>
+<b class="nc"><i>654</i>&nbsp;                } else {</b>
+<i>655</i>&nbsp;                    X500Principal principal = certImpl.getIssuerX500Principal();
+<b class="nc"><i>656</i>&nbsp;                    temporary = new TrustAnchor(principal, prevKey, null);</b>
+<b class="nc"><i>657</i>&nbsp;                }</b>
+<i>658</i>&nbsp;                newTrustAnchors.add(temporary);
+<b class="nc"><i>659</i>&nbsp;            }</b>
+<i>660</i>&nbsp;
+<i>661</i>&nbsp;            PKIXBuilderParameters params = null;
+<b class="nc"><i>662</i>&nbsp;            try {</b>
+<i>663</i>&nbsp;                params = new PKIXBuilderParameters(newTrustAnchors, certSel);
+<b class="nc"><i>664</i>&nbsp;            } catch (InvalidAlgorithmParameterException iape) {</b>
+<b class="nc"><i>665</i>&nbsp;                throw new CRLException(iape);</b>
+<b class="nc"><i>666</i>&nbsp;            }</b>
+<b class="nc"><i>667</i>&nbsp;            params.setCertStores(certStores);</b>
+<b class="nc"><i>668</i>&nbsp;            params.setSigProvider(provider);</b>
+<b class="nc"><i>669</i>&nbsp;            params.setDate(validity);</b>
+<b class="nc"><i>670</i>&nbsp;            try {</b>
+<i>671</i>&nbsp;                CertPathBuilder builder = CertPathBuilder.getInstance(&quot;PKIX&quot;);
+<b class="nc"><i>672</i>&nbsp;                PKIXCertPathBuilderResult result =</b>
+<b class="nc"><i>673</i>&nbsp;                    (PKIXCertPathBuilderResult) builder.build(params);</b>
+<b class="nc"><i>674</i>&nbsp;                prevKey = result.getPublicKey();</b>
+<b class="nc"><i>675</i>&nbsp;            } catch (GeneralSecurityException e) {</b>
+<b class="nc"><i>676</i>&nbsp;                throw new CRLException(e);</b>
+<b class="nc"><i>677</i>&nbsp;            }</b>
+<b class="nc"><i>678</i>&nbsp;        }</b>
+<i>679</i>&nbsp;
+<i>680</i>&nbsp;        // check the crl signature algorithm
+<i>681</i>&nbsp;        try {
+<i>682</i>&nbsp;            AlgorithmChecker.check(prevKey, crl, variant);
+<b class="nc"><i>683</i>&nbsp;        } catch (CertPathValidatorException cpve) {</b>
+<b class="nc"><i>684</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>685</i>&nbsp;                debug.println(&quot;CRL signature algorithm check failed: &quot; + cpve);</b>
+<b class="nc"><i>686</i>&nbsp;            }</b>
+<i>687</i>&nbsp;            return false;
+<b class="nc"><i>688</i>&nbsp;        }</b>
+<b class="nc"><i>689</i>&nbsp;</b>
+<i>690</i>&nbsp;        // validate the signature on the CRL
+<i>691</i>&nbsp;        try {
+<i>692</i>&nbsp;            crl.verify(prevKey, provider);
+<b class="nc"><i>693</i>&nbsp;        } catch (GeneralSecurityException e) {</b>
+<b class="nc"><i>694</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>695</i>&nbsp;                debug.println(&quot;CRL signature failed to verify&quot;);</b>
+<b class="nc"><i>696</i>&nbsp;            }</b>
+<i>697</i>&nbsp;            return false;
+<b class="nc"><i>698</i>&nbsp;        }</b>
+<b class="nc"><i>699</i>&nbsp;</b>
+<i>700</i>&nbsp;        // reject CRL if any unresolved critical extensions remain in the CRL.
+<i>701</i>&nbsp;        Set&lt;String&gt; unresCritExts = crl.getCriticalExtensionOIDs();
+<b class="nc"><i>702</i>&nbsp;        // remove any that we have processed</b>
+<i>703</i>&nbsp;        if (unresCritExts != null) {
+<b class="nc"><i>704</i>&nbsp;            unresCritExts.remove(IssuingDistributionPoint_Id.toString());</b>
+<b class="nc"><i>705</i>&nbsp;            if (!unresCritExts.isEmpty()) {</b>
+<b class="nc"><i>706</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>707</i>&nbsp;                    debug.println(&quot;Unrecognized critical extension(s) in CRL: &quot;</b>
+<b class="nc"><i>708</i>&nbsp;                        + unresCritExts);</b>
+<i>709</i>&nbsp;                    for (String ext : unresCritExts) {
+<b class="nc"><i>710</i>&nbsp;                        debug.println(ext);</b>
+<b class="nc"><i>711</i>&nbsp;                    }</b>
+<b class="nc"><i>712</i>&nbsp;                }</b>
+<i>713</i>&nbsp;                return false;
+<b class="nc"><i>714</i>&nbsp;            }</b>
+<i>715</i>&nbsp;        }
+<i>716</i>&nbsp;
+<i>717</i>&nbsp;        // update reasonsMask
+<i>718</i>&nbsp;        for (int i = 0; i &lt; reasonsMask.length; i++) {
+<b class="nc"><i>719</i>&nbsp;            reasonsMask[i] = reasonsMask[i] ||</b>
+<b class="nc"><i>720</i>&nbsp;                    (i &lt; interimReasonsMask.length &amp;&amp; interimReasonsMask[i]);</b>
+<i>721</i>&nbsp;        }
+<i>722</i>&nbsp;
+<i>723</i>&nbsp;        return true;
+<b class="nc"><i>724</i>&nbsp;    }</b>
+<i>725</i>&nbsp;
+<i>726</i>&nbsp;    /**
+<i>727</i>&nbsp;     * Append relative name to the issuer name and return a new
+<i>728</i>&nbsp;     * GeneralNames object.
+<i>729</i>&nbsp;     */
+<i>730</i>&nbsp;    private static GeneralNames getFullNames(X500Name issuer, RDN rdn)
+<i>731</i>&nbsp;        throws IOException
+<i>732</i>&nbsp;    {
+<i>733</i>&nbsp;        List&lt;RDN&gt; rdns = new ArrayList&lt;&gt;(issuer.rdns());
+<b class="nc"><i>734</i>&nbsp;        rdns.add(rdn);</b>
+<b class="nc"><i>735</i>&nbsp;        X500Name fullName = new X500Name(rdns.toArray(new RDN[0]));</b>
+<b class="nc"><i>736</i>&nbsp;        GeneralNames fullNames = new GeneralNames();</b>
+<b class="nc"><i>737</i>&nbsp;        fullNames.add(new GeneralName(fullName));</b>
+<b class="nc"><i>738</i>&nbsp;        return fullNames;</b>
+<b class="nc"><i>739</i>&nbsp;    }</b>
+<i>740</i>&nbsp;
+<i>741</i>&nbsp;    /**
+<i>742</i>&nbsp;     * Verifies whether a CRL is issued by a certain certificate
+<i>743</i>&nbsp;     *
+<i>744</i>&nbsp;     * @param cert the certificate
+<i>745</i>&nbsp;     * @param crl the CRL to be verified
+<i>746</i>&nbsp;     * @param provider the name of the signature provider
+<i>747</i>&nbsp;     */
+<i>748</i>&nbsp;    private static boolean issues(X509CertImpl cert, X509CRLImpl crl,
+<i>749</i>&nbsp;                                  String provider) throws IOException
+<i>750</i>&nbsp;    {
+<i>751</i>&nbsp;        boolean matched = false;
+<b class="nc"><i>752</i>&nbsp;</b>
+<i>753</i>&nbsp;        AdaptableX509CertSelector issuerSelector =
+<b class="nc"><i>754</i>&nbsp;                                    new AdaptableX509CertSelector();</b>
+<i>755</i>&nbsp;
+<i>756</i>&nbsp;        // check certificate&#39;s key usage
+<i>757</i>&nbsp;        boolean[] usages = cert.getKeyUsage();
+<b class="nc"><i>758</i>&nbsp;        if (usages != null) {</b>
+<b class="nc"><i>759</i>&nbsp;            usages[6] = true;       // cRLSign</b>
+<b class="nc"><i>760</i>&nbsp;            issuerSelector.setKeyUsage(usages);</b>
+<b class="nc"><i>761</i>&nbsp;        }</b>
+<i>762</i>&nbsp;
+<i>763</i>&nbsp;        // check certificate&#39;s subject
+<i>764</i>&nbsp;        X500Principal crlIssuer = crl.getIssuerX500Principal();
+<b class="nc"><i>765</i>&nbsp;        issuerSelector.setSubject(crlIssuer);</b>
+<b class="nc"><i>766</i>&nbsp;</b>
+<i>767</i>&nbsp;        /*
+<i>768</i>&nbsp;         * Facilitate certification path construction with authority
+<i>769</i>&nbsp;         * key identifier and subject key identifier.
+<i>770</i>&nbsp;         *
+<i>771</i>&nbsp;         * In practice, conforming CAs MUST use the key identifier method,
+<i>772</i>&nbsp;         * and MUST include authority key identifier extension in all CRLs
+<i>773</i>&nbsp;         * issued. [section 5.2.1, RFC 2459]
+<i>774</i>&nbsp;         */
+<i>775</i>&nbsp;        AuthorityKeyIdentifierExtension crlAKID = crl.getAuthKeyIdExtension();
+<b class="nc"><i>776</i>&nbsp;        issuerSelector.setSkiAndSerialNumber(crlAKID);</b>
+<b class="nc"><i>777</i>&nbsp;</b>
+<i>778</i>&nbsp;        matched = issuerSelector.match(cert);
+<b class="nc"><i>779</i>&nbsp;</b>
+<i>780</i>&nbsp;        // if AKID is unreliable, verify the CRL signature with the cert
+<i>781</i>&nbsp;        if (matched &amp;&amp; (crlAKID == null ||
+<b class="nc"><i>782</i>&nbsp;                cert.getAuthorityKeyIdentifierExtension() == null)) {</b>
+<b class="nc"><i>783</i>&nbsp;            try {</b>
+<i>784</i>&nbsp;                crl.verify(cert.getPublicKey(), provider);
+<b class="nc"><i>785</i>&nbsp;                matched = true;</b>
+<b class="nc"><i>786</i>&nbsp;            } catch (GeneralSecurityException e) {</b>
+<b class="nc"><i>787</i>&nbsp;                matched = false;</b>
+<b class="nc"><i>788</i>&nbsp;            }</b>
+<b class="nc"><i>789</i>&nbsp;        }</b>
+<i>790</i>&nbsp;
+<i>791</i>&nbsp;        return matched;
+<b class="nc"><i>792</i>&nbsp;    }</b>
+<i>793</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

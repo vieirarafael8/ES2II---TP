@@ -1,0 +1,2462 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: AbstractQueuedSynchronizer</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.concurrent.locks</a> ]
+</div>
+
+<h1>Coverage Summary for Class: AbstractQueuedSynchronizer (java.util.concurrent.locks)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">AbstractQueuedSynchronizer</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 59)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 336)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">AbstractQueuedSynchronizer$ConditionObject</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 18)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 165)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">AbstractQueuedSynchronizer$Node</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 83)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 515)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; */
+<i>24</i>&nbsp;
+<i>25</i>&nbsp;/*
+<i>26</i>&nbsp; *
+<i>27</i>&nbsp; *
+<i>28</i>&nbsp; *
+<i>29</i>&nbsp; *
+<i>30</i>&nbsp; *
+<i>31</i>&nbsp; * Written by Doug Lea with assistance from members of JCP JSR-166
+<i>32</i>&nbsp; * Expert Group and released to the public domain, as explained at
+<i>33</i>&nbsp; * http://creativecommons.org/publicdomain/zero/1.0/
+<i>34</i>&nbsp; */
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;package java.util.concurrent.locks;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import java.lang.invoke.MethodHandles;
+<i>39</i>&nbsp;import java.lang.invoke.VarHandle;
+<i>40</i>&nbsp;import java.util.ArrayList;
+<i>41</i>&nbsp;import java.util.Collection;
+<i>42</i>&nbsp;import java.util.Date;
+<i>43</i>&nbsp;import java.util.concurrent.TimeUnit;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;/**
+<i>46</i>&nbsp; * Provides a framework for implementing blocking locks and related
+<i>47</i>&nbsp; * synchronizers (semaphores, events, etc) that rely on
+<i>48</i>&nbsp; * first-in-first-out (FIFO) wait queues.  This class is designed to
+<i>49</i>&nbsp; * be a useful basis for most kinds of synchronizers that rely on a
+<i>50</i>&nbsp; * single atomic {@code int} value to represent state. Subclasses
+<i>51</i>&nbsp; * must define the protected methods that change this state, and which
+<i>52</i>&nbsp; * define what that state means in terms of this object being acquired
+<i>53</i>&nbsp; * or released.  Given these, the other methods in this class carry
+<i>54</i>&nbsp; * out all queuing and blocking mechanics. Subclasses can maintain
+<i>55</i>&nbsp; * other state fields, but only the atomically updated {@code int}
+<i>56</i>&nbsp; * value manipulated using methods {@link #getState}, {@link
+<i>57</i>&nbsp; * #setState} and {@link #compareAndSetState} is tracked with respect
+<i>58</i>&nbsp; * to synchronization.
+<i>59</i>&nbsp; *
+<i>60</i>&nbsp; * &lt;p&gt;Subclasses should be defined as non-public internal helper
+<i>61</i>&nbsp; * classes that are used to implement the synchronization properties
+<i>62</i>&nbsp; * of their enclosing class.  Class
+<i>63</i>&nbsp; * {@code AbstractQueuedSynchronizer} does not implement any
+<i>64</i>&nbsp; * synchronization interface.  Instead it defines methods such as
+<i>65</i>&nbsp; * {@link #acquireInterruptibly} that can be invoked as
+<i>66</i>&nbsp; * appropriate by concrete locks and related synchronizers to
+<i>67</i>&nbsp; * implement their public methods.
+<i>68</i>&nbsp; *
+<i>69</i>&nbsp; * &lt;p&gt;This class supports either or both a default &lt;em&gt;exclusive&lt;/em&gt;
+<i>70</i>&nbsp; * mode and a &lt;em&gt;shared&lt;/em&gt; mode. When acquired in exclusive mode,
+<i>71</i>&nbsp; * attempted acquires by other threads cannot succeed. Shared mode
+<i>72</i>&nbsp; * acquires by multiple threads may (but need not) succeed. This class
+<i>73</i>&nbsp; * does not &amp;quot;understand&amp;quot; these differences except in the
+<i>74</i>&nbsp; * mechanical sense that when a shared mode acquire succeeds, the next
+<i>75</i>&nbsp; * waiting thread (if one exists) must also determine whether it can
+<i>76</i>&nbsp; * acquire as well. Threads waiting in the different modes share the
+<i>77</i>&nbsp; * same FIFO queue. Usually, implementation subclasses support only
+<i>78</i>&nbsp; * one of these modes, but both can come into play for example in a
+<i>79</i>&nbsp; * {@link ReadWriteLock}. Subclasses that support only exclusive or
+<i>80</i>&nbsp; * only shared modes need not define the methods supporting the unused mode.
+<i>81</i>&nbsp; *
+<i>82</i>&nbsp; * &lt;p&gt;This class defines a nested {@link ConditionObject} class that
+<i>83</i>&nbsp; * can be used as a {@link Condition} implementation by subclasses
+<i>84</i>&nbsp; * supporting exclusive mode for which method {@link
+<i>85</i>&nbsp; * #isHeldExclusively} reports whether synchronization is exclusively
+<i>86</i>&nbsp; * held with respect to the current thread, method {@link #release}
+<i>87</i>&nbsp; * invoked with the current {@link #getState} value fully releases
+<i>88</i>&nbsp; * this object, and {@link #acquire}, given this saved state value,
+<i>89</i>&nbsp; * eventually restores this object to its previous acquired state.  No
+<i>90</i>&nbsp; * {@code AbstractQueuedSynchronizer} method otherwise creates such a
+<i>91</i>&nbsp; * condition, so if this constraint cannot be met, do not use it.  The
+<i>92</i>&nbsp; * behavior of {@link ConditionObject} depends of course on the
+<i>93</i>&nbsp; * semantics of its synchronizer implementation.
+<i>94</i>&nbsp; *
+<i>95</i>&nbsp; * &lt;p&gt;This class provides inspection, instrumentation, and monitoring
+<i>96</i>&nbsp; * methods for the internal queue, as well as similar methods for
+<i>97</i>&nbsp; * condition objects. These can be exported as desired into classes
+<i>98</i>&nbsp; * using an {@code AbstractQueuedSynchronizer} for their
+<i>99</i>&nbsp; * synchronization mechanics.
+<i>100</i>&nbsp; *
+<i>101</i>&nbsp; * &lt;p&gt;Serialization of this class stores only the underlying atomic
+<i>102</i>&nbsp; * integer maintaining state, so deserialized objects have empty
+<i>103</i>&nbsp; * thread queues. Typical subclasses requiring serializability will
+<i>104</i>&nbsp; * define a {@code readObject} method that restores this to a known
+<i>105</i>&nbsp; * initial state upon deserialization.
+<i>106</i>&nbsp; *
+<i>107</i>&nbsp; * &lt;h3&gt;Usage&lt;/h3&gt;
+<i>108</i>&nbsp; *
+<i>109</i>&nbsp; * &lt;p&gt;To use this class as the basis of a synchronizer, redefine the
+<i>110</i>&nbsp; * following methods, as applicable, by inspecting and/or modifying
+<i>111</i>&nbsp; * the synchronization state using {@link #getState}, {@link
+<i>112</i>&nbsp; * #setState} and/or {@link #compareAndSetState}:
+<i>113</i>&nbsp; *
+<i>114</i>&nbsp; * &lt;ul&gt;
+<i>115</i>&nbsp; * &lt;li&gt;{@link #tryAcquire}
+<i>116</i>&nbsp; * &lt;li&gt;{@link #tryRelease}
+<i>117</i>&nbsp; * &lt;li&gt;{@link #tryAcquireShared}
+<i>118</i>&nbsp; * &lt;li&gt;{@link #tryReleaseShared}
+<i>119</i>&nbsp; * &lt;li&gt;{@link #isHeldExclusively}
+<i>120</i>&nbsp; * &lt;/ul&gt;
+<i>121</i>&nbsp; *
+<i>122</i>&nbsp; * Each of these methods by default throws {@link
+<i>123</i>&nbsp; * UnsupportedOperationException}.  Implementations of these methods
+<i>124</i>&nbsp; * must be internally thread-safe, and should in general be short and
+<i>125</i>&nbsp; * not block. Defining these methods is the &lt;em&gt;only&lt;/em&gt; supported
+<i>126</i>&nbsp; * means of using this class. All other methods are declared
+<i>127</i>&nbsp; * {@code final} because they cannot be independently varied.
+<i>128</i>&nbsp; *
+<i>129</i>&nbsp; * &lt;p&gt;You may also find the inherited methods from {@link
+<i>130</i>&nbsp; * AbstractOwnableSynchronizer} useful to keep track of the thread
+<i>131</i>&nbsp; * owning an exclusive synchronizer.  You are encouraged to use them
+<i>132</i>&nbsp; * -- this enables monitoring and diagnostic tools to assist users in
+<i>133</i>&nbsp; * determining which threads hold locks.
+<i>134</i>&nbsp; *
+<i>135</i>&nbsp; * &lt;p&gt;Even though this class is based on an internal FIFO queue, it
+<i>136</i>&nbsp; * does not automatically enforce FIFO acquisition policies.  The core
+<i>137</i>&nbsp; * of exclusive synchronization takes the form:
+<i>138</i>&nbsp; *
+<i>139</i>&nbsp; * &lt;pre&gt;
+<i>140</i>&nbsp; * Acquire:
+<i>141</i>&nbsp; *     while (!tryAcquire(arg)) {
+<i>142</i>&nbsp; *        &lt;em&gt;enqueue thread if it is not already queued&lt;/em&gt;;
+<i>143</i>&nbsp; *        &lt;em&gt;possibly block current thread&lt;/em&gt;;
+<i>144</i>&nbsp; *     }
+<i>145</i>&nbsp; *
+<i>146</i>&nbsp; * Release:
+<i>147</i>&nbsp; *     if (tryRelease(arg))
+<i>148</i>&nbsp; *        &lt;em&gt;unblock the first queued thread&lt;/em&gt;;
+<i>149</i>&nbsp; * &lt;/pre&gt;
+<i>150</i>&nbsp; *
+<i>151</i>&nbsp; * (Shared mode is similar but may involve cascading signals.)
+<i>152</i>&nbsp; *
+<i>153</i>&nbsp; * &lt;p id=&quot;barging&quot;&gt;Because checks in acquire are invoked before
+<i>154</i>&nbsp; * enqueuing, a newly acquiring thread may &lt;em&gt;barge&lt;/em&gt; ahead of
+<i>155</i>&nbsp; * others that are blocked and queued.  However, you can, if desired,
+<i>156</i>&nbsp; * define {@code tryAcquire} and/or {@code tryAcquireShared} to
+<i>157</i>&nbsp; * disable barging by internally invoking one or more of the inspection
+<i>158</i>&nbsp; * methods, thereby providing a &lt;em&gt;fair&lt;/em&gt; FIFO acquisition order.
+<i>159</i>&nbsp; * In particular, most fair synchronizers can define {@code tryAcquire}
+<i>160</i>&nbsp; * to return {@code false} if {@link #hasQueuedPredecessors} (a method
+<i>161</i>&nbsp; * specifically designed to be used by fair synchronizers) returns
+<i>162</i>&nbsp; * {@code true}.  Other variations are possible.
+<i>163</i>&nbsp; *
+<i>164</i>&nbsp; * &lt;p&gt;Throughput and scalability are generally highest for the
+<i>165</i>&nbsp; * default barging (also known as &lt;em&gt;greedy&lt;/em&gt;,
+<i>166</i>&nbsp; * &lt;em&gt;renouncement&lt;/em&gt;, and &lt;em&gt;convoy-avoidance&lt;/em&gt;) strategy.
+<i>167</i>&nbsp; * While this is not guaranteed to be fair or starvation-free, earlier
+<i>168</i>&nbsp; * queued threads are allowed to recontend before later queued
+<i>169</i>&nbsp; * threads, and each recontention has an unbiased chance to succeed
+<i>170</i>&nbsp; * against incoming threads.  Also, while acquires do not
+<i>171</i>&nbsp; * &amp;quot;spin&amp;quot; in the usual sense, they may perform multiple
+<i>172</i>&nbsp; * invocations of {@code tryAcquire} interspersed with other
+<i>173</i>&nbsp; * computations before blocking.  This gives most of the benefits of
+<i>174</i>&nbsp; * spins when exclusive synchronization is only briefly held, without
+<i>175</i>&nbsp; * most of the liabilities when it isn&#39;t. If so desired, you can
+<i>176</i>&nbsp; * augment this by preceding calls to acquire methods with
+<i>177</i>&nbsp; * &quot;fast-path&quot; checks, possibly prechecking {@link #hasContended}
+<i>178</i>&nbsp; * and/or {@link #hasQueuedThreads} to only do so if the synchronizer
+<i>179</i>&nbsp; * is likely not to be contended.
+<i>180</i>&nbsp; *
+<i>181</i>&nbsp; * &lt;p&gt;This class provides an efficient and scalable basis for
+<i>182</i>&nbsp; * synchronization in part by specializing its range of use to
+<i>183</i>&nbsp; * synchronizers that can rely on {@code int} state, acquire, and
+<i>184</i>&nbsp; * release parameters, and an internal FIFO wait queue. When this does
+<i>185</i>&nbsp; * not suffice, you can build synchronizers from a lower level using
+<i>186</i>&nbsp; * {@link java.util.concurrent.atomic atomic} classes, your own custom
+<i>187</i>&nbsp; * {@link java.util.Queue} classes, and {@link LockSupport} blocking
+<i>188</i>&nbsp; * support.
+<i>189</i>&nbsp; *
+<i>190</i>&nbsp; * &lt;h3&gt;Usage Examples&lt;/h3&gt;
+<i>191</i>&nbsp; *
+<i>192</i>&nbsp; * &lt;p&gt;Here is a non-reentrant mutual exclusion lock class that uses
+<i>193</i>&nbsp; * the value zero to represent the unlocked state, and one to
+<i>194</i>&nbsp; * represent the locked state. While a non-reentrant lock
+<i>195</i>&nbsp; * does not strictly require recording of the current owner
+<i>196</i>&nbsp; * thread, this class does so anyway to make usage easier to monitor.
+<i>197</i>&nbsp; * It also supports conditions and exposes some instrumentation methods:
+<i>198</i>&nbsp; *
+<i>199</i>&nbsp; * &lt;pre&gt; {@code
+<i>200</i>&nbsp; * class Mutex implements Lock, java.io.Serializable {
+<i>201</i>&nbsp; *
+<i>202</i>&nbsp; *   // Our internal helper class
+<i>203</i>&nbsp; *   private static class Sync extends AbstractQueuedSynchronizer {
+<i>204</i>&nbsp; *     // Acquires the lock if state is zero
+<i>205</i>&nbsp; *     public boolean tryAcquire(int acquires) {
+<i>206</i>&nbsp; *       assert acquires == 1; // Otherwise unused
+<i>207</i>&nbsp; *       if (compareAndSetState(0, 1)) {
+<i>208</i>&nbsp; *         setExclusiveOwnerThread(Thread.currentThread());
+<i>209</i>&nbsp; *         return true;
+<i>210</i>&nbsp; *       }
+<i>211</i>&nbsp; *       return false;
+<i>212</i>&nbsp; *     }
+<i>213</i>&nbsp; *
+<i>214</i>&nbsp; *     // Releases the lock by setting state to zero
+<i>215</i>&nbsp; *     protected boolean tryRelease(int releases) {
+<i>216</i>&nbsp; *       assert releases == 1; // Otherwise unused
+<i>217</i>&nbsp; *       if (!isHeldExclusively())
+<i>218</i>&nbsp; *         throw new IllegalMonitorStateException();
+<i>219</i>&nbsp; *       setExclusiveOwnerThread(null);
+<i>220</i>&nbsp; *       setState(0);
+<i>221</i>&nbsp; *       return true;
+<i>222</i>&nbsp; *     }
+<i>223</i>&nbsp; *
+<i>224</i>&nbsp; *     // Reports whether in locked state
+<i>225</i>&nbsp; *     public boolean isLocked() {
+<i>226</i>&nbsp; *       return getState() != 0;
+<i>227</i>&nbsp; *     }
+<i>228</i>&nbsp; *
+<i>229</i>&nbsp; *     public boolean isHeldExclusively() {
+<i>230</i>&nbsp; *       // a data race, but safe due to out-of-thin-air guarantees
+<i>231</i>&nbsp; *       return getExclusiveOwnerThread() == Thread.currentThread();
+<i>232</i>&nbsp; *     }
+<i>233</i>&nbsp; *
+<i>234</i>&nbsp; *     // Provides a Condition
+<i>235</i>&nbsp; *     public Condition newCondition() {
+<i>236</i>&nbsp; *       return new ConditionObject();
+<i>237</i>&nbsp; *     }
+<i>238</i>&nbsp; *
+<i>239</i>&nbsp; *     // Deserializes properly
+<i>240</i>&nbsp; *     private void readObject(ObjectInputStream s)
+<i>241</i>&nbsp; *         throws IOException, ClassNotFoundException {
+<i>242</i>&nbsp; *       s.defaultReadObject();
+<i>243</i>&nbsp; *       setState(0); // reset to unlocked state
+<i>244</i>&nbsp; *     }
+<i>245</i>&nbsp; *   }
+<i>246</i>&nbsp; *
+<i>247</i>&nbsp; *   // The sync object does all the hard work. We just forward to it.
+<i>248</i>&nbsp; *   private final Sync sync = new Sync();
+<i>249</i>&nbsp; *
+<i>250</i>&nbsp; *   public void lock()              { sync.acquire(1); }
+<i>251</i>&nbsp; *   public boolean tryLock()        { return sync.tryAcquire(1); }
+<i>252</i>&nbsp; *   public void unlock()            { sync.release(1); }
+<i>253</i>&nbsp; *   public Condition newCondition() { return sync.newCondition(); }
+<i>254</i>&nbsp; *   public boolean isLocked()       { return sync.isLocked(); }
+<i>255</i>&nbsp; *   public boolean isHeldByCurrentThread() {
+<i>256</i>&nbsp; *     return sync.isHeldExclusively();
+<i>257</i>&nbsp; *   }
+<i>258</i>&nbsp; *   public boolean hasQueuedThreads() {
+<i>259</i>&nbsp; *     return sync.hasQueuedThreads();
+<i>260</i>&nbsp; *   }
+<i>261</i>&nbsp; *   public void lockInterruptibly() throws InterruptedException {
+<i>262</i>&nbsp; *     sync.acquireInterruptibly(1);
+<i>263</i>&nbsp; *   }
+<i>264</i>&nbsp; *   public boolean tryLock(long timeout, TimeUnit unit)
+<i>265</i>&nbsp; *       throws InterruptedException {
+<i>266</i>&nbsp; *     return sync.tryAcquireNanos(1, unit.toNanos(timeout));
+<i>267</i>&nbsp; *   }
+<i>268</i>&nbsp; * }}&lt;/pre&gt;
+<i>269</i>&nbsp; *
+<i>270</i>&nbsp; * &lt;p&gt;Here is a latch class that is like a
+<i>271</i>&nbsp; * {@link java.util.concurrent.CountDownLatch CountDownLatch}
+<i>272</i>&nbsp; * except that it only requires a single {@code signal} to
+<i>273</i>&nbsp; * fire. Because a latch is non-exclusive, it uses the {@code shared}
+<i>274</i>&nbsp; * acquire and release methods.
+<i>275</i>&nbsp; *
+<i>276</i>&nbsp; * &lt;pre&gt; {@code
+<i>277</i>&nbsp; * class BooleanLatch {
+<i>278</i>&nbsp; *
+<i>279</i>&nbsp; *   private static class Sync extends AbstractQueuedSynchronizer {
+<i>280</i>&nbsp; *     boolean isSignalled() { return getState() != 0; }
+<i>281</i>&nbsp; *
+<i>282</i>&nbsp; *     protected int tryAcquireShared(int ignore) {
+<i>283</i>&nbsp; *       return isSignalled() ? 1 : -1;
+<i>284</i>&nbsp; *     }
+<i>285</i>&nbsp; *
+<i>286</i>&nbsp; *     protected boolean tryReleaseShared(int ignore) {
+<i>287</i>&nbsp; *       setState(1);
+<i>288</i>&nbsp; *       return true;
+<i>289</i>&nbsp; *     }
+<i>290</i>&nbsp; *   }
+<i>291</i>&nbsp; *
+<i>292</i>&nbsp; *   private final Sync sync = new Sync();
+<i>293</i>&nbsp; *   public boolean isSignalled() { return sync.isSignalled(); }
+<i>294</i>&nbsp; *   public void signal()         { sync.releaseShared(1); }
+<i>295</i>&nbsp; *   public void await() throws InterruptedException {
+<i>296</i>&nbsp; *     sync.acquireSharedInterruptibly(1);
+<i>297</i>&nbsp; *   }
+<i>298</i>&nbsp; * }}&lt;/pre&gt;
+<b class="nc"><i>299</i>&nbsp; *</b>
+<i>300</i>&nbsp; * @since 1.5
+<i>301</i>&nbsp; * @author Doug Lea
+<i>302</i>&nbsp; */
+<i>303</i>&nbsp;public abstract class AbstractQueuedSynchronizer
+<i>304</i>&nbsp;    extends AbstractOwnableSynchronizer
+<i>305</i>&nbsp;    implements java.io.Serializable {
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;    private static final long serialVersionUID = 7373984972572414691L;
+<i>308</i>&nbsp;
+<i>309</i>&nbsp;    /**
+<i>310</i>&nbsp;     * Creates a new {@code AbstractQueuedSynchronizer} instance
+<i>311</i>&nbsp;     * with initial synchronization state of zero.
+<i>312</i>&nbsp;     */
+<i>313</i>&nbsp;    protected AbstractQueuedSynchronizer() { }
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;    /**
+<i>316</i>&nbsp;     * Wait queue node class.
+<i>317</i>&nbsp;     *
+<i>318</i>&nbsp;     * &lt;p&gt;The wait queue is a variant of a &quot;CLH&quot; (Craig, Landin, and
+<i>319</i>&nbsp;     * Hagersten) lock queue. CLH locks are normally used for
+<i>320</i>&nbsp;     * spinlocks.  We instead use them for blocking synchronizers, but
+<i>321</i>&nbsp;     * use the same basic tactic of holding some of the control
+<i>322</i>&nbsp;     * information about a thread in the predecessor of its node.  A
+<i>323</i>&nbsp;     * &quot;status&quot; field in each node keeps track of whether a thread
+<i>324</i>&nbsp;     * should block.  A node is signalled when its predecessor
+<i>325</i>&nbsp;     * releases.  Each node of the queue otherwise serves as a
+<i>326</i>&nbsp;     * specific-notification-style monitor holding a single waiting
+<i>327</i>&nbsp;     * thread. The status field does NOT control whether threads are
+<i>328</i>&nbsp;     * granted locks etc though.  A thread may try to acquire if it is
+<i>329</i>&nbsp;     * first in the queue. But being first does not guarantee success;
+<i>330</i>&nbsp;     * it only gives the right to contend.  So the currently released
+<i>331</i>&nbsp;     * contender thread may need to rewait.
+<i>332</i>&nbsp;     *
+<i>333</i>&nbsp;     * &lt;p&gt;To enqueue into a CLH lock, you atomically splice it in as new
+<i>334</i>&nbsp;     * tail. To dequeue, you just set the head field.
+<i>335</i>&nbsp;     * &lt;pre&gt;
+<i>336</i>&nbsp;     *      +------+  prev +-----+       +-----+
+<i>337</i>&nbsp;     * head |      | &lt;---- |     | &lt;---- |     |  tail
+<i>338</i>&nbsp;     *      +------+       +-----+       +-----+
+<i>339</i>&nbsp;     * &lt;/pre&gt;
+<i>340</i>&nbsp;     *
+<i>341</i>&nbsp;     * &lt;p&gt;Insertion into a CLH queue requires only a single atomic
+<i>342</i>&nbsp;     * operation on &quot;tail&quot;, so there is a simple atomic point of
+<i>343</i>&nbsp;     * demarcation from unqueued to queued. Similarly, dequeuing
+<i>344</i>&nbsp;     * involves only updating the &quot;head&quot;. However, it takes a bit
+<i>345</i>&nbsp;     * more work for nodes to determine who their successors are,
+<i>346</i>&nbsp;     * in part to deal with possible cancellation due to timeouts
+<i>347</i>&nbsp;     * and interrupts.
+<i>348</i>&nbsp;     *
+<i>349</i>&nbsp;     * &lt;p&gt;The &quot;prev&quot; links (not used in original CLH locks), are mainly
+<i>350</i>&nbsp;     * needed to handle cancellation. If a node is cancelled, its
+<i>351</i>&nbsp;     * successor is (normally) relinked to a non-cancelled
+<i>352</i>&nbsp;     * predecessor. For explanation of similar mechanics in the case
+<i>353</i>&nbsp;     * of spin locks, see the papers by Scott and Scherer at
+<i>354</i>&nbsp;     * http://www.cs.rochester.edu/u/scott/synchronization/
+<i>355</i>&nbsp;     *
+<i>356</i>&nbsp;     * &lt;p&gt;We also use &quot;next&quot; links to implement blocking mechanics.
+<i>357</i>&nbsp;     * The thread id for each node is kept in its own node, so a
+<i>358</i>&nbsp;     * predecessor signals the next node to wake up by traversing
+<i>359</i>&nbsp;     * next link to determine which thread it is.  Determination of
+<i>360</i>&nbsp;     * successor must avoid races with newly queued nodes to set
+<i>361</i>&nbsp;     * the &quot;next&quot; fields of their predecessors.  This is solved
+<i>362</i>&nbsp;     * when necessary by checking backwards from the atomically
+<i>363</i>&nbsp;     * updated &quot;tail&quot; when a node&#39;s successor appears to be null.
+<i>364</i>&nbsp;     * (Or, said differently, the next-links are an optimization
+<i>365</i>&nbsp;     * so that we don&#39;t usually need a backward scan.)
+<i>366</i>&nbsp;     *
+<i>367</i>&nbsp;     * &lt;p&gt;Cancellation introduces some conservatism to the basic
+<i>368</i>&nbsp;     * algorithms.  Since we must poll for cancellation of other
+<i>369</i>&nbsp;     * nodes, we can miss noticing whether a cancelled node is
+<i>370</i>&nbsp;     * ahead or behind us. This is dealt with by always unparking
+<i>371</i>&nbsp;     * successors upon cancellation, allowing them to stabilize on
+<i>372</i>&nbsp;     * a new predecessor, unless we can identify an uncancelled
+<i>373</i>&nbsp;     * predecessor who will carry this responsibility.
+<i>374</i>&nbsp;     *
+<i>375</i>&nbsp;     * &lt;p&gt;CLH queues need a dummy header node to get started. But
+<i>376</i>&nbsp;     * we don&#39;t create them on construction, because it would be wasted
+<i>377</i>&nbsp;     * effort if there is never contention. Instead, the node
+<i>378</i>&nbsp;     * is constructed and head and tail pointers are set upon first
+<i>379</i>&nbsp;     * contention.
+<i>380</i>&nbsp;     *
+<i>381</i>&nbsp;     * &lt;p&gt;Threads waiting on Conditions use the same nodes, but
+<b class="nc"><i>382</i>&nbsp;     * use an additional link. Conditions only need to link nodes</b>
+<i>383</i>&nbsp;     * in simple (non-concurrent) linked queues because they are
+<b class="nc"><i>384</i>&nbsp;     * only accessed when exclusively held.  Upon await, a node is</b>
+<i>385</i>&nbsp;     * inserted into a condition queue.  Upon signal, the node is
+<i>386</i>&nbsp;     * transferred to the main queue.  A special value of status
+<i>387</i>&nbsp;     * field is used to mark which queue a node is on.
+<i>388</i>&nbsp;     *
+<i>389</i>&nbsp;     * &lt;p&gt;Thanks go to Dave Dice, Mark Moir, Victor Luchangco, Bill
+<i>390</i>&nbsp;     * Scherer and Michael Scott, along with members of JSR-166
+<i>391</i>&nbsp;     * expert group, for helpful ideas, discussions, and critiques
+<i>392</i>&nbsp;     * on the design of this class.
+<i>393</i>&nbsp;     */
+<i>394</i>&nbsp;    static final class Node {
+<i>395</i>&nbsp;        /** Marker to indicate a node is waiting in shared mode */
+<i>396</i>&nbsp;        static final Node SHARED = new Node();
+<i>397</i>&nbsp;        /** Marker to indicate a node is waiting in exclusive mode */
+<i>398</i>&nbsp;        static final Node EXCLUSIVE = null;
+<i>399</i>&nbsp;
+<i>400</i>&nbsp;        /** waitStatus value to indicate thread has cancelled. */
+<i>401</i>&nbsp;        static final int CANCELLED =  1;
+<i>402</i>&nbsp;        /** waitStatus value to indicate successor&#39;s thread needs unparking. */
+<i>403</i>&nbsp;        static final int SIGNAL    = -1;
+<i>404</i>&nbsp;        /** waitStatus value to indicate thread is waiting on condition. */
+<i>405</i>&nbsp;        static final int CONDITION = -2;
+<i>406</i>&nbsp;        /**
+<i>407</i>&nbsp;         * waitStatus value to indicate the next acquireShared should
+<i>408</i>&nbsp;         * unconditionally propagate.
+<i>409</i>&nbsp;         */
+<i>410</i>&nbsp;        static final int PROPAGATE = -3;
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;        /**
+<i>413</i>&nbsp;         * Status field, taking on only the values:
+<i>414</i>&nbsp;         *   SIGNAL:     The successor of this node is (or will soon be)
+<i>415</i>&nbsp;         *               blocked (via park), so the current node must
+<i>416</i>&nbsp;         *               unpark its successor when it releases or
+<i>417</i>&nbsp;         *               cancels. To avoid races, acquire methods must
+<i>418</i>&nbsp;         *               first indicate they need a signal,
+<i>419</i>&nbsp;         *               then retry the atomic acquire, and then,
+<i>420</i>&nbsp;         *               on failure, block.
+<i>421</i>&nbsp;         *   CANCELLED:  This node is cancelled due to timeout or interrupt.
+<i>422</i>&nbsp;         *               Nodes never leave this state. In particular,
+<i>423</i>&nbsp;         *               a thread with cancelled node never again blocks.
+<i>424</i>&nbsp;         *   CONDITION:  This node is currently on a condition queue.
+<i>425</i>&nbsp;         *               It will not be used as a sync queue node
+<i>426</i>&nbsp;         *               until transferred, at which time the status
+<i>427</i>&nbsp;         *               will be set to 0. (Use of this value here has
+<i>428</i>&nbsp;         *               nothing to do with the other uses of the
+<i>429</i>&nbsp;         *               field, but simplifies mechanics.)
+<i>430</i>&nbsp;         *   PROPAGATE:  A releaseShared should be propagated to other
+<i>431</i>&nbsp;         *               nodes. This is set (for head node only) in
+<i>432</i>&nbsp;         *               doReleaseShared to ensure propagation
+<i>433</i>&nbsp;         *               continues, even if other operations have
+<i>434</i>&nbsp;         *               since intervened.
+<i>435</i>&nbsp;         *   0:          None of the above
+<i>436</i>&nbsp;         *
+<i>437</i>&nbsp;         * The values are arranged numerically to simplify use.
+<i>438</i>&nbsp;         * Non-negative values mean that a node doesn&#39;t need to
+<i>439</i>&nbsp;         * signal. So, most code doesn&#39;t need to check for particular
+<i>440</i>&nbsp;         * values, just for sign.
+<i>441</i>&nbsp;         *
+<i>442</i>&nbsp;         * The field is initialized to 0 for normal sync nodes, and
+<i>443</i>&nbsp;         * CONDITION for condition nodes.  It is modified using CAS
+<i>444</i>&nbsp;         * (or when possible, unconditional volatile writes).
+<i>445</i>&nbsp;         */
+<i>446</i>&nbsp;        volatile int waitStatus;
+<i>447</i>&nbsp;
+<i>448</i>&nbsp;        /**
+<i>449</i>&nbsp;         * Link to predecessor node that current node/thread relies on
+<i>450</i>&nbsp;         * for checking waitStatus. Assigned during enqueuing, and nulled
+<i>451</i>&nbsp;         * out (for sake of GC) only upon dequeuing.  Also, upon
+<i>452</i>&nbsp;         * cancellation of a predecessor, we short-circuit while
+<i>453</i>&nbsp;         * finding a non-cancelled one, which will always exist
+<i>454</i>&nbsp;         * because the head node is never cancelled: A node becomes
+<i>455</i>&nbsp;         * head only as a result of successful acquire. A
+<i>456</i>&nbsp;         * cancelled thread never succeeds in acquiring, and a thread only
+<i>457</i>&nbsp;         * cancels itself, not any other node.
+<i>458</i>&nbsp;         */
+<i>459</i>&nbsp;        volatile Node prev;
+<i>460</i>&nbsp;
+<i>461</i>&nbsp;        /**
+<i>462</i>&nbsp;         * Link to the successor node that the current node/thread
+<i>463</i>&nbsp;         * unparks upon release. Assigned during enqueuing, adjusted
+<i>464</i>&nbsp;         * when bypassing cancelled predecessors, and nulled out (for
+<i>465</i>&nbsp;         * sake of GC) when dequeued.  The enq operation does not
+<i>466</i>&nbsp;         * assign next field of a predecessor until after attachment,
+<i>467</i>&nbsp;         * so seeing a null next field does not necessarily mean that
+<i>468</i>&nbsp;         * node is at end of queue. However, if a next field appears
+<i>469</i>&nbsp;         * to be null, we can scan prev&#39;s from the tail to
+<i>470</i>&nbsp;         * double-check.  The next field of cancelled nodes is set to
+<i>471</i>&nbsp;         * point to the node itself instead of null, to make life
+<i>472</i>&nbsp;         * easier for isOnSyncQueue.
+<i>473</i>&nbsp;         */
+<i>474</i>&nbsp;        volatile Node next;
+<i>475</i>&nbsp;
+<i>476</i>&nbsp;        /**
+<i>477</i>&nbsp;         * The thread that enqueued this node.  Initialized on
+<i>478</i>&nbsp;         * construction and nulled out after use.
+<i>479</i>&nbsp;         */
+<i>480</i>&nbsp;        volatile Thread thread;
+<i>481</i>&nbsp;
+<i>482</i>&nbsp;        /**
+<i>483</i>&nbsp;         * Link to next node waiting on condition, or the special
+<b class="nc"><i>484</i>&nbsp;         * value SHARED.  Because condition queues are accessed only</b>
+<i>485</i>&nbsp;         * when holding in exclusive mode, we just need a simple
+<i>486</i>&nbsp;         * linked queue to hold nodes while they are waiting on
+<i>487</i>&nbsp;         * conditions. They are then transferred to the queue to
+<i>488</i>&nbsp;         * re-acquire. And because conditions can only be exclusive,
+<i>489</i>&nbsp;         * we save a field by using special value to indicate shared
+<i>490</i>&nbsp;         * mode.
+<i>491</i>&nbsp;         */
+<i>492</i>&nbsp;        Node nextWaiter;
+<i>493</i>&nbsp;
+<i>494</i>&nbsp;        /**
+<b class="nc"><i>495</i>&nbsp;         * Returns true if node is waiting in shared mode.</b>
+<b class="nc"><i>496</i>&nbsp;         */</b>
+<b class="nc"><i>497</i>&nbsp;        final boolean isShared() {</b>
+<i>498</i>&nbsp;            return nextWaiter == SHARED;
+<b class="nc"><i>499</i>&nbsp;        }</b>
+<i>500</i>&nbsp;
+<i>501</i>&nbsp;        /**
+<b class="nc"><i>502</i>&nbsp;         * Returns previous node, or throws NullPointerException if null.</b>
+<i>503</i>&nbsp;         * Use when predecessor cannot be null.  The null check could
+<i>504</i>&nbsp;         * be elided, but is present to help the VM.
+<b class="nc"><i>505</i>&nbsp;         *</b>
+<b class="nc"><i>506</i>&nbsp;         * @return the predecessor of this node</b>
+<b class="nc"><i>507</i>&nbsp;         */</b>
+<i>508</i>&nbsp;        final Node predecessor() {
+<i>509</i>&nbsp;            Node p = prev;
+<b class="nc"><i>510</i>&nbsp;            if (p == null)</b>
+<b class="nc"><i>511</i>&nbsp;                throw new NullPointerException();</b>
+<b class="nc"><i>512</i>&nbsp;            else</b>
+<i>513</i>&nbsp;                return p;
+<i>514</i>&nbsp;        }
+<i>515</i>&nbsp;
+<i>516</i>&nbsp;        /** Establishes initial head or SHARED marker. */
+<i>517</i>&nbsp;        Node() {}
+<i>518</i>&nbsp;
+<i>519</i>&nbsp;        /** Constructor used by addWaiter. */
+<i>520</i>&nbsp;        Node(Node nextWaiter) {
+<i>521</i>&nbsp;            this.nextWaiter = nextWaiter;
+<i>522</i>&nbsp;            THREAD.set(this, Thread.currentThread());
+<i>523</i>&nbsp;        }
+<i>524</i>&nbsp;
+<i>525</i>&nbsp;        /** Constructor used by addConditionWaiter. */
+<i>526</i>&nbsp;        Node(int waitStatus) {
+<i>527</i>&nbsp;            WAITSTATUS.set(this, waitStatus);
+<i>528</i>&nbsp;            THREAD.set(this, Thread.currentThread());
+<i>529</i>&nbsp;        }
+<i>530</i>&nbsp;
+<i>531</i>&nbsp;        /** CASes waitStatus field. */
+<i>532</i>&nbsp;        final boolean compareAndSetWaitStatus(int expect, int update) {
+<i>533</i>&nbsp;            return WAITSTATUS.compareAndSet(this, expect, update);
+<i>534</i>&nbsp;        }
+<i>535</i>&nbsp;
+<i>536</i>&nbsp;        /** CASes next field. */
+<i>537</i>&nbsp;        final boolean compareAndSetNext(Node expect, Node update) {
+<i>538</i>&nbsp;            return NEXT.compareAndSet(this, expect, update);
+<i>539</i>&nbsp;        }
+<i>540</i>&nbsp;
+<b class="nc"><i>541</i>&nbsp;        final void setPrevRelaxed(Node p) {</b>
+<i>542</i>&nbsp;            PREV.set(this, p);
+<i>543</i>&nbsp;        }
+<i>544</i>&nbsp;
+<i>545</i>&nbsp;        // VarHandle mechanics
+<i>546</i>&nbsp;        private static final VarHandle NEXT;
+<i>547</i>&nbsp;        private static final VarHandle PREV;
+<i>548</i>&nbsp;        private static final VarHandle THREAD;
+<i>549</i>&nbsp;        private static final VarHandle WAITSTATUS;
+<b class="nc"><i>550</i>&nbsp;        static {</b>
+<i>551</i>&nbsp;            try {
+<i>552</i>&nbsp;                MethodHandles.Lookup l = MethodHandles.lookup();
+<i>553</i>&nbsp;                NEXT = l.findVarHandle(Node.class, &quot;next&quot;, Node.class);
+<i>554</i>&nbsp;                PREV = l.findVarHandle(Node.class, &quot;prev&quot;, Node.class);
+<i>555</i>&nbsp;                THREAD = l.findVarHandle(Node.class, &quot;thread&quot;, Thread.class);
+<i>556</i>&nbsp;                WAITSTATUS = l.findVarHandle(Node.class, &quot;waitStatus&quot;, int.class);
+<i>557</i>&nbsp;            } catch (ReflectiveOperationException e) {
+<i>558</i>&nbsp;                throw new ExceptionInInitializerError(e);
+<i>559</i>&nbsp;            }
+<i>560</i>&nbsp;        }
+<i>561</i>&nbsp;    }
+<i>562</i>&nbsp;
+<i>563</i>&nbsp;    /**
+<i>564</i>&nbsp;     * Head of the wait queue, lazily initialized.  Except for
+<i>565</i>&nbsp;     * initialization, it is modified only via method setHead.  Note:
+<b class="nc"><i>566</i>&nbsp;     * If head exists, its waitStatus is guaranteed not to be</b>
+<i>567</i>&nbsp;     * CANCELLED.
+<i>568</i>&nbsp;     */
+<i>569</i>&nbsp;    private transient volatile Node head;
+<i>570</i>&nbsp;
+<i>571</i>&nbsp;    /**
+<i>572</i>&nbsp;     * Tail of the wait queue, lazily initialized.  Modified only via
+<i>573</i>&nbsp;     * method enq to add new wait node.
+<i>574</i>&nbsp;     */
+<i>575</i>&nbsp;    private transient volatile Node tail;
+<i>576</i>&nbsp;
+<i>577</i>&nbsp;    /**
+<i>578</i>&nbsp;     * The synchronization state.
+<i>579</i>&nbsp;     */
+<i>580</i>&nbsp;    private volatile int state;
+<i>581</i>&nbsp;
+<i>582</i>&nbsp;    /**
+<i>583</i>&nbsp;     * Returns the current value of synchronization state.
+<i>584</i>&nbsp;     * This operation has memory semantics of a {@code volatile} read.
+<b class="nc"><i>585</i>&nbsp;     * @return current state value</b>
+<b class="nc"><i>586</i>&nbsp;     */</b>
+<b class="nc"><i>587</i>&nbsp;    protected final int getState() {</b>
+<b class="nc"><i>588</i>&nbsp;        return state;</b>
+<i>589</i>&nbsp;    }
+<b class="nc"><i>590</i>&nbsp;</b>
+<b class="nc"><i>591</i>&nbsp;    /**</b>
+<b class="nc"><i>592</i>&nbsp;     * Sets the value of synchronization state.</b>
+<b class="nc"><i>593</i>&nbsp;     * This operation has memory semantics of a {@code volatile} write.</b>
+<i>594</i>&nbsp;     * @param newState the new state value
+<i>595</i>&nbsp;     */
+<b class="nc"><i>596</i>&nbsp;    protected final void setState(int newState) {</b>
+<i>597</i>&nbsp;        state = newState;
+<i>598</i>&nbsp;    }
+<i>599</i>&nbsp;
+<i>600</i>&nbsp;    /**
+<i>601</i>&nbsp;     * Atomically sets synchronization state to the given updated
+<i>602</i>&nbsp;     * value if the current state value equals the expected value.
+<i>603</i>&nbsp;     * This operation has memory semantics of a {@code volatile} read
+<i>604</i>&nbsp;     * and write.
+<i>605</i>&nbsp;     *
+<b class="nc"><i>606</i>&nbsp;     * @param expect the expected value</b>
+<i>607</i>&nbsp;     * @param update the new value
+<b class="nc"><i>608</i>&nbsp;     * @return {@code true} if successful. False return indicates that the actual</b>
+<b class="nc"><i>609</i>&nbsp;     *         value was not equal to the expected value.</b>
+<b class="nc"><i>610</i>&nbsp;     */</b>
+<b class="nc"><i>611</i>&nbsp;    protected final boolean compareAndSetState(int expect, int update) {</b>
+<b class="nc"><i>612</i>&nbsp;        return STATE.compareAndSet(this, expect, update);</b>
+<b class="nc"><i>613</i>&nbsp;    }</b>
+<i>614</i>&nbsp;
+<i>615</i>&nbsp;    // Queuing utilities
+<b class="nc"><i>616</i>&nbsp;</b>
+<b class="nc"><i>617</i>&nbsp;    /**</b>
+<i>618</i>&nbsp;     * The number of nanoseconds for which it is faster to spin
+<i>619</i>&nbsp;     * rather than to use timed park. A rough estimate suffices
+<i>620</i>&nbsp;     * to improve responsiveness with very short timeouts.
+<i>621</i>&nbsp;     */
+<i>622</i>&nbsp;    static final long SPIN_FOR_TIMEOUT_THRESHOLD = 1000L;
+<i>623</i>&nbsp;
+<i>624</i>&nbsp;    /**
+<i>625</i>&nbsp;     * Inserts node into queue, initializing if necessary. See picture above.
+<i>626</i>&nbsp;     * @param node the node to insert
+<i>627</i>&nbsp;     * @return node&#39;s predecessor
+<b class="nc"><i>628</i>&nbsp;     */</b>
+<b class="nc"><i>629</i>&nbsp;    private Node enq(Node node) {</b>
+<b class="nc"><i>630</i>&nbsp;        for (;;) {</b>
+<i>631</i>&nbsp;            Node oldTail = tail;
+<i>632</i>&nbsp;            if (oldTail != null) {
+<i>633</i>&nbsp;                node.setPrevRelaxed(oldTail);
+<i>634</i>&nbsp;                if (compareAndSetTail(oldTail, node)) {
+<i>635</i>&nbsp;                    oldTail.next = node;
+<i>636</i>&nbsp;                    return oldTail;
+<i>637</i>&nbsp;                }
+<i>638</i>&nbsp;            } else {
+<i>639</i>&nbsp;                initializeSyncQueue();
+<i>640</i>&nbsp;            }
+<i>641</i>&nbsp;        }
+<i>642</i>&nbsp;    }
+<i>643</i>&nbsp;
+<b class="nc"><i>644</i>&nbsp;    /**</b>
+<b class="nc"><i>645</i>&nbsp;     * Creates and enqueues node for current thread and given mode.</b>
+<b class="nc"><i>646</i>&nbsp;     *</b>
+<i>647</i>&nbsp;     * @param mode Node.EXCLUSIVE for exclusive, Node.SHARED for shared
+<i>648</i>&nbsp;     * @return the new node
+<i>649</i>&nbsp;     */
+<i>650</i>&nbsp;    private Node addWaiter(Node mode) {
+<i>651</i>&nbsp;        Node node = new Node(mode);
+<i>652</i>&nbsp;
+<i>653</i>&nbsp;        for (;;) {
+<b class="nc"><i>654</i>&nbsp;            Node oldTail = tail;</b>
+<b class="nc"><i>655</i>&nbsp;            if (oldTail != null) {</b>
+<b class="nc"><i>656</i>&nbsp;                node.setPrevRelaxed(oldTail);</b>
+<b class="nc"><i>657</i>&nbsp;                if (compareAndSetTail(oldTail, node)) {</b>
+<b class="nc"><i>658</i>&nbsp;                    oldTail.next = node;</b>
+<b class="nc"><i>659</i>&nbsp;                    return node;</b>
+<i>660</i>&nbsp;                }
+<b class="nc"><i>661</i>&nbsp;            } else {</b>
+<b class="nc"><i>662</i>&nbsp;                initializeSyncQueue();</b>
+<i>663</i>&nbsp;            }
+<i>664</i>&nbsp;        }
+<i>665</i>&nbsp;    }
+<i>666</i>&nbsp;
+<i>667</i>&nbsp;    /**
+<i>668</i>&nbsp;     * Sets head of queue to be node, thus dequeuing. Called only by
+<i>669</i>&nbsp;     * acquire methods.  Also nulls out unused fields for sake of GC
+<i>670</i>&nbsp;     * and to suppress unnecessary signals and traversals.
+<i>671</i>&nbsp;     *
+<i>672</i>&nbsp;     * @param node the node
+<i>673</i>&nbsp;     */
+<i>674</i>&nbsp;    private void setHead(Node node) {
+<i>675</i>&nbsp;        head = node;
+<i>676</i>&nbsp;        node.thread = null;
+<i>677</i>&nbsp;        node.prev = null;
+<i>678</i>&nbsp;    }
+<i>679</i>&nbsp;
+<i>680</i>&nbsp;    /**
+<i>681</i>&nbsp;     * Wakes up node&#39;s successor, if one exists.
+<i>682</i>&nbsp;     *
+<b class="nc"><i>683</i>&nbsp;     * @param node the node</b>
+<b class="nc"><i>684</i>&nbsp;     */</b>
+<b class="nc"><i>685</i>&nbsp;    private void unparkSuccessor(Node node) {</b>
+<b class="nc"><i>686</i>&nbsp;        /*</b>
+<b class="nc"><i>687</i>&nbsp;         * If status is negative (i.e., possibly needing signal) try</b>
+<b class="nc"><i>688</i>&nbsp;         * to clear in anticipation of signalling.  It is OK if this</b>
+<b class="nc"><i>689</i>&nbsp;         * fails or if status is changed by waiting thread.</b>
+<i>690</i>&nbsp;         */
+<b class="nc"><i>691</i>&nbsp;        int ws = node.waitStatus;</b>
+<b class="nc"><i>692</i>&nbsp;        if (ws &lt; 0)</b>
+<b class="nc"><i>693</i>&nbsp;            node.compareAndSetWaitStatus(ws, 0);</b>
+<i>694</i>&nbsp;
+<b class="nc"><i>695</i>&nbsp;        /*</b>
+<b class="nc"><i>696</i>&nbsp;         * Thread to unpark is held in successor, which is normally</b>
+<b class="nc"><i>697</i>&nbsp;         * just the next node.  But if cancelled or apparently null,</b>
+<i>698</i>&nbsp;         * traverse backwards from tail to find the actual
+<i>699</i>&nbsp;         * non-cancelled successor.
+<i>700</i>&nbsp;         */
+<i>701</i>&nbsp;        Node s = node.next;
+<i>702</i>&nbsp;        if (s == null || s.waitStatus &gt; 0) {
+<i>703</i>&nbsp;            s = null;
+<i>704</i>&nbsp;            for (Node p = tail; p != node &amp;&amp; p != null; p = p.prev)
+<i>705</i>&nbsp;                if (p.waitStatus &lt;= 0)
+<i>706</i>&nbsp;                    s = p;
+<i>707</i>&nbsp;        }
+<i>708</i>&nbsp;        if (s != null)
+<b class="nc"><i>709</i>&nbsp;            LockSupport.unpark(s.thread);</b>
+<b class="nc"><i>710</i>&nbsp;    }</b>
+<i>711</i>&nbsp;
+<i>712</i>&nbsp;    /**
+<i>713</i>&nbsp;     * Release action for shared mode -- signals successor and ensures
+<i>714</i>&nbsp;     * propagation. (Note: For exclusive mode, release just amounts
+<i>715</i>&nbsp;     * to calling unparkSuccessor of head if it needs signal.)
+<i>716</i>&nbsp;     */
+<i>717</i>&nbsp;    private void doReleaseShared() {
+<i>718</i>&nbsp;        /*
+<i>719</i>&nbsp;         * Ensure that a release propagates, even if there are other
+<i>720</i>&nbsp;         * in-progress acquires/releases.  This proceeds in the usual
+<i>721</i>&nbsp;         * way of trying to unparkSuccessor of head if it needs
+<i>722</i>&nbsp;         * signal. But if it does not, status is set to PROPAGATE to
+<i>723</i>&nbsp;         * ensure that upon release, propagation continues.
+<i>724</i>&nbsp;         * Additionally, we must loop in case a new node is added
+<i>725</i>&nbsp;         * while we are doing this. Also, unlike other uses of
+<i>726</i>&nbsp;         * unparkSuccessor, we need to know if CAS to reset status
+<b class="nc"><i>727</i>&nbsp;         * fails, if so rechecking.</b>
+<i>728</i>&nbsp;         */
+<b class="nc"><i>729</i>&nbsp;        for (;;) {</b>
+<b class="nc"><i>730</i>&nbsp;            Node h = head;</b>
+<b class="nc"><i>731</i>&nbsp;            if (h != null &amp;&amp; h != tail) {</b>
+<i>732</i>&nbsp;                int ws = h.waitStatus;
+<i>733</i>&nbsp;                if (ws == Node.SIGNAL) {
+<i>734</i>&nbsp;                    if (!h.compareAndSetWaitStatus(Node.SIGNAL, 0))
+<i>735</i>&nbsp;                        continue;            // loop to recheck cases
+<i>736</i>&nbsp;                    unparkSuccessor(h);
+<i>737</i>&nbsp;                }
+<i>738</i>&nbsp;                else if (ws == 0 &amp;&amp;
+<i>739</i>&nbsp;                         !h.compareAndSetWaitStatus(0, Node.PROPAGATE))
+<i>740</i>&nbsp;                    continue;                // loop on failed CAS
+<i>741</i>&nbsp;            }
+<i>742</i>&nbsp;            if (h == head)                   // loop if head changed
+<i>743</i>&nbsp;                break;
+<b class="nc"><i>744</i>&nbsp;        }</b>
+<i>745</i>&nbsp;    }
+<i>746</i>&nbsp;
+<b class="nc"><i>747</i>&nbsp;    /**</b>
+<i>748</i>&nbsp;     * Sets head of queue, and checks if successor may be waiting
+<i>749</i>&nbsp;     * in shared mode, if so propagating if either propagate &gt; 0 or
+<b class="nc"><i>750</i>&nbsp;     * PROPAGATE status was set.</b>
+<b class="nc"><i>751</i>&nbsp;     *</b>
+<b class="nc"><i>752</i>&nbsp;     * @param node the node</b>
+<i>753</i>&nbsp;     * @param propagate the return value from a tryAcquireShared
+<i>754</i>&nbsp;     */
+<i>755</i>&nbsp;    private void setHeadAndPropagate(Node node, int propagate) {
+<i>756</i>&nbsp;        Node h = head; // Record old head for check below
+<b class="nc"><i>757</i>&nbsp;        setHead(node);</b>
+<i>758</i>&nbsp;        /*
+<i>759</i>&nbsp;         * Try to signal next queued node if:
+<i>760</i>&nbsp;         *   Propagation was indicated by caller,
+<i>761</i>&nbsp;         *     or was recorded (as h.waitStatus either before
+<b class="nc"><i>762</i>&nbsp;         *     or after setHead) by a previous operation</b>
+<i>763</i>&nbsp;         *     (note: this uses sign-check of waitStatus because
+<i>764</i>&nbsp;         *      PROPAGATE status may transition to SIGNAL.)
+<b class="nc"><i>765</i>&nbsp;         * and</b>
+<b class="nc"><i>766</i>&nbsp;         *   The next node is waiting in shared mode,</b>
+<i>767</i>&nbsp;         *     or we don&#39;t know, because it appears null
+<i>768</i>&nbsp;         *
+<i>769</i>&nbsp;         * The conservatism in both of these checks may cause
+<i>770</i>&nbsp;         * unnecessary wake-ups, but only when there are multiple
+<b class="nc"><i>771</i>&nbsp;         * racing acquires/releases, so most need signals now or soon</b>
+<i>772</i>&nbsp;         * anyway.
+<b class="nc"><i>773</i>&nbsp;         */</b>
+<i>774</i>&nbsp;        if (propagate &gt; 0 || h == null || h.waitStatus &lt; 0 ||
+<b class="nc"><i>775</i>&nbsp;            (h = head) == null || h.waitStatus &lt; 0) {</b>
+<b class="nc"><i>776</i>&nbsp;            Node s = node.next;</b>
+<b class="nc"><i>777</i>&nbsp;            if (s == null || s.isShared())</b>
+<b class="nc"><i>778</i>&nbsp;                doReleaseShared();</b>
+<b class="nc"><i>779</i>&nbsp;        }</b>
+<i>780</i>&nbsp;    }
+<i>781</i>&nbsp;
+<b class="nc"><i>782</i>&nbsp;    // Utilities for various versions of acquire</b>
+<i>783</i>&nbsp;
+<i>784</i>&nbsp;    /**
+<i>785</i>&nbsp;     * Cancels an ongoing attempt to acquire.
+<i>786</i>&nbsp;     *
+<i>787</i>&nbsp;     * @param node the node
+<i>788</i>&nbsp;     */
+<i>789</i>&nbsp;    private void cancelAcquire(Node node) {
+<i>790</i>&nbsp;        // Ignore if node doesn&#39;t exist
+<i>791</i>&nbsp;        if (node == null)
+<i>792</i>&nbsp;            return;
+<i>793</i>&nbsp;
+<i>794</i>&nbsp;        node.thread = null;
+<i>795</i>&nbsp;
+<b class="nc"><i>796</i>&nbsp;        // Skip cancelled predecessors</b>
+<b class="nc"><i>797</i>&nbsp;        Node pred = node.prev;</b>
+<i>798</i>&nbsp;        while (pred.waitStatus &gt; 0)
+<i>799</i>&nbsp;            node.prev = pred = pred.prev;
+<i>800</i>&nbsp;
+<i>801</i>&nbsp;        // predNext is the apparent node to unsplice. CASes below will
+<b class="nc"><i>802</i>&nbsp;        // fail if not, in which case, we lost race vs another cancel</b>
+<b class="nc"><i>803</i>&nbsp;        // or signal, so no further action is necessary, although with</b>
+<i>804</i>&nbsp;        // a possibility that a cancelled node may transiently remain
+<i>805</i>&nbsp;        // reachable.
+<i>806</i>&nbsp;        Node predNext = pred.next;
+<i>807</i>&nbsp;
+<i>808</i>&nbsp;        // Can use unconditional write instead of CAS here.
+<b class="nc"><i>809</i>&nbsp;        // After this atomic step, other Nodes can skip past us.</b>
+<b class="nc"><i>810</i>&nbsp;        // Before, we are free of interference from other threads.</b>
+<b class="nc"><i>811</i>&nbsp;        node.waitStatus = Node.CANCELLED;</b>
+<i>812</i>&nbsp;
+<i>813</i>&nbsp;        // If we are the tail, remove ourselves.
+<i>814</i>&nbsp;        if (node == tail &amp;&amp; compareAndSetTail(node, pred)) {
+<i>815</i>&nbsp;            pred.compareAndSetNext(predNext, null);
+<i>816</i>&nbsp;        } else {
+<i>817</i>&nbsp;            // If successor needs signal, try to set pred&#39;s next-link
+<b class="nc"><i>818</i>&nbsp;            // so it will get one. Otherwise wake it up to propagate.</b>
+<i>819</i>&nbsp;            int ws;
+<b class="nc"><i>820</i>&nbsp;            if (pred != head &amp;&amp;</b>
+<i>821</i>&nbsp;                ((ws = pred.waitStatus) == Node.SIGNAL ||
+<i>822</i>&nbsp;                 (ws &lt;= 0 &amp;&amp; pred.compareAndSetWaitStatus(ws, Node.SIGNAL))) &amp;&amp;
+<i>823</i>&nbsp;                pred.thread != null) {
+<i>824</i>&nbsp;                Node next = node.next;
+<i>825</i>&nbsp;                if (next != null &amp;&amp; next.waitStatus &lt;= 0)
+<i>826</i>&nbsp;                    pred.compareAndSetNext(predNext, next);
+<b class="nc"><i>827</i>&nbsp;            } else {</b>
+<i>828</i>&nbsp;                unparkSuccessor(node);
+<i>829</i>&nbsp;            }
+<i>830</i>&nbsp;
+<i>831</i>&nbsp;            node.next = node; // help GC
+<i>832</i>&nbsp;        }
+<i>833</i>&nbsp;    }
+<i>834</i>&nbsp;
+<i>835</i>&nbsp;    /**
+<b class="nc"><i>836</i>&nbsp;     * Checks and updates status for a node that failed to acquire.</b>
+<b class="nc"><i>837</i>&nbsp;     * Returns true if thread should block. This is the main signal</b>
+<i>838</i>&nbsp;     * control in all acquire loops.  Requires that pred == node.prev.
+<i>839</i>&nbsp;     *
+<i>840</i>&nbsp;     * @param pred node&#39;s predecessor holding status
+<i>841</i>&nbsp;     * @param node the node
+<i>842</i>&nbsp;     * @return {@code true} if thread should block
+<i>843</i>&nbsp;     */
+<i>844</i>&nbsp;    private static boolean shouldParkAfterFailedAcquire(Node pred, Node node) {
+<i>845</i>&nbsp;        int ws = pred.waitStatus;
+<i>846</i>&nbsp;        if (ws == Node.SIGNAL)
+<i>847</i>&nbsp;            /*
+<i>848</i>&nbsp;             * This node has already set status asking a release
+<i>849</i>&nbsp;             * to signal it, so it can safely park.
+<i>850</i>&nbsp;             */
+<i>851</i>&nbsp;            return true;
+<i>852</i>&nbsp;        if (ws &gt; 0) {
+<i>853</i>&nbsp;            /*
+<i>854</i>&nbsp;             * Predecessor was cancelled. Skip over predecessors and
+<i>855</i>&nbsp;             * indicate retry.
+<i>856</i>&nbsp;             */
+<i>857</i>&nbsp;            do {
+<b class="nc"><i>858</i>&nbsp;                node.prev = pred = pred.prev;</b>
+<i>859</i>&nbsp;            } while (pred.waitStatus &gt; 0);
+<b class="nc"><i>860</i>&nbsp;            pred.next = node;</b>
+<i>861</i>&nbsp;        } else {
+<b class="nc"><i>862</i>&nbsp;            /*</b>
+<b class="nc"><i>863</i>&nbsp;             * waitStatus must be 0 or PROPAGATE.  Indicate that we</b>
+<b class="nc"><i>864</i>&nbsp;             * need a signal, but don&#39;t park yet.  Caller will need to</b>
+<b class="nc"><i>865</i>&nbsp;             * retry to make sure it cannot acquire before parking.</b>
+<b class="nc"><i>866</i>&nbsp;             */</b>
+<b class="nc"><i>867</i>&nbsp;            pred.compareAndSetWaitStatus(ws, Node.SIGNAL);</b>
+<i>868</i>&nbsp;        }
+<b class="nc"><i>869</i>&nbsp;        return false;</b>
+<b class="nc"><i>870</i>&nbsp;    }</b>
+<b class="nc"><i>871</i>&nbsp;</b>
+<b class="nc"><i>872</i>&nbsp;    /**</b>
+<i>873</i>&nbsp;     * Convenience method to interrupt current thread.
+<b class="nc"><i>874</i>&nbsp;     */</b>
+<b class="nc"><i>875</i>&nbsp;    static void selfInterrupt() {</b>
+<i>876</i>&nbsp;        Thread.currentThread().interrupt();
+<i>877</i>&nbsp;    }
+<i>878</i>&nbsp;
+<i>879</i>&nbsp;    /**
+<i>880</i>&nbsp;     * Convenience method to park and then check if interrupted.
+<i>881</i>&nbsp;     *
+<i>882</i>&nbsp;     * @return {@code true} if interrupted
+<i>883</i>&nbsp;     */
+<i>884</i>&nbsp;    private final boolean parkAndCheckInterrupt() {
+<b class="nc"><i>885</i>&nbsp;        LockSupport.park(this);</b>
+<b class="nc"><i>886</i>&nbsp;        return Thread.interrupted();</b>
+<i>887</i>&nbsp;    }
+<i>888</i>&nbsp;
+<b class="nc"><i>889</i>&nbsp;    /*</b>
+<b class="nc"><i>890</i>&nbsp;     * Various flavors of acquire, varying in exclusive/shared and</b>
+<b class="nc"><i>891</i>&nbsp;     * control modes.  Each is mostly the same, but annoyingly</b>
+<b class="nc"><i>892</i>&nbsp;     * different.  Only a little bit of factoring is possible due to</b>
+<b class="nc"><i>893</i>&nbsp;     * interactions of exception mechanics (including ensuring that we</b>
+<i>894</i>&nbsp;     * cancel if tryAcquire throws exception) and other control, at
+<i>895</i>&nbsp;     * least not without hurting performance too much.
+<b class="nc"><i>896</i>&nbsp;     */</b>
+<b class="nc"><i>897</i>&nbsp;</b>
+<b class="nc"><i>898</i>&nbsp;    /**</b>
+<b class="nc"><i>899</i>&nbsp;     * Acquires in exclusive uninterruptible mode for thread already in</b>
+<i>900</i>&nbsp;     * queue. Used by condition wait methods as well as acquire.
+<b class="nc"><i>901</i>&nbsp;     *</b>
+<b class="nc"><i>902</i>&nbsp;     * @param node the node</b>
+<i>903</i>&nbsp;     * @param arg the acquire argument
+<i>904</i>&nbsp;     * @return {@code true} if interrupted while waiting
+<i>905</i>&nbsp;     */
+<i>906</i>&nbsp;    final boolean acquireQueued(final Node node, int arg) {
+<i>907</i>&nbsp;        boolean interrupted = false;
+<i>908</i>&nbsp;        try {
+<i>909</i>&nbsp;            for (;;) {
+<i>910</i>&nbsp;                final Node p = node.predecessor();
+<i>911</i>&nbsp;                if (p == head &amp;&amp; tryAcquire(arg)) {
+<i>912</i>&nbsp;                    setHead(node);
+<i>913</i>&nbsp;                    p.next = null; // help GC
+<i>914</i>&nbsp;                    return interrupted;
+<b class="nc"><i>915</i>&nbsp;                }</b>
+<b class="nc"><i>916</i>&nbsp;                if (shouldParkAfterFailedAcquire(p, node))</b>
+<b class="nc"><i>917</i>&nbsp;                    interrupted |= parkAndCheckInterrupt();</b>
+<b class="nc"><i>918</i>&nbsp;            }</b>
+<b class="nc"><i>919</i>&nbsp;        } catch (Throwable t) {</b>
+<i>920</i>&nbsp;            cancelAcquire(node);
+<i>921</i>&nbsp;            if (interrupted)
+<b class="nc"><i>922</i>&nbsp;                selfInterrupt();</b>
+<b class="nc"><i>923</i>&nbsp;            throw t;</b>
+<b class="nc"><i>924</i>&nbsp;        }</b>
+<b class="nc"><i>925</i>&nbsp;    }</b>
+<b class="nc"><i>926</i>&nbsp;</b>
+<b class="nc"><i>927</i>&nbsp;    /**</b>
+<i>928</i>&nbsp;     * Acquires in exclusive interruptible mode.
+<b class="nc"><i>929</i>&nbsp;     * @param arg the acquire argument</b>
+<b class="nc"><i>930</i>&nbsp;     */</b>
+<b class="nc"><i>931</i>&nbsp;    private void doAcquireInterruptibly(int arg)</b>
+<b class="nc"><i>932</i>&nbsp;        throws InterruptedException {</b>
+<i>933</i>&nbsp;        final Node node = addWaiter(Node.EXCLUSIVE);
+<b class="nc"><i>934</i>&nbsp;        try {</b>
+<b class="nc"><i>935</i>&nbsp;            for (;;) {</b>
+<b class="nc"><i>936</i>&nbsp;                final Node p = node.predecessor();</b>
+<b class="nc"><i>937</i>&nbsp;                if (p == head &amp;&amp; tryAcquire(arg)) {</b>
+<i>938</i>&nbsp;                    setHead(node);
+<b class="nc"><i>939</i>&nbsp;                    p.next = null; // help GC</b>
+<b class="nc"><i>940</i>&nbsp;                    return;</b>
+<i>941</i>&nbsp;                }
+<i>942</i>&nbsp;                if (shouldParkAfterFailedAcquire(p, node) &amp;&amp;
+<i>943</i>&nbsp;                    parkAndCheckInterrupt())
+<i>944</i>&nbsp;                    throw new InterruptedException();
+<i>945</i>&nbsp;            }
+<i>946</i>&nbsp;        } catch (Throwable t) {
+<i>947</i>&nbsp;            cancelAcquire(node);
+<i>948</i>&nbsp;            throw t;
+<b class="nc"><i>949</i>&nbsp;        }</b>
+<b class="nc"><i>950</i>&nbsp;    }</b>
+<i>951</i>&nbsp;
+<b class="nc"><i>952</i>&nbsp;    /**</b>
+<i>953</i>&nbsp;     * Acquires in exclusive timed mode.
+<b class="nc"><i>954</i>&nbsp;     *</b>
+<b class="nc"><i>955</i>&nbsp;     * @param arg the acquire argument</b>
+<b class="nc"><i>956</i>&nbsp;     * @param nanosTimeout max wait time</b>
+<b class="nc"><i>957</i>&nbsp;     * @return {@code true} if acquired</b>
+<b class="nc"><i>958</i>&nbsp;     */</b>
+<b class="nc"><i>959</i>&nbsp;    private boolean doAcquireNanos(int arg, long nanosTimeout)</b>
+<b class="nc"><i>960</i>&nbsp;            throws InterruptedException {</b>
+<b class="nc"><i>961</i>&nbsp;        if (nanosTimeout &lt;= 0L)</b>
+<b class="nc"><i>962</i>&nbsp;            return false;</b>
+<i>963</i>&nbsp;        final long deadline = System.nanoTime() + nanosTimeout;
+<i>964</i>&nbsp;        final Node node = addWaiter(Node.EXCLUSIVE);
+<i>965</i>&nbsp;        try {
+<b class="nc"><i>966</i>&nbsp;            for (;;) {</b>
+<b class="nc"><i>967</i>&nbsp;                final Node p = node.predecessor();</b>
+<b class="nc"><i>968</i>&nbsp;                if (p == head &amp;&amp; tryAcquire(arg)) {</b>
+<b class="nc"><i>969</i>&nbsp;                    setHead(node);</b>
+<i>970</i>&nbsp;                    p.next = null; // help GC
+<b class="nc"><i>971</i>&nbsp;                    return true;</b>
+<b class="nc"><i>972</i>&nbsp;                }</b>
+<i>973</i>&nbsp;                nanosTimeout = deadline - System.nanoTime();
+<i>974</i>&nbsp;                if (nanosTimeout &lt;= 0L) {
+<i>975</i>&nbsp;                    cancelAcquire(node);
+<i>976</i>&nbsp;                    return false;
+<i>977</i>&nbsp;                }
+<i>978</i>&nbsp;                if (shouldParkAfterFailedAcquire(p, node) &amp;&amp;
+<i>979</i>&nbsp;                    nanosTimeout &gt; SPIN_FOR_TIMEOUT_THRESHOLD)
+<i>980</i>&nbsp;                    LockSupport.parkNanos(this, nanosTimeout);
+<i>981</i>&nbsp;                if (Thread.interrupted())
+<b class="nc"><i>982</i>&nbsp;                    throw new InterruptedException();</b>
+<b class="nc"><i>983</i>&nbsp;            }</b>
+<i>984</i>&nbsp;        } catch (Throwable t) {
+<i>985</i>&nbsp;            cancelAcquire(node);
+<b class="nc"><i>986</i>&nbsp;            throw t;</b>
+<b class="nc"><i>987</i>&nbsp;        }</b>
+<b class="nc"><i>988</i>&nbsp;    }</b>
+<b class="nc"><i>989</i>&nbsp;</b>
+<b class="nc"><i>990</i>&nbsp;    /**</b>
+<b class="nc"><i>991</i>&nbsp;     * Acquires in shared uninterruptible mode.</b>
+<b class="nc"><i>992</i>&nbsp;     * @param arg the acquire argument</b>
+<i>993</i>&nbsp;     */
+<i>994</i>&nbsp;    private void doAcquireShared(int arg) {
+<i>995</i>&nbsp;        final Node node = addWaiter(Node.SHARED);
+<b class="nc"><i>996</i>&nbsp;        boolean interrupted = false;</b>
+<b class="nc"><i>997</i>&nbsp;        try {</b>
+<b class="nc"><i>998</i>&nbsp;            for (;;) {</b>
+<b class="nc"><i>999</i>&nbsp;                final Node p = node.predecessor();</b>
+<i>1000</i>&nbsp;                if (p == head) {
+<b class="nc"><i>1001</i>&nbsp;                    int r = tryAcquireShared(arg);</b>
+<b class="nc"><i>1002</i>&nbsp;                    if (r &gt;= 0) {</b>
+<i>1003</i>&nbsp;                        setHeadAndPropagate(node, r);
+<i>1004</i>&nbsp;                        p.next = null; // help GC
+<i>1005</i>&nbsp;                        return;
+<i>1006</i>&nbsp;                    }
+<i>1007</i>&nbsp;                }
+<i>1008</i>&nbsp;                if (shouldParkAfterFailedAcquire(p, node))
+<i>1009</i>&nbsp;                    interrupted |= parkAndCheckInterrupt();
+<i>1010</i>&nbsp;            }
+<i>1011</i>&nbsp;        } catch (Throwable t) {
+<i>1012</i>&nbsp;            cancelAcquire(node);
+<i>1013</i>&nbsp;            throw t;
+<i>1014</i>&nbsp;        } finally {
+<b class="nc"><i>1015</i>&nbsp;            if (interrupted)</b>
+<b class="nc"><i>1016</i>&nbsp;                selfInterrupt();</b>
+<b class="nc"><i>1017</i>&nbsp;        }</b>
+<b class="nc"><i>1018</i>&nbsp;    }</b>
+<b class="nc"><i>1019</i>&nbsp;</b>
+<i>1020</i>&nbsp;    /**
+<i>1021</i>&nbsp;     * Acquires in shared interruptible mode.
+<b class="nc"><i>1022</i>&nbsp;     * @param arg the acquire argument</b>
+<b class="nc"><i>1023</i>&nbsp;     */</b>
+<b class="nc"><i>1024</i>&nbsp;    private void doAcquireSharedInterruptibly(int arg)</b>
+<b class="nc"><i>1025</i>&nbsp;        throws InterruptedException {</b>
+<b class="nc"><i>1026</i>&nbsp;        final Node node = addWaiter(Node.SHARED);</b>
+<b class="nc"><i>1027</i>&nbsp;        try {</b>
+<b class="nc"><i>1028</i>&nbsp;            for (;;) {</b>
+<b class="nc"><i>1029</i>&nbsp;                final Node p = node.predecessor();</b>
+<i>1030</i>&nbsp;                if (p == head) {
+<i>1031</i>&nbsp;                    int r = tryAcquireShared(arg);
+<b class="nc"><i>1032</i>&nbsp;                    if (r &gt;= 0) {</b>
+<b class="nc"><i>1033</i>&nbsp;                        setHeadAndPropagate(node, r);</b>
+<b class="nc"><i>1034</i>&nbsp;                        p.next = null; // help GC</b>
+<b class="nc"><i>1035</i>&nbsp;                        return;</b>
+<i>1036</i>&nbsp;                    }
+<b class="nc"><i>1037</i>&nbsp;                }</b>
+<b class="nc"><i>1038</i>&nbsp;                if (shouldParkAfterFailedAcquire(p, node) &amp;&amp;</b>
+<b class="nc"><i>1039</i>&nbsp;                    parkAndCheckInterrupt())</b>
+<b class="nc"><i>1040</i>&nbsp;                    throw new InterruptedException();</b>
+<i>1041</i>&nbsp;            }
+<b class="nc"><i>1042</i>&nbsp;        } catch (Throwable t) {</b>
+<b class="nc"><i>1043</i>&nbsp;            cancelAcquire(node);</b>
+<i>1044</i>&nbsp;            throw t;
+<i>1045</i>&nbsp;        }
+<i>1046</i>&nbsp;    }
+<i>1047</i>&nbsp;
+<i>1048</i>&nbsp;    /**
+<i>1049</i>&nbsp;     * Acquires in shared timed mode.
+<i>1050</i>&nbsp;     *
+<i>1051</i>&nbsp;     * @param arg the acquire argument
+<i>1052</i>&nbsp;     * @param nanosTimeout max wait time
+<i>1053</i>&nbsp;     * @return {@code true} if acquired
+<i>1054</i>&nbsp;     */
+<i>1055</i>&nbsp;    private boolean doAcquireSharedNanos(int arg, long nanosTimeout)
+<i>1056</i>&nbsp;            throws InterruptedException {
+<i>1057</i>&nbsp;        if (nanosTimeout &lt;= 0L)
+<i>1058</i>&nbsp;            return false;
+<i>1059</i>&nbsp;        final long deadline = System.nanoTime() + nanosTimeout;
+<i>1060</i>&nbsp;        final Node node = addWaiter(Node.SHARED);
+<i>1061</i>&nbsp;        try {
+<i>1062</i>&nbsp;            for (;;) {
+<i>1063</i>&nbsp;                final Node p = node.predecessor();
+<i>1064</i>&nbsp;                if (p == head) {
+<i>1065</i>&nbsp;                    int r = tryAcquireShared(arg);
+<i>1066</i>&nbsp;                    if (r &gt;= 0) {
+<i>1067</i>&nbsp;                        setHeadAndPropagate(node, r);
+<i>1068</i>&nbsp;                        p.next = null; // help GC
+<i>1069</i>&nbsp;                        return true;
+<i>1070</i>&nbsp;                    }
+<i>1071</i>&nbsp;                }
+<i>1072</i>&nbsp;                nanosTimeout = deadline - System.nanoTime();
+<i>1073</i>&nbsp;                if (nanosTimeout &lt;= 0L) {
+<i>1074</i>&nbsp;                    cancelAcquire(node);
+<i>1075</i>&nbsp;                    return false;
+<b class="nc"><i>1076</i>&nbsp;                }</b>
+<i>1077</i>&nbsp;                if (shouldParkAfterFailedAcquire(p, node) &amp;&amp;
+<i>1078</i>&nbsp;                    nanosTimeout &gt; SPIN_FOR_TIMEOUT_THRESHOLD)
+<i>1079</i>&nbsp;                    LockSupport.parkNanos(this, nanosTimeout);
+<i>1080</i>&nbsp;                if (Thread.interrupted())
+<i>1081</i>&nbsp;                    throw new InterruptedException();
+<i>1082</i>&nbsp;            }
+<i>1083</i>&nbsp;        } catch (Throwable t) {
+<i>1084</i>&nbsp;            cancelAcquire(node);
+<i>1085</i>&nbsp;            throw t;
+<i>1086</i>&nbsp;        }
+<i>1087</i>&nbsp;    }
+<i>1088</i>&nbsp;
+<i>1089</i>&nbsp;    // Main exported methods
+<i>1090</i>&nbsp;
+<i>1091</i>&nbsp;    /**
+<i>1092</i>&nbsp;     * Attempts to acquire in exclusive mode. This method should query
+<i>1093</i>&nbsp;     * if the state of the object permits it to be acquired in the
+<i>1094</i>&nbsp;     * exclusive mode, and if so to acquire it.
+<i>1095</i>&nbsp;     *
+<i>1096</i>&nbsp;     * &lt;p&gt;This method is always invoked by the thread performing
+<i>1097</i>&nbsp;     * acquire.  If this method reports failure, the acquire method
+<i>1098</i>&nbsp;     * may queue the thread, if it is not already queued, until it is
+<i>1099</i>&nbsp;     * signalled by a release from some other thread. This can be used
+<i>1100</i>&nbsp;     * to implement method {@link Lock#tryLock()}.
+<i>1101</i>&nbsp;     *
+<b class="nc"><i>1102</i>&nbsp;     * &lt;p&gt;The default</b>
+<i>1103</i>&nbsp;     * implementation throws {@link UnsupportedOperationException}.
+<i>1104</i>&nbsp;     *
+<i>1105</i>&nbsp;     * @param arg the acquire argument. This value is always the one
+<i>1106</i>&nbsp;     *        passed to an acquire method, or is the value saved on entry
+<i>1107</i>&nbsp;     *        to a condition wait.  The value is otherwise uninterpreted
+<i>1108</i>&nbsp;     *        and can represent anything you like.
+<i>1109</i>&nbsp;     * @return {@code true} if successful. Upon success, this object has
+<i>1110</i>&nbsp;     *         been acquired.
+<i>1111</i>&nbsp;     * @throws IllegalMonitorStateException if acquiring would place this
+<i>1112</i>&nbsp;     *         synchronizer in an illegal state. This exception must be
+<i>1113</i>&nbsp;     *         thrown in a consistent fashion for synchronization to work
+<i>1114</i>&nbsp;     *         correctly.
+<i>1115</i>&nbsp;     * @throws UnsupportedOperationException if exclusive mode is not supported
+<i>1116</i>&nbsp;     */
+<i>1117</i>&nbsp;    protected boolean tryAcquire(int arg) {
+<i>1118</i>&nbsp;        throw new UnsupportedOperationException();
+<i>1119</i>&nbsp;    }
+<i>1120</i>&nbsp;
+<i>1121</i>&nbsp;    /**
+<i>1122</i>&nbsp;     * Attempts to set the state to reflect a release in exclusive
+<i>1123</i>&nbsp;     * mode.
+<i>1124</i>&nbsp;     *
+<i>1125</i>&nbsp;     * &lt;p&gt;This method is always invoked by the thread performing release.
+<i>1126</i>&nbsp;     *
+<i>1127</i>&nbsp;     * &lt;p&gt;The default implementation throws
+<i>1128</i>&nbsp;     * {@link UnsupportedOperationException}.
+<i>1129</i>&nbsp;     *
+<i>1130</i>&nbsp;     * @param arg the release argument. This value is always the one
+<i>1131</i>&nbsp;     *        passed to a release method, or the current state value upon
+<i>1132</i>&nbsp;     *        entry to a condition wait.  The value is otherwise
+<i>1133</i>&nbsp;     *        uninterpreted and can represent anything you like.
+<i>1134</i>&nbsp;     * @return {@code true} if this object is now in a fully released
+<i>1135</i>&nbsp;     *         state, so that any waiting threads may attempt to acquire;
+<i>1136</i>&nbsp;     *         and {@code false} otherwise.
+<i>1137</i>&nbsp;     * @throws IllegalMonitorStateException if releasing would place this
+<b class="nc"><i>1138</i>&nbsp;     *         synchronizer in an illegal state. This exception must be</b>
+<i>1139</i>&nbsp;     *         thrown in a consistent fashion for synchronization to work
+<i>1140</i>&nbsp;     *         correctly.
+<i>1141</i>&nbsp;     * @throws UnsupportedOperationException if exclusive mode is not supported
+<i>1142</i>&nbsp;     */
+<i>1143</i>&nbsp;    protected boolean tryRelease(int arg) {
+<i>1144</i>&nbsp;        throw new UnsupportedOperationException();
+<i>1145</i>&nbsp;    }
+<i>1146</i>&nbsp;
+<i>1147</i>&nbsp;    /**
+<i>1148</i>&nbsp;     * Attempts to acquire in shared mode. This method should query if
+<i>1149</i>&nbsp;     * the state of the object permits it to be acquired in the shared
+<i>1150</i>&nbsp;     * mode, and if so to acquire it.
+<i>1151</i>&nbsp;     *
+<i>1152</i>&nbsp;     * &lt;p&gt;This method is always invoked by the thread performing
+<i>1153</i>&nbsp;     * acquire.  If this method reports failure, the acquire method
+<i>1154</i>&nbsp;     * may queue the thread, if it is not already queued, until it is
+<i>1155</i>&nbsp;     * signalled by a release from some other thread.
+<i>1156</i>&nbsp;     *
+<i>1157</i>&nbsp;     * &lt;p&gt;The default implementation throws {@link
+<i>1158</i>&nbsp;     * UnsupportedOperationException}.
+<i>1159</i>&nbsp;     *
+<i>1160</i>&nbsp;     * @param arg the acquire argument. This value is always the one
+<i>1161</i>&nbsp;     *        passed to an acquire method, or is the value saved on entry
+<i>1162</i>&nbsp;     *        to a condition wait.  The value is otherwise uninterpreted
+<b class="nc"><i>1163</i>&nbsp;     *        and can represent anything you like.</b>
+<i>1164</i>&nbsp;     * @return a negative value on failure; zero if acquisition in shared
+<i>1165</i>&nbsp;     *         mode succeeded but no subsequent shared-mode acquire can
+<i>1166</i>&nbsp;     *         succeed; and a positive value if acquisition in shared
+<i>1167</i>&nbsp;     *         mode succeeded and subsequent shared-mode acquires might
+<i>1168</i>&nbsp;     *         also succeed, in which case a subsequent waiting thread
+<i>1169</i>&nbsp;     *         must check availability. (Support for three different
+<i>1170</i>&nbsp;     *         return values enables this method to be used in contexts
+<i>1171</i>&nbsp;     *         where acquires only sometimes act exclusively.)  Upon
+<i>1172</i>&nbsp;     *         success, this object has been acquired.
+<i>1173</i>&nbsp;     * @throws IllegalMonitorStateException if acquiring would place this
+<i>1174</i>&nbsp;     *         synchronizer in an illegal state. This exception must be
+<i>1175</i>&nbsp;     *         thrown in a consistent fashion for synchronization to work
+<i>1176</i>&nbsp;     *         correctly.
+<i>1177</i>&nbsp;     * @throws UnsupportedOperationException if shared mode is not supported
+<i>1178</i>&nbsp;     */
+<i>1179</i>&nbsp;    protected int tryAcquireShared(int arg) {
+<i>1180</i>&nbsp;        throw new UnsupportedOperationException();
+<i>1181</i>&nbsp;    }
+<b class="nc"><i>1182</i>&nbsp;</b>
+<i>1183</i>&nbsp;    /**
+<i>1184</i>&nbsp;     * Attempts to set the state to reflect a release in shared mode.
+<i>1185</i>&nbsp;     *
+<i>1186</i>&nbsp;     * &lt;p&gt;This method is always invoked by the thread performing release.
+<i>1187</i>&nbsp;     *
+<i>1188</i>&nbsp;     * &lt;p&gt;The default implementation throws
+<i>1189</i>&nbsp;     * {@link UnsupportedOperationException}.
+<i>1190</i>&nbsp;     *
+<i>1191</i>&nbsp;     * @param arg the release argument. This value is always the one
+<i>1192</i>&nbsp;     *        passed to a release method, or the current state value upon
+<i>1193</i>&nbsp;     *        entry to a condition wait.  The value is otherwise
+<i>1194</i>&nbsp;     *        uninterpreted and can represent anything you like.
+<i>1195</i>&nbsp;     * @return {@code true} if this release of shared mode may permit a
+<i>1196</i>&nbsp;     *         waiting acquire (shared or exclusive) to succeed; and
+<i>1197</i>&nbsp;     *         {@code false} otherwise
+<b class="nc"><i>1198</i>&nbsp;     * @throws IllegalMonitorStateException if releasing would place this</b>
+<b class="nc"><i>1199</i>&nbsp;     *         synchronizer in an illegal state. This exception must be</b>
+<b class="nc"><i>1200</i>&nbsp;     *         thrown in a consistent fashion for synchronization to work</b>
+<i>1201</i>&nbsp;     *         correctly.
+<i>1202</i>&nbsp;     * @throws UnsupportedOperationException if shared mode is not supported
+<i>1203</i>&nbsp;     */
+<i>1204</i>&nbsp;    protected boolean tryReleaseShared(int arg) {
+<i>1205</i>&nbsp;        throw new UnsupportedOperationException();
+<i>1206</i>&nbsp;    }
+<i>1207</i>&nbsp;
+<i>1208</i>&nbsp;    /**
+<i>1209</i>&nbsp;     * Returns {@code true} if synchronization is held exclusively with
+<i>1210</i>&nbsp;     * respect to the current (calling) thread.  This method is invoked
+<i>1211</i>&nbsp;     * upon each call to a {@link ConditionObject} method.
+<i>1212</i>&nbsp;     *
+<i>1213</i>&nbsp;     * &lt;p&gt;The default implementation throws {@link
+<i>1214</i>&nbsp;     * UnsupportedOperationException}. This method is invoked
+<i>1215</i>&nbsp;     * internally only within {@link ConditionObject} methods, so need
+<i>1216</i>&nbsp;     * not be defined if conditions are not used.
+<i>1217</i>&nbsp;     *
+<i>1218</i>&nbsp;     * @return {@code true} if synchronization is held exclusively;
+<b class="nc"><i>1219</i>&nbsp;     *         {@code false} otherwise</b>
+<b class="nc"><i>1220</i>&nbsp;     * @throws UnsupportedOperationException if conditions are not supported</b>
+<b class="nc"><i>1221</i>&nbsp;     */</b>
+<b class="nc"><i>1222</i>&nbsp;    protected boolean isHeldExclusively() {</b>
+<i>1223</i>&nbsp;        throw new UnsupportedOperationException();
+<i>1224</i>&nbsp;    }
+<i>1225</i>&nbsp;
+<i>1226</i>&nbsp;    /**
+<i>1227</i>&nbsp;     * Acquires in exclusive mode, ignoring interrupts.  Implemented
+<i>1228</i>&nbsp;     * by invoking at least once {@link #tryAcquire},
+<i>1229</i>&nbsp;     * returning on success.  Otherwise the thread is queued, possibly
+<i>1230</i>&nbsp;     * repeatedly blocking and unblocking, invoking {@link
+<i>1231</i>&nbsp;     * #tryAcquire} until success.  This method can be used
+<i>1232</i>&nbsp;     * to implement method {@link Lock#lock}.
+<i>1233</i>&nbsp;     *
+<i>1234</i>&nbsp;     * @param arg the acquire argument.  This value is conveyed to
+<i>1235</i>&nbsp;     *        {@link #tryAcquire} but is otherwise uninterpreted and
+<i>1236</i>&nbsp;     *        can represent anything you like.
+<i>1237</i>&nbsp;     */
+<i>1238</i>&nbsp;    public final void acquire(int arg) {
+<i>1239</i>&nbsp;        if (!tryAcquire(arg) &amp;&amp;
+<i>1240</i>&nbsp;            acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+<i>1241</i>&nbsp;            selfInterrupt();
+<i>1242</i>&nbsp;    }
+<i>1243</i>&nbsp;
+<b class="nc"><i>1244</i>&nbsp;    /**</b>
+<b class="nc"><i>1245</i>&nbsp;     * Acquires in exclusive mode, aborting if interrupted.</b>
+<b class="nc"><i>1246</i>&nbsp;     * Implemented by first checking interrupt status, then invoking</b>
+<b class="nc"><i>1247</i>&nbsp;     * at least once {@link #tryAcquire}, returning on</b>
+<i>1248</i>&nbsp;     * success.  Otherwise the thread is queued, possibly repeatedly
+<i>1249</i>&nbsp;     * blocking and unblocking, invoking {@link #tryAcquire}
+<i>1250</i>&nbsp;     * until success or the thread is interrupted.  This method can be
+<i>1251</i>&nbsp;     * used to implement method {@link Lock#lockInterruptibly}.
+<i>1252</i>&nbsp;     *
+<i>1253</i>&nbsp;     * @param arg the acquire argument.  This value is conveyed to
+<i>1254</i>&nbsp;     *        {@link #tryAcquire} but is otherwise uninterpreted and
+<i>1255</i>&nbsp;     *        can represent anything you like.
+<i>1256</i>&nbsp;     * @throws InterruptedException if the current thread is interrupted
+<i>1257</i>&nbsp;     */
+<i>1258</i>&nbsp;    public final void acquireInterruptibly(int arg)
+<i>1259</i>&nbsp;            throws InterruptedException {
+<i>1260</i>&nbsp;        if (Thread.interrupted())
+<b class="nc"><i>1261</i>&nbsp;            throw new InterruptedException();</b>
+<b class="nc"><i>1262</i>&nbsp;        if (!tryAcquire(arg))</b>
+<b class="nc"><i>1263</i>&nbsp;            doAcquireInterruptibly(arg);</b>
+<b class="nc"><i>1264</i>&nbsp;    }</b>
+<b class="nc"><i>1265</i>&nbsp;</b>
+<i>1266</i>&nbsp;    /**
+<b class="nc"><i>1267</i>&nbsp;     * Attempts to acquire in exclusive mode, aborting if interrupted,</b>
+<i>1268</i>&nbsp;     * and failing if the given timeout elapses.  Implemented by first
+<i>1269</i>&nbsp;     * checking interrupt status, then invoking at least once {@link
+<i>1270</i>&nbsp;     * #tryAcquire}, returning on success.  Otherwise, the thread is
+<i>1271</i>&nbsp;     * queued, possibly repeatedly blocking and unblocking, invoking
+<i>1272</i>&nbsp;     * {@link #tryAcquire} until success or the thread is interrupted
+<i>1273</i>&nbsp;     * or the timeout elapses.  This method can be used to implement
+<i>1274</i>&nbsp;     * method {@link Lock#tryLock(long, TimeUnit)}.
+<i>1275</i>&nbsp;     *
+<i>1276</i>&nbsp;     * @param arg the acquire argument.  This value is conveyed to
+<i>1277</i>&nbsp;     *        {@link #tryAcquire} but is otherwise uninterpreted and
+<i>1278</i>&nbsp;     *        can represent anything you like.
+<i>1279</i>&nbsp;     * @param nanosTimeout the maximum number of nanoseconds to wait
+<i>1280</i>&nbsp;     * @return {@code true} if acquired; {@code false} if timed out
+<i>1281</i>&nbsp;     * @throws InterruptedException if the current thread is interrupted
+<b class="nc"><i>1282</i>&nbsp;     */</b>
+<b class="nc"><i>1283</i>&nbsp;    public final boolean tryAcquireNanos(int arg, long nanosTimeout)</b>
+<i>1284</i>&nbsp;            throws InterruptedException {
+<i>1285</i>&nbsp;        if (Thread.interrupted())
+<i>1286</i>&nbsp;            throw new InterruptedException();
+<i>1287</i>&nbsp;        return tryAcquire(arg) ||
+<i>1288</i>&nbsp;            doAcquireNanos(arg, nanosTimeout);
+<i>1289</i>&nbsp;    }
+<i>1290</i>&nbsp;
+<i>1291</i>&nbsp;    /**
+<i>1292</i>&nbsp;     * Releases in exclusive mode.  Implemented by unblocking one or
+<i>1293</i>&nbsp;     * more threads if {@link #tryRelease} returns true.
+<i>1294</i>&nbsp;     * This method can be used to implement method {@link Lock#unlock}.
+<i>1295</i>&nbsp;     *
+<i>1296</i>&nbsp;     * @param arg the release argument.  This value is conveyed to
+<i>1297</i>&nbsp;     *        {@link #tryRelease} but is otherwise uninterpreted and
+<i>1298</i>&nbsp;     *        can represent anything you like.
+<i>1299</i>&nbsp;     * @return the value returned from {@link #tryRelease}
+<i>1300</i>&nbsp;     */
+<b class="nc"><i>1301</i>&nbsp;    public final boolean release(int arg) {</b>
+<b class="nc"><i>1302</i>&nbsp;        if (tryRelease(arg)) {</b>
+<b class="nc"><i>1303</i>&nbsp;            Node h = head;</b>
+<b class="nc"><i>1304</i>&nbsp;            if (h != null &amp;&amp; h.waitStatus != 0)</b>
+<i>1305</i>&nbsp;                unparkSuccessor(h);
+<i>1306</i>&nbsp;            return true;
+<i>1307</i>&nbsp;        }
+<i>1308</i>&nbsp;        return false;
+<i>1309</i>&nbsp;    }
+<i>1310</i>&nbsp;
+<i>1311</i>&nbsp;    /**
+<i>1312</i>&nbsp;     * Acquires in shared mode, ignoring interrupts.  Implemented by
+<i>1313</i>&nbsp;     * first invoking at least once {@link #tryAcquireShared},
+<i>1314</i>&nbsp;     * returning on success.  Otherwise the thread is queued, possibly
+<i>1315</i>&nbsp;     * repeatedly blocking and unblocking, invoking {@link
+<i>1316</i>&nbsp;     * #tryAcquireShared} until success.
+<i>1317</i>&nbsp;     *
+<i>1318</i>&nbsp;     * @param arg the acquire argument.  This value is conveyed to
+<i>1319</i>&nbsp;     *        {@link #tryAcquireShared} but is otherwise uninterpreted
+<i>1320</i>&nbsp;     *        and can represent anything you like.
+<i>1321</i>&nbsp;     */
+<i>1322</i>&nbsp;    public final void acquireShared(int arg) {
+<i>1323</i>&nbsp;        if (tryAcquireShared(arg) &lt; 0)
+<i>1324</i>&nbsp;            doAcquireShared(arg);
+<b class="nc"><i>1325</i>&nbsp;    }</b>
+<b class="nc"><i>1326</i>&nbsp;</b>
+<b class="nc"><i>1327</i>&nbsp;    /**</b>
+<b class="nc"><i>1328</i>&nbsp;     * Acquires in shared mode, aborting if interrupted.  Implemented</b>
+<i>1329</i>&nbsp;     * by first checking interrupt status, then invoking at least once
+<i>1330</i>&nbsp;     * {@link #tryAcquireShared}, returning on success.  Otherwise the
+<i>1331</i>&nbsp;     * thread is queued, possibly repeatedly blocking and unblocking,
+<i>1332</i>&nbsp;     * invoking {@link #tryAcquireShared} until success or the thread
+<i>1333</i>&nbsp;     * is interrupted.
+<i>1334</i>&nbsp;     * @param arg the acquire argument.
+<i>1335</i>&nbsp;     * This value is conveyed to {@link #tryAcquireShared} but is
+<i>1336</i>&nbsp;     * otherwise uninterpreted and can represent anything
+<i>1337</i>&nbsp;     * you like.
+<i>1338</i>&nbsp;     * @throws InterruptedException if the current thread is interrupted
+<i>1339</i>&nbsp;     */
+<i>1340</i>&nbsp;    public final void acquireSharedInterruptibly(int arg)
+<b class="nc"><i>1341</i>&nbsp;            throws InterruptedException {</b>
+<b class="nc"><i>1342</i>&nbsp;        if (Thread.interrupted())</b>
+<b class="nc"><i>1343</i>&nbsp;            throw new InterruptedException();</b>
+<i>1344</i>&nbsp;        if (tryAcquireShared(arg) &lt; 0)
+<b class="nc"><i>1345</i>&nbsp;            doAcquireSharedInterruptibly(arg);</b>
+<i>1346</i>&nbsp;    }
+<i>1347</i>&nbsp;
+<i>1348</i>&nbsp;    /**
+<i>1349</i>&nbsp;     * Attempts to acquire in shared mode, aborting if interrupted, and
+<i>1350</i>&nbsp;     * failing if the given timeout elapses.  Implemented by first
+<i>1351</i>&nbsp;     * checking interrupt status, then invoking at least once {@link
+<i>1352</i>&nbsp;     * #tryAcquireShared}, returning on success.  Otherwise, the
+<i>1353</i>&nbsp;     * thread is queued, possibly repeatedly blocking and unblocking,
+<i>1354</i>&nbsp;     * invoking {@link #tryAcquireShared} until success or the thread
+<i>1355</i>&nbsp;     * is interrupted or the timeout elapses.
+<i>1356</i>&nbsp;     *
+<i>1357</i>&nbsp;     * @param arg the acquire argument.  This value is conveyed to
+<i>1358</i>&nbsp;     *        {@link #tryAcquireShared} but is otherwise uninterpreted
+<i>1359</i>&nbsp;     *        and can represent anything you like.
+<i>1360</i>&nbsp;     * @param nanosTimeout the maximum number of nanoseconds to wait
+<i>1361</i>&nbsp;     * @return {@code true} if acquired; {@code false} if timed out
+<b class="nc"><i>1362</i>&nbsp;     * @throws InterruptedException if the current thread is interrupted</b>
+<i>1363</i>&nbsp;     */
+<i>1364</i>&nbsp;    public final boolean tryAcquireSharedNanos(int arg, long nanosTimeout)
+<i>1365</i>&nbsp;            throws InterruptedException {
+<i>1366</i>&nbsp;        if (Thread.interrupted())
+<i>1367</i>&nbsp;            throw new InterruptedException();
+<i>1368</i>&nbsp;        return tryAcquireShared(arg) &gt;= 0 ||
+<i>1369</i>&nbsp;            doAcquireSharedNanos(arg, nanosTimeout);
+<i>1370</i>&nbsp;    }
+<i>1371</i>&nbsp;
+<i>1372</i>&nbsp;    /**
+<i>1373</i>&nbsp;     * Releases in shared mode.  Implemented by unblocking one or more
+<i>1374</i>&nbsp;     * threads if {@link #tryReleaseShared} returns true.
+<b class="nc"><i>1375</i>&nbsp;     *</b>
+<i>1376</i>&nbsp;     * @param arg the release argument.  This value is conveyed to
+<i>1377</i>&nbsp;     *        {@link #tryReleaseShared} but is otherwise uninterpreted
+<i>1378</i>&nbsp;     *        and can represent anything you like.
+<i>1379</i>&nbsp;     * @return the value returned from {@link #tryReleaseShared}
+<i>1380</i>&nbsp;     */
+<i>1381</i>&nbsp;    public final boolean releaseShared(int arg) {
+<i>1382</i>&nbsp;        if (tryReleaseShared(arg)) {
+<i>1383</i>&nbsp;            doReleaseShared();
+<i>1384</i>&nbsp;            return true;
+<i>1385</i>&nbsp;        }
+<i>1386</i>&nbsp;        return false;
+<i>1387</i>&nbsp;    }
+<i>1388</i>&nbsp;
+<i>1389</i>&nbsp;    // Queue inspection methods
+<i>1390</i>&nbsp;
+<b class="nc"><i>1391</i>&nbsp;    /**</b>
+<i>1392</i>&nbsp;     * Queries whether any threads are waiting to acquire. Note that
+<i>1393</i>&nbsp;     * because cancellations due to interrupts and timeouts may occur
+<i>1394</i>&nbsp;     * at any time, a {@code true} return does not guarantee that any
+<i>1395</i>&nbsp;     * other thread will ever acquire.
+<i>1396</i>&nbsp;     *
+<i>1397</i>&nbsp;     * @return {@code true} if there may be other threads waiting to acquire
+<i>1398</i>&nbsp;     */
+<i>1399</i>&nbsp;    public final boolean hasQueuedThreads() {
+<i>1400</i>&nbsp;        for (Node p = tail, h = head; p != h &amp;&amp; p != null; p = p.prev)
+<i>1401</i>&nbsp;            if (p.waitStatus &lt;= 0)
+<i>1402</i>&nbsp;                return true;
+<i>1403</i>&nbsp;        return false;
+<i>1404</i>&nbsp;    }
+<i>1405</i>&nbsp;
+<i>1406</i>&nbsp;    /**
+<i>1407</i>&nbsp;     * Queries whether any threads have ever contended to acquire this
+<b class="nc"><i>1408</i>&nbsp;     * synchronizer; that is, if an acquire method has ever blocked.</b>
+<i>1409</i>&nbsp;     *
+<i>1410</i>&nbsp;     * &lt;p&gt;In this implementation, this operation returns in
+<i>1411</i>&nbsp;     * constant time.
+<b class="nc"><i>1412</i>&nbsp;     *</b>
+<i>1413</i>&nbsp;     * @return {@code true} if there has ever been contention
+<i>1414</i>&nbsp;     */
+<i>1415</i>&nbsp;    public final boolean hasContended() {
+<i>1416</i>&nbsp;        return head != null;
+<i>1417</i>&nbsp;    }
+<i>1418</i>&nbsp;
+<i>1419</i>&nbsp;    /**
+<i>1420</i>&nbsp;     * Returns the first (longest-waiting) thread in the queue, or
+<i>1421</i>&nbsp;     * {@code null} if no threads are currently queued.
+<b class="nc"><i>1422</i>&nbsp;     *</b>
+<b class="nc"><i>1423</i>&nbsp;     * &lt;p&gt;In this implementation, this operation normally returns in</b>
+<b class="nc"><i>1424</i>&nbsp;     * constant time, but may iterate upon contention if other threads are</b>
+<b class="nc"><i>1425</i>&nbsp;     * concurrently modifying the queue.</b>
+<b class="nc"><i>1426</i>&nbsp;     *</b>
+<b class="nc"><i>1427</i>&nbsp;     * @return the first (longest-waiting) thread in the queue, or</b>
+<b class="nc"><i>1428</i>&nbsp;     *         {@code null} if no threads are currently queued</b>
+<b class="nc"><i>1429</i>&nbsp;     */</b>
+<b class="nc"><i>1430</i>&nbsp;    public final Thread getFirstQueuedThread() {</b>
+<i>1431</i>&nbsp;        // handle only fast path, else relay
+<i>1432</i>&nbsp;        return (head == tail) ? null : fullGetFirstQueuedThread();
+<i>1433</i>&nbsp;    }
+<i>1434</i>&nbsp;
+<i>1435</i>&nbsp;    /**
+<i>1436</i>&nbsp;     * Version of getFirstQueuedThread called when fastpath fails.
+<i>1437</i>&nbsp;     */
+<i>1438</i>&nbsp;    private Thread fullGetFirstQueuedThread() {
+<i>1439</i>&nbsp;        /*
+<i>1440</i>&nbsp;         * The first node is normally head.next. Try to get its
+<i>1441</i>&nbsp;         * thread field, ensuring consistent reads: If thread
+<i>1442</i>&nbsp;         * field is nulled out or s.prev is no longer head, then
+<i>1443</i>&nbsp;         * some other thread(s) concurrently performed setHead in
+<b class="nc"><i>1444</i>&nbsp;         * between some of our reads. We try this twice before</b>
+<b class="nc"><i>1445</i>&nbsp;         * resorting to traversal.</b>
+<b class="nc"><i>1446</i>&nbsp;         */</b>
+<b class="nc"><i>1447</i>&nbsp;        Node h, s;</b>
+<b class="nc"><i>1448</i>&nbsp;        Thread st;</b>
+<b class="nc"><i>1449</i>&nbsp;        if (((h = head) != null &amp;&amp; (s = h.next) != null &amp;&amp;</b>
+<i>1450</i>&nbsp;             s.prev == head &amp;&amp; (st = s.thread) != null) ||
+<i>1451</i>&nbsp;            ((h = head) != null &amp;&amp; (s = h.next) != null &amp;&amp;
+<i>1452</i>&nbsp;             s.prev == head &amp;&amp; (st = s.thread) != null))
+<i>1453</i>&nbsp;            return st;
+<i>1454</i>&nbsp;
+<i>1455</i>&nbsp;        /*
+<i>1456</i>&nbsp;         * Head&#39;s next field might not have been set yet, or may have
+<i>1457</i>&nbsp;         * been unset after setHead. So we must check to see if tail
+<i>1458</i>&nbsp;         * is actually first node. If not, we continue on, safely
+<i>1459</i>&nbsp;         * traversing from tail back to head to find first,
+<i>1460</i>&nbsp;         * guaranteeing termination.
+<i>1461</i>&nbsp;         */
+<i>1462</i>&nbsp;
+<b class="nc"><i>1463</i>&nbsp;        Thread firstThread = null;</b>
+<i>1464</i>&nbsp;        for (Node p = tail; p != null &amp;&amp; p != head; p = p.prev) {
+<b class="nc"><i>1465</i>&nbsp;            Thread t = p.thread;</b>
+<i>1466</i>&nbsp;            if (t != null)
+<i>1467</i>&nbsp;                firstThread = t;
+<i>1468</i>&nbsp;        }
+<i>1469</i>&nbsp;        return firstThread;
+<i>1470</i>&nbsp;    }
+<i>1471</i>&nbsp;
+<i>1472</i>&nbsp;    /**
+<i>1473</i>&nbsp;     * Returns true if the given thread is currently queued.
+<i>1474</i>&nbsp;     *
+<i>1475</i>&nbsp;     * &lt;p&gt;This implementation traverses the queue to determine
+<i>1476</i>&nbsp;     * presence of the given thread.
+<i>1477</i>&nbsp;     *
+<i>1478</i>&nbsp;     * @param thread the thread
+<i>1479</i>&nbsp;     * @return {@code true} if the given thread is on the queue
+<i>1480</i>&nbsp;     * @throws NullPointerException if the thread is null
+<i>1481</i>&nbsp;     */
+<i>1482</i>&nbsp;    public final boolean isQueued(Thread thread) {
+<i>1483</i>&nbsp;        if (thread == null)
+<i>1484</i>&nbsp;            throw new NullPointerException();
+<i>1485</i>&nbsp;        for (Node p = tail; p != null; p = p.prev)
+<i>1486</i>&nbsp;            if (p.thread == thread)
+<i>1487</i>&nbsp;                return true;
+<i>1488</i>&nbsp;        return false;
+<i>1489</i>&nbsp;    }
+<i>1490</i>&nbsp;
+<i>1491</i>&nbsp;    /**
+<i>1492</i>&nbsp;     * Returns {@code true} if the apparent first queued thread, if one
+<i>1493</i>&nbsp;     * exists, is waiting in exclusive mode.  If this method returns
+<i>1494</i>&nbsp;     * {@code true}, and the current thread is attempting to acquire in
+<i>1495</i>&nbsp;     * shared mode (that is, this method is invoked from {@link
+<i>1496</i>&nbsp;     * #tryAcquireShared}) then it is guaranteed that the current thread
+<i>1497</i>&nbsp;     * is not the first queued thread.  Used only as a heuristic in
+<i>1498</i>&nbsp;     * ReentrantReadWriteLock.
+<i>1499</i>&nbsp;     */
+<i>1500</i>&nbsp;    final boolean apparentlyFirstQueuedIsExclusive() {
+<i>1501</i>&nbsp;        Node h, s;
+<i>1502</i>&nbsp;        return (h = head) != null &amp;&amp;
+<i>1503</i>&nbsp;            (s = h.next)  != null &amp;&amp;
+<i>1504</i>&nbsp;            !s.isShared()         &amp;&amp;
+<i>1505</i>&nbsp;            s.thread != null;
+<i>1506</i>&nbsp;    }
+<i>1507</i>&nbsp;
+<i>1508</i>&nbsp;    /**
+<i>1509</i>&nbsp;     * Queries whether any threads have been waiting to acquire longer
+<i>1510</i>&nbsp;     * than the current thread.
+<i>1511</i>&nbsp;     *
+<i>1512</i>&nbsp;     * &lt;p&gt;An invocation of this method is equivalent to (but may be
+<i>1513</i>&nbsp;     * more efficient than):
+<i>1514</i>&nbsp;     * &lt;pre&gt; {@code
+<i>1515</i>&nbsp;     * getFirstQueuedThread() != Thread.currentThread()
+<b class="nc"><i>1516</i>&nbsp;     *   &amp;&amp; hasQueuedThreads()}&lt;/pre&gt;</b>
+<b class="nc"><i>1517</i>&nbsp;     *</b>
+<i>1518</i>&nbsp;     * &lt;p&gt;Note that because cancellations due to interrupts and
+<b class="nc"><i>1519</i>&nbsp;     * timeouts may occur at any time, a {@code true} return does not</b>
+<b class="nc"><i>1520</i>&nbsp;     * guarantee that some other thread will acquire before the current</b>
+<i>1521</i>&nbsp;     * thread.  Likewise, it is possible for another thread to win a
+<i>1522</i>&nbsp;     * race to enqueue after this method has returned {@code false},
+<i>1523</i>&nbsp;     * due to the queue being empty.
+<i>1524</i>&nbsp;     *
+<i>1525</i>&nbsp;     * &lt;p&gt;This method is designed to be used by a fair synchronizer to
+<i>1526</i>&nbsp;     * avoid &lt;a href=&quot;AbstractQueuedSynchronizer.html#barging&quot;&gt;barging&lt;/a&gt;.
+<i>1527</i>&nbsp;     * Such a synchronizer&#39;s {@link #tryAcquire} method should return
+<i>1528</i>&nbsp;     * {@code false}, and its {@link #tryAcquireShared} method should
+<i>1529</i>&nbsp;     * return a negative value, if this method returns {@code true}
+<i>1530</i>&nbsp;     * (unless this is a reentrant acquire).  For example, the {@code
+<i>1531</i>&nbsp;     * tryAcquire} method for a fair, reentrant, exclusive mode
+<i>1532</i>&nbsp;     * synchronizer might look like this:
+<i>1533</i>&nbsp;     *
+<i>1534</i>&nbsp;     * &lt;pre&gt; {@code
+<i>1535</i>&nbsp;     * protected boolean tryAcquire(int arg) {
+<i>1536</i>&nbsp;     *   if (isHeldExclusively()) {
+<b class="nc"><i>1537</i>&nbsp;     *     // A reentrant acquire; increment hold count</b>
+<b class="nc"><i>1538</i>&nbsp;     *     return true;</b>
+<b class="nc"><i>1539</i>&nbsp;     *   } else if (hasQueuedPredecessors()) {</b>
+<b class="nc"><i>1540</i>&nbsp;     *     return false;</b>
+<i>1541</i>&nbsp;     *   } else {
+<b class="nc"><i>1542</i>&nbsp;     *     // try to acquire normally</b>
+<i>1543</i>&nbsp;     *   }
+<i>1544</i>&nbsp;     * }}&lt;/pre&gt;
+<i>1545</i>&nbsp;     *
+<i>1546</i>&nbsp;     * @return {@code true} if there is a queued thread preceding the
+<i>1547</i>&nbsp;     *         current thread, and {@code false} if the current thread
+<i>1548</i>&nbsp;     *         is at the head of the queue or the queue is empty
+<i>1549</i>&nbsp;     * @since 1.7
+<i>1550</i>&nbsp;     */
+<i>1551</i>&nbsp;    public final boolean hasQueuedPredecessors() {
+<i>1552</i>&nbsp;        Node h, s;
+<i>1553</i>&nbsp;        if ((h = head) != null) {
+<i>1554</i>&nbsp;            if ((s = h.next) == null || s.waitStatus &gt; 0) {
+<i>1555</i>&nbsp;                s = null; // traverse in case of concurrent cancellation
+<i>1556</i>&nbsp;                for (Node p = tail; p != h &amp;&amp; p != null; p = p.prev) {
+<b class="nc"><i>1557</i>&nbsp;                    if (p.waitStatus &lt;= 0)</b>
+<b class="nc"><i>1558</i>&nbsp;                        s = p;</b>
+<b class="nc"><i>1559</i>&nbsp;                }</b>
+<b class="nc"><i>1560</i>&nbsp;            }</b>
+<b class="nc"><i>1561</i>&nbsp;            if (s != null &amp;&amp; s.thread != Thread.currentThread())</b>
+<i>1562</i>&nbsp;                return true;
+<b class="nc"><i>1563</i>&nbsp;        }</b>
+<i>1564</i>&nbsp;        return false;
+<i>1565</i>&nbsp;    }
+<i>1566</i>&nbsp;
+<i>1567</i>&nbsp;    // Instrumentation and monitoring methods
+<i>1568</i>&nbsp;
+<i>1569</i>&nbsp;    /**
+<i>1570</i>&nbsp;     * Returns an estimate of the number of threads waiting to
+<i>1571</i>&nbsp;     * acquire.  The value is only an estimate because the number of
+<i>1572</i>&nbsp;     * threads may change dynamically while this method traverses
+<i>1573</i>&nbsp;     * internal data structures.  This method is designed for use in
+<i>1574</i>&nbsp;     * monitoring system state, not for synchronization control.
+<b class="nc"><i>1575</i>&nbsp;     *</b>
+<b class="nc"><i>1576</i>&nbsp;     * @return the estimated number of threads waiting to acquire</b>
+<b class="nc"><i>1577</i>&nbsp;     */</b>
+<b class="nc"><i>1578</i>&nbsp;    public final int getQueueLength() {</b>
+<b class="nc"><i>1579</i>&nbsp;        int n = 0;</b>
+<b class="nc"><i>1580</i>&nbsp;        for (Node p = tail; p != null; p = p.prev) {</b>
+<i>1581</i>&nbsp;            if (p.thread != null)
+<i>1582</i>&nbsp;                ++n;
+<b class="nc"><i>1583</i>&nbsp;        }</b>
+<i>1584</i>&nbsp;        return n;
+<i>1585</i>&nbsp;    }
+<i>1586</i>&nbsp;
+<i>1587</i>&nbsp;    /**
+<i>1588</i>&nbsp;     * Returns a collection containing threads that may be waiting to
+<i>1589</i>&nbsp;     * acquire.  Because the actual set of threads may change
+<i>1590</i>&nbsp;     * dynamically while constructing this result, the returned
+<i>1591</i>&nbsp;     * collection is only a best-effort estimate.  The elements of the
+<i>1592</i>&nbsp;     * returned collection are in no particular order.  This method is
+<i>1593</i>&nbsp;     * designed to facilitate construction of subclasses that provide
+<i>1594</i>&nbsp;     * more extensive monitoring facilities.
+<b class="nc"><i>1595</i>&nbsp;     *</b>
+<b class="nc"><i>1596</i>&nbsp;     * @return the collection of threads</b>
+<b class="nc"><i>1597</i>&nbsp;     */</b>
+<b class="nc"><i>1598</i>&nbsp;    public final Collection&lt;Thread&gt; getQueuedThreads() {</b>
+<b class="nc"><i>1599</i>&nbsp;        ArrayList&lt;Thread&gt; list = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>1600</i>&nbsp;        for (Node p = tail; p != null; p = p.prev) {</b>
+<i>1601</i>&nbsp;            Thread t = p.thread;
+<i>1602</i>&nbsp;            if (t != null)
+<b class="nc"><i>1603</i>&nbsp;                list.add(t);</b>
+<i>1604</i>&nbsp;        }
+<i>1605</i>&nbsp;        return list;
+<i>1606</i>&nbsp;    }
+<i>1607</i>&nbsp;
+<i>1608</i>&nbsp;    /**
+<i>1609</i>&nbsp;     * Returns a collection containing threads that may be waiting to
+<i>1610</i>&nbsp;     * acquire in exclusive mode. This has the same properties
+<i>1611</i>&nbsp;     * as {@link #getQueuedThreads} except that it only returns
+<i>1612</i>&nbsp;     * those threads waiting due to an exclusive acquire.
+<i>1613</i>&nbsp;     *
+<i>1614</i>&nbsp;     * @return the collection of threads
+<i>1615</i>&nbsp;     */
+<b class="nc"><i>1616</i>&nbsp;    public final Collection&lt;Thread&gt; getExclusiveQueuedThreads() {</b>
+<b class="nc"><i>1617</i>&nbsp;        ArrayList&lt;Thread&gt; list = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>1618</i>&nbsp;        for (Node p = tail; p != null; p = p.prev) {</b>
+<i>1619</i>&nbsp;            if (!p.isShared()) {
+<i>1620</i>&nbsp;                Thread t = p.thread;
+<i>1621</i>&nbsp;                if (t != null)
+<i>1622</i>&nbsp;                    list.add(t);
+<i>1623</i>&nbsp;            }
+<i>1624</i>&nbsp;        }
+<i>1625</i>&nbsp;        return list;
+<i>1626</i>&nbsp;    }
+<i>1627</i>&nbsp;
+<i>1628</i>&nbsp;    /**
+<i>1629</i>&nbsp;     * Returns a collection containing threads that may be waiting to
+<i>1630</i>&nbsp;     * acquire in shared mode. This has the same properties
+<i>1631</i>&nbsp;     * as {@link #getQueuedThreads} except that it only returns
+<b class="nc"><i>1632</i>&nbsp;     * those threads waiting due to a shared acquire.</b>
+<b class="nc"><i>1633</i>&nbsp;     *</b>
+<b class="nc"><i>1634</i>&nbsp;     * @return the collection of threads</b>
+<b class="nc"><i>1635</i>&nbsp;     */</b>
+<i>1636</i>&nbsp;    public final Collection&lt;Thread&gt; getSharedQueuedThreads() {
+<i>1637</i>&nbsp;        ArrayList&lt;Thread&gt; list = new ArrayList&lt;&gt;();
+<i>1638</i>&nbsp;        for (Node p = tail; p != null; p = p.prev) {
+<i>1639</i>&nbsp;            if (p.isShared()) {
+<i>1640</i>&nbsp;                Thread t = p.thread;
+<i>1641</i>&nbsp;                if (t != null)
+<i>1642</i>&nbsp;                    list.add(t);
+<i>1643</i>&nbsp;            }
+<b class="nc"><i>1644</i>&nbsp;        }</b>
+<i>1645</i>&nbsp;        return list;
+<i>1646</i>&nbsp;    }
+<i>1647</i>&nbsp;
+<i>1648</i>&nbsp;    /**
+<i>1649</i>&nbsp;     * Returns a string identifying this synchronizer, as well as its state.
+<i>1650</i>&nbsp;     * The state, in brackets, includes the String {@code &quot;State =&quot;}
+<i>1651</i>&nbsp;     * followed by the current value of {@link #getState}, and either
+<i>1652</i>&nbsp;     * {@code &quot;nonempty&quot;} or {@code &quot;empty&quot;} depending on whether the
+<b class="nc"><i>1653</i>&nbsp;     * queue is empty.</b>
+<i>1654</i>&nbsp;     *
+<b class="nc"><i>1655</i>&nbsp;     * @return a string identifying this synchronizer, as well as its state</b>
+<b class="nc"><i>1656</i>&nbsp;     */</b>
+<b class="nc"><i>1657</i>&nbsp;    public String toString() {</b>
+<b class="nc"><i>1658</i>&nbsp;        return super.toString()</b>
+<b class="nc"><i>1659</i>&nbsp;            + &quot;[State = &quot; + getState() + &quot;, &quot;</b>
+<i>1660</i>&nbsp;            + (hasQueuedThreads() ? &quot;non&quot; : &quot;&quot;) + &quot;empty queue]&quot;;
+<i>1661</i>&nbsp;    }
+<i>1662</i>&nbsp;
+<i>1663</i>&nbsp;
+<i>1664</i>&nbsp;    // Internal support methods for Conditions
+<i>1665</i>&nbsp;
+<i>1666</i>&nbsp;    /**
+<i>1667</i>&nbsp;     * Returns true if a node, always one that was initially placed on
+<i>1668</i>&nbsp;     * a condition queue, is now waiting to reacquire on sync queue.
+<i>1669</i>&nbsp;     * @param node the node
+<i>1670</i>&nbsp;     * @return true if is reacquiring
+<i>1671</i>&nbsp;     */
+<i>1672</i>&nbsp;    final boolean isOnSyncQueue(Node node) {
+<i>1673</i>&nbsp;        if (node.waitStatus == Node.CONDITION || node.prev == null)
+<b class="nc"><i>1674</i>&nbsp;            return false;</b>
+<b class="nc"><i>1675</i>&nbsp;        if (node.next != null) // If has successor, it must be on queue</b>
+<i>1676</i>&nbsp;            return true;
+<i>1677</i>&nbsp;        /*
+<i>1678</i>&nbsp;         * node.prev can be non-null, but not yet on queue because
+<i>1679</i>&nbsp;         * the CAS to place it on queue can fail. So we have to
+<i>1680</i>&nbsp;         * traverse from tail to make sure it actually made it.  It
+<i>1681</i>&nbsp;         * will always be near the tail in calls to this method, and
+<i>1682</i>&nbsp;         * unless the CAS failed (which is unlikely), it will be
+<b class="nc"><i>1683</i>&nbsp;         * there, so we hardly ever traverse much.</b>
+<b class="nc"><i>1684</i>&nbsp;         */</b>
+<b class="nc"><i>1685</i>&nbsp;        return findNodeFromTail(node);</b>
+<b class="nc"><i>1686</i>&nbsp;    }</b>
+<b class="nc"><i>1687</i>&nbsp;</b>
+<i>1688</i>&nbsp;    /**
+<i>1689</i>&nbsp;     * Returns true if node is on sync queue by searching backwards from tail.
+<i>1690</i>&nbsp;     * Called only when needed by isOnSyncQueue.
+<i>1691</i>&nbsp;     * @return true if present
+<i>1692</i>&nbsp;     */
+<i>1693</i>&nbsp;    private boolean findNodeFromTail(Node node) {
+<i>1694</i>&nbsp;        // We check for node first, since it&#39;s likely to be at or near tail.
+<i>1695</i>&nbsp;        // tail is known to be non-null, so we could re-order to &quot;save&quot;
+<i>1696</i>&nbsp;        // one null check, but we leave it this way to help the VM.
+<i>1697</i>&nbsp;        for (Node p = tail;;) {
+<b class="nc"><i>1698</i>&nbsp;            if (p == node)</b>
+<b class="nc"><i>1699</i>&nbsp;                return true;</b>
+<b class="nc"><i>1700</i>&nbsp;            if (p == null)</b>
+<i>1701</i>&nbsp;                return false;
+<i>1702</i>&nbsp;            p = p.prev;
+<i>1703</i>&nbsp;        }
+<i>1704</i>&nbsp;    }
+<i>1705</i>&nbsp;
+<i>1706</i>&nbsp;    /**
+<i>1707</i>&nbsp;     * Transfers a node from a condition queue onto sync queue.
+<b class="nc"><i>1708</i>&nbsp;     * Returns true if successful.</b>
+<b class="nc"><i>1709</i>&nbsp;     * @param node the node</b>
+<b class="nc"><i>1710</i>&nbsp;     * @return true if successfully transferred (else the node was</b>
+<i>1711</i>&nbsp;     * cancelled before signal)
+<i>1712</i>&nbsp;     */
+<i>1713</i>&nbsp;    final boolean transferForSignal(Node node) {
+<i>1714</i>&nbsp;        /*
+<i>1715</i>&nbsp;         * If cannot change waitStatus, the node has been cancelled.
+<i>1716</i>&nbsp;         */
+<i>1717</i>&nbsp;        if (!node.compareAndSetWaitStatus(Node.CONDITION, 0))
+<i>1718</i>&nbsp;            return false;
+<i>1719</i>&nbsp;
+<b class="nc"><i>1720</i>&nbsp;        /*</b>
+<i>1721</i>&nbsp;         * Splice onto queue and try to set waitStatus of predecessor to
+<b class="nc"><i>1722</i>&nbsp;         * indicate that thread is (probably) waiting. If cancelled or</b>
+<b class="nc"><i>1723</i>&nbsp;         * attempt to set waitStatus fails, wake up to resync (in which</b>
+<b class="nc"><i>1724</i>&nbsp;         * case the waitStatus can be transiently and harmlessly wrong).</b>
+<b class="nc"><i>1725</i>&nbsp;         */</b>
+<i>1726</i>&nbsp;        Node p = enq(node);
+<b class="nc"><i>1727</i>&nbsp;        int ws = p.waitStatus;</b>
+<i>1728</i>&nbsp;        if (ws &gt; 0 || !p.compareAndSetWaitStatus(ws, Node.SIGNAL))
+<i>1729</i>&nbsp;            LockSupport.unpark(node.thread);
+<b class="nc"><i>1730</i>&nbsp;        return true;</b>
+<b class="nc"><i>1731</i>&nbsp;    }</b>
+<i>1732</i>&nbsp;
+<i>1733</i>&nbsp;    /**
+<i>1734</i>&nbsp;     * Transfers node, if necessary, to sync queue after a cancelled wait.
+<i>1735</i>&nbsp;     * Returns true if thread was cancelled before being signalled.
+<i>1736</i>&nbsp;     *
+<i>1737</i>&nbsp;     * @param node the node
+<i>1738</i>&nbsp;     * @return true if cancelled before the node was signalled
+<i>1739</i>&nbsp;     */
+<i>1740</i>&nbsp;    final boolean transferAfterCancelledWait(Node node) {
+<i>1741</i>&nbsp;        if (node.compareAndSetWaitStatus(Node.CONDITION, 0)) {
+<i>1742</i>&nbsp;            enq(node);
+<i>1743</i>&nbsp;            return true;
+<i>1744</i>&nbsp;        }
+<i>1745</i>&nbsp;        /*
+<b class="nc"><i>1746</i>&nbsp;         * If we lost out to a signal(), then we can&#39;t proceed</b>
+<i>1747</i>&nbsp;         * until it finishes its enq().  Cancelling during an
+<i>1748</i>&nbsp;         * incomplete transfer is both rare and transient, so just
+<i>1749</i>&nbsp;         * spin.
+<i>1750</i>&nbsp;         */
+<i>1751</i>&nbsp;        while (!isOnSyncQueue(node))
+<i>1752</i>&nbsp;            Thread.yield();
+<i>1753</i>&nbsp;        return false;
+<i>1754</i>&nbsp;    }
+<i>1755</i>&nbsp;
+<i>1756</i>&nbsp;    /**
+<i>1757</i>&nbsp;     * Invokes release with current state value; returns saved state.
+<i>1758</i>&nbsp;     * Cancels node and throws exception on failure.
+<i>1759</i>&nbsp;     * @param node the condition node for this wait
+<i>1760</i>&nbsp;     * @return previous sync state
+<i>1761</i>&nbsp;     */
+<i>1762</i>&nbsp;    final int fullyRelease(Node node) {
+<i>1763</i>&nbsp;        try {
+<i>1764</i>&nbsp;            int savedState = getState();
+<i>1765</i>&nbsp;            if (release(savedState))
+<b class="nc"><i>1766</i>&nbsp;                return savedState;</b>
+<b class="nc"><i>1767</i>&nbsp;            throw new IllegalMonitorStateException();</b>
+<b class="nc"><i>1768</i>&nbsp;        } catch (Throwable t) {</b>
+<i>1769</i>&nbsp;            node.waitStatus = Node.CANCELLED;
+<i>1770</i>&nbsp;            throw t;
+<i>1771</i>&nbsp;        }
+<i>1772</i>&nbsp;    }
+<i>1773</i>&nbsp;
+<i>1774</i>&nbsp;    // Instrumentation methods for conditions
+<i>1775</i>&nbsp;
+<i>1776</i>&nbsp;    /**
+<i>1777</i>&nbsp;     * Queries whether the given ConditionObject
+<i>1778</i>&nbsp;     * uses this synchronizer as its lock.
+<i>1779</i>&nbsp;     *
+<i>1780</i>&nbsp;     * @param condition the condition
+<i>1781</i>&nbsp;     * @return {@code true} if owned
+<i>1782</i>&nbsp;     * @throws NullPointerException if the condition is null
+<i>1783</i>&nbsp;     */
+<i>1784</i>&nbsp;    public final boolean owns(ConditionObject condition) {
+<i>1785</i>&nbsp;        return condition.isOwnedBy(this);
+<i>1786</i>&nbsp;    }
+<i>1787</i>&nbsp;
+<b class="nc"><i>1788</i>&nbsp;    /**</b>
+<b class="nc"><i>1789</i>&nbsp;     * Queries whether any threads are waiting on the given condition</b>
+<b class="nc"><i>1790</i>&nbsp;     * associated with this synchronizer. Note that because timeouts</b>
+<i>1791</i>&nbsp;     * and interrupts may occur at any time, a {@code true} return
+<i>1792</i>&nbsp;     * does not guarantee that a future {@code signal} will awaken
+<i>1793</i>&nbsp;     * any threads.  This method is designed primarily for use in
+<i>1794</i>&nbsp;     * monitoring of the system state.
+<i>1795</i>&nbsp;     *
+<i>1796</i>&nbsp;     * @param condition the condition
+<i>1797</i>&nbsp;     * @return {@code true} if there are any waiting threads
+<i>1798</i>&nbsp;     * @throws IllegalMonitorStateException if exclusive synchronization
+<i>1799</i>&nbsp;     *         is not held
+<i>1800</i>&nbsp;     * @throws IllegalArgumentException if the given condition is
+<i>1801</i>&nbsp;     *         not associated with this synchronizer
+<i>1802</i>&nbsp;     * @throws NullPointerException if the condition is null
+<i>1803</i>&nbsp;     */
+<i>1804</i>&nbsp;    public final boolean hasWaiters(ConditionObject condition) {
+<i>1805</i>&nbsp;        if (!owns(condition))
+<i>1806</i>&nbsp;            throw new IllegalArgumentException(&quot;Not owner&quot;);
+<i>1807</i>&nbsp;        return condition.hasWaiters();
+<i>1808</i>&nbsp;    }
+<i>1809</i>&nbsp;
+<b class="nc"><i>1810</i>&nbsp;    /**</b>
+<b class="nc"><i>1811</i>&nbsp;     * Returns an estimate of the number of threads waiting on the</b>
+<b class="nc"><i>1812</i>&nbsp;     * given condition associated with this synchronizer. Note that</b>
+<i>1813</i>&nbsp;     * because timeouts and interrupts may occur at any time, the
+<i>1814</i>&nbsp;     * estimate serves only as an upper bound on the actual number of
+<i>1815</i>&nbsp;     * waiters.  This method is designed for use in monitoring system
+<i>1816</i>&nbsp;     * state, not for synchronization control.
+<i>1817</i>&nbsp;     *
+<i>1818</i>&nbsp;     * @param condition the condition
+<i>1819</i>&nbsp;     * @return the estimated number of waiting threads
+<i>1820</i>&nbsp;     * @throws IllegalMonitorStateException if exclusive synchronization
+<i>1821</i>&nbsp;     *         is not held
+<i>1822</i>&nbsp;     * @throws IllegalArgumentException if the given condition is
+<i>1823</i>&nbsp;     *         not associated with this synchronizer
+<i>1824</i>&nbsp;     * @throws NullPointerException if the condition is null
+<i>1825</i>&nbsp;     */
+<i>1826</i>&nbsp;    public final int getWaitQueueLength(ConditionObject condition) {
+<i>1827</i>&nbsp;        if (!owns(condition))
+<i>1828</i>&nbsp;            throw new IllegalArgumentException(&quot;Not owner&quot;);
+<i>1829</i>&nbsp;        return condition.getWaitQueueLength();
+<i>1830</i>&nbsp;    }
+<i>1831</i>&nbsp;
+<i>1832</i>&nbsp;    /**
+<i>1833</i>&nbsp;     * Returns a collection containing those threads that may be
+<i>1834</i>&nbsp;     * waiting on the given condition associated with this
+<i>1835</i>&nbsp;     * synchronizer.  Because the actual set of threads may change
+<i>1836</i>&nbsp;     * dynamically while constructing this result, the returned
+<i>1837</i>&nbsp;     * collection is only a best-effort estimate. The elements of the
+<i>1838</i>&nbsp;     * returned collection are in no particular order.
+<i>1839</i>&nbsp;     *
+<b class="nc"><i>1840</i>&nbsp;     * @param condition the condition</b>
+<i>1841</i>&nbsp;     * @return the collection of threads
+<i>1842</i>&nbsp;     * @throws IllegalMonitorStateException if exclusive synchronization
+<i>1843</i>&nbsp;     *         is not held
+<i>1844</i>&nbsp;     * @throws IllegalArgumentException if the given condition is
+<i>1845</i>&nbsp;     *         not associated with this synchronizer
+<i>1846</i>&nbsp;     * @throws NullPointerException if the condition is null
+<i>1847</i>&nbsp;     */
+<i>1848</i>&nbsp;    public final Collection&lt;Thread&gt; getWaitingThreads(ConditionObject condition) {
+<b class="nc"><i>1849</i>&nbsp;        if (!owns(condition))</b>
+<i>1850</i>&nbsp;            throw new IllegalArgumentException(&quot;Not owner&quot;);
+<b class="nc"><i>1851</i>&nbsp;        return condition.getWaitingThreads();</b>
+<b class="nc"><i>1852</i>&nbsp;    }</b>
+<b class="nc"><i>1853</i>&nbsp;</b>
+<i>1854</i>&nbsp;    /**
+<b class="nc"><i>1855</i>&nbsp;     * Condition implementation for a {@link AbstractQueuedSynchronizer}</b>
+<b class="nc"><i>1856</i>&nbsp;     * serving as the basis of a {@link Lock} implementation.</b>
+<b class="nc"><i>1857</i>&nbsp;     *</b>
+<i>1858</i>&nbsp;     * &lt;p&gt;Method documentation for this class describes mechanics,
+<b class="nc"><i>1859</i>&nbsp;     * not behavioral specifications from the point of view of Lock</b>
+<b class="nc"><i>1860</i>&nbsp;     * and Condition users. Exported versions of this class will in</b>
+<b class="nc"><i>1861</i>&nbsp;     * general need to be accompanied by documentation describing</b>
+<i>1862</i>&nbsp;     * condition semantics that rely on those of the associated
+<i>1863</i>&nbsp;     * {@code AbstractQueuedSynchronizer}.
+<i>1864</i>&nbsp;     *
+<i>1865</i>&nbsp;     * &lt;p&gt;This class is Serializable, but all fields are transient,
+<i>1866</i>&nbsp;     * so deserialized conditions have no waiters.
+<i>1867</i>&nbsp;     */
+<i>1868</i>&nbsp;    public class ConditionObject implements Condition, java.io.Serializable {
+<i>1869</i>&nbsp;        private static final long serialVersionUID = 1173984872572414699L;
+<i>1870</i>&nbsp;        /** First node of condition queue. */
+<i>1871</i>&nbsp;        private transient Node firstWaiter;
+<b class="nc"><i>1872</i>&nbsp;        /** Last node of condition queue. */</b>
+<b class="nc"><i>1873</i>&nbsp;        private transient Node lastWaiter;</b>
+<b class="nc"><i>1874</i>&nbsp;</b>
+<b class="nc"><i>1875</i>&nbsp;        /**</b>
+<i>1876</i>&nbsp;         * Creates a new {@code ConditionObject} instance.
+<i>1877</i>&nbsp;         */
+<i>1878</i>&nbsp;        public ConditionObject() { }
+<i>1879</i>&nbsp;
+<i>1880</i>&nbsp;        // Internal methods
+<i>1881</i>&nbsp;
+<i>1882</i>&nbsp;        /**
+<i>1883</i>&nbsp;         * Adds a new waiter to wait queue.
+<b class="nc"><i>1884</i>&nbsp;         * @return its new wait node</b>
+<i>1885</i>&nbsp;         */
+<b class="nc"><i>1886</i>&nbsp;        private Node addConditionWaiter() {</b>
+<b class="nc"><i>1887</i>&nbsp;            if (!isHeldExclusively())</b>
+<b class="nc"><i>1888</i>&nbsp;                throw new IllegalMonitorStateException();</b>
+<b class="nc"><i>1889</i>&nbsp;            Node t = lastWaiter;</b>
+<b class="nc"><i>1890</i>&nbsp;            // If lastWaiter is cancelled, clean out.</b>
+<i>1891</i>&nbsp;            if (t != null &amp;&amp; t.waitStatus != Node.CONDITION) {
+<i>1892</i>&nbsp;                unlinkCancelledWaiters();
+<i>1893</i>&nbsp;                t = lastWaiter;
+<i>1894</i>&nbsp;            }
+<i>1895</i>&nbsp;
+<i>1896</i>&nbsp;            Node node = new Node(Node.CONDITION);
+<i>1897</i>&nbsp;
+<i>1898</i>&nbsp;            if (t == null)
+<i>1899</i>&nbsp;                firstWaiter = node;
+<i>1900</i>&nbsp;            else
+<i>1901</i>&nbsp;                t.nextWaiter = node;
+<i>1902</i>&nbsp;            lastWaiter = node;
+<i>1903</i>&nbsp;            return node;
+<i>1904</i>&nbsp;        }
+<i>1905</i>&nbsp;
+<i>1906</i>&nbsp;        /**
+<i>1907</i>&nbsp;         * Removes and transfers nodes until hit non-cancelled one or
+<b class="nc"><i>1908</i>&nbsp;         * null. Split out from signal in part to encourage compilers</b>
+<b class="nc"><i>1909</i>&nbsp;         * to inline the case of no waiters.</b>
+<b class="nc"><i>1910</i>&nbsp;         * @param first (non-null) the first node on condition queue</b>
+<b class="nc"><i>1911</i>&nbsp;         */</b>
+<b class="nc"><i>1912</i>&nbsp;        private void doSignal(Node first) {</b>
+<b class="nc"><i>1913</i>&nbsp;            do {</b>
+<b class="nc"><i>1914</i>&nbsp;                if ( (firstWaiter = first.nextWaiter) == null)</b>
+<b class="nc"><i>1915</i>&nbsp;                    lastWaiter = null;</b>
+<i>1916</i>&nbsp;                first.nextWaiter = null;
+<b class="nc"><i>1917</i>&nbsp;            } while (!transferForSignal(first) &amp;&amp;</b>
+<b class="nc"><i>1918</i>&nbsp;                     (first = firstWaiter) != null);</b>
+<b class="nc"><i>1919</i>&nbsp;        }</b>
+<i>1920</i>&nbsp;
+<i>1921</i>&nbsp;        /**
+<b class="nc"><i>1922</i>&nbsp;         * Removes and transfers all nodes.</b>
+<b class="nc"><i>1923</i>&nbsp;         * @param first (non-null) the first node on condition queue</b>
+<b class="nc"><i>1924</i>&nbsp;         */</b>
+<i>1925</i>&nbsp;        private void doSignalAll(Node first) {
+<i>1926</i>&nbsp;            lastWaiter = firstWaiter = null;
+<i>1927</i>&nbsp;            do {
+<i>1928</i>&nbsp;                Node next = first.nextWaiter;
+<i>1929</i>&nbsp;                first.nextWaiter = null;
+<i>1930</i>&nbsp;                transferForSignal(first);
+<i>1931</i>&nbsp;                first = next;
+<i>1932</i>&nbsp;            } while (first != null);
+<i>1933</i>&nbsp;        }
+<i>1934</i>&nbsp;
+<i>1935</i>&nbsp;        /**
+<i>1936</i>&nbsp;         * Unlinks cancelled waiter nodes from condition queue.
+<i>1937</i>&nbsp;         * Called only while holding lock. This is called when
+<b class="nc"><i>1938</i>&nbsp;         * cancellation occurred during condition wait, and upon</b>
+<b class="nc"><i>1939</i>&nbsp;         * insertion of a new waiter when lastWaiter is seen to have</b>
+<b class="nc"><i>1940</i>&nbsp;         * been cancelled. This method is needed to avoid garbage</b>
+<b class="nc"><i>1941</i>&nbsp;         * retention in the absence of signals. So even though it may</b>
+<b class="nc"><i>1942</i>&nbsp;         * require a full traversal, it comes into play only when</b>
+<i>1943</i>&nbsp;         * timeouts or cancellations occur in the absence of
+<i>1944</i>&nbsp;         * signals. It traverses all nodes rather than stopping at a
+<i>1945</i>&nbsp;         * particular target to unlink all pointers to garbage nodes
+<i>1946</i>&nbsp;         * without requiring many re-traversals during cancellation
+<i>1947</i>&nbsp;         * storms.
+<i>1948</i>&nbsp;         */
+<i>1949</i>&nbsp;        private void unlinkCancelledWaiters() {
+<i>1950</i>&nbsp;            Node t = firstWaiter;
+<i>1951</i>&nbsp;            Node trail = null;
+<i>1952</i>&nbsp;            while (t != null) {
+<b class="nc"><i>1953</i>&nbsp;                Node next = t.nextWaiter;</b>
+<b class="nc"><i>1954</i>&nbsp;                if (t.waitStatus != Node.CONDITION) {</b>
+<b class="nc"><i>1955</i>&nbsp;                    t.nextWaiter = null;</b>
+<b class="nc"><i>1956</i>&nbsp;                    if (trail == null)</b>
+<b class="nc"><i>1957</i>&nbsp;                        firstWaiter = next;</b>
+<i>1958</i>&nbsp;                    else
+<i>1959</i>&nbsp;                        trail.nextWaiter = next;
+<i>1960</i>&nbsp;                    if (next == null)
+<i>1961</i>&nbsp;                        lastWaiter = trail;
+<i>1962</i>&nbsp;                }
+<i>1963</i>&nbsp;                else
+<i>1964</i>&nbsp;                    trail = t;
+<i>1965</i>&nbsp;                t = next;
+<i>1966</i>&nbsp;            }
+<i>1967</i>&nbsp;        }
+<i>1968</i>&nbsp;
+<i>1969</i>&nbsp;        // public methods
+<i>1970</i>&nbsp;
+<i>1971</i>&nbsp;        /**
+<b class="nc"><i>1972</i>&nbsp;         * Moves the longest-waiting thread, if one exists, from the</b>
+<b class="nc"><i>1973</i>&nbsp;         * wait queue for this condition to the wait queue for the</b>
+<b class="nc"><i>1974</i>&nbsp;         * owning lock.</b>
+<b class="nc"><i>1975</i>&nbsp;         *</b>
+<b class="nc"><i>1976</i>&nbsp;         * @throws IllegalMonitorStateException if {@link #isHeldExclusively}</b>
+<b class="nc"><i>1977</i>&nbsp;         *         returns {@code false}</b>
+<b class="nc"><i>1978</i>&nbsp;         */</b>
+<i>1979</i>&nbsp;        public final void signal() {
+<b class="nc"><i>1980</i>&nbsp;            if (!isHeldExclusively())</b>
+<b class="nc"><i>1981</i>&nbsp;                throw new IllegalMonitorStateException();</b>
+<i>1982</i>&nbsp;            Node first = firstWaiter;
+<i>1983</i>&nbsp;            if (first != null)
+<i>1984</i>&nbsp;                doSignal(first);
+<i>1985</i>&nbsp;        }
+<i>1986</i>&nbsp;
+<i>1987</i>&nbsp;        /**
+<i>1988</i>&nbsp;         * Moves all threads from the wait queue for this condition to
+<i>1989</i>&nbsp;         * the wait queue for the owning lock.
+<i>1990</i>&nbsp;         *
+<i>1991</i>&nbsp;         * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
+<i>1992</i>&nbsp;         *         returns {@code false}
+<i>1993</i>&nbsp;         */
+<i>1994</i>&nbsp;        public final void signalAll() {
+<i>1995</i>&nbsp;            if (!isHeldExclusively())
+<i>1996</i>&nbsp;                throw new IllegalMonitorStateException();
+<i>1997</i>&nbsp;            Node first = firstWaiter;
+<i>1998</i>&nbsp;            if (first != null)
+<i>1999</i>&nbsp;                doSignalAll(first);
+<i>2000</i>&nbsp;        }
+<i>2001</i>&nbsp;
+<b class="nc"><i>2002</i>&nbsp;        /**</b>
+<b class="nc"><i>2003</i>&nbsp;         * Implements uninterruptible condition wait.</b>
+<i>2004</i>&nbsp;         * &lt;ol&gt;
+<i>2005</i>&nbsp;         * &lt;li&gt;Save lock state returned by {@link #getState}.
+<i>2006</i>&nbsp;         * &lt;li&gt;Invoke {@link #release} with saved state as argument,
+<i>2007</i>&nbsp;         *     throwing IllegalMonitorStateException if it fails.
+<i>2008</i>&nbsp;         * &lt;li&gt;Block until signalled.
+<i>2009</i>&nbsp;         * &lt;li&gt;Reacquire by invoking specialized version of
+<i>2010</i>&nbsp;         *     {@link #acquire} with saved state as argument.
+<i>2011</i>&nbsp;         * &lt;/ol&gt;
+<i>2012</i>&nbsp;         */
+<b class="nc"><i>2013</i>&nbsp;        public final void awaitUninterruptibly() {</b>
+<b class="nc"><i>2014</i>&nbsp;            Node node = addConditionWaiter();</b>
+<b class="nc"><i>2015</i>&nbsp;            int savedState = fullyRelease(node);</b>
+<b class="nc"><i>2016</i>&nbsp;            boolean interrupted = false;</b>
+<i>2017</i>&nbsp;            while (!isOnSyncQueue(node)) {
+<i>2018</i>&nbsp;                LockSupport.park(this);
+<i>2019</i>&nbsp;                if (Thread.interrupted())
+<i>2020</i>&nbsp;                    interrupted = true;
+<i>2021</i>&nbsp;            }
+<i>2022</i>&nbsp;            if (acquireQueued(node, savedState) || interrupted)
+<i>2023</i>&nbsp;                selfInterrupt();
+<i>2024</i>&nbsp;        }
+<i>2025</i>&nbsp;
+<i>2026</i>&nbsp;        /*
+<i>2027</i>&nbsp;         * For interruptible waits, we need to track whether to throw
+<i>2028</i>&nbsp;         * InterruptedException, if interrupted while blocked on
+<i>2029</i>&nbsp;         * condition, versus reinterrupt current thread, if
+<i>2030</i>&nbsp;         * interrupted while blocked waiting to re-acquire.
+<i>2031</i>&nbsp;         */
+<i>2032</i>&nbsp;
+<b class="nc"><i>2033</i>&nbsp;        /** Mode meaning to reinterrupt on exit from wait */</b>
+<b class="nc"><i>2034</i>&nbsp;        private static final int REINTERRUPT =  1;</b>
+<b class="nc"><i>2035</i>&nbsp;        /** Mode meaning to throw InterruptedException on exit from wait */</b>
+<b class="nc"><i>2036</i>&nbsp;        private static final int THROW_IE    = -1;</b>
+<b class="nc"><i>2037</i>&nbsp;</b>
+<b class="nc"><i>2038</i>&nbsp;        /**</b>
+<b class="nc"><i>2039</i>&nbsp;         * Checks for interrupt, returning THROW_IE if interrupted</b>
+<b class="nc"><i>2040</i>&nbsp;         * before signalled, REINTERRUPT if after signalled, or</b>
+<b class="nc"><i>2041</i>&nbsp;         * 0 if not interrupted.</b>
+<i>2042</i>&nbsp;         */
+<b class="nc"><i>2043</i>&nbsp;        private int checkInterruptWhileWaiting(Node node) {</b>
+<b class="nc"><i>2044</i>&nbsp;            return Thread.interrupted() ?</b>
+<b class="nc"><i>2045</i>&nbsp;                (transferAfterCancelledWait(node) ? THROW_IE : REINTERRUPT) :</b>
+<b class="nc"><i>2046</i>&nbsp;                0;</b>
+<b class="nc"><i>2047</i>&nbsp;        }</b>
+<b class="nc"><i>2048</i>&nbsp;</b>
+<i>2049</i>&nbsp;        /**
+<i>2050</i>&nbsp;         * Throws InterruptedException, reinterrupts current thread, or
+<i>2051</i>&nbsp;         * does nothing, depending on mode.
+<i>2052</i>&nbsp;         */
+<i>2053</i>&nbsp;        private void reportInterruptAfterWait(int interruptMode)
+<i>2054</i>&nbsp;            throws InterruptedException {
+<i>2055</i>&nbsp;            if (interruptMode == THROW_IE)
+<i>2056</i>&nbsp;                throw new InterruptedException();
+<i>2057</i>&nbsp;            else if (interruptMode == REINTERRUPT)
+<i>2058</i>&nbsp;                selfInterrupt();
+<i>2059</i>&nbsp;        }
+<i>2060</i>&nbsp;
+<i>2061</i>&nbsp;        /**
+<i>2062</i>&nbsp;         * Implements interruptible condition wait.
+<i>2063</i>&nbsp;         * &lt;ol&gt;
+<i>2064</i>&nbsp;         * &lt;li&gt;If current thread is interrupted, throw InterruptedException.
+<i>2065</i>&nbsp;         * &lt;li&gt;Save lock state returned by {@link #getState}.
+<b class="nc"><i>2066</i>&nbsp;         * &lt;li&gt;Invoke {@link #release} with saved state as argument,</b>
+<b class="nc"><i>2067</i>&nbsp;         *     throwing IllegalMonitorStateException if it fails.</b>
+<b class="nc"><i>2068</i>&nbsp;         * &lt;li&gt;Block until signalled or interrupted.</b>
+<b class="nc"><i>2069</i>&nbsp;         * &lt;li&gt;Reacquire by invoking specialized version of</b>
+<b class="nc"><i>2070</i>&nbsp;         *     {@link #acquire} with saved state as argument.</b>
+<b class="nc"><i>2071</i>&nbsp;         * &lt;li&gt;If interrupted while blocked in step 4, throw InterruptedException.</b>
+<b class="nc"><i>2072</i>&nbsp;         * &lt;/ol&gt;</b>
+<b class="nc"><i>2073</i>&nbsp;         */</b>
+<b class="nc"><i>2074</i>&nbsp;        public final void await() throws InterruptedException {</b>
+<b class="nc"><i>2075</i>&nbsp;            if (Thread.interrupted())</b>
+<i>2076</i>&nbsp;                throw new InterruptedException();
+<b class="nc"><i>2077</i>&nbsp;            Node node = addConditionWaiter();</b>
+<b class="nc"><i>2078</i>&nbsp;            int savedState = fullyRelease(node);</b>
+<b class="nc"><i>2079</i>&nbsp;            int interruptMode = 0;</b>
+<b class="nc"><i>2080</i>&nbsp;            while (!isOnSyncQueue(node)) {</b>
+<b class="nc"><i>2081</i>&nbsp;                LockSupport.park(this);</b>
+<i>2082</i>&nbsp;                if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+<b class="nc"><i>2083</i>&nbsp;                    break;</b>
+<b class="nc"><i>2084</i>&nbsp;            }</b>
+<b class="nc"><i>2085</i>&nbsp;            if (acquireQueued(node, savedState) &amp;&amp; interruptMode != THROW_IE)</b>
+<b class="nc"><i>2086</i>&nbsp;                interruptMode = REINTERRUPT;</b>
+<b class="nc"><i>2087</i>&nbsp;            if (node.nextWaiter != null) // clean up if cancelled</b>
+<b class="nc"><i>2088</i>&nbsp;                unlinkCancelledWaiters();</b>
+<b class="nc"><i>2089</i>&nbsp;            if (interruptMode != 0)</b>
+<i>2090</i>&nbsp;                reportInterruptAfterWait(interruptMode);
+<i>2091</i>&nbsp;        }
+<i>2092</i>&nbsp;
+<i>2093</i>&nbsp;        /**
+<i>2094</i>&nbsp;         * Implements timed condition wait.
+<i>2095</i>&nbsp;         * &lt;ol&gt;
+<i>2096</i>&nbsp;         * &lt;li&gt;If current thread is interrupted, throw InterruptedException.
+<i>2097</i>&nbsp;         * &lt;li&gt;Save lock state returned by {@link #getState}.
+<i>2098</i>&nbsp;         * &lt;li&gt;Invoke {@link #release} with saved state as argument,
+<i>2099</i>&nbsp;         *     throwing IllegalMonitorStateException if it fails.
+<i>2100</i>&nbsp;         * &lt;li&gt;Block until signalled, interrupted, or timed out.
+<i>2101</i>&nbsp;         * &lt;li&gt;Reacquire by invoking specialized version of
+<i>2102</i>&nbsp;         *     {@link #acquire} with saved state as argument.
+<i>2103</i>&nbsp;         * &lt;li&gt;If interrupted while blocked in step 4, throw InterruptedException.
+<i>2104</i>&nbsp;         * &lt;/ol&gt;
+<i>2105</i>&nbsp;         */
+<i>2106</i>&nbsp;        public final long awaitNanos(long nanosTimeout)
+<i>2107</i>&nbsp;                throws InterruptedException {
+<b class="nc"><i>2108</i>&nbsp;            if (Thread.interrupted())</b>
+<b class="nc"><i>2109</i>&nbsp;                throw new InterruptedException();</b>
+<b class="nc"><i>2110</i>&nbsp;            // We don&#39;t check for nanosTimeout &lt;= 0L here, to allow</b>
+<b class="nc"><i>2111</i>&nbsp;            // awaitNanos(0) as a way to &quot;yield the lock&quot;.</b>
+<b class="nc"><i>2112</i>&nbsp;            final long deadline = System.nanoTime() + nanosTimeout;</b>
+<b class="nc"><i>2113</i>&nbsp;            long initialNanos = nanosTimeout;</b>
+<b class="nc"><i>2114</i>&nbsp;            Node node = addConditionWaiter();</b>
+<b class="nc"><i>2115</i>&nbsp;            int savedState = fullyRelease(node);</b>
+<b class="nc"><i>2116</i>&nbsp;            int interruptMode = 0;</b>
+<b class="nc"><i>2117</i>&nbsp;            while (!isOnSyncQueue(node)) {</b>
+<b class="nc"><i>2118</i>&nbsp;                if (nanosTimeout &lt;= 0L) {</b>
+<i>2119</i>&nbsp;                    transferAfterCancelledWait(node);
+<b class="nc"><i>2120</i>&nbsp;                    break;</b>
+<b class="nc"><i>2121</i>&nbsp;                }</b>
+<b class="nc"><i>2122</i>&nbsp;                if (nanosTimeout &gt; SPIN_FOR_TIMEOUT_THRESHOLD)</b>
+<i>2123</i>&nbsp;                    LockSupport.parkNanos(this, nanosTimeout);
+<b class="nc"><i>2124</i>&nbsp;                if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)</b>
+<b class="nc"><i>2125</i>&nbsp;                    break;</b>
+<b class="nc"><i>2126</i>&nbsp;                nanosTimeout = deadline - System.nanoTime();</b>
+<b class="nc"><i>2127</i>&nbsp;            }</b>
+<b class="nc"><i>2128</i>&nbsp;            if (acquireQueued(node, savedState) &amp;&amp; interruptMode != THROW_IE)</b>
+<b class="nc"><i>2129</i>&nbsp;                interruptMode = REINTERRUPT;</b>
+<b class="nc"><i>2130</i>&nbsp;            if (node.nextWaiter != null)</b>
+<i>2131</i>&nbsp;                unlinkCancelledWaiters();
+<i>2132</i>&nbsp;            if (interruptMode != 0)
+<i>2133</i>&nbsp;                reportInterruptAfterWait(interruptMode);
+<i>2134</i>&nbsp;            long remaining = deadline - System.nanoTime(); // avoid overflow
+<i>2135</i>&nbsp;            return (remaining &lt;= initialNanos) ? remaining : Long.MIN_VALUE;
+<i>2136</i>&nbsp;        }
+<i>2137</i>&nbsp;
+<i>2138</i>&nbsp;        /**
+<i>2139</i>&nbsp;         * Implements absolute timed condition wait.
+<i>2140</i>&nbsp;         * &lt;ol&gt;
+<i>2141</i>&nbsp;         * &lt;li&gt;If current thread is interrupted, throw InterruptedException.
+<i>2142</i>&nbsp;         * &lt;li&gt;Save lock state returned by {@link #getState}.
+<i>2143</i>&nbsp;         * &lt;li&gt;Invoke {@link #release} with saved state as argument,
+<i>2144</i>&nbsp;         *     throwing IllegalMonitorStateException if it fails.
+<i>2145</i>&nbsp;         * &lt;li&gt;Block until signalled, interrupted, or timed out.
+<i>2146</i>&nbsp;         * &lt;li&gt;Reacquire by invoking specialized version of
+<i>2147</i>&nbsp;         *     {@link #acquire} with saved state as argument.
+<i>2148</i>&nbsp;         * &lt;li&gt;If interrupted while blocked in step 4, throw InterruptedException.
+<b class="nc"><i>2149</i>&nbsp;         * &lt;li&gt;If timed out while blocked in step 4, return false, else true.</b>
+<b class="nc"><i>2150</i>&nbsp;         * &lt;/ol&gt;</b>
+<b class="nc"><i>2151</i>&nbsp;         */</b>
+<b class="nc"><i>2152</i>&nbsp;        public final boolean awaitUntil(Date deadline)</b>
+<b class="nc"><i>2153</i>&nbsp;                throws InterruptedException {</b>
+<b class="nc"><i>2154</i>&nbsp;            long abstime = deadline.getTime();</b>
+<b class="nc"><i>2155</i>&nbsp;            if (Thread.interrupted())</b>
+<b class="nc"><i>2156</i>&nbsp;                throw new InterruptedException();</b>
+<b class="nc"><i>2157</i>&nbsp;            Node node = addConditionWaiter();</b>
+<b class="nc"><i>2158</i>&nbsp;            int savedState = fullyRelease(node);</b>
+<b class="nc"><i>2159</i>&nbsp;            boolean timedout = false;</b>
+<b class="nc"><i>2160</i>&nbsp;            int interruptMode = 0;</b>
+<i>2161</i>&nbsp;            while (!isOnSyncQueue(node)) {
+<b class="nc"><i>2162</i>&nbsp;                if (System.currentTimeMillis() &gt;= abstime) {</b>
+<b class="nc"><i>2163</i>&nbsp;                    timedout = transferAfterCancelledWait(node);</b>
+<b class="nc"><i>2164</i>&nbsp;                    break;</b>
+<b class="nc"><i>2165</i>&nbsp;                }</b>
+<b class="nc"><i>2166</i>&nbsp;                LockSupport.parkUntil(this, abstime);</b>
+<i>2167</i>&nbsp;                if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+<b class="nc"><i>2168</i>&nbsp;                    break;</b>
+<b class="nc"><i>2169</i>&nbsp;            }</b>
+<b class="nc"><i>2170</i>&nbsp;            if (acquireQueued(node, savedState) &amp;&amp; interruptMode != THROW_IE)</b>
+<b class="nc"><i>2171</i>&nbsp;                interruptMode = REINTERRUPT;</b>
+<b class="nc"><i>2172</i>&nbsp;            if (node.nextWaiter != null)</b>
+<b class="nc"><i>2173</i>&nbsp;                unlinkCancelledWaiters();</b>
+<b class="nc"><i>2174</i>&nbsp;            if (interruptMode != 0)</b>
+<i>2175</i>&nbsp;                reportInterruptAfterWait(interruptMode);
+<i>2176</i>&nbsp;            return !timedout;
+<i>2177</i>&nbsp;        }
+<i>2178</i>&nbsp;
+<i>2179</i>&nbsp;        /**
+<i>2180</i>&nbsp;         * Implements timed condition wait.
+<i>2181</i>&nbsp;         * &lt;ol&gt;
+<i>2182</i>&nbsp;         * &lt;li&gt;If current thread is interrupted, throw InterruptedException.
+<i>2183</i>&nbsp;         * &lt;li&gt;Save lock state returned by {@link #getState}.
+<i>2184</i>&nbsp;         * &lt;li&gt;Invoke {@link #release} with saved state as argument,
+<i>2185</i>&nbsp;         *     throwing IllegalMonitorStateException if it fails.
+<b class="nc"><i>2186</i>&nbsp;         * &lt;li&gt;Block until signalled, interrupted, or timed out.</b>
+<i>2187</i>&nbsp;         * &lt;li&gt;Reacquire by invoking specialized version of
+<i>2188</i>&nbsp;         *     {@link #acquire} with saved state as argument.
+<i>2189</i>&nbsp;         * &lt;li&gt;If interrupted while blocked in step 4, throw InterruptedException.
+<i>2190</i>&nbsp;         * &lt;li&gt;If timed out while blocked in step 4, return false, else true.
+<i>2191</i>&nbsp;         * &lt;/ol&gt;
+<i>2192</i>&nbsp;         */
+<i>2193</i>&nbsp;        public final boolean await(long time, TimeUnit unit)
+<i>2194</i>&nbsp;                throws InterruptedException {
+<i>2195</i>&nbsp;            long nanosTimeout = unit.toNanos(time);
+<i>2196</i>&nbsp;            if (Thread.interrupted())
+<i>2197</i>&nbsp;                throw new InterruptedException();
+<b class="nc"><i>2198</i>&nbsp;            // We don&#39;t check for nanosTimeout &lt;= 0L here, to allow</b>
+<b class="nc"><i>2199</i>&nbsp;            // await(0, unit) as a way to &quot;yield the lock&quot;.</b>
+<b class="nc"><i>2200</i>&nbsp;            final long deadline = System.nanoTime() + nanosTimeout;</b>
+<b class="nc"><i>2201</i>&nbsp;            Node node = addConditionWaiter();</b>
+<b class="nc"><i>2202</i>&nbsp;            int savedState = fullyRelease(node);</b>
+<i>2203</i>&nbsp;            boolean timedout = false;
+<b class="nc"><i>2204</i>&nbsp;            int interruptMode = 0;</b>
+<i>2205</i>&nbsp;            while (!isOnSyncQueue(node)) {
+<i>2206</i>&nbsp;                if (nanosTimeout &lt;= 0L) {
+<i>2207</i>&nbsp;                    timedout = transferAfterCancelledWait(node);
+<i>2208</i>&nbsp;                    break;
+<i>2209</i>&nbsp;                }
+<i>2210</i>&nbsp;                if (nanosTimeout &gt; SPIN_FOR_TIMEOUT_THRESHOLD)
+<i>2211</i>&nbsp;                    LockSupport.parkNanos(this, nanosTimeout);
+<i>2212</i>&nbsp;                if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+<i>2213</i>&nbsp;                    break;
+<i>2214</i>&nbsp;                nanosTimeout = deadline - System.nanoTime();
+<i>2215</i>&nbsp;            }
+<i>2216</i>&nbsp;            if (acquireQueued(node, savedState) &amp;&amp; interruptMode != THROW_IE)
+<b class="nc"><i>2217</i>&nbsp;                interruptMode = REINTERRUPT;</b>
+<b class="nc"><i>2218</i>&nbsp;            if (node.nextWaiter != null)</b>
+<b class="nc"><i>2219</i>&nbsp;                unlinkCancelledWaiters();</b>
+<b class="nc"><i>2220</i>&nbsp;            if (interruptMode != 0)</b>
+<b class="nc"><i>2221</i>&nbsp;                reportInterruptAfterWait(interruptMode);</b>
+<b class="nc"><i>2222</i>&nbsp;            return !timedout;</b>
+<i>2223</i>&nbsp;        }
+<b class="nc"><i>2224</i>&nbsp;</b>
+<i>2225</i>&nbsp;        //  support for instrumentation
+<i>2226</i>&nbsp;
+<i>2227</i>&nbsp;        /**
+<i>2228</i>&nbsp;         * Returns true if this condition was created by the given
+<i>2229</i>&nbsp;         * synchronization object.
+<i>2230</i>&nbsp;         *
+<i>2231</i>&nbsp;         * @return {@code true} if owned
+<i>2232</i>&nbsp;         */
+<i>2233</i>&nbsp;        final boolean isOwnedBy(AbstractQueuedSynchronizer sync) {
+<i>2234</i>&nbsp;            return sync == AbstractQueuedSynchronizer.this;
+<i>2235</i>&nbsp;        }
+<i>2236</i>&nbsp;
+<b class="nc"><i>2237</i>&nbsp;        /**</b>
+<b class="nc"><i>2238</i>&nbsp;         * Queries whether any threads are waiting on this condition.</b>
+<b class="nc"><i>2239</i>&nbsp;         * Implements {@link AbstractQueuedSynchronizer#hasWaiters(ConditionObject)}.</b>
+<b class="nc"><i>2240</i>&nbsp;         *</b>
+<b class="nc"><i>2241</i>&nbsp;         * @return {@code true} if there are any waiting threads</b>
+<b class="nc"><i>2242</i>&nbsp;         * @throws IllegalMonitorStateException if {@link #isHeldExclusively}</b>
+<b class="nc"><i>2243</i>&nbsp;         *         returns {@code false}</b>
+<b class="nc"><i>2244</i>&nbsp;         */</b>
+<i>2245</i>&nbsp;        protected final boolean hasWaiters() {
+<i>2246</i>&nbsp;            if (!isHeldExclusively())
+<b class="nc"><i>2247</i>&nbsp;                throw new IllegalMonitorStateException();</b>
+<i>2248</i>&nbsp;            for (Node w = firstWaiter; w != null; w = w.nextWaiter) {
+<i>2249</i>&nbsp;                if (w.waitStatus == Node.CONDITION)
+<i>2250</i>&nbsp;                    return true;
+<i>2251</i>&nbsp;            }
+<i>2252</i>&nbsp;            return false;
+<i>2253</i>&nbsp;        }
+<i>2254</i>&nbsp;
+<i>2255</i>&nbsp;        /**
+<i>2256</i>&nbsp;         * Returns an estimate of the number of threads waiting on
+<i>2257</i>&nbsp;         * this condition.
+<i>2258</i>&nbsp;         * Implements {@link AbstractQueuedSynchronizer#getWaitQueueLength(ConditionObject)}.
+<i>2259</i>&nbsp;         *
+<b class="nc"><i>2260</i>&nbsp;         * @return the estimated number of waiting threads</b>
+<i>2261</i>&nbsp;         * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
+<i>2262</i>&nbsp;         *         returns {@code false}
+<i>2263</i>&nbsp;         */
+<i>2264</i>&nbsp;        protected final int getWaitQueueLength() {
+<i>2265</i>&nbsp;            if (!isHeldExclusively())
+<i>2266</i>&nbsp;                throw new IllegalMonitorStateException();
+<i>2267</i>&nbsp;            int n = 0;
+<i>2268</i>&nbsp;            for (Node w = firstWaiter; w != null; w = w.nextWaiter) {
+<b class="nc"><i>2269</i>&nbsp;                if (w.waitStatus == Node.CONDITION)</b>
+<b class="nc"><i>2270</i>&nbsp;                    ++n;</b>
+<b class="nc"><i>2271</i>&nbsp;            }</b>
+<b class="nc"><i>2272</i>&nbsp;            return n;</b>
+<b class="nc"><i>2273</i>&nbsp;        }</b>
+<b class="nc"><i>2274</i>&nbsp;</b>
+<b class="nc"><i>2275</i>&nbsp;        /**</b>
+<b class="nc"><i>2276</i>&nbsp;         * Returns a collection containing those threads that may be</b>
+<b class="nc"><i>2277</i>&nbsp;         * waiting on this Condition.</b>
+<b class="nc"><i>2278</i>&nbsp;         * Implements {@link AbstractQueuedSynchronizer#getWaitingThreads(ConditionObject)}.</b>
+<i>2279</i>&nbsp;         *
+<b class="nc"><i>2280</i>&nbsp;         * @return the collection of threads</b>
+<i>2281</i>&nbsp;         * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
+<i>2282</i>&nbsp;         *         returns {@code false}
+<i>2283</i>&nbsp;         */
+<i>2284</i>&nbsp;        protected final Collection&lt;Thread&gt; getWaitingThreads() {
+<i>2285</i>&nbsp;            if (!isHeldExclusively())
+<i>2286</i>&nbsp;                throw new IllegalMonitorStateException();
+<b class="nc"><i>2287</i>&nbsp;            ArrayList&lt;Thread&gt; list = new ArrayList&lt;&gt;();</b>
+<i>2288</i>&nbsp;            for (Node w = firstWaiter; w != null; w = w.nextWaiter) {
+<i>2289</i>&nbsp;                if (w.waitStatus == Node.CONDITION) {
+<i>2290</i>&nbsp;                    Thread t = w.thread;
+<i>2291</i>&nbsp;                    if (t != null)
+<i>2292</i>&nbsp;                        list.add(t);
+<i>2293</i>&nbsp;                }
+<b class="nc"><i>2294</i>&nbsp;            }</b>
+<i>2295</i>&nbsp;            return list;
+<i>2296</i>&nbsp;        }
+<i>2297</i>&nbsp;    }
+<i>2298</i>&nbsp;
+<i>2299</i>&nbsp;    // VarHandle mechanics
+<i>2300</i>&nbsp;    private static final VarHandle STATE;
+<i>2301</i>&nbsp;    private static final VarHandle HEAD;
+<i>2302</i>&nbsp;    private static final VarHandle TAIL;
+<b class="nc"><i>2303</i>&nbsp;</b>
+<i>2304</i>&nbsp;    static {
+<i>2305</i>&nbsp;        try {
+<i>2306</i>&nbsp;            MethodHandles.Lookup l = MethodHandles.lookup();
+<i>2307</i>&nbsp;            STATE = l.findVarHandle(AbstractQueuedSynchronizer.class, &quot;state&quot;, int.class);
+<i>2308</i>&nbsp;            HEAD = l.findVarHandle(AbstractQueuedSynchronizer.class, &quot;head&quot;, Node.class);
+<i>2309</i>&nbsp;            TAIL = l.findVarHandle(AbstractQueuedSynchronizer.class, &quot;tail&quot;, Node.class);
+<i>2310</i>&nbsp;        } catch (ReflectiveOperationException e) {
+<i>2311</i>&nbsp;            throw new ExceptionInInitializerError(e);
+<i>2312</i>&nbsp;        }
+<b class="nc"><i>2313</i>&nbsp;</b>
+<i>2314</i>&nbsp;        // Reduce the risk of rare disastrous classloading in first call to
+<i>2315</i>&nbsp;        // LockSupport.park: https://bugs.openjdk.java.net/browse/JDK-8074773
+<i>2316</i>&nbsp;        Class&lt;?&gt; ensureLoaded = LockSupport.class;
+<i>2317</i>&nbsp;    }
+<i>2318</i>&nbsp;
+<i>2319</i>&nbsp;    /**
+<i>2320</i>&nbsp;     * Initializes head and tail fields on first contention.
+<i>2321</i>&nbsp;     */
+<i>2322</i>&nbsp;    private final void initializeSyncQueue() {
+<i>2323</i>&nbsp;        Node h;
+<i>2324</i>&nbsp;        if (HEAD.compareAndSet(this, null, (h = new Node())))
+<i>2325</i>&nbsp;            tail = h;
+<i>2326</i>&nbsp;    }
+<i>2327</i>&nbsp;
+<i>2328</i>&nbsp;    /**
+<i>2329</i>&nbsp;     * CASes tail field.
+<i>2330</i>&nbsp;     */
+<i>2331</i>&nbsp;    private final boolean compareAndSetTail(Node expect, Node update) {
+<i>2332</i>&nbsp;        return TAIL.compareAndSet(this, expect, update);
+<i>2333</i>&nbsp;    }
+<i>2334</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

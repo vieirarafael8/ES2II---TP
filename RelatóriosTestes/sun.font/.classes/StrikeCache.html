@@ -1,0 +1,612 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: StrikeCache</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.font</a> ]
+</div>
+
+<h1>Coverage Summary for Class: StrikeCache (sun.font)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">StrikeCache</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 12)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 112)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">StrikeCache$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 14)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">StrikeCache$2</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">StrikeCache$SoftDisposerRef</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">StrikeCache$WeakDisposerRef</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 20)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 137)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2003, 2014, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.font;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.awt.GraphicsConfiguration;
+<i>29</i>&nbsp;import java.awt.GraphicsEnvironment;
+<i>30</i>&nbsp;import java.lang.ref.Reference;
+<i>31</i>&nbsp;import java.lang.ref.ReferenceQueue;
+<i>32</i>&nbsp;import java.lang.ref.SoftReference;
+<i>33</i>&nbsp;import java.lang.ref.WeakReference;
+<i>34</i>&nbsp;import java.util.*;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import sun.java2d.Disposer;
+<i>37</i>&nbsp;import sun.java2d.pipe.BufferedContext;
+<i>38</i>&nbsp;import sun.java2d.pipe.RenderQueue;
+<i>39</i>&nbsp;import sun.java2d.pipe.hw.AccelGraphicsConfig;
+<i>40</i>&nbsp;import jdk.internal.misc.Unsafe;
+<i>41</i>&nbsp;
+<i>42</i>&nbsp;/**
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;A FontStrike is the keeper of scaled glyph image data which is expensive
+<i>45</i>&nbsp;to compute so needs to be cached.
+<i>46</i>&nbsp;So long as that data may be being used it cannot be invalidated.
+<i>47</i>&nbsp;Yet we also need to limit the amount of native memory and number of
+<i>48</i>&nbsp;strike objects in use.
+<i>49</i>&nbsp;For scaleability and ease of use, a key goal is multi-threaded read
+<i>50</i>&nbsp;access to a strike, so that it may be shared by multiple client objects,
+<i>51</i>&nbsp;potentially executing on different threads, with no special reference
+<i>52</i>&nbsp;counting or &quot;check-out/check-in&quot; requirements which would pass on the
+<i>53</i>&nbsp;burden of keeping track of strike references to the SG2D and other clients.
+<i>54</i>&nbsp;
+<i>55</i>&nbsp;A cache of strikes is maintained via Reference objects.
+<i>56</i>&nbsp;This helps in two ways :
+<i>57</i>&nbsp;1. The VM will free references when memory is low or they have not been
+<i>58</i>&nbsp;used in a long time.
+<i>59</i>&nbsp;2. Reference queues provide a way to get notification of this so we can
+<i>60</i>&nbsp;free native memory resources.
+<i>61</i>&nbsp;
+<i>62</i>&nbsp; */
+<i>63</i>&nbsp;
+<b class="nc"><i>64</i>&nbsp;public final class StrikeCache {</b>
+<i>65</i>&nbsp;
+<b class="nc"><i>66</i>&nbsp;    static final Unsafe unsafe = Unsafe.getUnsafe();</b>
+<i>67</i>&nbsp;
+<b class="nc"><i>68</i>&nbsp;    static ReferenceQueue&lt;Object&gt; refQueue = Disposer.getQueue();</b>
+<i>69</i>&nbsp;
+<b class="nc"><i>70</i>&nbsp;    static ArrayList&lt;GlyphDisposedListener&gt; disposeListeners = new ArrayList&lt;GlyphDisposedListener&gt;(1);</b>
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;    /* Reference objects may have their referents cleared when GC chooses.
+<i>74</i>&nbsp;     * During application client start-up there is typically at least one
+<i>75</i>&nbsp;     * GC which causes the hotspot VM to clear soft (not just weak) references
+<i>76</i>&nbsp;     * Thus not only is there a GC pause, but the work done do rasterise
+<i>77</i>&nbsp;     * glyphs that are fairly certain to be needed again almost immediately
+<i>78</i>&nbsp;     * is thrown away. So for performance reasons a simple optimisation is to
+<i>79</i>&nbsp;     * keep up to 8 strong references to strikes to reduce the chance of
+<i>80</i>&nbsp;     * GC&#39;ing strikes that have been used recently. Note that this may not
+<i>81</i>&nbsp;     * suffice in Solaris UTF-8 locales where a single composite strike may be
+<i>82</i>&nbsp;     * composed of 15 individual strikes, plus the composite strike.
+<i>83</i>&nbsp;     * And this assumes the new architecture doesn&#39;t maintain strikes for
+<i>84</i>&nbsp;     * natively accessed bitmaps. It may be worth &quot;tuning&quot; the number of
+<i>85</i>&nbsp;     * strikes kept around for the platform or locale.
+<i>86</i>&nbsp;     * Since no attempt is made to ensure uniqueness or ensure synchronized
+<i>87</i>&nbsp;     * access there is no guarantee that this cache will ensure that unique
+<i>88</i>&nbsp;     * strikes are cached. Every time a strike is looked up it is added
+<i>89</i>&nbsp;     * to the current index in this cache. All this cache has to do to be
+<i>90</i>&nbsp;     * worthwhile is prevent excessive cache flushing of strikes that are
+<i>91</i>&nbsp;     * referenced frequently. The logic that adds references here could be
+<i>92</i>&nbsp;     * tweaked to keep only strikes  that represent untransformed, screen
+<i>93</i>&nbsp;     * sizes as that&#39;s the typical performance case.
+<i>94</i>&nbsp;     */
+<b class="nc"><i>95</i>&nbsp;    static int MINSTRIKES = 8; // can be overridden by property</b>
+<b class="nc"><i>96</i>&nbsp;    static int recentStrikeIndex = 0;</b>
+<i>97</i>&nbsp;    static FontStrike[] recentStrikes;
+<i>98</i>&nbsp;    static boolean cacheRefTypeWeak;
+<i>99</i>&nbsp;
+<i>100</i>&nbsp;    /*
+<i>101</i>&nbsp;     * Native sizes and offsets for glyph cache
+<i>102</i>&nbsp;     * There are 10 values.
+<i>103</i>&nbsp;     */
+<i>104</i>&nbsp;    static int nativeAddressSize;
+<i>105</i>&nbsp;    static int glyphInfoSize;
+<i>106</i>&nbsp;    static int xAdvanceOffset;
+<i>107</i>&nbsp;    static int yAdvanceOffset;
+<i>108</i>&nbsp;    static int boundsOffset;
+<i>109</i>&nbsp;    static int widthOffset;
+<i>110</i>&nbsp;    static int heightOffset;
+<i>111</i>&nbsp;    static int rowBytesOffset;
+<i>112</i>&nbsp;    static int topLeftXOffset;
+<i>113</i>&nbsp;    static int topLeftYOffset;
+<i>114</i>&nbsp;    static int pixelDataOffset;
+<i>115</i>&nbsp;    static int cacheCellOffset;
+<i>116</i>&nbsp;    static int managedOffset;
+<i>117</i>&nbsp;    static long invisibleGlyphPtr;
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;    /* Native method used to return information used for unsafe
+<i>120</i>&nbsp;     * access to native data.
+<i>121</i>&nbsp;     * return values as follows:-
+<i>122</i>&nbsp;     * arr[0] = size of an address/pointer.
+<i>123</i>&nbsp;     * arr[1] = size of a GlyphInfo
+<i>124</i>&nbsp;     * arr[2] = offset of advanceX
+<i>125</i>&nbsp;     * arr[3] = offset of advanceY
+<i>126</i>&nbsp;     * arr[4] = offset of width
+<i>127</i>&nbsp;     * arr[5] = offset of height
+<i>128</i>&nbsp;     * arr[6] = offset of rowBytes
+<i>129</i>&nbsp;     * arr[7] = offset of topLeftX
+<i>130</i>&nbsp;     * arr[8] = offset of topLeftY
+<i>131</i>&nbsp;     * arr[9] = offset of pixel data.
+<i>132</i>&nbsp;     * arr[10] = address of a GlyphImageRef representing the invisible glyph
+<i>133</i>&nbsp;     */
+<i>134</i>&nbsp;    static native void getGlyphCacheDescription(long[] infoArray);
+<i>135</i>&nbsp;
+<i>136</i>&nbsp;    static {
+<i>137</i>&nbsp;
+<b class="nc"><i>138</i>&nbsp;        long[] nativeInfo = new long[13];</b>
+<b class="nc"><i>139</i>&nbsp;        getGlyphCacheDescription(nativeInfo);</b>
+<i>140</i>&nbsp;        //Can also get address size from Unsafe class :-
+<i>141</i>&nbsp;        //nativeAddressSize = unsafe.addressSize();
+<b class="nc"><i>142</i>&nbsp;        nativeAddressSize = (int)nativeInfo[0];</b>
+<b class="nc"><i>143</i>&nbsp;        glyphInfoSize     = (int)nativeInfo[1];</b>
+<b class="nc"><i>144</i>&nbsp;        xAdvanceOffset    = (int)nativeInfo[2];</b>
+<b class="nc"><i>145</i>&nbsp;        yAdvanceOffset    = (int)nativeInfo[3];</b>
+<b class="nc"><i>146</i>&nbsp;        widthOffset       = (int)nativeInfo[4];</b>
+<b class="nc"><i>147</i>&nbsp;        heightOffset      = (int)nativeInfo[5];</b>
+<b class="nc"><i>148</i>&nbsp;        rowBytesOffset    = (int)nativeInfo[6];</b>
+<b class="nc"><i>149</i>&nbsp;        topLeftXOffset    = (int)nativeInfo[7];</b>
+<b class="nc"><i>150</i>&nbsp;        topLeftYOffset    = (int)nativeInfo[8];</b>
+<b class="nc"><i>151</i>&nbsp;        pixelDataOffset   = (int)nativeInfo[9];</b>
+<b class="nc"><i>152</i>&nbsp;        invisibleGlyphPtr = nativeInfo[10];</b>
+<b class="nc"><i>153</i>&nbsp;        cacheCellOffset = (int) nativeInfo[11];</b>
+<b class="nc"><i>154</i>&nbsp;        managedOffset = (int) nativeInfo[12];</b>
+<i>155</i>&nbsp;
+<b class="nc"><i>156</i>&nbsp;        if (nativeAddressSize &lt; 4) {</b>
+<b class="nc"><i>157</i>&nbsp;            throw new InternalError(&quot;Unexpected address size for font data: &quot; +</b>
+<i>158</i>&nbsp;                                    nativeAddressSize);
+<i>159</i>&nbsp;        }
+<i>160</i>&nbsp;
+<b class="nc"><i>161</i>&nbsp;        java.security.AccessController.doPrivileged(</b>
+<b class="nc"><i>162</i>&nbsp;                                    new java.security.PrivilegedAction&lt;Object&gt;() {</b>
+<i>163</i>&nbsp;            public Object run() {
+<i>164</i>&nbsp;
+<i>165</i>&nbsp;               /* Allow a client to override the reference type used to
+<i>166</i>&nbsp;                * cache strikes. The default is &quot;soft&quot; which hints to keep
+<i>167</i>&nbsp;                * the strikes around. This property allows the client to
+<i>168</i>&nbsp;                * override this to &quot;weak&quot; which hint to the GC to free
+<i>169</i>&nbsp;                * memory more aggressively.
+<i>170</i>&nbsp;                */
+<b class="nc"><i>171</i>&nbsp;               String refType =</b>
+<b class="nc"><i>172</i>&nbsp;                   System.getProperty(&quot;sun.java2d.font.reftype&quot;, &quot;soft&quot;);</b>
+<b class="nc"><i>173</i>&nbsp;               cacheRefTypeWeak = refType.equals(&quot;weak&quot;);</b>
+<i>174</i>&nbsp;
+<b class="nc"><i>175</i>&nbsp;                String minStrikesStr =</b>
+<b class="nc"><i>176</i>&nbsp;                    System.getProperty(&quot;sun.java2d.font.minstrikes&quot;);</b>
+<b class="nc"><i>177</i>&nbsp;                if (minStrikesStr != null) {</b>
+<i>178</i>&nbsp;                    try {
+<b class="nc"><i>179</i>&nbsp;                        MINSTRIKES = Integer.parseInt(minStrikesStr);</b>
+<b class="nc"><i>180</i>&nbsp;                        if (MINSTRIKES &lt;= 0) {</b>
+<b class="nc"><i>181</i>&nbsp;                            MINSTRIKES = 1;</b>
+<i>182</i>&nbsp;                        }
+<b class="nc"><i>183</i>&nbsp;                    } catch (NumberFormatException e) {</b>
+<b class="nc"><i>184</i>&nbsp;                    }</b>
+<i>185</i>&nbsp;                }
+<i>186</i>&nbsp;
+<b class="nc"><i>187</i>&nbsp;                recentStrikes = new FontStrike[MINSTRIKES];</b>
+<i>188</i>&nbsp;
+<b class="nc"><i>189</i>&nbsp;                return null;</b>
+<i>190</i>&nbsp;            }
+<i>191</i>&nbsp;        });
+<i>192</i>&nbsp;    }
+<i>193</i>&nbsp;
+<i>194</i>&nbsp;
+<i>195</i>&nbsp;    static void refStrike(FontStrike strike) {
+<b class="nc"><i>196</i>&nbsp;        int index = recentStrikeIndex;</b>
+<b class="nc"><i>197</i>&nbsp;        recentStrikes[index] = strike;</b>
+<b class="nc"><i>198</i>&nbsp;        index++;</b>
+<b class="nc"><i>199</i>&nbsp;        if (index == MINSTRIKES) {</b>
+<b class="nc"><i>200</i>&nbsp;            index = 0;</b>
+<i>201</i>&nbsp;        }
+<b class="nc"><i>202</i>&nbsp;        recentStrikeIndex = index;</b>
+<i>203</i>&nbsp;    }
+<i>204</i>&nbsp;
+<i>205</i>&nbsp;    private static void doDispose(FontStrikeDisposer disposer) {
+<b class="nc"><i>206</i>&nbsp;        if (disposer.intGlyphImages != null) {</b>
+<b class="nc"><i>207</i>&nbsp;            freeCachedIntMemory(disposer.intGlyphImages,</b>
+<i>208</i>&nbsp;                    disposer.pScalerContext);
+<b class="nc"><i>209</i>&nbsp;        } else if (disposer.longGlyphImages != null) {</b>
+<b class="nc"><i>210</i>&nbsp;            freeCachedLongMemory(disposer.longGlyphImages,</b>
+<i>211</i>&nbsp;                    disposer.pScalerContext);
+<b class="nc"><i>212</i>&nbsp;        } else if (disposer.segIntGlyphImages != null) {</b>
+<i>213</i>&nbsp;            /* NB Now making multiple JNI calls in this case.
+<i>214</i>&nbsp;             * But assuming that there&#39;s a reasonable amount of locality
+<i>215</i>&nbsp;             * rather than sparse references then it should be OK.
+<i>216</i>&nbsp;             */
+<b class="nc"><i>217</i>&nbsp;            for (int i=0; i&lt;disposer.segIntGlyphImages.length; i++) {</b>
+<b class="nc"><i>218</i>&nbsp;                if (disposer.segIntGlyphImages[i] != null) {</b>
+<b class="nc"><i>219</i>&nbsp;                    freeCachedIntMemory(disposer.segIntGlyphImages[i],</b>
+<i>220</i>&nbsp;                            disposer.pScalerContext);
+<i>221</i>&nbsp;                    /* native will only free the scaler context once */
+<b class="nc"><i>222</i>&nbsp;                    disposer.pScalerContext = 0L;</b>
+<b class="nc"><i>223</i>&nbsp;                    disposer.segIntGlyphImages[i] = null;</b>
+<i>224</i>&nbsp;                }
+<i>225</i>&nbsp;            }
+<i>226</i>&nbsp;            /* This may appear inefficient but it should only be invoked
+<i>227</i>&nbsp;             * for a strike that never was asked to rasterise a glyph.
+<i>228</i>&nbsp;             */
+<b class="nc"><i>229</i>&nbsp;            if (disposer.pScalerContext != 0L) {</b>
+<b class="nc"><i>230</i>&nbsp;                freeCachedIntMemory(new int[0], disposer.pScalerContext);</b>
+<i>231</i>&nbsp;            }
+<b class="nc"><i>232</i>&nbsp;        } else if (disposer.segLongGlyphImages != null) {</b>
+<b class="nc"><i>233</i>&nbsp;            for (int i=0; i&lt;disposer.segLongGlyphImages.length; i++) {</b>
+<b class="nc"><i>234</i>&nbsp;                if (disposer.segLongGlyphImages[i] != null) {</b>
+<b class="nc"><i>235</i>&nbsp;                    freeCachedLongMemory(disposer.segLongGlyphImages[i],</b>
+<i>236</i>&nbsp;                            disposer.pScalerContext);
+<b class="nc"><i>237</i>&nbsp;                    disposer.pScalerContext = 0L;</b>
+<b class="nc"><i>238</i>&nbsp;                    disposer.segLongGlyphImages[i] = null;</b>
+<i>239</i>&nbsp;                }
+<i>240</i>&nbsp;            }
+<b class="nc"><i>241</i>&nbsp;            if (disposer.pScalerContext != 0L) {</b>
+<b class="nc"><i>242</i>&nbsp;                freeCachedLongMemory(new long[0], disposer.pScalerContext);</b>
+<i>243</i>&nbsp;            }
+<b class="nc"><i>244</i>&nbsp;        } else if (disposer.pScalerContext != 0L) {</b>
+<i>245</i>&nbsp;            /* Rarely a strike may have been created that never cached
+<i>246</i>&nbsp;             * any glyphs. In this case we still want to free the scaler
+<i>247</i>&nbsp;             * context.
+<i>248</i>&nbsp;             */
+<b class="nc"><i>249</i>&nbsp;            if (longAddresses()) {</b>
+<b class="nc"><i>250</i>&nbsp;                freeCachedLongMemory(new long[0], disposer.pScalerContext);</b>
+<i>251</i>&nbsp;            } else {
+<b class="nc"><i>252</i>&nbsp;                freeCachedIntMemory(new int[0], disposer.pScalerContext);</b>
+<i>253</i>&nbsp;            }
+<i>254</i>&nbsp;        }
+<i>255</i>&nbsp;    }
+<i>256</i>&nbsp;
+<i>257</i>&nbsp;    private static boolean longAddresses() {
+<b class="nc"><i>258</i>&nbsp;        return nativeAddressSize == 8;</b>
+<i>259</i>&nbsp;    }
+<i>260</i>&nbsp;
+<i>261</i>&nbsp;    static void disposeStrike(final FontStrikeDisposer disposer) {
+<i>262</i>&nbsp;        // we need to execute the strike disposal on the rendering thread
+<i>263</i>&nbsp;        // because they may be accessed on that thread at the time of the
+<i>264</i>&nbsp;        // disposal (for example, when the accel. cache is invalidated)
+<i>265</i>&nbsp;
+<i>266</i>&nbsp;        // Whilst this is a bit heavyweight, in most applications
+<i>267</i>&nbsp;        // strike disposal is a relatively infrequent operation, so it
+<i>268</i>&nbsp;        // doesn&#39;t matter. But in some tests that use vast numbers
+<i>269</i>&nbsp;        // of strikes, the switching back and forth is measurable.
+<i>270</i>&nbsp;        // So the &quot;pollRemove&quot; call is added to batch up the work.
+<i>271</i>&nbsp;        // If we are polling we know we&#39;ve already been called back
+<i>272</i>&nbsp;        // and can directly dispose the record.
+<i>273</i>&nbsp;        // Also worrisome is the necessity of getting a GC here.
+<i>274</i>&nbsp;
+<b class="nc"><i>275</i>&nbsp;        if (Disposer.pollingQueue) {</b>
+<b class="nc"><i>276</i>&nbsp;            doDispose(disposer);</b>
+<i>277</i>&nbsp;            return;
+<i>278</i>&nbsp;        }
+<i>279</i>&nbsp;
+<b class="nc"><i>280</i>&nbsp;        RenderQueue rq = null;</b>
+<i>281</i>&nbsp;        GraphicsEnvironment ge =
+<b class="nc"><i>282</i>&nbsp;            GraphicsEnvironment.getLocalGraphicsEnvironment();</b>
+<b class="nc"><i>283</i>&nbsp;        if (!GraphicsEnvironment.isHeadless()) {</b>
+<b class="nc"><i>284</i>&nbsp;            GraphicsConfiguration gc =</b>
+<b class="nc"><i>285</i>&nbsp;                ge.getDefaultScreenDevice().getDefaultConfiguration();</b>
+<b class="nc"><i>286</i>&nbsp;            if (gc instanceof AccelGraphicsConfig) {</b>
+<b class="nc"><i>287</i>&nbsp;                AccelGraphicsConfig agc = (AccelGraphicsConfig)gc;</b>
+<b class="nc"><i>288</i>&nbsp;                BufferedContext bc = agc.getContext();</b>
+<b class="nc"><i>289</i>&nbsp;                if (bc != null) {</b>
+<b class="nc"><i>290</i>&nbsp;                    rq = bc.getRenderQueue();</b>
+<i>291</i>&nbsp;                }
+<i>292</i>&nbsp;            }
+<i>293</i>&nbsp;        }
+<b class="nc"><i>294</i>&nbsp;        if (rq != null) {</b>
+<b class="nc"><i>295</i>&nbsp;            rq.lock();</b>
+<i>296</i>&nbsp;            try {
+<b class="nc"><i>297</i>&nbsp;                rq.flushAndInvokeNow(new Runnable() {</b>
+<i>298</i>&nbsp;                    public void run() {
+<b class="nc"><i>299</i>&nbsp;                        doDispose(disposer);</b>
+<b class="nc"><i>300</i>&nbsp;                        Disposer.pollRemove();</b>
+<i>301</i>&nbsp;                    }
+<i>302</i>&nbsp;                });
+<i>303</i>&nbsp;            } finally {
+<b class="nc"><i>304</i>&nbsp;                rq.unlock();</b>
+<b class="nc"><i>305</i>&nbsp;            }</b>
+<i>306</i>&nbsp;        } else {
+<b class="nc"><i>307</i>&nbsp;            doDispose(disposer);</b>
+<i>308</i>&nbsp;        }
+<i>309</i>&nbsp;    }
+<i>310</i>&nbsp;
+<i>311</i>&nbsp;    static native void freeIntPointer(int ptr);
+<i>312</i>&nbsp;    static native void freeLongPointer(long ptr);
+<i>313</i>&nbsp;    private static native void freeIntMemory(int[] glyphPtrs, long pContext);
+<i>314</i>&nbsp;    private static native void freeLongMemory(long[] glyphPtrs, long pContext);
+<i>315</i>&nbsp;
+<i>316</i>&nbsp;    private static void freeCachedIntMemory(int[] glyphPtrs, long pContext) {
+<b class="nc"><i>317</i>&nbsp;        synchronized(disposeListeners) {</b>
+<b class="nc"><i>318</i>&nbsp;            if (disposeListeners.size() &gt; 0) {</b>
+<b class="nc"><i>319</i>&nbsp;                ArrayList&lt;Long&gt; gids = null;</b>
+<i>320</i>&nbsp;
+<b class="nc"><i>321</i>&nbsp;                for (int i = 0; i &lt; glyphPtrs.length; i++) {</b>
+<b class="nc"><i>322</i>&nbsp;                    if (glyphPtrs[i] != 0 &amp;&amp; unsafe.getByte(glyphPtrs[i] + managedOffset) == 0) {</b>
+<i>323</i>&nbsp;
+<b class="nc"><i>324</i>&nbsp;                        if (gids == null) {</b>
+<b class="nc"><i>325</i>&nbsp;                            gids = new ArrayList&lt;Long&gt;();</b>
+<i>326</i>&nbsp;                        }
+<b class="nc"><i>327</i>&nbsp;                        gids.add((long) glyphPtrs[i]);</b>
+<i>328</i>&nbsp;                    }
+<i>329</i>&nbsp;                }
+<i>330</i>&nbsp;
+<b class="nc"><i>331</i>&nbsp;                if (gids != null) {</b>
+<i>332</i>&nbsp;                    // Any reference by the disposers to the native glyph ptrs
+<i>333</i>&nbsp;                    // must be done before this returns.
+<b class="nc"><i>334</i>&nbsp;                    notifyDisposeListeners(gids);</b>
+<i>335</i>&nbsp;                }
+<i>336</i>&nbsp;            }
+<b class="nc"><i>337</i>&nbsp;        }</b>
+<i>338</i>&nbsp;
+<b class="nc"><i>339</i>&nbsp;        freeIntMemory(glyphPtrs, pContext);</b>
+<i>340</i>&nbsp;    }
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;    private static void  freeCachedLongMemory(long[] glyphPtrs, long pContext) {
+<b class="nc"><i>343</i>&nbsp;        synchronized(disposeListeners) {</b>
+<b class="nc"><i>344</i>&nbsp;        if (disposeListeners.size() &gt; 0)  {</b>
+<b class="nc"><i>345</i>&nbsp;                ArrayList&lt;Long&gt; gids = null;</b>
+<i>346</i>&nbsp;
+<b class="nc"><i>347</i>&nbsp;                for (int i=0; i &lt; glyphPtrs.length; i++) {</b>
+<b class="nc"><i>348</i>&nbsp;                    if (glyphPtrs[i] != 0</b>
+<b class="nc"><i>349</i>&nbsp;                            &amp;&amp; unsafe.getByte(glyphPtrs[i] + managedOffset) == 0) {</b>
+<i>350</i>&nbsp;
+<b class="nc"><i>351</i>&nbsp;                        if (gids == null) {</b>
+<b class="nc"><i>352</i>&nbsp;                            gids = new ArrayList&lt;Long&gt;();</b>
+<i>353</i>&nbsp;                        }
+<b class="nc"><i>354</i>&nbsp;                        gids.add(glyphPtrs[i]);</b>
+<i>355</i>&nbsp;                    }
+<i>356</i>&nbsp;                }
+<i>357</i>&nbsp;
+<b class="nc"><i>358</i>&nbsp;                if (gids != null) {</b>
+<i>359</i>&nbsp;                    // Any reference by the disposers to the native glyph ptrs
+<i>360</i>&nbsp;                    // must be done before this returns.
+<b class="nc"><i>361</i>&nbsp;                    notifyDisposeListeners(gids);</b>
+<i>362</i>&nbsp;                }
+<i>363</i>&nbsp;        }
+<b class="nc"><i>364</i>&nbsp;        }</b>
+<i>365</i>&nbsp;
+<b class="nc"><i>366</i>&nbsp;        freeLongMemory(glyphPtrs, pContext);</b>
+<i>367</i>&nbsp;    }
+<i>368</i>&nbsp;
+<i>369</i>&nbsp;    public static void addGlyphDisposedListener(GlyphDisposedListener listener) {
+<b class="nc"><i>370</i>&nbsp;        synchronized(disposeListeners) {</b>
+<b class="nc"><i>371</i>&nbsp;            disposeListeners.add(listener);</b>
+<b class="nc"><i>372</i>&nbsp;        }</b>
+<i>373</i>&nbsp;    }
+<i>374</i>&nbsp;
+<i>375</i>&nbsp;    private static void notifyDisposeListeners(ArrayList&lt;Long&gt; glyphs) {
+<b class="nc"><i>376</i>&nbsp;        for (GlyphDisposedListener listener : disposeListeners) {</b>
+<b class="nc"><i>377</i>&nbsp;            listener.glyphDisposed(glyphs);</b>
+<b class="nc"><i>378</i>&nbsp;        }</b>
+<i>379</i>&nbsp;    }
+<i>380</i>&nbsp;
+<i>381</i>&nbsp;    public static Reference&lt;FontStrike&gt; getStrikeRef(FontStrike strike) {
+<b class="nc"><i>382</i>&nbsp;        return getStrikeRef(strike, cacheRefTypeWeak);</b>
+<i>383</i>&nbsp;    }
+<i>384</i>&nbsp;
+<i>385</i>&nbsp;    public static Reference&lt;FontStrike&gt; getStrikeRef(FontStrike strike, boolean weak) {
+<i>386</i>&nbsp;        /* Some strikes may have no disposer as there&#39;s nothing
+<i>387</i>&nbsp;         * for them to free, as they allocated no native resource
+<i>388</i>&nbsp;         * eg, if they did not allocate resources because of a problem,
+<i>389</i>&nbsp;         * or they never hold native resources. So they create no disposer.
+<i>390</i>&nbsp;         * But any strike that reaches here that has a null disposer is
+<i>391</i>&nbsp;         * a potential memory leak.
+<i>392</i>&nbsp;         */
+<b class="nc"><i>393</i>&nbsp;        if (strike.disposer == null) {</b>
+<b class="nc"><i>394</i>&nbsp;            if (weak) {</b>
+<b class="nc"><i>395</i>&nbsp;                return new WeakReference&lt;&gt;(strike);</b>
+<i>396</i>&nbsp;            } else {
+<b class="nc"><i>397</i>&nbsp;                return new SoftReference&lt;&gt;(strike);</b>
+<i>398</i>&nbsp;            }
+<i>399</i>&nbsp;        }
+<i>400</i>&nbsp;
+<b class="nc"><i>401</i>&nbsp;        if (weak) {</b>
+<b class="nc"><i>402</i>&nbsp;            return new WeakDisposerRef(strike);</b>
+<i>403</i>&nbsp;        } else {
+<b class="nc"><i>404</i>&nbsp;            return new SoftDisposerRef(strike);</b>
+<i>405</i>&nbsp;        }
+<i>406</i>&nbsp;    }
+<i>407</i>&nbsp;
+<i>408</i>&nbsp;    static interface DisposableStrike {
+<i>409</i>&nbsp;        FontStrikeDisposer getDisposer();
+<i>410</i>&nbsp;    }
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;    static class SoftDisposerRef
+<i>413</i>&nbsp;        extends SoftReference&lt;FontStrike&gt; implements DisposableStrike {
+<i>414</i>&nbsp;
+<i>415</i>&nbsp;        private FontStrikeDisposer disposer;
+<i>416</i>&nbsp;
+<i>417</i>&nbsp;        public FontStrikeDisposer getDisposer() {
+<b class="nc"><i>418</i>&nbsp;            return disposer;</b>
+<i>419</i>&nbsp;        }
+<i>420</i>&nbsp;
+<i>421</i>&nbsp;        @SuppressWarnings(&quot;unchecked&quot;)
+<b class="nc"><i>422</i>&nbsp;        SoftDisposerRef(FontStrike strike) {</b>
+<b class="nc"><i>423</i>&nbsp;            super(strike, StrikeCache.refQueue);</b>
+<b class="nc"><i>424</i>&nbsp;            disposer = strike.disposer;</b>
+<i>425</i>&nbsp;            Disposer.addReference((Reference&lt;Object&gt;)(Reference)this, disposer);
+<i>426</i>&nbsp;        }
+<i>427</i>&nbsp;    }
+<i>428</i>&nbsp;
+<i>429</i>&nbsp;    static class WeakDisposerRef
+<i>430</i>&nbsp;        extends WeakReference&lt;FontStrike&gt; implements DisposableStrike {
+<i>431</i>&nbsp;
+<i>432</i>&nbsp;        private FontStrikeDisposer disposer;
+<i>433</i>&nbsp;
+<b class="nc"><i>434</i>&nbsp;        public FontStrikeDisposer getDisposer() {</b>
+<i>435</i>&nbsp;            return disposer;
+<i>436</i>&nbsp;        }
+<i>437</i>&nbsp;
+<b class="nc"><i>438</i>&nbsp;        @SuppressWarnings(&quot;unchecked&quot;)</b>
+<b class="nc"><i>439</i>&nbsp;        WeakDisposerRef(FontStrike strike) {</b>
+<b class="nc"><i>440</i>&nbsp;            super(strike, StrikeCache.refQueue);</b>
+<i>441</i>&nbsp;            disposer = strike.disposer;
+<i>442</i>&nbsp;            Disposer.addReference((Reference&lt;Object&gt;)(Reference)this, disposer);
+<i>443</i>&nbsp;        }
+<i>444</i>&nbsp;    }
+<i>445</i>&nbsp;
+<i>446</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

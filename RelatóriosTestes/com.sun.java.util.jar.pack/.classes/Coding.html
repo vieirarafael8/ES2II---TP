@@ -1,0 +1,989 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Coding</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.java.util.jar.pack</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Coding (com.sun.java.util.jar.pack)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Coding</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 72)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 399)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2001, 2011, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.java.util.jar.pack;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.io.InputStream;
+<i>30</i>&nbsp;import java.io.OutputStream;
+<i>31</i>&nbsp;import java.util.HashMap;
+<i>32</i>&nbsp;import java.util.Map;
+<i>33</i>&nbsp;import static com.sun.java.util.jar.pack.Constants.*;
+<i>34</i>&nbsp;/**
+<i>35</i>&nbsp; * Define the conversions between sequences of small integers and raw bytes.
+<i>36</i>&nbsp; * This is a schema of encodings which incorporates varying lengths,
+<i>37</i>&nbsp; * varying degrees of length variability, and varying amounts of signed-ness.
+<i>38</i>&nbsp; * @author John Rose
+<i>39</i>&nbsp; */
+<b class="nc"><i>40</i>&nbsp;class Coding implements Comparable&lt;Coding&gt;, CodingMethod, Histogram.BitMetric {</b>
+<i>41</i>&nbsp;    /*
+<i>42</i>&nbsp;      Coding schema for single integers, parameterized by (B,H,S):
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;      Let B in [1,5], H in [1,256], S in [0,3].
+<i>45</i>&nbsp;      (S limit is arbitrary.  B follows the 32-bit limit.  H is byte size.)
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;      A given (B,H,S) code varies in length from 1 to B bytes.
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;      The 256 values a byte may take on are divided into L=(256-H) and H
+<i>50</i>&nbsp;      values, with all the H values larger than the L values.
+<i>51</i>&nbsp;      (That is, the L values are [0,L) and the H are [L,256).)
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;      The last byte is always either the B-th byte, a byte with &quot;L value&quot;
+<i>54</i>&nbsp;      (&lt;L), or both.  There is no other byte that satisfies these conditions.
+<i>55</i>&nbsp;      All bytes before the last always have &quot;H values&quot; (&gt;=L).
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;      Therefore, if L==0, the code always has the full length of B bytes.
+<i>58</i>&nbsp;      The coding then becomes a classic B-byte little-endian unsigned integer.
+<i>59</i>&nbsp;      (Also, if L==128, the high bit of each byte acts signals the presence
+<i>60</i>&nbsp;      of a following byte, up to the maximum length.)
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;      In the unsigned case (S==0), the coding is compact and monotonic
+<i>63</i>&nbsp;      in the ordering of byte sequences defined by appending zero bytes
+<i>64</i>&nbsp;      to pad them to a common length B, reversing them, and ordering them
+<i>65</i>&nbsp;      lexicographically.  (This agrees with &quot;little-endian&quot; byte order.)
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;      Therefore, the unsigned value of a byte sequence may be defined as:
+<i>68</i>&nbsp;      &lt;pre&gt;
+<i>69</i>&nbsp;        U(b0)           == b0
+<i>70</i>&nbsp;                           in [0..L)
+<i>71</i>&nbsp;                           or [0..256) if B==1 (**)
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;        U(b0,b1)        == b0 + b1*H
+<i>74</i>&nbsp;                           in [L..L*(1+H))
+<i>75</i>&nbsp;                           or [L..L*(1+H) + H^2) if B==2
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;        U(b0,b1,b2)     == b0 + b1*H + b2*H^2
+<i>78</i>&nbsp;                           in [L*(1+H)..L*(1+H+H^2))
+<i>79</i>&nbsp;                           or [L*(1+H)..L*(1+H+H^2) + H^3) if B==3
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;        U(b[i]: i&lt;n)    == Sum[i&lt;n]( b[i] * H^i )
+<i>82</i>&nbsp;                           up to  L*Sum[i&lt;n]( H^i )
+<i>83</i>&nbsp;                           or to  L*Sum[i&lt;n]( H^i ) + H^n if n==B
+<i>84</i>&nbsp;      &lt;/pre&gt;
+<i>85</i>&nbsp;
+<i>86</i>&nbsp;      (**) If B==1, the values H,L play no role in the coding.
+<i>87</i>&nbsp;      As a convention, we require that any (1,H,S) code must always
+<i>88</i>&nbsp;      encode values less than H.  Thus, a simple unsigned byte is coded
+<i>89</i>&nbsp;      specifically by the code (1,256,0).
+<i>90</i>&nbsp;
+<i>91</i>&nbsp;      (Properly speaking, the unsigned case should be parameterized as
+<i>92</i>&nbsp;      S==Infinity.  If the schema were regular, the case S==0 would really
+<i>93</i>&nbsp;      denote a numbering in which all coded values are negative.)
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;      If S&gt;0, the unsigned value of a byte sequence is regarded as a binary
+<i>96</i>&nbsp;      integer.  If any of the S low-order bits are zero, the corresponding
+<i>97</i>&nbsp;      signed value will be non-negative.  If all of the S low-order bits
+<i>98</i>&nbsp;      (S&gt;0) are one, the corresponding signed value will be negative.
+<i>99</i>&nbsp;
+<i>100</i>&nbsp;      The non-negative signed values are compact and monotonically increasing
+<i>101</i>&nbsp;      (from 0) in the ordering of the corresponding unsigned values.
+<i>102</i>&nbsp;
+<i>103</i>&nbsp;      The negative signed values are compact and monotonically decreasing
+<i>104</i>&nbsp;      (from -1) in the ordering of the corresponding unsigned values.
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;      In essence, the low-order S bits function as a collective sign bit
+<i>107</i>&nbsp;      for negative signed numbers, and as a low-order base-(2^S-1) digit
+<i>108</i>&nbsp;      for non-negative signed numbers.
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;      Therefore, the signed value corresponding to an unsigned value is:
+<i>111</i>&nbsp;      &lt;pre&gt;
+<i>112</i>&nbsp;        Sgn(x)  == x                               if S==0
+<i>113</i>&nbsp;        Sgn(x)  == (x / 2^S)*(2^S-1) + (x % 2^S),  if S&gt;0, (x % 2^S) &lt; 2^S-1
+<i>114</i>&nbsp;        Sgn(x)  == -(x / 2^S)-1,                   if S&gt;0, (x % 2^S) == 2^S-1
+<i>115</i>&nbsp;      &lt;/pre&gt;
+<i>116</i>&nbsp;
+<i>117</i>&nbsp;      Finally, the value of a byte sequence, given the coding parameters
+<i>118</i>&nbsp;      (B,H,S), is defined as:
+<i>119</i>&nbsp;      &lt;pre&gt;
+<i>120</i>&nbsp;        V(b[i]: i&lt;n)  == Sgn(U(b[i]: i&lt;n))
+<i>121</i>&nbsp;      &lt;/pre&gt;
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;      The extremal positive and negative signed value for a given range
+<i>124</i>&nbsp;      of unsigned values may be found by sign-encoding the largest unsigned
+<i>125</i>&nbsp;      value which is not 2^S-1 mod 2^S, and that which is, respectively.
+<i>126</i>&nbsp;
+<i>127</i>&nbsp;      Because B,H,S are variable, this is not a single coding but a schema
+<i>128</i>&nbsp;      of codings.  For optimal compression, it is necessary to adaptively
+<i>129</i>&nbsp;      select specific codings to the data being compressed.
+<i>130</i>&nbsp;
+<i>131</i>&nbsp;      For example, if a sequence of values happens never to be negative,
+<i>132</i>&nbsp;      S==0 is the best choice.  If the values are equally balanced between
+<i>133</i>&nbsp;      negative and positive, S==1.  If negative values are rare, then S&gt;1
+<i>134</i>&nbsp;      is more appropriate.
+<i>135</i>&nbsp;
+<i>136</i>&nbsp;      A (B,H,S) encoding is called a &quot;subrange&quot; if it does not encode
+<i>137</i>&nbsp;      the largest 32-bit value, and if the number R of values it does
+<i>138</i>&nbsp;      encode can be expressed as a positive 32-bit value.  (Note that
+<i>139</i>&nbsp;      B=1 implies R&lt;=256, B=2 implies R&lt;=65536, etc.)
+<i>140</i>&nbsp;
+<i>141</i>&nbsp;      A delta version of a given (B,H,S) coding encodes an array of integers
+<i>142</i>&nbsp;      by writing their successive differences in the (B,H,S) coding.
+<i>143</i>&nbsp;      The original integers themselves may be recovered by making a
+<i>144</i>&nbsp;      running accumulation of sum of the differences as they are read.
+<i>145</i>&nbsp;
+<i>146</i>&nbsp;      As a special case, if a (B,H,S) encoding is a subrange, its delta
+<i>147</i>&nbsp;      version will only encode arrays of numbers in the coding&#39;s unsigned
+<i>148</i>&nbsp;      range, [0..R-1].  The coding of deltas is still in the normal signed
+<i>149</i>&nbsp;      range, if S!=0.  During delta encoding, all subtraction results are
+<i>150</i>&nbsp;      reduced to the signed range, by adding multiples of R.  Likewise,
+<i>151</i>&nbsp;.     during encoding, all addition results are reduced to the unsigned range.
+<i>152</i>&nbsp;      This special case for subranges allows the benefits of wraparound
+<i>153</i>&nbsp;      when encoding correlated sequences of very small positive numbers.
+<i>154</i>&nbsp;     */
+<i>155</i>&nbsp;
+<i>156</i>&nbsp;    // Code-specific limits:
+<i>157</i>&nbsp;    private static int saturate32(long x) {
+<b class="nc"><i>158</i>&nbsp;        if (x &gt; Integer.MAX_VALUE)   return Integer.MAX_VALUE;</b>
+<b class="nc"><i>159</i>&nbsp;        if (x &lt; Integer.MIN_VALUE)   return Integer.MIN_VALUE;</b>
+<b class="nc"><i>160</i>&nbsp;        return (int)x;</b>
+<i>161</i>&nbsp;    }
+<i>162</i>&nbsp;    private static long codeRangeLong(int B, int H) {
+<b class="nc"><i>163</i>&nbsp;        return codeRangeLong(B, H, B);</b>
+<i>164</i>&nbsp;    }
+<i>165</i>&nbsp;    private static long codeRangeLong(int B, int H, int nMax) {
+<i>166</i>&nbsp;        // Code range for a all (B,H) codes of length &lt;=nMax (&lt;=B).
+<i>167</i>&nbsp;        // n &lt; B:   L*Sum[i&lt;n]( H^i )
+<i>168</i>&nbsp;        // n == B:  L*Sum[i&lt;B]( H^i ) + H^B
+<b class="nc"><i>169</i>&nbsp;        assert(nMax &gt;= 0 &amp;&amp; nMax &lt;= B);</b>
+<b class="nc"><i>170</i>&nbsp;        assert(B &gt;= 1 &amp;&amp; B &lt;= 5);</b>
+<b class="nc"><i>171</i>&nbsp;        assert(H &gt;= 1 &amp;&amp; H &lt;= 256);</b>
+<b class="nc"><i>172</i>&nbsp;        if (nMax == 0)  return 0;  // no codes of zero length</b>
+<b class="nc"><i>173</i>&nbsp;        if (B == 1)     return H;  // special case; see (**) above</b>
+<b class="nc"><i>174</i>&nbsp;        int L = 256-H;</b>
+<b class="nc"><i>175</i>&nbsp;        long sum = 0;</b>
+<b class="nc"><i>176</i>&nbsp;        long H_i = 1;</b>
+<b class="nc"><i>177</i>&nbsp;        for (int n = 1; n &lt;= nMax; n++) {</b>
+<b class="nc"><i>178</i>&nbsp;            sum += H_i;</b>
+<b class="nc"><i>179</i>&nbsp;            H_i *= H;</b>
+<i>180</i>&nbsp;        }
+<b class="nc"><i>181</i>&nbsp;        sum *= L;</b>
+<b class="nc"><i>182</i>&nbsp;        if (nMax == B)</b>
+<b class="nc"><i>183</i>&nbsp;            sum += H_i;</b>
+<b class="nc"><i>184</i>&nbsp;        return sum;</b>
+<i>185</i>&nbsp;    }
+<i>186</i>&nbsp;    /** Largest int representable by (B,H,S) in up to nMax bytes. */
+<i>187</i>&nbsp;    public static int codeMax(int B, int H, int S, int nMax) {
+<i>188</i>&nbsp;        //assert(S &gt;= 0 &amp;&amp; S &lt;= S_MAX);
+<b class="nc"><i>189</i>&nbsp;        long range = codeRangeLong(B, H, nMax);</b>
+<b class="nc"><i>190</i>&nbsp;        if (range == 0)</b>
+<b class="nc"><i>191</i>&nbsp;            return -1;  // degenerate max value for empty set of codes</b>
+<b class="nc"><i>192</i>&nbsp;        if (S == 0 || range &gt;= (long)1&lt;&lt;32)</b>
+<b class="nc"><i>193</i>&nbsp;            return saturate32(range-1);</b>
+<b class="nc"><i>194</i>&nbsp;        long maxPos = range-1;</b>
+<b class="nc"><i>195</i>&nbsp;        while (isNegativeCode(maxPos, S)) {</b>
+<b class="nc"><i>196</i>&nbsp;            --maxPos;</b>
+<i>197</i>&nbsp;        }
+<b class="nc"><i>198</i>&nbsp;        if (maxPos &lt; 0)  return -1;  // No positive codings at all.</b>
+<b class="nc"><i>199</i>&nbsp;        int smax = decodeSign32(maxPos, S);</b>
+<i>200</i>&nbsp;        // check for 32-bit wraparound:
+<b class="nc"><i>201</i>&nbsp;        if (smax &lt; 0)</b>
+<b class="nc"><i>202</i>&nbsp;            return Integer.MAX_VALUE;</b>
+<b class="nc"><i>203</i>&nbsp;        return smax;</b>
+<i>204</i>&nbsp;    }
+<i>205</i>&nbsp;    /** Smallest int representable by (B,H,S) in up to nMax bytes.
+<i>206</i>&nbsp;        Returns Integer.MIN_VALUE if 32-bit wraparound covers
+<i>207</i>&nbsp;        the entire negative range.
+<i>208</i>&nbsp;     */
+<i>209</i>&nbsp;    public static int codeMin(int B, int H, int S, int nMax) {
+<i>210</i>&nbsp;        //assert(S &gt;= 0 &amp;&amp; S &lt;= S_MAX);
+<b class="nc"><i>211</i>&nbsp;        long range = codeRangeLong(B, H, nMax);</b>
+<b class="nc"><i>212</i>&nbsp;        if (range &gt;= (long)1&lt;&lt;32 &amp;&amp; nMax == B) {</b>
+<i>213</i>&nbsp;            // Can code negative values via 32-bit wraparound.
+<b class="nc"><i>214</i>&nbsp;            return Integer.MIN_VALUE;</b>
+<i>215</i>&nbsp;        }
+<b class="nc"><i>216</i>&nbsp;        if (S == 0) {</b>
+<b class="nc"><i>217</i>&nbsp;            return 0;</b>
+<i>218</i>&nbsp;        }
+<b class="nc"><i>219</i>&nbsp;        long maxNeg = range-1;</b>
+<b class="nc"><i>220</i>&nbsp;        while (!isNegativeCode(maxNeg, S))</b>
+<b class="nc"><i>221</i>&nbsp;            --maxNeg;</b>
+<i>222</i>&nbsp;
+<b class="nc"><i>223</i>&nbsp;        if (maxNeg &lt; 0)  return 0;  // No negative codings at all.</b>
+<b class="nc"><i>224</i>&nbsp;        return decodeSign32(maxNeg, S);</b>
+<i>225</i>&nbsp;    }
+<i>226</i>&nbsp;
+<i>227</i>&nbsp;    // Some of the arithmetic below is on unsigned 32-bit integers.
+<i>228</i>&nbsp;    // These must be represented in Java as longs in the range [0..2^32-1].
+<i>229</i>&nbsp;    // The conversion to a signed int is just the Java cast (int), but
+<i>230</i>&nbsp;    // the conversion to an unsigned int is the following little method:
+<i>231</i>&nbsp;    private static long toUnsigned32(int sx) {
+<b class="nc"><i>232</i>&nbsp;        return ((long)sx &lt;&lt; 32) &gt;&gt;&gt; 32;</b>
+<i>233</i>&nbsp;    }
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;    // Sign encoding:
+<i>236</i>&nbsp;    private static boolean isNegativeCode(long ux, int S) {
+<b class="nc"><i>237</i>&nbsp;        assert(S &gt; 0);</b>
+<b class="nc"><i>238</i>&nbsp;        assert(ux &gt;= -1);  // can be out of 32-bit range; who cares</b>
+<b class="nc"><i>239</i>&nbsp;        int Smask = (1&lt;&lt;S)-1;</b>
+<b class="nc"><i>240</i>&nbsp;        return (((int)ux+1) &amp; Smask) == 0;</b>
+<i>241</i>&nbsp;    }
+<i>242</i>&nbsp;    private static boolean hasNegativeCode(int sx, int S) {
+<b class="nc"><i>243</i>&nbsp;        assert(S &gt; 0);</b>
+<i>244</i>&nbsp;        // If S&gt;=2 very low negatives are coded by 32-bit-wrapped positives.
+<i>245</i>&nbsp;        // The lowest negative representable by a negative coding is
+<i>246</i>&nbsp;        // ~(umax32 &gt;&gt; S), and the next lower number is coded by wrapping
+<i>247</i>&nbsp;        // the highest positive:
+<i>248</i>&nbsp;        //    CodePos(umax32-1)  -&gt;  (umax32-1)-((umax32-1)&gt;&gt;S)
+<i>249</i>&nbsp;        // which simplifies to ~(umax32 &gt;&gt; S)-1.
+<b class="nc"><i>250</i>&nbsp;        return (0 &gt; sx) &amp;&amp; (sx &gt;= ~(-1&gt;&gt;&gt;S));</b>
+<i>251</i>&nbsp;    }
+<i>252</i>&nbsp;    private static int decodeSign32(long ux, int S) {
+<b class="nc"><i>253</i>&nbsp;        assert(ux == toUnsigned32((int)ux))  // must be unsigned 32-bit number</b>
+<b class="nc"><i>254</i>&nbsp;            : (Long.toHexString(ux));</b>
+<b class="nc"><i>255</i>&nbsp;        if (S == 0) {</b>
+<b class="nc"><i>256</i>&nbsp;            return (int) ux;  // cast to signed int</b>
+<i>257</i>&nbsp;        }
+<i>258</i>&nbsp;        int sx;
+<b class="nc"><i>259</i>&nbsp;        if (isNegativeCode(ux, S)) {</b>
+<i>260</i>&nbsp;            // Sgn(x)  == -(x / 2^S)-1
+<b class="nc"><i>261</i>&nbsp;            sx = ~((int)ux &gt;&gt;&gt; S);</b>
+<i>262</i>&nbsp;        } else {
+<i>263</i>&nbsp;            // Sgn(x)  == (x / 2^S)*(2^S-1) + (x % 2^S)
+<b class="nc"><i>264</i>&nbsp;            sx = (int)ux - ((int)ux &gt;&gt;&gt; S);</b>
+<i>265</i>&nbsp;        }
+<i>266</i>&nbsp;        // Assert special case of S==1:
+<b class="nc"><i>267</i>&nbsp;        assert(!(S == 1) || sx == (((int)ux &gt;&gt;&gt; 1) ^ -((int)ux &amp; 1)));</b>
+<b class="nc"><i>268</i>&nbsp;        return sx;</b>
+<i>269</i>&nbsp;    }
+<i>270</i>&nbsp;    private static long encodeSign32(int sx, int S) {
+<b class="nc"><i>271</i>&nbsp;        if (S == 0) {</b>
+<b class="nc"><i>272</i>&nbsp;            return toUnsigned32(sx);  // unsigned 32-bit int</b>
+<i>273</i>&nbsp;        }
+<b class="nc"><i>274</i>&nbsp;        int Smask = (1&lt;&lt;S)-1;</b>
+<i>275</i>&nbsp;        long ux;
+<b class="nc"><i>276</i>&nbsp;        if (!hasNegativeCode(sx, S)) {</b>
+<i>277</i>&nbsp;            // InvSgn(sx) = (sx / (2^S-1))*2^S + (sx % (2^S-1))
+<b class="nc"><i>278</i>&nbsp;            ux = sx + (toUnsigned32(sx) / Smask);</b>
+<i>279</i>&nbsp;        } else {
+<i>280</i>&nbsp;            // InvSgn(sx) = (-sx-1)*2^S + (2^S-1)
+<b class="nc"><i>281</i>&nbsp;            ux = (-sx &lt;&lt; S) - 1;</b>
+<i>282</i>&nbsp;        }
+<b class="nc"><i>283</i>&nbsp;        ux = toUnsigned32((int)ux);</b>
+<b class="nc"><i>284</i>&nbsp;        assert(sx == decodeSign32(ux, S))</b>
+<b class="nc"><i>285</i>&nbsp;            : (Long.toHexString(ux)+&quot; -&gt; &quot;+</b>
+<b class="nc"><i>286</i>&nbsp;               Integer.toHexString(sx)+&quot; != &quot;+</b>
+<b class="nc"><i>287</i>&nbsp;               Integer.toHexString(decodeSign32(ux, S)));</b>
+<b class="nc"><i>288</i>&nbsp;        return ux;</b>
+<i>289</i>&nbsp;    }
+<i>290</i>&nbsp;
+<i>291</i>&nbsp;    // Top-level coding of single integers:
+<i>292</i>&nbsp;    public static void writeInt(byte[] out, int[] outpos, int sx, int B, int H, int S) {
+<b class="nc"><i>293</i>&nbsp;        long ux = encodeSign32(sx, S);</b>
+<b class="nc"><i>294</i>&nbsp;        assert(ux == toUnsigned32((int)ux));</b>
+<b class="nc"><i>295</i>&nbsp;        assert(ux &lt; codeRangeLong(B, H))</b>
+<b class="nc"><i>296</i>&nbsp;            : Long.toHexString(ux);</b>
+<b class="nc"><i>297</i>&nbsp;        int L = 256-H;</b>
+<b class="nc"><i>298</i>&nbsp;        long sum = ux;</b>
+<b class="nc"><i>299</i>&nbsp;        int pos = outpos[0];</b>
+<b class="nc"><i>300</i>&nbsp;        for (int i = 0; i &lt; B-1; i++) {</b>
+<b class="nc"><i>301</i>&nbsp;            if (sum &lt; L)</b>
+<b class="nc"><i>302</i>&nbsp;                break;</b>
+<b class="nc"><i>303</i>&nbsp;            sum -= L;</b>
+<b class="nc"><i>304</i>&nbsp;            int b_i = (int)( L + (sum % H) );</b>
+<b class="nc"><i>305</i>&nbsp;            sum /= H;</b>
+<b class="nc"><i>306</i>&nbsp;            out[pos++] = (byte)b_i;</b>
+<i>307</i>&nbsp;        }
+<b class="nc"><i>308</i>&nbsp;        out[pos++] = (byte)sum;</b>
+<i>309</i>&nbsp;        // Report number of bytes written by updating outpos[0]:
+<b class="nc"><i>310</i>&nbsp;        outpos[0] = pos;</b>
+<i>311</i>&nbsp;        // Check right away for mis-coding.
+<i>312</i>&nbsp;        //assert(sx == readInt(out, new int[1], B, H, S));
+<i>313</i>&nbsp;    }
+<i>314</i>&nbsp;    public static int readInt(byte[] in, int[] inpos, int B, int H, int S) {
+<i>315</i>&nbsp;        // U(b[i]: i&lt;n) == Sum[i&lt;n]( b[i] * H^i )
+<b class="nc"><i>316</i>&nbsp;        int L = 256-H;</b>
+<b class="nc"><i>317</i>&nbsp;        long sum = 0;</b>
+<b class="nc"><i>318</i>&nbsp;        long H_i = 1;</b>
+<b class="nc"><i>319</i>&nbsp;        int pos = inpos[0];</b>
+<b class="nc"><i>320</i>&nbsp;        for (int i = 0; i &lt; B; i++) {</b>
+<b class="nc"><i>321</i>&nbsp;            int b_i = in[pos++] &amp; 0xFF;</b>
+<b class="nc"><i>322</i>&nbsp;            sum += b_i*H_i;</b>
+<b class="nc"><i>323</i>&nbsp;            H_i *= H;</b>
+<b class="nc"><i>324</i>&nbsp;            if (b_i &lt; L)  break;</b>
+<i>325</i>&nbsp;        }
+<i>326</i>&nbsp;        //assert(sum &gt;= 0 &amp;&amp; sum &lt; codeRangeLong(B, H));
+<i>327</i>&nbsp;        // Report number of bytes read by updating inpos[0]:
+<b class="nc"><i>328</i>&nbsp;        inpos[0] = pos;</b>
+<b class="nc"><i>329</i>&nbsp;        return decodeSign32(sum, S);</b>
+<i>330</i>&nbsp;    }
+<i>331</i>&nbsp;    // The Stream version doesn&#39;t fetch a byte unless it is needed for coding.
+<i>332</i>&nbsp;    public static int readIntFrom(InputStream in, int B, int H, int S) throws IOException {
+<i>333</i>&nbsp;        // U(b[i]: i&lt;n) == Sum[i&lt;n]( b[i] * H^i )
+<b class="nc"><i>334</i>&nbsp;        int L = 256-H;</b>
+<b class="nc"><i>335</i>&nbsp;        long sum = 0;</b>
+<b class="nc"><i>336</i>&nbsp;        long H_i = 1;</b>
+<b class="nc"><i>337</i>&nbsp;        for (int i = 0; i &lt; B; i++) {</b>
+<b class="nc"><i>338</i>&nbsp;            int b_i = in.read();</b>
+<b class="nc"><i>339</i>&nbsp;            if (b_i &lt; 0)  throw new RuntimeException(&quot;unexpected EOF&quot;);</b>
+<b class="nc"><i>340</i>&nbsp;            sum += b_i*H_i;</b>
+<b class="nc"><i>341</i>&nbsp;            H_i *= H;</b>
+<b class="nc"><i>342</i>&nbsp;            if (b_i &lt; L)  break;</b>
+<i>343</i>&nbsp;        }
+<b class="nc"><i>344</i>&nbsp;        assert(sum &gt;= 0 &amp;&amp; sum &lt; codeRangeLong(B, H));</b>
+<b class="nc"><i>345</i>&nbsp;        return decodeSign32(sum, S);</b>
+<i>346</i>&nbsp;    }
+<i>347</i>&nbsp;
+<i>348</i>&nbsp;    public static final int B_MAX = 5;    /* B: [1,5] */
+<i>349</i>&nbsp;    public static final int H_MAX = 256;  /* H: [1,256] */
+<i>350</i>&nbsp;    public static final int S_MAX = 2;    /* S: [0,2] */
+<i>351</i>&nbsp;
+<i>352</i>&nbsp;    // END OF STATICS.
+<i>353</i>&nbsp;
+<i>354</i>&nbsp;    private final int B; /*1..5*/       // # bytes (1..5)
+<i>355</i>&nbsp;    private final int H; /*1..256*/     // # codes requiring a higher byte
+<i>356</i>&nbsp;    private final int L; /*0..255*/     // # codes requiring a higher byte
+<i>357</i>&nbsp;    private final int S; /*0..3*/       // # low-order bits representing sign
+<i>358</i>&nbsp;    private final int del; /*0..2*/     // type of delta encoding (0 == none)
+<i>359</i>&nbsp;    private final int min;              // smallest representable value
+<i>360</i>&nbsp;    private final int max;              // largest representable value
+<i>361</i>&nbsp;    private final int umin;             // smallest representable uns. value
+<i>362</i>&nbsp;    private final int umax;             // largest representable uns. value
+<i>363</i>&nbsp;    private final int[] byteMin;        // smallest repr. value, given # bytes
+<i>364</i>&nbsp;    private final int[] byteMax;        // largest repr. value, given # bytes
+<i>365</i>&nbsp;
+<i>366</i>&nbsp;    private Coding(int B, int H, int S) {
+<b class="nc"><i>367</i>&nbsp;        this(B, H, S, 0);</b>
+<i>368</i>&nbsp;    }
+<b class="nc"><i>369</i>&nbsp;    private Coding(int B, int H, int S, int del) {</b>
+<b class="nc"><i>370</i>&nbsp;        this.B = B;</b>
+<b class="nc"><i>371</i>&nbsp;        this.H = H;</b>
+<b class="nc"><i>372</i>&nbsp;        this.L = 256-H;</b>
+<b class="nc"><i>373</i>&nbsp;        this.S = S;</b>
+<b class="nc"><i>374</i>&nbsp;        this.del = del;</b>
+<b class="nc"><i>375</i>&nbsp;        this.min = codeMin(B, H, S, B);</b>
+<b class="nc"><i>376</i>&nbsp;        this.max = codeMax(B, H, S, B);</b>
+<b class="nc"><i>377</i>&nbsp;        this.umin = codeMin(B, H, 0, B);</b>
+<b class="nc"><i>378</i>&nbsp;        this.umax = codeMax(B, H, 0, B);</b>
+<b class="nc"><i>379</i>&nbsp;        this.byteMin = new int[B];</b>
+<b class="nc"><i>380</i>&nbsp;        this.byteMax = new int[B];</b>
+<i>381</i>&nbsp;
+<b class="nc"><i>382</i>&nbsp;        for (int nMax = 1; nMax &lt;= B; nMax++) {</b>
+<b class="nc"><i>383</i>&nbsp;            byteMin[nMax-1] = codeMin(B, H, S, nMax);</b>
+<b class="nc"><i>384</i>&nbsp;            byteMax[nMax-1] = codeMax(B, H, S, nMax);</b>
+<i>385</i>&nbsp;        }
+<i>386</i>&nbsp;    }
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;    public boolean equals(Object x) {
+<b class="nc"><i>389</i>&nbsp;        if (!(x instanceof Coding))  return false;</b>
+<b class="nc"><i>390</i>&nbsp;        Coding that = (Coding) x;</b>
+<b class="nc"><i>391</i>&nbsp;        if (this.B != that.B)  return false;</b>
+<b class="nc"><i>392</i>&nbsp;        if (this.H != that.H)  return false;</b>
+<b class="nc"><i>393</i>&nbsp;        if (this.S != that.S)  return false;</b>
+<b class="nc"><i>394</i>&nbsp;        if (this.del != that.del)  return false;</b>
+<b class="nc"><i>395</i>&nbsp;        return true;</b>
+<i>396</i>&nbsp;    }
+<i>397</i>&nbsp;
+<i>398</i>&nbsp;    public int hashCode() {
+<b class="nc"><i>399</i>&nbsp;        return (del&lt;&lt;14)+(S&lt;&lt;11)+(B&lt;&lt;8)+(H&lt;&lt;0);</b>
+<i>400</i>&nbsp;    }
+<i>401</i>&nbsp;
+<i>402</i>&nbsp;    private static Map&lt;Coding, Coding&gt; codeMap;
+<i>403</i>&nbsp;
+<i>404</i>&nbsp;    private static synchronized Coding of(int B, int H, int S, int del) {
+<b class="nc"><i>405</i>&nbsp;        if (codeMap == null)  codeMap = new HashMap&lt;&gt;();</b>
+<b class="nc"><i>406</i>&nbsp;        Coding x0 = new Coding(B, H, S, del);</b>
+<b class="nc"><i>407</i>&nbsp;        Coding x1 = codeMap.get(x0);</b>
+<b class="nc"><i>408</i>&nbsp;        if (x1 == null)  codeMap.put(x0, x1 = x0);</b>
+<b class="nc"><i>409</i>&nbsp;        return x1;</b>
+<i>410</i>&nbsp;    }
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;    public static Coding of(int B, int H) {
+<b class="nc"><i>413</i>&nbsp;        return of(B, H, 0, 0);</b>
+<i>414</i>&nbsp;    }
+<i>415</i>&nbsp;
+<i>416</i>&nbsp;    public static Coding of(int B, int H, int S) {
+<b class="nc"><i>417</i>&nbsp;        return of(B, H, S, 0);</b>
+<i>418</i>&nbsp;    }
+<i>419</i>&nbsp;
+<i>420</i>&nbsp;    public boolean canRepresentValue(int x) {
+<b class="nc"><i>421</i>&nbsp;        if (isSubrange())</b>
+<b class="nc"><i>422</i>&nbsp;            return canRepresentUnsigned(x);</b>
+<i>423</i>&nbsp;        else
+<b class="nc"><i>424</i>&nbsp;            return canRepresentSigned(x);</b>
+<i>425</i>&nbsp;    }
+<i>426</i>&nbsp;    /** Can this coding represent a single value, possibly a delta?
+<i>427</i>&nbsp;     *  This ignores the D property.  That is, for delta codings,
+<i>428</i>&nbsp;     *  this tests whether a delta value of &#39;x&#39; can be coded.
+<i>429</i>&nbsp;     *  For signed delta codings which produce unsigned end values,
+<i>430</i>&nbsp;     *  use canRepresentUnsigned.
+<i>431</i>&nbsp;     */
+<i>432</i>&nbsp;    public boolean canRepresentSigned(int x) {
+<b class="nc"><i>433</i>&nbsp;        return (x &gt;= min &amp;&amp; x &lt;= max);</b>
+<i>434</i>&nbsp;    }
+<i>435</i>&nbsp;    /** Can this coding, apart from its S property,
+<i>436</i>&nbsp;     *  represent a single value?  (Negative values
+<i>437</i>&nbsp;     *  can only be represented via 32-bit overflow,
+<i>438</i>&nbsp;     *  so this returns true for negative values
+<i>439</i>&nbsp;     *  if isFullRange is true.)
+<i>440</i>&nbsp;     */
+<i>441</i>&nbsp;    public boolean canRepresentUnsigned(int x) {
+<b class="nc"><i>442</i>&nbsp;        return (x &gt;= umin &amp;&amp; x &lt;= umax);</b>
+<i>443</i>&nbsp;    }
+<i>444</i>&nbsp;
+<i>445</i>&nbsp;    // object-oriented code/decode
+<i>446</i>&nbsp;    public int readFrom(byte[] in, int[] inpos) {
+<b class="nc"><i>447</i>&nbsp;        return readInt(in, inpos, B, H, S);</b>
+<i>448</i>&nbsp;    }
+<i>449</i>&nbsp;    public void writeTo(byte[] out, int[] outpos, int x) {
+<b class="nc"><i>450</i>&nbsp;        writeInt(out, outpos, x, B, H, S);</b>
+<i>451</i>&nbsp;    }
+<i>452</i>&nbsp;
+<i>453</i>&nbsp;    // Stream versions
+<i>454</i>&nbsp;    public int readFrom(InputStream in) throws IOException {
+<b class="nc"><i>455</i>&nbsp;        return readIntFrom(in, B, H, S);</b>
+<i>456</i>&nbsp;    }
+<i>457</i>&nbsp;    public void writeTo(OutputStream out, int x) throws IOException {
+<b class="nc"><i>458</i>&nbsp;        byte[] buf = new byte[B];</b>
+<b class="nc"><i>459</i>&nbsp;        int[] pos = new int[1];</b>
+<b class="nc"><i>460</i>&nbsp;        writeInt(buf, pos, x, B, H, S);</b>
+<b class="nc"><i>461</i>&nbsp;        out.write(buf, 0, pos[0]);</b>
+<i>462</i>&nbsp;    }
+<i>463</i>&nbsp;
+<i>464</i>&nbsp;    // Stream/array versions
+<i>465</i>&nbsp;    public void readArrayFrom(InputStream in, int[] a, int start, int end) throws IOException {
+<i>466</i>&nbsp;        // %%% use byte[] buffer
+<b class="nc"><i>467</i>&nbsp;        for (int i = start; i &lt; end; i++)</b>
+<b class="nc"><i>468</i>&nbsp;            a[i] = readFrom(in);</b>
+<i>469</i>&nbsp;
+<b class="nc"><i>470</i>&nbsp;        for (int dstep = 0; dstep &lt; del; dstep++) {</b>
+<b class="nc"><i>471</i>&nbsp;            long state = 0;</b>
+<b class="nc"><i>472</i>&nbsp;            for (int i = start; i &lt; end; i++) {</b>
+<b class="nc"><i>473</i>&nbsp;                state += a[i];</b>
+<i>474</i>&nbsp;                // Reduce array values to the required range.
+<b class="nc"><i>475</i>&nbsp;                if (isSubrange()) {</b>
+<b class="nc"><i>476</i>&nbsp;                    state = reduceToUnsignedRange(state);</b>
+<i>477</i>&nbsp;                }
+<b class="nc"><i>478</i>&nbsp;                a[i] = (int) state;</b>
+<i>479</i>&nbsp;            }
+<i>480</i>&nbsp;        }
+<i>481</i>&nbsp;    }
+<i>482</i>&nbsp;    public void writeArrayTo(OutputStream out, int[] a, int start, int end) throws IOException {
+<b class="nc"><i>483</i>&nbsp;        if (end &lt;= start)  return;</b>
+<b class="nc"><i>484</i>&nbsp;        for (int dstep = 0; dstep &lt; del; dstep++) {</b>
+<i>485</i>&nbsp;            int[] deltas;
+<b class="nc"><i>486</i>&nbsp;            if (!isSubrange())</b>
+<b class="nc"><i>487</i>&nbsp;                deltas = makeDeltas(a, start, end, 0, 0);</b>
+<i>488</i>&nbsp;            else
+<b class="nc"><i>489</i>&nbsp;                deltas = makeDeltas(a, start, end, min, max);</b>
+<b class="nc"><i>490</i>&nbsp;            a = deltas;</b>
+<b class="nc"><i>491</i>&nbsp;            start = 0;</b>
+<b class="nc"><i>492</i>&nbsp;            end = deltas.length;</b>
+<i>493</i>&nbsp;        }
+<i>494</i>&nbsp;        // The following code is a buffered version of this loop:
+<i>495</i>&nbsp;        //    for (int i = start; i &lt; end; i++)
+<i>496</i>&nbsp;        //        writeTo(out, a[i]);
+<b class="nc"><i>497</i>&nbsp;        byte[] buf = new byte[1&lt;&lt;8];</b>
+<b class="nc"><i>498</i>&nbsp;        final int bufmax = buf.length-B;</b>
+<b class="nc"><i>499</i>&nbsp;        int[] pos = { 0 };</b>
+<b class="nc"><i>500</i>&nbsp;        for (int i = start; i &lt; end; ) {</b>
+<b class="nc"><i>501</i>&nbsp;            while (pos[0] &lt;= bufmax) {</b>
+<b class="nc"><i>502</i>&nbsp;                writeTo(buf, pos, a[i++]);</b>
+<b class="nc"><i>503</i>&nbsp;                if (i &gt;= end)  break;</b>
+<i>504</i>&nbsp;            }
+<b class="nc"><i>505</i>&nbsp;            out.write(buf, 0, pos[0]);</b>
+<b class="nc"><i>506</i>&nbsp;            pos[0] = 0;</b>
+<i>507</i>&nbsp;        }
+<i>508</i>&nbsp;    }
+<i>509</i>&nbsp;
+<i>510</i>&nbsp;    /** Tell if the range of this coding (number of distinct
+<i>511</i>&nbsp;     *  representable values) can be expressed in 32 bits.
+<i>512</i>&nbsp;     */
+<i>513</i>&nbsp;    boolean isSubrange() {
+<b class="nc"><i>514</i>&nbsp;        return max &lt; Integer.MAX_VALUE</b>
+<i>515</i>&nbsp;            &amp;&amp; ((long)max - (long)min + 1) &lt;= Integer.MAX_VALUE;
+<i>516</i>&nbsp;    }
+<i>517</i>&nbsp;
+<i>518</i>&nbsp;    /** Tell if this coding can represent all 32-bit values.
+<i>519</i>&nbsp;     *  Note:  Some codings, such as unsigned ones, can be neither
+<i>520</i>&nbsp;     *  subranges nor full-range codings.
+<i>521</i>&nbsp;     */
+<i>522</i>&nbsp;    boolean isFullRange() {
+<b class="nc"><i>523</i>&nbsp;        return max == Integer.MAX_VALUE &amp;&amp; min == Integer.MIN_VALUE;</b>
+<i>524</i>&nbsp;    }
+<i>525</i>&nbsp;
+<i>526</i>&nbsp;    /** Return the number of values this coding (a subrange) can represent. */
+<i>527</i>&nbsp;    int getRange() {
+<b class="nc"><i>528</i>&nbsp;        assert(isSubrange());</b>
+<b class="nc"><i>529</i>&nbsp;        return (max - min) + 1;  // range includes both min &amp; max</b>
+<i>530</i>&nbsp;    }
+<i>531</i>&nbsp;
+<b class="nc"><i>532</i>&nbsp;    Coding setB(int B) { return Coding.of(B, H, S, del); }</b>
+<b class="nc"><i>533</i>&nbsp;    Coding setH(int H) { return Coding.of(B, H, S, del); }</b>
+<b class="nc"><i>534</i>&nbsp;    Coding setS(int S) { return Coding.of(B, H, S, del); }</b>
+<b class="nc"><i>535</i>&nbsp;    Coding setL(int L) { return setH(256-L); }</b>
+<b class="nc"><i>536</i>&nbsp;    Coding setD(int del) { return Coding.of(B, H, S, del); }</b>
+<b class="nc"><i>537</i>&nbsp;    Coding getDeltaCoding() { return setD(del+1); }</b>
+<i>538</i>&nbsp;
+<i>539</i>&nbsp;    /** Return a coding suitable for representing summed, modulo-reduced values. */
+<i>540</i>&nbsp;    Coding getValueCoding() {
+<b class="nc"><i>541</i>&nbsp;        if (isDelta())</b>
+<b class="nc"><i>542</i>&nbsp;            return Coding.of(B, H, 0, del-1);</b>
+<i>543</i>&nbsp;        else
+<b class="nc"><i>544</i>&nbsp;            return this;</b>
+<i>545</i>&nbsp;    }
+<i>546</i>&nbsp;
+<i>547</i>&nbsp;    /** Reduce the given value to be within this coding&#39;s unsigned range,
+<i>548</i>&nbsp;     *  by adding or subtracting a multiple of (max-min+1).
+<i>549</i>&nbsp;     */
+<i>550</i>&nbsp;    int reduceToUnsignedRange(long value) {
+<b class="nc"><i>551</i>&nbsp;        if (value == (int)value &amp;&amp; canRepresentUnsigned((int)value))</b>
+<i>552</i>&nbsp;            // already in unsigned range
+<b class="nc"><i>553</i>&nbsp;            return (int)value;</b>
+<b class="nc"><i>554</i>&nbsp;        int range = getRange();</b>
+<b class="nc"><i>555</i>&nbsp;        assert(range &gt; 0);</b>
+<b class="nc"><i>556</i>&nbsp;        value %= range;</b>
+<b class="nc"><i>557</i>&nbsp;        if (value &lt; 0)  value += range;</b>
+<b class="nc"><i>558</i>&nbsp;        assert(canRepresentUnsigned((int)value));</b>
+<b class="nc"><i>559</i>&nbsp;        return (int)value;</b>
+<i>560</i>&nbsp;    }
+<i>561</i>&nbsp;
+<i>562</i>&nbsp;    int reduceToSignedRange(int value) {
+<b class="nc"><i>563</i>&nbsp;        if (canRepresentSigned(value))</b>
+<i>564</i>&nbsp;            // already in signed range
+<b class="nc"><i>565</i>&nbsp;            return value;</b>
+<b class="nc"><i>566</i>&nbsp;        return reduceToSignedRange(value, min, max);</b>
+<i>567</i>&nbsp;    }
+<i>568</i>&nbsp;    static int reduceToSignedRange(int value, int min, int max) {
+<b class="nc"><i>569</i>&nbsp;        int range = (max-min+1);</b>
+<b class="nc"><i>570</i>&nbsp;        assert(range &gt; 0);</b>
+<b class="nc"><i>571</i>&nbsp;        int value0 = value;</b>
+<b class="nc"><i>572</i>&nbsp;        value -= min;</b>
+<b class="nc"><i>573</i>&nbsp;        if (value &lt; 0 &amp;&amp; value0 &gt;= 0) {</b>
+<i>574</i>&nbsp;            // 32-bit overflow, but the next &#39;%=&#39; op needs to be unsigned
+<b class="nc"><i>575</i>&nbsp;            value -= range;</b>
+<b class="nc"><i>576</i>&nbsp;            assert(value &gt;= 0);</b>
+<i>577</i>&nbsp;        }
+<b class="nc"><i>578</i>&nbsp;        value %= range;</b>
+<b class="nc"><i>579</i>&nbsp;        if (value &lt; 0)  value += range;</b>
+<b class="nc"><i>580</i>&nbsp;        value += min;</b>
+<b class="nc"><i>581</i>&nbsp;        assert(min &lt;= value &amp;&amp; value &lt;= max);</b>
+<b class="nc"><i>582</i>&nbsp;        return value;</b>
+<i>583</i>&nbsp;    }
+<i>584</i>&nbsp;
+<i>585</i>&nbsp;    /** Does this coding support at least one negative value?
+<i>586</i>&nbsp;        Includes codings that can do so via 32-bit wraparound.
+<i>587</i>&nbsp;     */
+<i>588</i>&nbsp;    boolean isSigned() {
+<b class="nc"><i>589</i>&nbsp;        return min &lt; 0;</b>
+<i>590</i>&nbsp;    }
+<i>591</i>&nbsp;    /** Does this coding code arrays by making successive differences? */
+<i>592</i>&nbsp;    boolean isDelta() {
+<b class="nc"><i>593</i>&nbsp;        return del != 0;</b>
+<i>594</i>&nbsp;    }
+<i>595</i>&nbsp;
+<b class="nc"><i>596</i>&nbsp;    public int B() { return B; }</b>
+<b class="nc"><i>597</i>&nbsp;    public int H() { return H; }</b>
+<b class="nc"><i>598</i>&nbsp;    public int L() { return L; }</b>
+<b class="nc"><i>599</i>&nbsp;    public int S() { return S; }</b>
+<b class="nc"><i>600</i>&nbsp;    public int del() { return del; }</b>
+<b class="nc"><i>601</i>&nbsp;    public int min() { return min; }</b>
+<b class="nc"><i>602</i>&nbsp;    public int max() { return max; }</b>
+<b class="nc"><i>603</i>&nbsp;    public int umin() { return umin; }</b>
+<b class="nc"><i>604</i>&nbsp;    public int umax() { return umax; }</b>
+<b class="nc"><i>605</i>&nbsp;    public int byteMin(int b) { return byteMin[b-1]; }</b>
+<b class="nc"><i>606</i>&nbsp;    public int byteMax(int b) { return byteMax[b-1]; }</b>
+<i>607</i>&nbsp;
+<i>608</i>&nbsp;    public int compareTo(Coding that) {
+<b class="nc"><i>609</i>&nbsp;        int dkey = this.del - that.del;</b>
+<b class="nc"><i>610</i>&nbsp;        if (dkey == 0)</b>
+<b class="nc"><i>611</i>&nbsp;            dkey = this.B - that.B;</b>
+<b class="nc"><i>612</i>&nbsp;        if (dkey == 0)</b>
+<b class="nc"><i>613</i>&nbsp;            dkey = this.H - that.H;</b>
+<b class="nc"><i>614</i>&nbsp;        if (dkey == 0)</b>
+<b class="nc"><i>615</i>&nbsp;            dkey = this.S - that.S;</b>
+<b class="nc"><i>616</i>&nbsp;        return dkey;</b>
+<i>617</i>&nbsp;    }
+<i>618</i>&nbsp;
+<i>619</i>&nbsp;    /** Heuristic measure of the difference between two codings. */
+<i>620</i>&nbsp;    public int distanceFrom(Coding that) {
+<b class="nc"><i>621</i>&nbsp;        int diffdel = this.del - that.del;</b>
+<b class="nc"><i>622</i>&nbsp;        if (diffdel &lt; 0)  diffdel = -diffdel;</b>
+<b class="nc"><i>623</i>&nbsp;        int diffS = this.S - that.S;</b>
+<b class="nc"><i>624</i>&nbsp;        if (diffS &lt; 0)  diffS = -diffS;</b>
+<b class="nc"><i>625</i>&nbsp;        int diffB = this.B - that.B;</b>
+<b class="nc"><i>626</i>&nbsp;        if (diffB &lt; 0)  diffB = -diffB;</b>
+<i>627</i>&nbsp;        int diffHL;
+<b class="nc"><i>628</i>&nbsp;        if (this.H == that.H) {</b>
+<b class="nc"><i>629</i>&nbsp;            diffHL = 0;</b>
+<i>630</i>&nbsp;        } else {
+<i>631</i>&nbsp;            // Distance in log space of H (&lt;=128) and L (&lt;128).
+<b class="nc"><i>632</i>&nbsp;            int thisHL = this.getHL();</b>
+<b class="nc"><i>633</i>&nbsp;            int thatHL = that.getHL();</b>
+<i>634</i>&nbsp;            // Double the accuracy of the log:
+<b class="nc"><i>635</i>&nbsp;            thisHL *= thisHL;</b>
+<b class="nc"><i>636</i>&nbsp;            thatHL *= thatHL;</b>
+<b class="nc"><i>637</i>&nbsp;            if (thisHL &gt; thatHL)</b>
+<b class="nc"><i>638</i>&nbsp;                diffHL = ceil_lg2(1+(thisHL-1)/thatHL);</b>
+<i>639</i>&nbsp;            else
+<b class="nc"><i>640</i>&nbsp;                diffHL = ceil_lg2(1+(thatHL-1)/thisHL);</b>
+<i>641</i>&nbsp;        }
+<b class="nc"><i>642</i>&nbsp;        int norm = 5*(diffdel + diffS + diffB) + diffHL;</b>
+<b class="nc"><i>643</i>&nbsp;        assert(norm != 0 || this.compareTo(that) == 0);</b>
+<b class="nc"><i>644</i>&nbsp;        return norm;</b>
+<i>645</i>&nbsp;    }
+<i>646</i>&nbsp;    private int getHL() {
+<i>647</i>&nbsp;        // Follow H in log space by the multiplicative inverse of L.
+<b class="nc"><i>648</i>&nbsp;        if (H &lt;= 128)  return H;</b>
+<b class="nc"><i>649</i>&nbsp;        if (L &gt;= 1)    return 128*128/L;</b>
+<b class="nc"><i>650</i>&nbsp;        return 128*256;</b>
+<i>651</i>&nbsp;    }
+<i>652</i>&nbsp;
+<i>653</i>&nbsp;    /** ceiling(log[2](x)): {1-&gt;0, 2-&gt;1, 3-&gt;2, 4-&gt;2, ...} */
+<i>654</i>&nbsp;    static int ceil_lg2(int x) {
+<b class="nc"><i>655</i>&nbsp;        assert(x-1 &gt;= 0);  // x in range (int.MIN_VALUE -&gt; 32)</b>
+<b class="nc"><i>656</i>&nbsp;        x -= 1;</b>
+<b class="nc"><i>657</i>&nbsp;        int lg = 0;</b>
+<b class="nc"><i>658</i>&nbsp;        while (x != 0) {</b>
+<b class="nc"><i>659</i>&nbsp;            lg++;</b>
+<b class="nc"><i>660</i>&nbsp;            x &gt;&gt;= 1;</b>
+<i>661</i>&nbsp;        }
+<b class="nc"><i>662</i>&nbsp;        return lg;</b>
+<i>663</i>&nbsp;    }
+<i>664</i>&nbsp;
+<b class="nc"><i>665</i>&nbsp;    private static final byte[] byteBitWidths = new byte[0x100];</b>
+<i>666</i>&nbsp;    static {
+<b class="nc"><i>667</i>&nbsp;        for (int b = 0; b &lt; byteBitWidths.length; b++) {</b>
+<b class="nc"><i>668</i>&nbsp;            byteBitWidths[b] = (byte) ceil_lg2(b + 1);</b>
+<i>669</i>&nbsp;        }
+<b class="nc"><i>670</i>&nbsp;        for (int i = 10; i &gt;= 0; i = (i &lt;&lt; 1) - (i &gt;&gt; 3)) {</b>
+<b class="nc"><i>671</i>&nbsp;            assert(bitWidth(i) == ceil_lg2(i + 1));</b>
+<i>672</i>&nbsp;        }
+<i>673</i>&nbsp;    }
+<i>674</i>&nbsp;
+<i>675</i>&nbsp;    /** Number of significant bits in i, not counting sign bits.
+<i>676</i>&nbsp;     *  For positive i, it is ceil_lg2(i + 1).
+<i>677</i>&nbsp;     */
+<i>678</i>&nbsp;    static int bitWidth(int i) {
+<b class="nc"><i>679</i>&nbsp;        if (i &lt; 0)  i = ~i;  // change sign</b>
+<b class="nc"><i>680</i>&nbsp;        int w = 0;</b>
+<b class="nc"><i>681</i>&nbsp;        int lo = i;</b>
+<b class="nc"><i>682</i>&nbsp;        if (lo &lt; byteBitWidths.length)</b>
+<b class="nc"><i>683</i>&nbsp;            return byteBitWidths[lo];</b>
+<i>684</i>&nbsp;        int hi;
+<b class="nc"><i>685</i>&nbsp;        hi = (lo &gt;&gt;&gt; 16);</b>
+<b class="nc"><i>686</i>&nbsp;        if (hi != 0) {</b>
+<b class="nc"><i>687</i>&nbsp;            lo = hi;</b>
+<b class="nc"><i>688</i>&nbsp;            w += 16;</b>
+<i>689</i>&nbsp;        }
+<b class="nc"><i>690</i>&nbsp;        hi = (lo &gt;&gt;&gt; 8);</b>
+<b class="nc"><i>691</i>&nbsp;        if (hi != 0) {</b>
+<b class="nc"><i>692</i>&nbsp;            lo = hi;</b>
+<b class="nc"><i>693</i>&nbsp;            w += 8;</b>
+<i>694</i>&nbsp;        }
+<b class="nc"><i>695</i>&nbsp;        w += byteBitWidths[lo];</b>
+<i>696</i>&nbsp;        //assert(w == ceil_lg2(i + 1));
+<b class="nc"><i>697</i>&nbsp;        return w;</b>
+<i>698</i>&nbsp;    }
+<i>699</i>&nbsp;
+<i>700</i>&nbsp;    /** Create an array of successive differences.
+<i>701</i>&nbsp;     *  If min==max, accept any and all 32-bit overflow.
+<i>702</i>&nbsp;     *  Otherwise, avoid 32-bit overflow, and reduce all differences
+<i>703</i>&nbsp;     *  to a value in the given range, by adding or subtracting
+<i>704</i>&nbsp;     *  multiples of the range cardinality (max-min+1).
+<i>705</i>&nbsp;     *  Also, the values are assumed to be in the range [0..(max-min)].
+<i>706</i>&nbsp;     */
+<i>707</i>&nbsp;    static int[] makeDeltas(int[] values, int start, int end,
+<i>708</i>&nbsp;                            int min, int max) {
+<b class="nc"><i>709</i>&nbsp;        assert(max &gt;= min);</b>
+<b class="nc"><i>710</i>&nbsp;        int count = end-start;</b>
+<b class="nc"><i>711</i>&nbsp;        int[] deltas = new int[count];</b>
+<b class="nc"><i>712</i>&nbsp;        int state = 0;</b>
+<b class="nc"><i>713</i>&nbsp;        if (min == max) {</b>
+<b class="nc"><i>714</i>&nbsp;            for (int i = 0; i &lt; count; i++) {</b>
+<b class="nc"><i>715</i>&nbsp;                int value = values[start+i];</b>
+<b class="nc"><i>716</i>&nbsp;                deltas[i] = value - state;</b>
+<b class="nc"><i>717</i>&nbsp;                state = value;</b>
+<i>718</i>&nbsp;            }
+<i>719</i>&nbsp;        } else {
+<b class="nc"><i>720</i>&nbsp;            for (int i = 0; i &lt; count; i++) {</b>
+<b class="nc"><i>721</i>&nbsp;                int value = values[start+i];</b>
+<b class="nc"><i>722</i>&nbsp;                assert(value &gt;= 0 &amp;&amp; value+min &lt;= max);</b>
+<b class="nc"><i>723</i>&nbsp;                int delta = value - state;</b>
+<b class="nc"><i>724</i>&nbsp;                assert(delta == (long)value - (long)state); // no overflow</b>
+<b class="nc"><i>725</i>&nbsp;                state = value;</b>
+<i>726</i>&nbsp;                // Reduce delta values to the required range.
+<b class="nc"><i>727</i>&nbsp;                delta = reduceToSignedRange(delta, min, max);</b>
+<b class="nc"><i>728</i>&nbsp;                deltas[i] = delta;</b>
+<i>729</i>&nbsp;            }
+<i>730</i>&nbsp;        }
+<b class="nc"><i>731</i>&nbsp;        return deltas;</b>
+<i>732</i>&nbsp;    }
+<i>733</i>&nbsp;
+<i>734</i>&nbsp;    boolean canRepresent(int minValue, int maxValue) {
+<b class="nc"><i>735</i>&nbsp;        assert(minValue &lt;= maxValue);</b>
+<b class="nc"><i>736</i>&nbsp;        if (del &gt; 0) {</b>
+<b class="nc"><i>737</i>&nbsp;            if (isSubrange()) {</b>
+<i>738</i>&nbsp;                // We will force the values to reduce to the right subrange.
+<b class="nc"><i>739</i>&nbsp;                return canRepresentUnsigned(maxValue)</b>
+<b class="nc"><i>740</i>&nbsp;                    &amp;&amp; canRepresentUnsigned(minValue);</b>
+<i>741</i>&nbsp;            } else {
+<i>742</i>&nbsp;                // Huge range; delta values must assume full 32-bit range.
+<b class="nc"><i>743</i>&nbsp;                return isFullRange();</b>
+<i>744</i>&nbsp;            }
+<i>745</i>&nbsp;        }
+<i>746</i>&nbsp;        else
+<i>747</i>&nbsp;            // final values must be representable
+<b class="nc"><i>748</i>&nbsp;            return canRepresentSigned(maxValue)</b>
+<b class="nc"><i>749</i>&nbsp;                &amp;&amp; canRepresentSigned(minValue);</b>
+<i>750</i>&nbsp;    }
+<i>751</i>&nbsp;
+<i>752</i>&nbsp;    boolean canRepresent(int[] values, int start, int end) {
+<b class="nc"><i>753</i>&nbsp;        int len = end-start;</b>
+<b class="nc"><i>754</i>&nbsp;        if (len == 0)       return true;</b>
+<b class="nc"><i>755</i>&nbsp;        if (isFullRange())  return true;</b>
+<i>756</i>&nbsp;        // Calculate max, min:
+<b class="nc"><i>757</i>&nbsp;        int lmax = values[start];</b>
+<b class="nc"><i>758</i>&nbsp;        int lmin = lmax;</b>
+<b class="nc"><i>759</i>&nbsp;        for (int i = 1; i &lt; len; i++) {</b>
+<b class="nc"><i>760</i>&nbsp;            int value = values[start+i];</b>
+<b class="nc"><i>761</i>&nbsp;            if (lmax &lt; value)  lmax = value;</b>
+<b class="nc"><i>762</i>&nbsp;            if (lmin &gt; value)  lmin = value;</b>
+<i>763</i>&nbsp;        }
+<b class="nc"><i>764</i>&nbsp;        return canRepresent(lmin, lmax);</b>
+<i>765</i>&nbsp;    }
+<i>766</i>&nbsp;
+<i>767</i>&nbsp;    public double getBitLength(int value) {  // implements BitMetric
+<b class="nc"><i>768</i>&nbsp;        return (double) getLength(value) * 8;</b>
+<i>769</i>&nbsp;    }
+<i>770</i>&nbsp;
+<i>771</i>&nbsp;    /** How many bytes are in the coding of this value?
+<i>772</i>&nbsp;     *  Returns Integer.MAX_VALUE if the value has no coding.
+<i>773</i>&nbsp;     *  The coding must not be a delta coding, since there is no
+<i>774</i>&nbsp;     *  definite size for a single value apart from its context.
+<i>775</i>&nbsp;     */
+<i>776</i>&nbsp;    public int getLength(int value) {
+<b class="nc"><i>777</i>&nbsp;        if (isDelta() &amp;&amp; isSubrange()) {</b>
+<b class="nc"><i>778</i>&nbsp;            if (!canRepresentUnsigned(value))</b>
+<b class="nc"><i>779</i>&nbsp;                return Integer.MAX_VALUE;</b>
+<b class="nc"><i>780</i>&nbsp;            value = reduceToSignedRange(value);</b>
+<i>781</i>&nbsp;        }
+<b class="nc"><i>782</i>&nbsp;        if (value &gt;= 0) {</b>
+<b class="nc"><i>783</i>&nbsp;            for (int n = 0; n &lt; B; n++) {</b>
+<b class="nc"><i>784</i>&nbsp;                if (value &lt;= byteMax[n])  return n+1;</b>
+<i>785</i>&nbsp;            }
+<i>786</i>&nbsp;        } else {
+<b class="nc"><i>787</i>&nbsp;            for (int n = 0; n &lt; B; n++) {</b>
+<b class="nc"><i>788</i>&nbsp;                if (value &gt;= byteMin[n])  return n+1;</b>
+<i>789</i>&nbsp;            }
+<i>790</i>&nbsp;        }
+<b class="nc"><i>791</i>&nbsp;        return Integer.MAX_VALUE;</b>
+<i>792</i>&nbsp;    }
+<i>793</i>&nbsp;
+<i>794</i>&nbsp;    public int getLength(int[] values, int start, int end) {
+<b class="nc"><i>795</i>&nbsp;        int len = end-start;</b>
+<b class="nc"><i>796</i>&nbsp;        if (B == 1)  return len;</b>
+<b class="nc"><i>797</i>&nbsp;        if (L == 0)  return len * B;</b>
+<b class="nc"><i>798</i>&nbsp;        if (isDelta()) {</b>
+<i>799</i>&nbsp;            int[] deltas;
+<b class="nc"><i>800</i>&nbsp;            if (!isSubrange())</b>
+<b class="nc"><i>801</i>&nbsp;                deltas = makeDeltas(values, start, end, 0, 0);</b>
+<i>802</i>&nbsp;            else
+<b class="nc"><i>803</i>&nbsp;                deltas = makeDeltas(values, start, end, min, max);</b>
+<i>804</i>&nbsp;            //return Coding.of(B, H, S).getLength(deltas, 0, len);
+<b class="nc"><i>805</i>&nbsp;            values = deltas;</b>
+<b class="nc"><i>806</i>&nbsp;            start = 0;</b>
+<i>807</i>&nbsp;        }
+<b class="nc"><i>808</i>&nbsp;        int sum = len;  // at least 1 byte per</b>
+<i>809</i>&nbsp;        // add extra bytes for extra-long values
+<b class="nc"><i>810</i>&nbsp;        for (int n = 1; n &lt;= B; n++) {</b>
+<i>811</i>&nbsp;            // what is the coding interval [min..max] for n bytes?
+<b class="nc"><i>812</i>&nbsp;            int lmax = byteMax[n-1];</b>
+<b class="nc"><i>813</i>&nbsp;            int lmin = byteMin[n-1];</b>
+<b class="nc"><i>814</i>&nbsp;            int longer = 0;  // count of guys longer than n bytes</b>
+<b class="nc"><i>815</i>&nbsp;            for (int i = 0; i &lt; len; i++) {</b>
+<b class="nc"><i>816</i>&nbsp;                int value = values[start+i];</b>
+<b class="nc"><i>817</i>&nbsp;                if (value &gt;= 0) {</b>
+<b class="nc"><i>818</i>&nbsp;                    if (value &gt; lmax)  longer++;</b>
+<i>819</i>&nbsp;                } else {
+<b class="nc"><i>820</i>&nbsp;                    if (value &lt; lmin)  longer++;</b>
+<i>821</i>&nbsp;                }
+<i>822</i>&nbsp;            }
+<b class="nc"><i>823</i>&nbsp;            if (longer == 0)  break;  // no more passes needed</b>
+<b class="nc"><i>824</i>&nbsp;            if (n == B)  return Integer.MAX_VALUE;  // cannot represent!</b>
+<b class="nc"><i>825</i>&nbsp;            sum += longer;</b>
+<i>826</i>&nbsp;        }
+<b class="nc"><i>827</i>&nbsp;        return sum;</b>
+<i>828</i>&nbsp;    }
+<i>829</i>&nbsp;
+<i>830</i>&nbsp;    public byte[] getMetaCoding(Coding dflt) {
+<b class="nc"><i>831</i>&nbsp;        if (dflt == this)  return new byte[]{ (byte) _meta_default };</b>
+<b class="nc"><i>832</i>&nbsp;        int canonicalIndex = BandStructure.indexOf(this);</b>
+<b class="nc"><i>833</i>&nbsp;        if (canonicalIndex &gt; 0)</b>
+<b class="nc"><i>834</i>&nbsp;            return new byte[]{ (byte) canonicalIndex };</b>
+<b class="nc"><i>835</i>&nbsp;        return new byte[]{</b>
+<i>836</i>&nbsp;            (byte)_meta_arb,
+<i>837</i>&nbsp;            (byte)(del + 2*S + 8*(B-1)),
+<i>838</i>&nbsp;            (byte)(H-1)
+<i>839</i>&nbsp;        };
+<i>840</i>&nbsp;    }
+<i>841</i>&nbsp;    public static int parseMetaCoding(byte[] bytes, int pos, Coding dflt, CodingMethod res[]) {
+<b class="nc"><i>842</i>&nbsp;        int op = bytes[pos++] &amp; 0xFF;</b>
+<b class="nc"><i>843</i>&nbsp;        if (_meta_canon_min &lt;= op &amp;&amp; op &lt;= _meta_canon_max) {</b>
+<b class="nc"><i>844</i>&nbsp;            Coding c = BandStructure.codingForIndex(op);</b>
+<b class="nc"><i>845</i>&nbsp;            assert(c != null);</b>
+<b class="nc"><i>846</i>&nbsp;            res[0] = c;</b>
+<b class="nc"><i>847</i>&nbsp;            return pos;</b>
+<i>848</i>&nbsp;        }
+<b class="nc"><i>849</i>&nbsp;        if (op == _meta_arb) {</b>
+<b class="nc"><i>850</i>&nbsp;            int dsb = bytes[pos++] &amp; 0xFF;</b>
+<b class="nc"><i>851</i>&nbsp;            int H_1 = bytes[pos++] &amp; 0xFF;</b>
+<b class="nc"><i>852</i>&nbsp;            int del = dsb % 2;</b>
+<b class="nc"><i>853</i>&nbsp;            int S = (dsb / 2) % 4;</b>
+<b class="nc"><i>854</i>&nbsp;            int B = (dsb / 8)+1;</b>
+<b class="nc"><i>855</i>&nbsp;            int H = H_1+1;</b>
+<b class="nc"><i>856</i>&nbsp;            if (!((1 &lt;= B &amp;&amp; B &lt;= B_MAX) &amp;&amp;</b>
+<i>857</i>&nbsp;                  (0 &lt;= S &amp;&amp; S &lt;= S_MAX) &amp;&amp;
+<i>858</i>&nbsp;                  (1 &lt;= H &amp;&amp; H &lt;= H_MAX) &amp;&amp;
+<i>859</i>&nbsp;                  (0 &lt;= del &amp;&amp; del &lt;= 1))
+<i>860</i>&nbsp;                || (B == 1 &amp;&amp; H != 256)
+<i>861</i>&nbsp;                || (B == 5 &amp;&amp; H == 256)) {
+<b class="nc"><i>862</i>&nbsp;                throw new RuntimeException(&quot;Bad arb. coding: (&quot;+B+&quot;,&quot;+H+&quot;,&quot;+S+&quot;,&quot;+del);</b>
+<i>863</i>&nbsp;            }
+<b class="nc"><i>864</i>&nbsp;            res[0] = Coding.of(B, H, S, del);</b>
+<b class="nc"><i>865</i>&nbsp;            return pos;</b>
+<i>866</i>&nbsp;        }
+<b class="nc"><i>867</i>&nbsp;        return pos-1;  // backup</b>
+<i>868</i>&nbsp;    }
+<i>869</i>&nbsp;
+<i>870</i>&nbsp;
+<i>871</i>&nbsp;    public String keyString() {
+<b class="nc"><i>872</i>&nbsp;        return &quot;(&quot;+B+&quot;,&quot;+H+&quot;,&quot;+S+&quot;,&quot;+del+&quot;)&quot;;</b>
+<i>873</i>&nbsp;    }
+<i>874</i>&nbsp;
+<i>875</i>&nbsp;    public String toString() {
+<b class="nc"><i>876</i>&nbsp;        String str = &quot;Coding&quot;+keyString();</b>
+<i>877</i>&nbsp;        // If -ea, print out more informative strings!
+<i>878</i>&nbsp;        //assert((str = stringForDebug()) != null);
+<b class="nc"><i>879</i>&nbsp;        return str;</b>
+<i>880</i>&nbsp;    }
+<i>881</i>&nbsp;
+<b class="nc"><i>882</i>&nbsp;    static boolean verboseStringForDebug = false;</b>
+<i>883</i>&nbsp;    String stringForDebug() {
+<b class="nc"><i>884</i>&nbsp;        String minS = (min == Integer.MIN_VALUE ? &quot;min&quot; : &quot;&quot;+min);</b>
+<b class="nc"><i>885</i>&nbsp;        String maxS = (max == Integer.MAX_VALUE ? &quot;max&quot; : &quot;&quot;+max);</b>
+<b class="nc"><i>886</i>&nbsp;        String str = keyString()+&quot; L=&quot;+L+&quot; r=[&quot;+minS+&quot;,&quot;+maxS+&quot;]&quot;;</b>
+<b class="nc"><i>887</i>&nbsp;        if (isSubrange())</b>
+<b class="nc"><i>888</i>&nbsp;            str += &quot; subrange&quot;;</b>
+<b class="nc"><i>889</i>&nbsp;        else if (!isFullRange())</b>
+<b class="nc"><i>890</i>&nbsp;            str += &quot; MIDRANGE&quot;;</b>
+<b class="nc"><i>891</i>&nbsp;        if (verboseStringForDebug) {</b>
+<b class="nc"><i>892</i>&nbsp;            str += &quot; {&quot;;</b>
+<b class="nc"><i>893</i>&nbsp;            int prev_range = 0;</b>
+<b class="nc"><i>894</i>&nbsp;            for (int n = 1; n &lt;= B; n++) {</b>
+<b class="nc"><i>895</i>&nbsp;                int range_n = saturate32((long)byteMax[n-1] - byteMin[n-1] + 1);</b>
+<b class="nc"><i>896</i>&nbsp;                assert(range_n == saturate32(codeRangeLong(B, H, n)));</b>
+<b class="nc"><i>897</i>&nbsp;                range_n -= prev_range;</b>
+<b class="nc"><i>898</i>&nbsp;                prev_range = range_n;</b>
+<b class="nc"><i>899</i>&nbsp;                String rngS = (range_n == Integer.MAX_VALUE ? &quot;max&quot; : &quot;&quot;+range_n);</b>
+<b class="nc"><i>900</i>&nbsp;                str += &quot; #&quot;+n+&quot;=&quot;+rngS;</b>
+<i>901</i>&nbsp;            }
+<b class="nc"><i>902</i>&nbsp;            str += &quot; }&quot;;</b>
+<i>903</i>&nbsp;        }
+<b class="nc"><i>904</i>&nbsp;        return str;</b>
+<i>905</i>&nbsp;    }
+<i>906</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

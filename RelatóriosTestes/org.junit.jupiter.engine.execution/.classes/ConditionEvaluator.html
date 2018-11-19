@@ -1,0 +1,215 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ConditionEvaluator</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">org.junit.jupiter.engine.execution</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ConditionEvaluator (org.junit.jupiter.engine.execution)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ConditionEvaluator</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    81,8%
+  </span>
+  <span class="absValue">
+    (9/ 11)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    63,9%
+  </span>
+  <span class="absValue">
+    (23/ 36)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright 2015-2018 the original author or authors.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; * All rights reserved. This program and the accompanying materials are
+<i>5</i>&nbsp; * made available under the terms of the Eclipse Public License v2.0 which
+<i>6</i>&nbsp; * accompanies this distribution and is available at
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; * http://www.eclipse.org/legal/epl-v20.html
+<i>9</i>&nbsp; */
+<i>10</i>&nbsp;
+<i>11</i>&nbsp;package org.junit.jupiter.engine.execution;
+<i>12</i>&nbsp;
+<i>13</i>&nbsp;import static java.lang.String.format;
+<i>14</i>&nbsp;import static org.apiguardian.api.API.Status.INTERNAL;
+<i>15</i>&nbsp;import static org.junit.jupiter.engine.Constants.DEACTIVATE_ALL_CONDITIONS_PATTERN;
+<i>16</i>&nbsp;import static org.junit.jupiter.engine.Constants.DEACTIVATE_CONDITIONS_PATTERN_PROPERTY_NAME;
+<i>17</i>&nbsp;
+<i>18</i>&nbsp;import java.util.function.Predicate;
+<i>19</i>&nbsp;import java.util.regex.Matcher;
+<i>20</i>&nbsp;import java.util.regex.Pattern;
+<i>21</i>&nbsp;
+<i>22</i>&nbsp;import org.apiguardian.api.API;
+<i>23</i>&nbsp;import org.junit.jupiter.api.extension.ConditionEvaluationResult;
+<i>24</i>&nbsp;import org.junit.jupiter.api.extension.ExecutionCondition;
+<i>25</i>&nbsp;import org.junit.jupiter.api.extension.ExtensionContext;
+<i>26</i>&nbsp;import org.junit.jupiter.engine.Constants;
+<i>27</i>&nbsp;import org.junit.jupiter.engine.extension.ExtensionRegistry;
+<i>28</i>&nbsp;import org.junit.platform.commons.logging.Logger;
+<i>29</i>&nbsp;import org.junit.platform.commons.logging.LoggerFactory;
+<i>30</i>&nbsp;import org.junit.platform.commons.util.StringUtils;
+<i>31</i>&nbsp;import org.junit.platform.engine.ConfigurationParameters;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;/**
+<i>34</i>&nbsp; * {@code ConditionEvaluator} evaluates {@link ExecutionCondition} extensions.
+<i>35</i>&nbsp; *
+<i>36</i>&nbsp; * @since 5.0
+<i>37</i>&nbsp; * @see ExecutionCondition
+<i>38</i>&nbsp; */
+<i>39</i>&nbsp;@API(status = INTERNAL, since = &quot;5.0&quot;)
+<b class="fc"><i>40</i>&nbsp;public class ConditionEvaluator {</b>
+<i>41</i>&nbsp;
+<b class="fc"><i>42</i>&nbsp;	private static final Logger logger = LoggerFactory.getLogger(ConditionEvaluator.class);</b>
+<i>43</i>&nbsp;
+<b class="fc"><i>44</i>&nbsp;	private static final ConditionEvaluationResult ENABLED = ConditionEvaluationResult.enabled(</b>
+<i>45</i>&nbsp;		&quot;No &#39;disabled&#39; conditions encountered&quot;);
+<i>46</i>&nbsp;
+<b class="fc"><i>47</i>&nbsp;	private static final Predicate&lt;Object&gt; alwaysActivated = condition -&gt; true;</b>
+<i>48</i>&nbsp;
+<b class="fc"><i>49</i>&nbsp;	private static final Predicate&lt;Object&gt; alwaysDeactivated = condition -&gt; false;</b>
+<i>50</i>&nbsp;
+<i>51</i>&nbsp;	/**
+<i>52</i>&nbsp;	 * Evaluate all {@link ExecutionCondition} extensions registered for the
+<i>53</i>&nbsp;	 * supplied {@link ExtensionContext}.
+<i>54</i>&nbsp;	 *
+<i>55</i>&nbsp;	 * @param context the current {@code ExtensionContext}
+<i>56</i>&nbsp;	 * @return the first &lt;em&gt;disabled&lt;/em&gt; {@code ConditionEvaluationResult},
+<i>57</i>&nbsp;	 * or a default &lt;em&gt;enabled&lt;/em&gt; {@code ConditionEvaluationResult} if no
+<i>58</i>&nbsp;	 * disabled conditions are encountered
+<i>59</i>&nbsp;	 */
+<i>60</i>&nbsp;	public ConditionEvaluationResult evaluate(ExtensionRegistry extensionRegistry,
+<i>61</i>&nbsp;			ConfigurationParameters configurationParameters, ExtensionContext context) {
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;		// @formatter:off
+<b class="fc"><i>64</i>&nbsp;		return extensionRegistry.stream(ExecutionCondition.class)</b>
+<b class="fc"><i>65</i>&nbsp;				.filter(conditionIsActivated(configurationParameters))</b>
+<b class="fc"><i>66</i>&nbsp;				.map(condition -&gt; evaluate(condition, context))</b>
+<b class="fc"><i>67</i>&nbsp;				.filter(ConditionEvaluationResult::isDisabled)</b>
+<b class="fc"><i>68</i>&nbsp;				.findFirst()</b>
+<b class="fc"><i>69</i>&nbsp;				.orElse(ENABLED);</b>
+<i>70</i>&nbsp;		// @formatter:on
+<i>71</i>&nbsp;	}
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;	private ConditionEvaluationResult evaluate(ExecutionCondition condition, ExtensionContext context) {
+<i>74</i>&nbsp;		try {
+<b class="fc"><i>75</i>&nbsp;			ConditionEvaluationResult result = condition.evaluateExecutionCondition(context);</b>
+<b class="fc"><i>76</i>&nbsp;			logResult(condition.getClass(), result);</b>
+<b class="fc"><i>77</i>&nbsp;			return result;</b>
+<i>78</i>&nbsp;		}
+<b class="nc"><i>79</i>&nbsp;		catch (Exception ex) {</b>
+<b class="nc"><i>80</i>&nbsp;			throw evaluationException(condition.getClass(), ex);</b>
+<i>81</i>&nbsp;		}
+<i>82</i>&nbsp;	}
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;	private void logResult(Class&lt;?&gt; conditionType, ConditionEvaluationResult result) {
+<b class="fc"><i>85</i>&nbsp;		logger.trace(() -&gt; format(&quot;Evaluation of condition [%s] resulted in: %s&quot;, conditionType.getName(), result));</b>
+<b class="fc"><i>86</i>&nbsp;	}</b>
+<i>87</i>&nbsp;
+<i>88</i>&nbsp;	private ConditionEvaluationException evaluationException(Class&lt;?&gt; conditionType, Exception ex) {
+<b class="nc"><i>89</i>&nbsp;		String cause = StringUtils.isNotBlank(ex.getMessage()) ? &quot;: &quot; + ex.getMessage() : &quot;&quot;;</b>
+<b class="nc"><i>90</i>&nbsp;		return new ConditionEvaluationException(</b>
+<b class="nc"><i>91</i>&nbsp;			format(&quot;Failed to evaluate condition [%s]%s&quot;, conditionType.getName(), cause), ex);</b>
+<i>92</i>&nbsp;	}
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;	private Predicate&lt;Object&gt; conditionIsActivated(ConfigurationParameters configurationParameters) {
+<b class="fc"><i>95</i>&nbsp;		String patternString = getDeactivatePatternString(configurationParameters);</b>
+<b class="fc"><i>96</i>&nbsp;		if (patternString != null) {</b>
+<b class="nc"><i>97</i>&nbsp;			if (DEACTIVATE_ALL_CONDITIONS_PATTERN.equals(patternString)) {</b>
+<b class="nc"><i>98</i>&nbsp;				return alwaysDeactivated;</b>
+<i>99</i>&nbsp;			}
+<b class="nc"><i>100</i>&nbsp;			Pattern pattern = Pattern.compile(convertToRegEx(patternString));</b>
+<b class="nc"><i>101</i>&nbsp;			return condition -&gt; !pattern.matcher(condition.getClass().getName()).matches();</b>
+<i>102</i>&nbsp;		}
+<b class="fc"><i>103</i>&nbsp;		return alwaysActivated;</b>
+<i>104</i>&nbsp;	}
+<i>105</i>&nbsp;
+<i>106</i>&nbsp;	private String getDeactivatePatternString(ConfigurationParameters configurationParameters) {
+<i>107</i>&nbsp;		// @formatter:off
+<b class="fc"><i>108</i>&nbsp;		return configurationParameters.get(DEACTIVATE_CONDITIONS_PATTERN_PROPERTY_NAME)</b>
+<b class="fc"><i>109</i>&nbsp;				.filter(StringUtils::isNotBlank)</b>
+<b class="fc"><i>110</i>&nbsp;				.map(String::trim)</b>
+<b class="fc"><i>111</i>&nbsp;				.orElse(null);</b>
+<i>112</i>&nbsp;		// @formatter:on
+<i>113</i>&nbsp;	}
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;	/**
+<i>116</i>&nbsp;	 * See {@link Constants#DEACTIVATE_CONDITIONS_PATTERN_PROPERTY_NAME} for
+<i>117</i>&nbsp;	 * details on the pattern matching syntax.
+<i>118</i>&nbsp;	 */
+<i>119</i>&nbsp;	private String convertToRegEx(String pattern) {
+<b class="nc"><i>120</i>&nbsp;		pattern = Matcher.quoteReplacement(pattern);</b>
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;		// Match &quot;.&quot; against &quot;.&quot; and &quot;$&quot; since users may declare a &quot;.&quot; instead of a
+<i>123</i>&nbsp;		// &quot;$&quot; as the separator between classes and nested classes.
+<b class="nc"><i>124</i>&nbsp;		pattern = pattern.replace(&quot;.&quot;, &quot;[.$]&quot;);</b>
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;		// Convert our &quot;*&quot; wildcard into a proper RegEx pattern.
+<b class="nc"><i>127</i>&nbsp;		pattern = pattern.replace(&quot;*&quot;, &quot;.+&quot;);</b>
+<i>128</i>&nbsp;
+<b class="nc"><i>129</i>&nbsp;		return pattern;</b>
+<i>130</i>&nbsp;	}
+<i>131</i>&nbsp;
+<i>132</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,1702 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: LdapClient</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.jndi.ldap</a> ]
+</div>
+
+<h1>Coverage Summary for Class: LdapClient (com.sun.jndi.ldap)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">LdapClient</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 40)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 560)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1999, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.jndi.ldap;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.*;
+<i>29</i>&nbsp;import java.util.Locale;
+<i>30</i>&nbsp;import java.util.Vector;
+<i>31</i>&nbsp;import java.util.Hashtable;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;import javax.naming.*;
+<i>34</i>&nbsp;import javax.naming.directory.*;
+<i>35</i>&nbsp;import javax.naming.ldap.*;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;import com.sun.jndi.ldap.pool.PooledConnection;
+<i>38</i>&nbsp;import com.sun.jndi.ldap.pool.PoolCallback;
+<i>39</i>&nbsp;import com.sun.jndi.ldap.sasl.LdapSasl;
+<i>40</i>&nbsp;import com.sun.jndi.ldap.sasl.SaslInputStream;
+<i>41</i>&nbsp;
+<i>42</i>&nbsp;/**
+<i>43</i>&nbsp; * LDAP (RFC-1777) and LDAPv3 (RFC-2251) compliant client
+<i>44</i>&nbsp; *
+<i>45</i>&nbsp; * This class represents a connection to an LDAP client.
+<i>46</i>&nbsp; * Callers interact with this class at an LDAP operation level.
+<i>47</i>&nbsp; * That is, the caller invokes a method to do a SEARCH or MODRDN
+<i>48</i>&nbsp; * operation and gets back the result.
+<i>49</i>&nbsp; * The caller uses the constructor to create a connection to the server.
+<i>50</i>&nbsp; * It then needs to use authenticate() to perform an LDAP BIND.
+<i>51</i>&nbsp; * Note that for v3, BIND is optional so authenticate() might not
+<i>52</i>&nbsp; * actually send a BIND. authenticate() can be used later on to issue
+<i>53</i>&nbsp; * a BIND, for example, for a v3 client that wants to change the connection&#39;s
+<i>54</i>&nbsp; * credentials.
+<i>55</i>&nbsp; *&lt;p&gt;
+<i>56</i>&nbsp; * Multiple LdapCtx might share the same LdapClient. For example, contexts
+<i>57</i>&nbsp; * derived from the same initial context would share the same LdapClient
+<i>58</i>&nbsp; * until changes to a context&#39;s properties necessitates its own LdapClient.
+<i>59</i>&nbsp; * LdapClient methods that access shared data are thread-safe (i.e., caller
+<i>60</i>&nbsp; * does not have to sync).
+<i>61</i>&nbsp; *&lt;p&gt;
+<i>62</i>&nbsp; * Fields:
+<i>63</i>&nbsp; *   isLdapv3 - no sync; initialized and updated within sync authenticate();
+<i>64</i>&nbsp; *       always updated when connection is &quot;quiet&quot; and not shared;
+<i>65</i>&nbsp; *       read access from outside LdapClient not sync
+<i>66</i>&nbsp; *   referenceCount - sync within LdapClient; exception is forceClose() which
+<i>67</i>&nbsp; *       is used by Connection thread to close connection upon receiving
+<i>68</i>&nbsp; *       an Unsolicited Notification.
+<i>69</i>&nbsp; *       access from outside LdapClient must sync;
+<i>70</i>&nbsp; *   conn - no sync; Connection takes care of its own sync
+<i>71</i>&nbsp; *   unsolicited - sync Vector; multiple operations sync&#39;ed
+<i>72</i>&nbsp; *
+<i>73</i>&nbsp; * @author Vincent Ryan
+<i>74</i>&nbsp; * @author Jagane Sundar
+<i>75</i>&nbsp; * @author Rosanna Lee
+<i>76</i>&nbsp; */
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;public final class LdapClient implements PooledConnection {
+<i>79</i>&nbsp;    // ---------------------- Constants ----------------------------------
+<i>80</i>&nbsp;    private static final int debug = 0;
+<i>81</i>&nbsp;    static final boolean caseIgnore = true;
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;    // Default list of binary attributes
+<b class="nc"><i>84</i>&nbsp;    private static final Hashtable&lt;String, Boolean&gt; defaultBinaryAttrs =</b>
+<i>85</i>&nbsp;            new Hashtable&lt;&gt;(23,0.75f);
+<i>86</i>&nbsp;    static {
+<b class="nc"><i>87</i>&nbsp;        defaultBinaryAttrs.put(&quot;userpassword&quot;, Boolean.TRUE);      //2.5.4.35</b>
+<b class="nc"><i>88</i>&nbsp;        defaultBinaryAttrs.put(&quot;javaserializeddata&quot;, Boolean.TRUE);</b>
+<i>89</i>&nbsp;                                                //1.3.6.1.4.1.42.2.27.4.1.8
+<b class="nc"><i>90</i>&nbsp;        defaultBinaryAttrs.put(&quot;javaserializedobject&quot;, Boolean.TRUE);</b>
+<i>91</i>&nbsp;                                                // 1.3.6.1.4.1.42.2.27.4.1.2
+<b class="nc"><i>92</i>&nbsp;        defaultBinaryAttrs.put(&quot;jpegphoto&quot;, Boolean.TRUE);</b>
+<i>93</i>&nbsp;                                                //0.9.2342.19200300.100.1.60
+<b class="nc"><i>94</i>&nbsp;        defaultBinaryAttrs.put(&quot;audio&quot;, Boolean.TRUE);  //0.9.2342.19200300.100.1.55</b>
+<b class="nc"><i>95</i>&nbsp;        defaultBinaryAttrs.put(&quot;thumbnailphoto&quot;, Boolean.TRUE);</b>
+<i>96</i>&nbsp;                                                //1.3.6.1.4.1.1466.101.120.35
+<b class="nc"><i>97</i>&nbsp;        defaultBinaryAttrs.put(&quot;thumbnaillogo&quot;, Boolean.TRUE);</b>
+<i>98</i>&nbsp;                                                //1.3.6.1.4.1.1466.101.120.36
+<b class="nc"><i>99</i>&nbsp;        defaultBinaryAttrs.put(&quot;usercertificate&quot;, Boolean.TRUE);     //2.5.4.36</b>
+<b class="nc"><i>100</i>&nbsp;        defaultBinaryAttrs.put(&quot;cacertificate&quot;, Boolean.TRUE);       //2.5.4.37</b>
+<b class="nc"><i>101</i>&nbsp;        defaultBinaryAttrs.put(&quot;certificaterevocationlist&quot;, Boolean.TRUE);</b>
+<i>102</i>&nbsp;                                                //2.5.4.39
+<b class="nc"><i>103</i>&nbsp;        defaultBinaryAttrs.put(&quot;authorityrevocationlist&quot;, Boolean.TRUE); //2.5.4.38</b>
+<b class="nc"><i>104</i>&nbsp;        defaultBinaryAttrs.put(&quot;crosscertificatepair&quot;, Boolean.TRUE);    //2.5.4.40</b>
+<b class="nc"><i>105</i>&nbsp;        defaultBinaryAttrs.put(&quot;photo&quot;, Boolean.TRUE);   //0.9.2342.19200300.100.1.7</b>
+<b class="nc"><i>106</i>&nbsp;        defaultBinaryAttrs.put(&quot;personalsignature&quot;, Boolean.TRUE);</b>
+<i>107</i>&nbsp;                                                //0.9.2342.19200300.100.1.53
+<b class="nc"><i>108</i>&nbsp;        defaultBinaryAttrs.put(&quot;x500uniqueidentifier&quot;, Boolean.TRUE); //2.5.4.45</b>
+<i>109</i>&nbsp;    }
+<i>110</i>&nbsp;
+<i>111</i>&nbsp;    private static final String DISCONNECT_OID = &quot;1.3.6.1.4.1.1466.20036&quot;;
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    // ----------------------- instance fields ------------------------
+<i>115</i>&nbsp;    boolean isLdapv3;         // Used by LdapCtx
+<b class="nc"><i>116</i>&nbsp;    int referenceCount = 1;   // Used by LdapCtx for check for sharing</b>
+<i>117</i>&nbsp;
+<i>118</i>&nbsp;    Connection conn;  // Connection to server; has reader thread
+<i>119</i>&nbsp;                      // used by LdapCtx for StartTLS
+<i>120</i>&nbsp;
+<i>121</i>&nbsp;    final private PoolCallback pcb;
+<i>122</i>&nbsp;    final private boolean pooled;
+<b class="nc"><i>123</i>&nbsp;    private boolean authenticateCalled = false;</b>
+<i>124</i>&nbsp;
+<i>125</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>126</i>&nbsp;    //
+<i>127</i>&nbsp;    // constructor: Create an authenticated connection to server
+<i>128</i>&nbsp;    //
+<i>129</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>130</i>&nbsp;
+<i>131</i>&nbsp;    LdapClient(String host, int port, String socketFactory,
+<i>132</i>&nbsp;        int connectTimeout, int readTimeout, OutputStream trace, PoolCallback pcb)
+<b class="nc"><i>133</i>&nbsp;        throws NamingException {</b>
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;        if (debug &gt; 0)
+<i>136</i>&nbsp;            System.err.println(&quot;LdapClient: constructor called &quot; + host + &quot;:&quot; + port );
+<b class="nc"><i>137</i>&nbsp;        conn = new Connection(this, host, port, socketFactory, connectTimeout, readTimeout,</b>
+<i>138</i>&nbsp;            trace);
+<i>139</i>&nbsp;
+<b class="nc"><i>140</i>&nbsp;        this.pcb = pcb;</b>
+<b class="nc"><i>141</i>&nbsp;        pooled = (pcb != null);</b>
+<i>142</i>&nbsp;    }
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;    synchronized boolean authenticateCalled() {
+<b class="nc"><i>145</i>&nbsp;        return authenticateCalled;</b>
+<i>146</i>&nbsp;    }
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;    synchronized LdapResult
+<i>149</i>&nbsp;    authenticate(boolean initial, String name, Object pw, int version,
+<i>150</i>&nbsp;        String authMechanism, Control[] ctls,  Hashtable&lt;?,?&gt; env)
+<i>151</i>&nbsp;        throws NamingException {
+<i>152</i>&nbsp;
+<b class="nc"><i>153</i>&nbsp;        int readTimeout = conn.readTimeout;</b>
+<b class="nc"><i>154</i>&nbsp;        conn.readTimeout = conn.connectTimeout;</b>
+<b class="nc"><i>155</i>&nbsp;        LdapResult res = null;</b>
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;        try {
+<b class="nc"><i>158</i>&nbsp;            authenticateCalled = true;</b>
+<i>159</i>&nbsp;
+<i>160</i>&nbsp;            try {
+<b class="nc"><i>161</i>&nbsp;                ensureOpen();</b>
+<b class="nc"><i>162</i>&nbsp;            } catch (IOException e) {</b>
+<b class="nc"><i>163</i>&nbsp;                NamingException ne = new CommunicationException();</b>
+<b class="nc"><i>164</i>&nbsp;                ne.setRootCause(e);</b>
+<b class="nc"><i>165</i>&nbsp;                throw ne;</b>
+<b class="nc"><i>166</i>&nbsp;            }</b>
+<i>167</i>&nbsp;
+<b class="nc"><i>168</i>&nbsp;            switch (version) {</b>
+<i>169</i>&nbsp;            case LDAP_VERSION3_VERSION2:
+<i>170</i>&nbsp;            case LDAP_VERSION3:
+<b class="nc"><i>171</i>&nbsp;                isLdapv3 = true;</b>
+<b class="nc"><i>172</i>&nbsp;                break;</b>
+<i>173</i>&nbsp;            case LDAP_VERSION2:
+<b class="nc"><i>174</i>&nbsp;                isLdapv3 = false;</b>
+<b class="nc"><i>175</i>&nbsp;                break;</b>
+<i>176</i>&nbsp;            default:
+<b class="nc"><i>177</i>&nbsp;                throw new CommunicationException(&quot;Protocol version &quot; + version +</b>
+<i>178</i>&nbsp;                    &quot; not supported&quot;);
+<i>179</i>&nbsp;            }
+<i>180</i>&nbsp;
+<b class="nc"><i>181</i>&nbsp;            if (authMechanism.equalsIgnoreCase(&quot;none&quot;) ||</b>
+<b class="nc"><i>182</i>&nbsp;                authMechanism.equalsIgnoreCase(&quot;anonymous&quot;)) {</b>
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;                // Perform LDAP bind if we are reauthenticating, using LDAPv2,
+<i>185</i>&nbsp;                // supporting failover to LDAPv2, or controls have been supplied.
+<b class="nc"><i>186</i>&nbsp;                if (!initial ||</b>
+<i>187</i>&nbsp;                    (version == LDAP_VERSION2) ||
+<i>188</i>&nbsp;                    (version == LDAP_VERSION3_VERSION2) ||
+<i>189</i>&nbsp;                    ((ctls != null) &amp;&amp; (ctls.length &gt; 0))) {
+<i>190</i>&nbsp;                    try {
+<i>191</i>&nbsp;                        // anonymous bind; update name/pw for LDAPv2 retry
+<b class="nc"><i>192</i>&nbsp;                        res = ldapBind(name=null, (byte[])(pw=null), ctls, null,</b>
+<i>193</i>&nbsp;                            false);
+<b class="nc"><i>194</i>&nbsp;                        if (res.status == LdapClient.LDAP_SUCCESS) {</b>
+<b class="nc"><i>195</i>&nbsp;                            conn.setBound();</b>
+<i>196</i>&nbsp;                        }
+<b class="nc"><i>197</i>&nbsp;                    } catch (IOException e) {</b>
+<b class="nc"><i>198</i>&nbsp;                        NamingException ne =</b>
+<i>199</i>&nbsp;                            new CommunicationException(&quot;anonymous bind failed: &quot; +
+<i>200</i>&nbsp;                            conn.host + &quot;:&quot; + conn.port);
+<b class="nc"><i>201</i>&nbsp;                        ne.setRootCause(e);</b>
+<b class="nc"><i>202</i>&nbsp;                        throw ne;</b>
+<b class="nc"><i>203</i>&nbsp;                    }</b>
+<i>204</i>&nbsp;                } else {
+<i>205</i>&nbsp;                    // Skip LDAP bind for LDAPv3 anonymous bind
+<b class="nc"><i>206</i>&nbsp;                    res = new LdapResult();</b>
+<b class="nc"><i>207</i>&nbsp;                    res.status = LdapClient.LDAP_SUCCESS;</b>
+<i>208</i>&nbsp;                }
+<b class="nc"><i>209</i>&nbsp;            } else if (authMechanism.equalsIgnoreCase(&quot;simple&quot;)) {</b>
+<i>210</i>&nbsp;                // simple authentication
+<b class="nc"><i>211</i>&nbsp;                byte[] encodedPw = null;</b>
+<i>212</i>&nbsp;                try {
+<b class="nc"><i>213</i>&nbsp;                    encodedPw = encodePassword(pw, isLdapv3);</b>
+<b class="nc"><i>214</i>&nbsp;                    res = ldapBind(name, encodedPw, ctls, null, false);</b>
+<b class="nc"><i>215</i>&nbsp;                    if (res.status == LdapClient.LDAP_SUCCESS) {</b>
+<b class="nc"><i>216</i>&nbsp;                        conn.setBound();</b>
+<i>217</i>&nbsp;                    }
+<b class="nc"><i>218</i>&nbsp;                } catch (IOException e) {</b>
+<b class="nc"><i>219</i>&nbsp;                    NamingException ne =</b>
+<i>220</i>&nbsp;                        new CommunicationException(&quot;simple bind failed: &quot; +
+<i>221</i>&nbsp;                            conn.host + &quot;:&quot; + conn.port);
+<b class="nc"><i>222</i>&nbsp;                    ne.setRootCause(e);</b>
+<b class="nc"><i>223</i>&nbsp;                    throw ne;</b>
+<i>224</i>&nbsp;                } finally {
+<i>225</i>&nbsp;                    // If pw was copied to a new array, clear that array as
+<i>226</i>&nbsp;                    // a security precaution.
+<b class="nc"><i>227</i>&nbsp;                    if (encodedPw != pw &amp;&amp; encodedPw != null) {</b>
+<b class="nc"><i>228</i>&nbsp;                        for (int i = 0; i &lt; encodedPw.length; i++) {</b>
+<b class="nc"><i>229</i>&nbsp;                            encodedPw[i] = 0;</b>
+<i>230</i>&nbsp;                        }
+<i>231</i>&nbsp;                    }
+<i>232</i>&nbsp;                }
+<b class="nc"><i>233</i>&nbsp;            } else if (isLdapv3) {</b>
+<i>234</i>&nbsp;                // SASL authentication
+<i>235</i>&nbsp;                try {
+<b class="nc"><i>236</i>&nbsp;                    res = LdapSasl.saslBind(this, conn, conn.host, name, pw,</b>
+<i>237</i>&nbsp;                        authMechanism, env, ctls);
+<b class="nc"><i>238</i>&nbsp;                    if (res.status == LdapClient.LDAP_SUCCESS) {</b>
+<b class="nc"><i>239</i>&nbsp;                        conn.setBound();</b>
+<i>240</i>&nbsp;                    }
+<b class="nc"><i>241</i>&nbsp;                } catch (IOException e) {</b>
+<b class="nc"><i>242</i>&nbsp;                    NamingException ne =</b>
+<i>243</i>&nbsp;                        new CommunicationException(&quot;SASL bind failed: &quot; +
+<i>244</i>&nbsp;                        conn.host + &quot;:&quot; + conn.port);
+<b class="nc"><i>245</i>&nbsp;                    ne.setRootCause(e);</b>
+<b class="nc"><i>246</i>&nbsp;                    throw ne;</b>
+<b class="nc"><i>247</i>&nbsp;                }</b>
+<i>248</i>&nbsp;            } else {
+<b class="nc"><i>249</i>&nbsp;                throw new AuthenticationNotSupportedException(authMechanism);</b>
+<i>250</i>&nbsp;            }
+<i>251</i>&nbsp;
+<i>252</i>&nbsp;            //
+<i>253</i>&nbsp;            // re-try login using v2 if failing over
+<i>254</i>&nbsp;            //
+<b class="nc"><i>255</i>&nbsp;            if (initial &amp;&amp;</b>
+<i>256</i>&nbsp;                (res.status == LdapClient.LDAP_PROTOCOL_ERROR) &amp;&amp;
+<i>257</i>&nbsp;                (version == LdapClient.LDAP_VERSION3_VERSION2) &amp;&amp;
+<b class="nc"><i>258</i>&nbsp;                (authMechanism.equalsIgnoreCase(&quot;none&quot;) ||</b>
+<b class="nc"><i>259</i>&nbsp;                    authMechanism.equalsIgnoreCase(&quot;anonymous&quot;) ||</b>
+<b class="nc"><i>260</i>&nbsp;                    authMechanism.equalsIgnoreCase(&quot;simple&quot;))) {</b>
+<i>261</i>&nbsp;
+<b class="nc"><i>262</i>&nbsp;                byte[] encodedPw = null;</b>
+<i>263</i>&nbsp;                try {
+<b class="nc"><i>264</i>&nbsp;                    isLdapv3 = false;</b>
+<b class="nc"><i>265</i>&nbsp;                    encodedPw = encodePassword(pw, false);</b>
+<b class="nc"><i>266</i>&nbsp;                    res = ldapBind(name, encodedPw, ctls, null, false);</b>
+<b class="nc"><i>267</i>&nbsp;                    if (res.status == LdapClient.LDAP_SUCCESS) {</b>
+<b class="nc"><i>268</i>&nbsp;                        conn.setBound();</b>
+<i>269</i>&nbsp;                    }
+<b class="nc"><i>270</i>&nbsp;                } catch (IOException e) {</b>
+<b class="nc"><i>271</i>&nbsp;                    NamingException ne =</b>
+<i>272</i>&nbsp;                        new CommunicationException(authMechanism + &quot;:&quot; +
+<i>273</i>&nbsp;                            conn.host +     &quot;:&quot; + conn.port);
+<b class="nc"><i>274</i>&nbsp;                    ne.setRootCause(e);</b>
+<b class="nc"><i>275</i>&nbsp;                    throw ne;</b>
+<i>276</i>&nbsp;                } finally {
+<i>277</i>&nbsp;                    // If pw was copied to a new array, clear that array as
+<i>278</i>&nbsp;                    // a security precaution.
+<b class="nc"><i>279</i>&nbsp;                    if (encodedPw != pw &amp;&amp; encodedPw != null) {</b>
+<b class="nc"><i>280</i>&nbsp;                        for (int i = 0; i &lt; encodedPw.length; i++) {</b>
+<b class="nc"><i>281</i>&nbsp;                            encodedPw[i] = 0;</b>
+<i>282</i>&nbsp;                        }
+<i>283</i>&nbsp;                    }
+<i>284</i>&nbsp;                }
+<i>285</i>&nbsp;            }
+<i>286</i>&nbsp;
+<i>287</i>&nbsp;            // principal name not found
+<i>288</i>&nbsp;            // (map NameNotFoundException to AuthenticationException)
+<i>289</i>&nbsp;            // %%% This is a workaround for Netscape servers returning
+<i>290</i>&nbsp;            // %%% no such object when the principal name is not found
+<i>291</i>&nbsp;            // %%% Note that when this workaround is applied, it does not allow
+<i>292</i>&nbsp;            // %%% response controls to be recorded by the calling context
+<b class="nc"><i>293</i>&nbsp;            if (res.status == LdapClient.LDAP_NO_SUCH_OBJECT) {</b>
+<b class="nc"><i>294</i>&nbsp;                throw new AuthenticationException(</b>
+<b class="nc"><i>295</i>&nbsp;                    getErrorMessage(res.status, res.errorMessage));</b>
+<i>296</i>&nbsp;            }
+<b class="nc"><i>297</i>&nbsp;            conn.setV3(isLdapv3);</b>
+<b class="nc"><i>298</i>&nbsp;            return res;</b>
+<i>299</i>&nbsp;        } finally {
+<b class="nc"><i>300</i>&nbsp;            conn.readTimeout = readTimeout;</b>
+<i>301</i>&nbsp;        }
+<i>302</i>&nbsp;    }
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;    /**
+<i>305</i>&nbsp;     * Sends an LDAP Bind request.
+<i>306</i>&nbsp;     * Cannot be private; called by LdapSasl
+<i>307</i>&nbsp;     * @param dn The possibly null DN to use in the BIND request. null if anonymous.
+<i>308</i>&nbsp;     * @param toServer The possibly null array of bytes to send to the server.
+<i>309</i>&nbsp;     * @param auth The authentication mechanism
+<i>310</i>&nbsp;     *
+<i>311</i>&nbsp;     */
+<i>312</i>&nbsp;    synchronized public LdapResult ldapBind(String dn, byte[]toServer,
+<i>313</i>&nbsp;        Control[] bindCtls, String auth, boolean pauseAfterReceipt)
+<i>314</i>&nbsp;        throws java.io.IOException, NamingException {
+<i>315</i>&nbsp;
+<b class="nc"><i>316</i>&nbsp;        ensureOpen();</b>
+<i>317</i>&nbsp;
+<i>318</i>&nbsp;        // flush outstanding requests
+<b class="nc"><i>319</i>&nbsp;        conn.abandonOutstandingReqs(null);</b>
+<i>320</i>&nbsp;
+<b class="nc"><i>321</i>&nbsp;        BerEncoder ber = new BerEncoder();</b>
+<b class="nc"><i>322</i>&nbsp;        int curMsgId = conn.getMsgId();</b>
+<b class="nc"><i>323</i>&nbsp;        LdapResult res = new LdapResult();</b>
+<b class="nc"><i>324</i>&nbsp;        res.status = LDAP_OPERATIONS_ERROR;</b>
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;        //
+<i>327</i>&nbsp;        // build the bind request.
+<i>328</i>&nbsp;        //
+<b class="nc"><i>329</i>&nbsp;        ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>330</i>&nbsp;            ber.encodeInt(curMsgId);</b>
+<b class="nc"><i>331</i>&nbsp;            ber.beginSeq(LdapClient.LDAP_REQ_BIND);</b>
+<b class="nc"><i>332</i>&nbsp;                ber.encodeInt(isLdapv3 ? LDAP_VERSION3 : LDAP_VERSION2);</b>
+<b class="nc"><i>333</i>&nbsp;                ber.encodeString(dn, isLdapv3);</b>
+<i>334</i>&nbsp;
+<i>335</i>&nbsp;                // if authentication mechanism specified, it is SASL
+<b class="nc"><i>336</i>&nbsp;                if (auth != null) {</b>
+<b class="nc"><i>337</i>&nbsp;                    ber.beginSeq(Ber.ASN_CONTEXT | Ber.ASN_CONSTRUCTOR | 3);</b>
+<b class="nc"><i>338</i>&nbsp;                        ber.encodeString(auth, isLdapv3);    // SASL mechanism</b>
+<b class="nc"><i>339</i>&nbsp;                        if (toServer != null) {</b>
+<b class="nc"><i>340</i>&nbsp;                            ber.encodeOctetString(toServer,</b>
+<i>341</i>&nbsp;                                Ber.ASN_OCTET_STR);
+<i>342</i>&nbsp;                        }
+<b class="nc"><i>343</i>&nbsp;                    ber.endSeq();</b>
+<i>344</i>&nbsp;                } else {
+<b class="nc"><i>345</i>&nbsp;                    if (toServer != null) {</b>
+<b class="nc"><i>346</i>&nbsp;                        ber.encodeOctetString(toServer, Ber.ASN_CONTEXT);</b>
+<i>347</i>&nbsp;                    } else {
+<b class="nc"><i>348</i>&nbsp;                        ber.encodeOctetString(null, Ber.ASN_CONTEXT, 0, 0);</b>
+<i>349</i>&nbsp;                    }
+<i>350</i>&nbsp;                }
+<b class="nc"><i>351</i>&nbsp;            ber.endSeq();</b>
+<i>352</i>&nbsp;
+<i>353</i>&nbsp;            // Encode controls
+<b class="nc"><i>354</i>&nbsp;            if (isLdapv3) {</b>
+<b class="nc"><i>355</i>&nbsp;                encodeControls(ber, bindCtls);</b>
+<i>356</i>&nbsp;            }
+<b class="nc"><i>357</i>&nbsp;        ber.endSeq();</b>
+<i>358</i>&nbsp;
+<b class="nc"><i>359</i>&nbsp;        LdapRequest req = conn.writeRequest(ber, curMsgId, pauseAfterReceipt);</b>
+<b class="nc"><i>360</i>&nbsp;        if (toServer != null) {</b>
+<b class="nc"><i>361</i>&nbsp;            ber.reset();        // clear internally-stored password</b>
+<i>362</i>&nbsp;        }
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;        // Read reply
+<b class="nc"><i>365</i>&nbsp;        BerDecoder rber = conn.readReply(req);</b>
+<i>366</i>&nbsp;
+<b class="nc"><i>367</i>&nbsp;        rber.parseSeq(null);    // init seq</b>
+<b class="nc"><i>368</i>&nbsp;        rber.parseInt();        // msg id</b>
+<b class="nc"><i>369</i>&nbsp;        if (rber.parseByte() !=  LDAP_REP_BIND) {</b>
+<b class="nc"><i>370</i>&nbsp;            return res;</b>
+<i>371</i>&nbsp;        }
+<i>372</i>&nbsp;
+<b class="nc"><i>373</i>&nbsp;        rber.parseLength();</b>
+<b class="nc"><i>374</i>&nbsp;        parseResult(rber, res, isLdapv3);</b>
+<i>375</i>&nbsp;
+<i>376</i>&nbsp;        // handle server&#39;s credentials (if present)
+<b class="nc"><i>377</i>&nbsp;        if (isLdapv3 &amp;&amp;</b>
+<b class="nc"><i>378</i>&nbsp;            (rber.bytesLeft() &gt; 0) &amp;&amp;</b>
+<b class="nc"><i>379</i>&nbsp;            (rber.peekByte() == (Ber.ASN_CONTEXT | 7))) {</b>
+<b class="nc"><i>380</i>&nbsp;            res.serverCreds = rber.parseOctetString((Ber.ASN_CONTEXT | 7), null);</b>
+<i>381</i>&nbsp;        }
+<i>382</i>&nbsp;
+<b class="nc"><i>383</i>&nbsp;        res.resControls = isLdapv3 ? parseControls(rber) : null;</b>
+<i>384</i>&nbsp;
+<b class="nc"><i>385</i>&nbsp;        conn.removeRequest(req);</b>
+<b class="nc"><i>386</i>&nbsp;        return res;</b>
+<i>387</i>&nbsp;    }
+<i>388</i>&nbsp;
+<i>389</i>&nbsp;    /**
+<i>390</i>&nbsp;     * Determines whether SASL encryption/integrity is in progress.
+<i>391</i>&nbsp;     * This check is made prior to reauthentication. You cannot reauthenticate
+<i>392</i>&nbsp;     * over an encrypted/integrity-protected SASL channel. You must
+<i>393</i>&nbsp;     * close the channel and open a new one.
+<i>394</i>&nbsp;     */
+<i>395</i>&nbsp;    boolean usingSaslStreams() {
+<b class="nc"><i>396</i>&nbsp;        return (conn.inStream instanceof SaslInputStream);</b>
+<i>397</i>&nbsp;    }
+<i>398</i>&nbsp;
+<i>399</i>&nbsp;    synchronized void incRefCount() {
+<b class="nc"><i>400</i>&nbsp;        ++referenceCount;</b>
+<i>401</i>&nbsp;        if (debug &gt; 1) {
+<i>402</i>&nbsp;            System.err.println(&quot;LdapClient.incRefCount: &quot; + referenceCount + &quot; &quot; + this);
+<i>403</i>&nbsp;        }
+<i>404</i>&nbsp;
+<i>405</i>&nbsp;    }
+<i>406</i>&nbsp;
+<i>407</i>&nbsp;    /**
+<i>408</i>&nbsp;     * Returns the encoded password.
+<i>409</i>&nbsp;     */
+<i>410</i>&nbsp;    private static byte[] encodePassword(Object pw, boolean v3) throws IOException {
+<i>411</i>&nbsp;
+<b class="nc"><i>412</i>&nbsp;        if (pw instanceof char[]) {</b>
+<b class="nc"><i>413</i>&nbsp;            pw = new String((char[])pw);</b>
+<i>414</i>&nbsp;        }
+<i>415</i>&nbsp;
+<b class="nc"><i>416</i>&nbsp;        if (pw instanceof String) {</b>
+<b class="nc"><i>417</i>&nbsp;            if (v3) {</b>
+<b class="nc"><i>418</i>&nbsp;                return ((String)pw).getBytes(&quot;UTF8&quot;);</b>
+<i>419</i>&nbsp;            } else {
+<b class="nc"><i>420</i>&nbsp;                return ((String)pw).getBytes(&quot;8859_1&quot;);</b>
+<i>421</i>&nbsp;            }
+<i>422</i>&nbsp;        } else {
+<b class="nc"><i>423</i>&nbsp;            return (byte[])pw;</b>
+<i>424</i>&nbsp;        }
+<i>425</i>&nbsp;    }
+<i>426</i>&nbsp;
+<i>427</i>&nbsp;    synchronized void close(Control[] reqCtls, boolean hardClose) {
+<b class="nc"><i>428</i>&nbsp;        --referenceCount;</b>
+<i>429</i>&nbsp;
+<i>430</i>&nbsp;        if (debug &gt; 1) {
+<i>431</i>&nbsp;            System.err.println(&quot;LdapClient: &quot; + this);
+<i>432</i>&nbsp;            System.err.println(&quot;LdapClient: close() called: &quot; + referenceCount);
+<i>433</i>&nbsp;            (new Throwable()).printStackTrace();
+<i>434</i>&nbsp;        }
+<i>435</i>&nbsp;
+<b class="nc"><i>436</i>&nbsp;        if (referenceCount &lt;= 0 &amp;&amp; conn != null) {</b>
+<i>437</i>&nbsp;            if (debug &gt; 0) System.err.println(&quot;LdapClient: closed connection &quot; + this);
+<b class="nc"><i>438</i>&nbsp;            if (!pooled) {</b>
+<i>439</i>&nbsp;                // Not being pooled; continue with closing
+<b class="nc"><i>440</i>&nbsp;                conn.cleanup(reqCtls, false);</b>
+<b class="nc"><i>441</i>&nbsp;                conn = null;</b>
+<i>442</i>&nbsp;            } else {
+<i>443</i>&nbsp;                // Pooled
+<i>444</i>&nbsp;
+<i>445</i>&nbsp;                // Is this a real close or a request to return conn to pool
+<b class="nc"><i>446</i>&nbsp;                if (hardClose) {</b>
+<b class="nc"><i>447</i>&nbsp;                    conn.cleanup(reqCtls, false);</b>
+<b class="nc"><i>448</i>&nbsp;                    conn = null;</b>
+<b class="nc"><i>449</i>&nbsp;                    pcb.removePooledConnection(this);</b>
+<i>450</i>&nbsp;                } else {
+<b class="nc"><i>451</i>&nbsp;                    pcb.releasePooledConnection(this);</b>
+<i>452</i>&nbsp;                }
+<i>453</i>&nbsp;            }
+<i>454</i>&nbsp;        }
+<i>455</i>&nbsp;    }
+<i>456</i>&nbsp;
+<i>457</i>&nbsp;    // NOTE: Should NOT be synchronized otherwise won&#39;t be able to close
+<i>458</i>&nbsp;    private void forceClose(boolean cleanPool) {
+<b class="nc"><i>459</i>&nbsp;        referenceCount = 0; // force closing of connection</b>
+<i>460</i>&nbsp;
+<i>461</i>&nbsp;        if (debug &gt; 1) {
+<i>462</i>&nbsp;            System.err.println(&quot;LdapClient: forceClose() of &quot; + this);
+<i>463</i>&nbsp;        }
+<i>464</i>&nbsp;
+<b class="nc"><i>465</i>&nbsp;        if (conn != null) {</b>
+<i>466</i>&nbsp;            if (debug &gt; 0) System.err.println(
+<i>467</i>&nbsp;                &quot;LdapClient: forced close of connection &quot; + this);
+<b class="nc"><i>468</i>&nbsp;            conn.cleanup(null, false);</b>
+<b class="nc"><i>469</i>&nbsp;            conn = null;</b>
+<i>470</i>&nbsp;
+<b class="nc"><i>471</i>&nbsp;            if (cleanPool) {</b>
+<b class="nc"><i>472</i>&nbsp;                pcb.removePooledConnection(this);</b>
+<i>473</i>&nbsp;            }
+<i>474</i>&nbsp;        }
+<i>475</i>&nbsp;    }
+<i>476</i>&nbsp;
+<i>477</i>&nbsp;    @SuppressWarnings(&quot;deprecation&quot;)
+<i>478</i>&nbsp;    protected void finalize() {
+<b class="nc"><i>479</i>&nbsp;        if (debug &gt; 0) System.err.println(&quot;LdapClient: finalize &quot; + this);</b>
+<i>480</i>&nbsp;        forceClose(pooled);
+<i>481</i>&nbsp;    }
+<i>482</i>&nbsp;
+<i>483</i>&nbsp;    /*
+<i>484</i>&nbsp;     * Used by connection pooling to close physical connection.
+<i>485</i>&nbsp;     */
+<b class="nc"><i>486</i>&nbsp;    synchronized public void closeConnection() {</b>
+<i>487</i>&nbsp;        forceClose(false); // this is a pool callback so no need to clean pool
+<i>488</i>&nbsp;    }
+<i>489</i>&nbsp;
+<i>490</i>&nbsp;    /**
+<i>491</i>&nbsp;     * Called by Connection.cleanup(). LdapClient should
+<i>492</i>&nbsp;     * notify any unsolicited listeners and removing itself from any pool.
+<i>493</i>&nbsp;     * This is almost like forceClose(), except it doesn&#39;t call
+<i>494</i>&nbsp;     * Connection.cleanup() (because this is called from cleanup()).
+<i>495</i>&nbsp;     */
+<i>496</i>&nbsp;    void processConnectionClosure() {
+<b class="nc"><i>497</i>&nbsp;        // Notify listeners</b>
+<i>498</i>&nbsp;        if (unsolicited.size() &gt; 0) {
+<b class="nc"><i>499</i>&nbsp;            String msg;</b>
+<b class="nc"><i>500</i>&nbsp;            if (conn != null) {</b>
+<i>501</i>&nbsp;                msg = conn.host + &quot;:&quot; + conn.port + &quot; connection closed&quot;;
+<b class="nc"><i>502</i>&nbsp;            } else {</b>
+<i>503</i>&nbsp;                msg = &quot;Connection closed&quot;;
+<b class="nc"><i>504</i>&nbsp;            }</b>
+<i>505</i>&nbsp;            notifyUnsolicited(new CommunicationException(msg));
+<i>506</i>&nbsp;        }
+<i>507</i>&nbsp;
+<b class="nc"><i>508</i>&nbsp;        // Remove from pool</b>
+<b class="nc"><i>509</i>&nbsp;        if (pooled) {</b>
+<i>510</i>&nbsp;            pcb.removePooledConnection(this);
+<i>511</i>&nbsp;        }
+<i>512</i>&nbsp;    }
+<i>513</i>&nbsp;
+<i>514</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>515</i>&nbsp;    //
+<i>516</i>&nbsp;    // LDAP search. also includes methods to encode rfc 1558 compliant filters
+<i>517</i>&nbsp;    //
+<i>518</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;    static final int SCOPE_BASE_OBJECT = 0;
+<i>521</i>&nbsp;    static final int SCOPE_ONE_LEVEL = 1;
+<i>522</i>&nbsp;    static final int SCOPE_SUBTREE = 2;
+<i>523</i>&nbsp;
+<i>524</i>&nbsp;    LdapResult search(String dn, int scope, int deref, int sizeLimit,
+<i>525</i>&nbsp;                      int timeLimit, boolean attrsOnly, String attrs[],
+<i>526</i>&nbsp;                      String filter, int batchSize, Control[] reqCtls,
+<i>527</i>&nbsp;                      Hashtable&lt;String, Boolean&gt; binaryAttrs,
+<i>528</i>&nbsp;                      boolean waitFirstReply, int replyQueueCapacity)
+<i>529</i>&nbsp;        throws IOException, NamingException {
+<b class="nc"><i>530</i>&nbsp;</b>
+<i>531</i>&nbsp;        ensureOpen();
+<b class="nc"><i>532</i>&nbsp;</b>
+<i>533</i>&nbsp;        LdapResult res = new LdapResult();
+<b class="nc"><i>534</i>&nbsp;</b>
+<b class="nc"><i>535</i>&nbsp;        BerEncoder ber = new BerEncoder();</b>
+<i>536</i>&nbsp;        int curMsgId = conn.getMsgId();
+<b class="nc"><i>537</i>&nbsp;</b>
+<b class="nc"><i>538</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>539</i>&nbsp;                ber.encodeInt(curMsgId);</b>
+<b class="nc"><i>540</i>&nbsp;                ber.beginSeq(LDAP_REQ_SEARCH);</b>
+<b class="nc"><i>541</i>&nbsp;                    ber.encodeString(dn == null ? &quot;&quot; : dn, isLdapv3);</b>
+<b class="nc"><i>542</i>&nbsp;                    ber.encodeInt(scope, LBER_ENUMERATED);</b>
+<b class="nc"><i>543</i>&nbsp;                    ber.encodeInt(deref, LBER_ENUMERATED);</b>
+<b class="nc"><i>544</i>&nbsp;                    ber.encodeInt(sizeLimit);</b>
+<b class="nc"><i>545</i>&nbsp;                    ber.encodeInt(timeLimit);</b>
+<b class="nc"><i>546</i>&nbsp;                    ber.encodeBoolean(attrsOnly);</b>
+<b class="nc"><i>547</i>&nbsp;                    Filter.encodeFilterString(ber, filter, isLdapv3);</b>
+<b class="nc"><i>548</i>&nbsp;                    ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>549</i>&nbsp;                        ber.encodeStringArray(attrs, isLdapv3);</b>
+<b class="nc"><i>550</i>&nbsp;                    ber.endSeq();</b>
+<b class="nc"><i>551</i>&nbsp;                ber.endSeq();</b>
+<b class="nc"><i>552</i>&nbsp;                if (isLdapv3) encodeControls(ber, reqCtls);</b>
+<i>553</i>&nbsp;            ber.endSeq();
+<b class="nc"><i>554</i>&nbsp;</b>
+<b class="nc"><i>555</i>&nbsp;         LdapRequest req =</b>
+<i>556</i>&nbsp;                conn.writeRequest(ber, curMsgId, false, replyQueueCapacity);
+<b class="nc"><i>557</i>&nbsp;</b>
+<b class="nc"><i>558</i>&nbsp;         res.msgId = curMsgId;</b>
+<b class="nc"><i>559</i>&nbsp;         res.status = LdapClient.LDAP_SUCCESS; //optimistic</b>
+<i>560</i>&nbsp;         if (waitFirstReply) {
+<b class="nc"><i>561</i>&nbsp;             // get first reply</b>
+<i>562</i>&nbsp;             res = getSearchReply(req, batchSize, res, binaryAttrs);
+<b class="nc"><i>563</i>&nbsp;         }</b>
+<i>564</i>&nbsp;         return res;
+<i>565</i>&nbsp;    }
+<i>566</i>&nbsp;
+<i>567</i>&nbsp;    /*
+<i>568</i>&nbsp;     * Abandon the search operation and remove it from the message queue.
+<i>569</i>&nbsp;     */
+<b class="nc"><i>570</i>&nbsp;    void clearSearchReply(LdapResult res, Control[] ctls) {</b>
+<i>571</i>&nbsp;        if (res != null &amp;&amp; conn != null) {
+<i>572</i>&nbsp;
+<i>573</i>&nbsp;            // Only send an LDAP abandon operation when clearing the search
+<b class="nc"><i>574</i>&nbsp;            // reply from a one-level or subtree search.</b>
+<b class="nc"><i>575</i>&nbsp;            LdapRequest req = conn.findRequest(res.msgId);</b>
+<i>576</i>&nbsp;            if (req == null) {
+<i>577</i>&nbsp;                return;
+<i>578</i>&nbsp;            }
+<i>579</i>&nbsp;
+<i>580</i>&nbsp;            // OK if req got removed after check; double removal attempt
+<i>581</i>&nbsp;            // but otherwise no harm done
+<i>582</i>&nbsp;
+<i>583</i>&nbsp;            // Send an LDAP abandon only if the search operation has not yet
+<b class="nc"><i>584</i>&nbsp;            // completed.</b>
+<b class="nc"><i>585</i>&nbsp;            if (req.hasSearchCompleted()) {</b>
+<i>586</i>&nbsp;                conn.removeRequest(req);
+<b class="nc"><i>587</i>&nbsp;            } else {</b>
+<i>588</i>&nbsp;                conn.abandonRequest(req, ctls);
+<i>589</i>&nbsp;            }
+<i>590</i>&nbsp;        }
+<i>591</i>&nbsp;    }
+<i>592</i>&nbsp;
+<i>593</i>&nbsp;    /*
+<i>594</i>&nbsp;     * Retrieve the next batch of entries and/or referrals.
+<i>595</i>&nbsp;     */
+<i>596</i>&nbsp;    LdapResult getSearchReply(int batchSize, LdapResult res,
+<i>597</i>&nbsp;        Hashtable&lt;String, Boolean&gt; binaryAttrs) throws IOException, NamingException {
+<b class="nc"><i>598</i>&nbsp;</b>
+<i>599</i>&nbsp;        ensureOpen();
+<i>600</i>&nbsp;
+<i>601</i>&nbsp;        LdapRequest req;
+<b class="nc"><i>602</i>&nbsp;</b>
+<b class="nc"><i>603</i>&nbsp;        if ((req = conn.findRequest(res.msgId)) == null) {</b>
+<i>604</i>&nbsp;            return null;
+<i>605</i>&nbsp;        }
+<b class="nc"><i>606</i>&nbsp;</b>
+<i>607</i>&nbsp;        return getSearchReply(req, batchSize, res, binaryAttrs);
+<i>608</i>&nbsp;    }
+<i>609</i>&nbsp;
+<i>610</i>&nbsp;    private LdapResult getSearchReply(LdapRequest req,
+<i>611</i>&nbsp;        int batchSize, LdapResult res, Hashtable&lt;String, Boolean&gt; binaryAttrs)
+<i>612</i>&nbsp;        throws IOException, NamingException {
+<b class="nc"><i>613</i>&nbsp;</b>
+<b class="nc"><i>614</i>&nbsp;        if (batchSize == 0)</b>
+<i>615</i>&nbsp;            batchSize = Integer.MAX_VALUE;
+<b class="nc"><i>616</i>&nbsp;</b>
+<b class="nc"><i>617</i>&nbsp;        if (res.entries != null) {</b>
+<i>618</i>&nbsp;            res.entries.setSize(0); // clear the (previous) set of entries
+<b class="nc"><i>619</i>&nbsp;        } else {</b>
+<i>620</i>&nbsp;            res.entries =
+<i>621</i>&nbsp;                new Vector&lt;&gt;(batchSize == Integer.MAX_VALUE ? 32 : batchSize);
+<i>622</i>&nbsp;        }
+<b class="nc"><i>623</i>&nbsp;</b>
+<b class="nc"><i>624</i>&nbsp;        if (res.referrals != null) {</b>
+<i>625</i>&nbsp;            res.referrals.setSize(0); // clear the (previous) set of referrals
+<i>626</i>&nbsp;        }
+<i>627</i>&nbsp;
+<i>628</i>&nbsp;        BerDecoder replyBer;    // Decoder for response
+<i>629</i>&nbsp;        int seq;                // Request id
+<i>630</i>&nbsp;
+<i>631</i>&nbsp;        Attributes lattrs;      // Attribute set read from response
+<i>632</i>&nbsp;        Attribute la;           // Attribute read from response
+<i>633</i>&nbsp;        String DN;              // DN read from response
+<i>634</i>&nbsp;        LdapEntry le;           // LDAP entry representing response
+<i>635</i>&nbsp;        int[] seqlen;           // Holder for response length
+<i>636</i>&nbsp;        int endseq;             // Position of end of response
+<b class="nc"><i>637</i>&nbsp;</b>
+<b class="nc"><i>638</i>&nbsp;        for (int i = 0; i &lt; batchSize;) {</b>
+<i>639</i>&nbsp;            replyBer = conn.readReply(req);
+<i>640</i>&nbsp;
+<i>641</i>&nbsp;            //
+<i>642</i>&nbsp;            // process search reply
+<b class="nc"><i>643</i>&nbsp;            //</b>
+<b class="nc"><i>644</i>&nbsp;            replyBer.parseSeq(null);                    // init seq</b>
+<b class="nc"><i>645</i>&nbsp;            replyBer.parseInt();                        // req id</b>
+<i>646</i>&nbsp;            seq = replyBer.parseSeq(null);
+<b class="nc"><i>647</i>&nbsp;</b>
+<i>648</i>&nbsp;            if (seq == LDAP_REP_SEARCH) {
+<i>649</i>&nbsp;
+<b class="nc"><i>650</i>&nbsp;                // handle LDAPv3 search entries</b>
+<b class="nc"><i>651</i>&nbsp;                lattrs = new BasicAttributes(caseIgnore);</b>
+<b class="nc"><i>652</i>&nbsp;                DN = replyBer.parseString(isLdapv3);</b>
+<b class="nc"><i>653</i>&nbsp;                le = new LdapEntry(DN, lattrs);</b>
+<i>654</i>&nbsp;                seqlen = new int[1];
+<b class="nc"><i>655</i>&nbsp;</b>
+<b class="nc"><i>656</i>&nbsp;                replyBer.parseSeq(seqlen);</b>
+<b class="nc"><i>657</i>&nbsp;                endseq = replyBer.getParsePosition() + seqlen[0];</b>
+<b class="nc"><i>658</i>&nbsp;                while ((replyBer.getParsePosition() &lt; endseq) &amp;&amp;</b>
+<b class="nc"><i>659</i>&nbsp;                    (replyBer.bytesLeft() &gt; 0)) {</b>
+<b class="nc"><i>660</i>&nbsp;                    la = parseAttribute(replyBer, binaryAttrs);</b>
+<i>661</i>&nbsp;                    lattrs.put(la);
+<b class="nc"><i>662</i>&nbsp;                }</b>
+<i>663</i>&nbsp;                le.respCtls = isLdapv3 ? parseControls(replyBer) : null;
+<b class="nc"><i>664</i>&nbsp;</b>
+<b class="nc"><i>665</i>&nbsp;                res.entries.addElement(le);</b>
+<i>666</i>&nbsp;                i++;
+<b class="nc"><i>667</i>&nbsp;</b>
+<i>668</i>&nbsp;            } else if ((seq == LDAP_REP_SEARCH_REF) &amp;&amp; isLdapv3) {
+<i>669</i>&nbsp;
+<b class="nc"><i>670</i>&nbsp;                // handle LDAPv3 search reference</b>
+<i>671</i>&nbsp;                Vector&lt;String&gt; URLs = new Vector&lt;&gt;(4);
+<i>672</i>&nbsp;
+<i>673</i>&nbsp;                // %%% Although not strictly correct, some LDAP servers
+<b class="nc"><i>674</i>&nbsp;                //     encode the SEQUENCE OF tag in the SearchResultRef</b>
+<i>675</i>&nbsp;                if (replyBer.peekByte() ==
+<b class="nc"><i>676</i>&nbsp;                    (Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR)) {</b>
+<i>677</i>&nbsp;                    replyBer.parseSeq(null);
+<i>678</i>&nbsp;                }
+<b class="nc"><i>679</i>&nbsp;</b>
+<b class="nc"><i>680</i>&nbsp;                while ((replyBer.bytesLeft() &gt; 0) &amp;&amp;</b>
+<i>681</i>&nbsp;                    (replyBer.peekByte() == Ber.ASN_OCTET_STR)) {
+<b class="nc"><i>682</i>&nbsp;</b>
+<i>683</i>&nbsp;                    URLs.addElement(replyBer.parseString(isLdapv3));
+<i>684</i>&nbsp;                }
+<b class="nc"><i>685</i>&nbsp;</b>
+<b class="nc"><i>686</i>&nbsp;                if (res.referrals == null) {</b>
+<i>687</i>&nbsp;                    res.referrals = new Vector&lt;&gt;(4);
+<b class="nc"><i>688</i>&nbsp;                }</b>
+<b class="nc"><i>689</i>&nbsp;                res.referrals.addElement(URLs);</b>
+<i>690</i>&nbsp;                res.resControls = isLdapv3 ? parseControls(replyBer) : null;
+<i>691</i>&nbsp;
+<i>692</i>&nbsp;                // Save referral and continue to get next search result
+<b class="nc"><i>693</i>&nbsp;</b>
+<i>694</i>&nbsp;            } else if (seq == LDAP_REP_EXTENSION) {
+<b class="nc"><i>695</i>&nbsp;</b>
+<i>696</i>&nbsp;                parseExtResponse(replyBer, res); //%%% ignore for now
+<b class="nc"><i>697</i>&nbsp;</b>
+<i>698</i>&nbsp;            } else if (seq == LDAP_REP_RESULT) {
+<b class="nc"><i>699</i>&nbsp;</b>
+<b class="nc"><i>700</i>&nbsp;                parseResult(replyBer, res, isLdapv3);</b>
+<i>701</i>&nbsp;                res.resControls = isLdapv3 ? parseControls(replyBer) : null;
+<b class="nc"><i>702</i>&nbsp;</b>
+<b class="nc"><i>703</i>&nbsp;                conn.removeRequest(req);</b>
+<i>704</i>&nbsp;                return res;     // Done with search
+<i>705</i>&nbsp;            }
+<i>706</i>&nbsp;        }
+<b class="nc"><i>707</i>&nbsp;</b>
+<i>708</i>&nbsp;        return res;
+<i>709</i>&nbsp;    }
+<i>710</i>&nbsp;
+<i>711</i>&nbsp;    private Attribute parseAttribute(BerDecoder ber,
+<i>712</i>&nbsp;                                     Hashtable&lt;String, Boolean&gt; binaryAttrs)
+<i>713</i>&nbsp;        throws IOException {
+<b class="nc"><i>714</i>&nbsp;</b>
+<b class="nc"><i>715</i>&nbsp;        int len[] = new int[1];</b>
+<b class="nc"><i>716</i>&nbsp;        int seq = ber.parseSeq(null);</b>
+<b class="nc"><i>717</i>&nbsp;        String attrid = ber.parseString(isLdapv3);</b>
+<b class="nc"><i>718</i>&nbsp;        boolean hasBinaryValues = isBinaryValued(attrid, binaryAttrs);</b>
+<i>719</i>&nbsp;        Attribute la = new LdapAttribute(attrid);
+<b class="nc"><i>720</i>&nbsp;</b>
+<b class="nc"><i>721</i>&nbsp;        if ((seq = ber.parseSeq(len)) == LBER_SET) {</b>
+<b class="nc"><i>722</i>&nbsp;            int attrlen = len[0];</b>
+<i>723</i>&nbsp;            while (ber.bytesLeft() &gt; 0 &amp;&amp; attrlen &gt; 0) {
+<b class="nc"><i>724</i>&nbsp;                try {</b>
+<b class="nc"><i>725</i>&nbsp;                    attrlen -= parseAttributeValue(ber, la, hasBinaryValues);</b>
+<b class="nc"><i>726</i>&nbsp;                } catch (IOException ex) {</b>
+<b class="nc"><i>727</i>&nbsp;                    ber.seek(attrlen);</b>
+<b class="nc"><i>728</i>&nbsp;                    break;</b>
+<i>729</i>&nbsp;                }
+<b class="nc"><i>730</i>&nbsp;            }</b>
+<i>731</i>&nbsp;        } else {
+<b class="nc"><i>732</i>&nbsp;            // Skip the rest of the sequence because it is not what we want</b>
+<i>733</i>&nbsp;            ber.seek(len[0]);
+<b class="nc"><i>734</i>&nbsp;        }</b>
+<i>735</i>&nbsp;        return la;
+<i>736</i>&nbsp;    }
+<i>737</i>&nbsp;
+<i>738</i>&nbsp;    //
+<i>739</i>&nbsp;    // returns number of bytes that were parsed. Adds the values to attr
+<i>740</i>&nbsp;    //
+<i>741</i>&nbsp;    private int parseAttributeValue(BerDecoder ber, Attribute la,
+<i>742</i>&nbsp;        boolean hasBinaryValues) throws IOException {
+<b class="nc"><i>743</i>&nbsp;</b>
+<i>744</i>&nbsp;        int len[] = new int[1];
+<b class="nc"><i>745</i>&nbsp;</b>
+<b class="nc"><i>746</i>&nbsp;        if (hasBinaryValues) {</b>
+<i>747</i>&nbsp;            la.add(ber.parseOctetString(ber.peekByte(), len));
+<b class="nc"><i>748</i>&nbsp;        } else {</b>
+<i>749</i>&nbsp;            la.add(ber.parseStringWithTag(
+<i>750</i>&nbsp;                                    Ber.ASN_SIMPLE_STRING, isLdapv3, len));
+<b class="nc"><i>751</i>&nbsp;        }</b>
+<i>752</i>&nbsp;        return len[0];
+<i>753</i>&nbsp;    }
+<i>754</i>&nbsp;
+<i>755</i>&nbsp;    private boolean isBinaryValued(String attrid,
+<b class="nc"><i>756</i>&nbsp;                                   Hashtable&lt;String, Boolean&gt; binaryAttrs) {</b>
+<i>757</i>&nbsp;        String id = attrid.toLowerCase(Locale.ENGLISH);
+<b class="nc"><i>758</i>&nbsp;</b>
+<b class="nc"><i>759</i>&nbsp;        return ((id.indexOf(&quot;;binary&quot;) != -1) ||</b>
+<b class="nc"><i>760</i>&nbsp;            defaultBinaryAttrs.containsKey(id) ||</b>
+<i>761</i>&nbsp;            ((binaryAttrs != null) &amp;&amp; (binaryAttrs.containsKey(id))));
+<i>762</i>&nbsp;    }
+<i>763</i>&nbsp;
+<i>764</i>&nbsp;    // package entry point; used by Connection
+<i>765</i>&nbsp;    static void parseResult(BerDecoder replyBer, LdapResult res,
+<i>766</i>&nbsp;            boolean isLdapv3) throws IOException {
+<b class="nc"><i>767</i>&nbsp;</b>
+<b class="nc"><i>768</i>&nbsp;        res.status = replyBer.parseEnumeration();</b>
+<b class="nc"><i>769</i>&nbsp;        res.matchedDN = replyBer.parseString(isLdapv3);</b>
+<i>770</i>&nbsp;        res.errorMessage = replyBer.parseString(isLdapv3);
+<i>771</i>&nbsp;
+<b class="nc"><i>772</i>&nbsp;        // handle LDAPv3 referrals (if present)</b>
+<b class="nc"><i>773</i>&nbsp;        if (isLdapv3 &amp;&amp;</b>
+<b class="nc"><i>774</i>&nbsp;            (replyBer.bytesLeft() &gt; 0) &amp;&amp;</b>
+<i>775</i>&nbsp;            (replyBer.peekByte() == LDAP_REP_REFERRAL)) {
+<b class="nc"><i>776</i>&nbsp;</b>
+<b class="nc"><i>777</i>&nbsp;            Vector&lt;String&gt; URLs = new Vector&lt;&gt;(4);</b>
+<i>778</i>&nbsp;            int[] seqlen = new int[1];
+<b class="nc"><i>779</i>&nbsp;</b>
+<b class="nc"><i>780</i>&nbsp;            replyBer.parseSeq(seqlen);</b>
+<b class="nc"><i>781</i>&nbsp;            int endseq = replyBer.getParsePosition() + seqlen[0];</b>
+<b class="nc"><i>782</i>&nbsp;            while ((replyBer.getParsePosition() &lt; endseq) &amp;&amp;</b>
+<i>783</i>&nbsp;                (replyBer.bytesLeft() &gt; 0)) {
+<b class="nc"><i>784</i>&nbsp;</b>
+<i>785</i>&nbsp;                URLs.addElement(replyBer.parseString(isLdapv3));
+<i>786</i>&nbsp;            }
+<b class="nc"><i>787</i>&nbsp;</b>
+<b class="nc"><i>788</i>&nbsp;            if (res.referrals == null) {</b>
+<i>789</i>&nbsp;                res.referrals = new Vector&lt;&gt;(4);
+<b class="nc"><i>790</i>&nbsp;            }</b>
+<i>791</i>&nbsp;            res.referrals.addElement(URLs);
+<i>792</i>&nbsp;        }
+<i>793</i>&nbsp;    }
+<i>794</i>&nbsp;
+<i>795</i>&nbsp;    // package entry point; used by Connection
+<i>796</i>&nbsp;    static Vector&lt;Control&gt; parseControls(BerDecoder replyBer) throws IOException {
+<i>797</i>&nbsp;
+<b class="nc"><i>798</i>&nbsp;        // handle LDAPv3 controls (if present)</b>
+<b class="nc"><i>799</i>&nbsp;        if ((replyBer.bytesLeft() &gt; 0) &amp;&amp; (replyBer.peekByte() == LDAP_CONTROLS)) {</b>
+<i>800</i>&nbsp;            Vector&lt;Control&gt; ctls = new Vector&lt;&gt;(4);
+<b class="nc"><i>801</i>&nbsp;            String controlOID;</b>
+<b class="nc"><i>802</i>&nbsp;            boolean criticality = false; // default</b>
+<b class="nc"><i>803</i>&nbsp;            byte[] controlValue = null;  // optional</b>
+<i>804</i>&nbsp;            int[] seqlen = new int[1];
+<b class="nc"><i>805</i>&nbsp;</b>
+<b class="nc"><i>806</i>&nbsp;            replyBer.parseSeq(seqlen);</b>
+<b class="nc"><i>807</i>&nbsp;            int endseq = replyBer.getParsePosition() + seqlen[0];</b>
+<b class="nc"><i>808</i>&nbsp;            while ((replyBer.getParsePosition() &lt; endseq) &amp;&amp;</b>
+<i>809</i>&nbsp;                (replyBer.bytesLeft() &gt; 0)) {
+<b class="nc"><i>810</i>&nbsp;</b>
+<b class="nc"><i>811</i>&nbsp;                replyBer.parseSeq(null);</b>
+<i>812</i>&nbsp;                controlOID = replyBer.parseString(true);
+<b class="nc"><i>813</i>&nbsp;</b>
+<b class="nc"><i>814</i>&nbsp;                if ((replyBer.bytesLeft() &gt; 0) &amp;&amp;</b>
+<b class="nc"><i>815</i>&nbsp;                    (replyBer.peekByte() == Ber.ASN_BOOLEAN)) {</b>
+<i>816</i>&nbsp;                    criticality = replyBer.parseBoolean();
+<b class="nc"><i>817</i>&nbsp;                }</b>
+<b class="nc"><i>818</i>&nbsp;                if ((replyBer.bytesLeft() &gt; 0) &amp;&amp;</b>
+<b class="nc"><i>819</i>&nbsp;                    (replyBer.peekByte() == Ber.ASN_OCTET_STR)) {</b>
+<b class="nc"><i>820</i>&nbsp;                    controlValue =</b>
+<i>821</i>&nbsp;                        replyBer.parseOctetString(Ber.ASN_OCTET_STR, null);
+<b class="nc"><i>822</i>&nbsp;                }</b>
+<b class="nc"><i>823</i>&nbsp;                if (controlOID != null) {</b>
+<i>824</i>&nbsp;                    ctls.addElement(
+<i>825</i>&nbsp;                        new BasicControl(controlOID, criticality, controlValue));
+<i>826</i>&nbsp;                }
+<b class="nc"><i>827</i>&nbsp;            }</b>
+<i>828</i>&nbsp;            return ctls;
+<b class="nc"><i>829</i>&nbsp;        } else {</b>
+<i>830</i>&nbsp;            return null;
+<i>831</i>&nbsp;        }
+<i>832</i>&nbsp;    }
+<i>833</i>&nbsp;
+<i>834</i>&nbsp;    private void parseExtResponse(BerDecoder replyBer, LdapResult res)
+<i>835</i>&nbsp;        throws IOException {
+<b class="nc"><i>836</i>&nbsp;</b>
+<i>837</i>&nbsp;        parseResult(replyBer, res, isLdapv3);
+<b class="nc"><i>838</i>&nbsp;</b>
+<b class="nc"><i>839</i>&nbsp;        if ((replyBer.bytesLeft() &gt; 0) &amp;&amp;</b>
+<b class="nc"><i>840</i>&nbsp;            (replyBer.peekByte() == LDAP_REP_EXT_OID)) {</b>
+<b class="nc"><i>841</i>&nbsp;            res.extensionId =</b>
+<i>842</i>&nbsp;                replyBer.parseStringWithTag(LDAP_REP_EXT_OID, isLdapv3, null);
+<b class="nc"><i>843</i>&nbsp;        }</b>
+<b class="nc"><i>844</i>&nbsp;        if ((replyBer.bytesLeft() &gt; 0) &amp;&amp;</b>
+<b class="nc"><i>845</i>&nbsp;            (replyBer.peekByte() == LDAP_REP_EXT_VAL)) {</b>
+<b class="nc"><i>846</i>&nbsp;            res.extensionValue =</b>
+<i>847</i>&nbsp;                replyBer.parseOctetString(LDAP_REP_EXT_VAL, null);
+<i>848</i>&nbsp;        }
+<b class="nc"><i>849</i>&nbsp;</b>
+<i>850</i>&nbsp;        res.resControls = parseControls(replyBer);
+<i>851</i>&nbsp;    }
+<i>852</i>&nbsp;
+<i>853</i>&nbsp;    //
+<i>854</i>&nbsp;    // Encode LDAPv3 controls
+<i>855</i>&nbsp;    //
+<i>856</i>&nbsp;    static void encodeControls(BerEncoder ber, Control[] reqCtls)
+<i>857</i>&nbsp;        throws IOException {
+<b class="nc"><i>858</i>&nbsp;</b>
+<i>859</i>&nbsp;        if ((reqCtls == null) || (reqCtls.length == 0)) {
+<i>860</i>&nbsp;            return;
+<i>861</i>&nbsp;        }
+<i>862</i>&nbsp;
+<i>863</i>&nbsp;        byte[] controlVal;
+<b class="nc"><i>864</i>&nbsp;</b>
+<i>865</i>&nbsp;        ber.beginSeq(LdapClient.LDAP_CONTROLS);
+<b class="nc"><i>866</i>&nbsp;</b>
+<b class="nc"><i>867</i>&nbsp;            for (int i = 0; i &lt; reqCtls.length; i++) {</b>
+<b class="nc"><i>868</i>&nbsp;                ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>869</i>&nbsp;                    ber.encodeString(reqCtls[i].getID(), true); // control OID</b>
+<b class="nc"><i>870</i>&nbsp;                    if (reqCtls[i].isCritical()) {</b>
+<i>871</i>&nbsp;                        ber.encodeBoolean(true); // critical control
+<b class="nc"><i>872</i>&nbsp;                    }</b>
+<b class="nc"><i>873</i>&nbsp;                    if ((controlVal = reqCtls[i].getEncodedValue()) != null) {</b>
+<i>874</i>&nbsp;                        ber.encodeOctetString(controlVal, Ber.ASN_OCTET_STR);
+<b class="nc"><i>875</i>&nbsp;                    }</b>
+<i>876</i>&nbsp;                ber.endSeq();
+<b class="nc"><i>877</i>&nbsp;            }</b>
+<i>878</i>&nbsp;        ber.endSeq();
+<i>879</i>&nbsp;    }
+<i>880</i>&nbsp;
+<i>881</i>&nbsp;    /**
+<i>882</i>&nbsp;     * Reads the next reply corresponding to msgId, outstanding on requestBer.
+<i>883</i>&nbsp;     * Processes the result and any controls.
+<i>884</i>&nbsp;     */
+<i>885</i>&nbsp;    private LdapResult processReply(LdapRequest req,
+<i>886</i>&nbsp;        LdapResult res, int responseType) throws IOException, NamingException {
+<b class="nc"><i>887</i>&nbsp;</b>
+<i>888</i>&nbsp;        BerDecoder rber = conn.readReply(req);
+<b class="nc"><i>889</i>&nbsp;</b>
+<b class="nc"><i>890</i>&nbsp;        rber.parseSeq(null);    // init seq</b>
+<b class="nc"><i>891</i>&nbsp;        rber.parseInt();        // msg id</b>
+<b class="nc"><i>892</i>&nbsp;        if (rber.parseByte() !=  responseType) {</b>
+<i>893</i>&nbsp;            return res;
+<i>894</i>&nbsp;        }
+<b class="nc"><i>895</i>&nbsp;</b>
+<b class="nc"><i>896</i>&nbsp;        rber.parseLength();</b>
+<b class="nc"><i>897</i>&nbsp;        parseResult(rber, res, isLdapv3);</b>
+<i>898</i>&nbsp;        res.resControls = isLdapv3 ? parseControls(rber) : null;
+<b class="nc"><i>899</i>&nbsp;</b>
+<i>900</i>&nbsp;        conn.removeRequest(req);
+<b class="nc"><i>901</i>&nbsp;</b>
+<i>902</i>&nbsp;        return res;     // Done with operation
+<i>903</i>&nbsp;    }
+<i>904</i>&nbsp;
+<i>905</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>906</i>&nbsp;    //
+<i>907</i>&nbsp;    // LDAP modify:
+<i>908</i>&nbsp;    //  Modify the DN dn with the operations on attributes attrs.
+<i>909</i>&nbsp;    //  ie, operations[0] is the operation to be performed on
+<i>910</i>&nbsp;    //  attrs[0];
+<i>911</i>&nbsp;    //          dn - DN to modify
+<i>912</i>&nbsp;    //          operations - add, delete or replace
+<i>913</i>&nbsp;    //          attrs - array of Attribute
+<i>914</i>&nbsp;    //          reqCtls - array of request controls
+<i>915</i>&nbsp;    //
+<i>916</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>917</i>&nbsp;
+<i>918</i>&nbsp;    static final int ADD = 0;
+<i>919</i>&nbsp;    static final int DELETE = 1;
+<i>920</i>&nbsp;    static final int REPLACE = 2;
+<i>921</i>&nbsp;
+<i>922</i>&nbsp;    LdapResult modify(String dn, int operations[], Attribute attrs[],
+<i>923</i>&nbsp;                      Control[] reqCtls)
+<i>924</i>&nbsp;        throws IOException, NamingException {
+<b class="nc"><i>925</i>&nbsp;</b>
+<i>926</i>&nbsp;        ensureOpen();
+<b class="nc"><i>927</i>&nbsp;</b>
+<b class="nc"><i>928</i>&nbsp;        LdapResult res = new LdapResult();</b>
+<i>929</i>&nbsp;        res.status = LDAP_OPERATIONS_ERROR;
+<b class="nc"><i>930</i>&nbsp;</b>
+<b class="nc"><i>931</i>&nbsp;        if (dn == null || operations.length != attrs.length)</b>
+<i>932</i>&nbsp;            return res;
+<b class="nc"><i>933</i>&nbsp;</b>
+<b class="nc"><i>934</i>&nbsp;        BerEncoder ber = new BerEncoder();</b>
+<i>935</i>&nbsp;        int curMsgId = conn.getMsgId();
+<b class="nc"><i>936</i>&nbsp;</b>
+<b class="nc"><i>937</i>&nbsp;        ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>938</i>&nbsp;            ber.encodeInt(curMsgId);</b>
+<b class="nc"><i>939</i>&nbsp;            ber.beginSeq(LDAP_REQ_MODIFY);</b>
+<b class="nc"><i>940</i>&nbsp;                ber.encodeString(dn, isLdapv3);</b>
+<b class="nc"><i>941</i>&nbsp;                ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>942</i>&nbsp;                    for (int i = 0; i &lt; operations.length; i++) {</b>
+<b class="nc"><i>943</i>&nbsp;                        ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<i>944</i>&nbsp;                            ber.encodeInt(operations[i], LBER_ENUMERATED);
+<i>945</i>&nbsp;
+<b class="nc"><i>946</i>&nbsp;                            // zero values is not permitted for the add op.</b>
+<b class="nc"><i>947</i>&nbsp;                            if ((operations[i] == ADD) &amp;&amp; hasNoValue(attrs[i])) {</b>
+<b class="nc"><i>948</i>&nbsp;                                throw new InvalidAttributeValueException(</b>
+<i>949</i>&nbsp;                                    &quot;&#39;&quot; + attrs[i].getID() + &quot;&#39; has no values.&quot;);
+<b class="nc"><i>950</i>&nbsp;                            } else {</b>
+<i>951</i>&nbsp;                                encodeAttribute(ber, attrs[i]);
+<b class="nc"><i>952</i>&nbsp;                            }</b>
+<i>953</i>&nbsp;                        ber.endSeq();
+<b class="nc"><i>954</i>&nbsp;                    }</b>
+<b class="nc"><i>955</i>&nbsp;                ber.endSeq();</b>
+<b class="nc"><i>956</i>&nbsp;            ber.endSeq();</b>
+<b class="nc"><i>957</i>&nbsp;            if (isLdapv3) encodeControls(ber, reqCtls);</b>
+<i>958</i>&nbsp;        ber.endSeq();
+<b class="nc"><i>959</i>&nbsp;</b>
+<i>960</i>&nbsp;        LdapRequest req = conn.writeRequest(ber, curMsgId);
+<b class="nc"><i>961</i>&nbsp;</b>
+<i>962</i>&nbsp;        return processReply(req, res, LDAP_REP_MODIFY);
+<i>963</i>&nbsp;    }
+<i>964</i>&nbsp;
+<i>965</i>&nbsp;    private void encodeAttribute(BerEncoder ber, Attribute attr)
+<i>966</i>&nbsp;        throws IOException, NamingException {
+<b class="nc"><i>967</i>&nbsp;</b>
+<b class="nc"><i>968</i>&nbsp;        ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>969</i>&nbsp;            ber.encodeString(attr.getID(), isLdapv3);</b>
+<b class="nc"><i>970</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR | 1);</b>
+<i>971</i>&nbsp;                NamingEnumeration&lt;?&gt; enum_ = attr.getAll();
+<b class="nc"><i>972</i>&nbsp;                Object val;</b>
+<b class="nc"><i>973</i>&nbsp;                while (enum_.hasMore()) {</b>
+<b class="nc"><i>974</i>&nbsp;                    val = enum_.next();</b>
+<b class="nc"><i>975</i>&nbsp;                    if (val instanceof String) {</b>
+<b class="nc"><i>976</i>&nbsp;                        ber.encodeString((String)val, isLdapv3);</b>
+<b class="nc"><i>977</i>&nbsp;                    } else if (val instanceof byte[]) {</b>
+<b class="nc"><i>978</i>&nbsp;                        ber.encodeOctetString((byte[])val, Ber.ASN_OCTET_STR);</b>
+<i>979</i>&nbsp;                    } else if (val == null) {
+<i>980</i>&nbsp;                        // no attribute value
+<b class="nc"><i>981</i>&nbsp;                    } else {</b>
+<b class="nc"><i>982</i>&nbsp;                        throw new InvalidAttributeValueException(</b>
+<i>983</i>&nbsp;                            &quot;Malformed &#39;&quot; + attr.getID() + &quot;&#39; attribute value&quot;);
+<i>984</i>&nbsp;                    }
+<b class="nc"><i>985</i>&nbsp;                }</b>
+<b class="nc"><i>986</i>&nbsp;            ber.endSeq();</b>
+<i>987</i>&nbsp;        ber.endSeq();
+<i>988</i>&nbsp;    }
+<i>989</i>&nbsp;
+<b class="nc"><i>990</i>&nbsp;    private static boolean hasNoValue(Attribute attr) throws NamingException {</b>
+<i>991</i>&nbsp;        return attr.size() == 0 || (attr.size() == 1 &amp;&amp; attr.get() == null);
+<i>992</i>&nbsp;    }
+<i>993</i>&nbsp;
+<i>994</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>995</i>&nbsp;    //
+<i>996</i>&nbsp;    // LDAP add
+<i>997</i>&nbsp;    //          Adds entry to the Directory
+<i>998</i>&nbsp;    //
+<i>999</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1000</i>&nbsp;
+<i>1001</i>&nbsp;    LdapResult add(LdapEntry entry, Control[] reqCtls)
+<i>1002</i>&nbsp;        throws IOException, NamingException {
+<b class="nc"><i>1003</i>&nbsp;</b>
+<i>1004</i>&nbsp;        ensureOpen();
+<b class="nc"><i>1005</i>&nbsp;</b>
+<b class="nc"><i>1006</i>&nbsp;        LdapResult res = new LdapResult();</b>
+<i>1007</i>&nbsp;        res.status = LDAP_OPERATIONS_ERROR;
+<b class="nc"><i>1008</i>&nbsp;</b>
+<b class="nc"><i>1009</i>&nbsp;        if (entry == null || entry.DN == null)</b>
+<i>1010</i>&nbsp;            return res;
+<b class="nc"><i>1011</i>&nbsp;</b>
+<b class="nc"><i>1012</i>&nbsp;        BerEncoder ber = new BerEncoder();</b>
+<i>1013</i>&nbsp;        int curMsgId = conn.getMsgId();
+<i>1014</i>&nbsp;        Attribute attr;
+<b class="nc"><i>1015</i>&nbsp;</b>
+<b class="nc"><i>1016</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>1017</i>&nbsp;                ber.encodeInt(curMsgId);</b>
+<b class="nc"><i>1018</i>&nbsp;                ber.beginSeq(LDAP_REQ_ADD);</b>
+<b class="nc"><i>1019</i>&nbsp;                    ber.encodeString(entry.DN, isLdapv3);</b>
+<b class="nc"><i>1020</i>&nbsp;                    ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>1021</i>&nbsp;                        NamingEnumeration&lt;? extends Attribute&gt; enum_ =</b>
+<b class="nc"><i>1022</i>&nbsp;                                entry.attributes.getAll();</b>
+<b class="nc"><i>1023</i>&nbsp;                        while (enum_.hasMore()) {</b>
+<i>1024</i>&nbsp;                            attr = enum_.next();
+<i>1025</i>&nbsp;
+<b class="nc"><i>1026</i>&nbsp;                            // zero values is not permitted</b>
+<b class="nc"><i>1027</i>&nbsp;                            if (hasNoValue(attr)) {</b>
+<b class="nc"><i>1028</i>&nbsp;                                throw new InvalidAttributeValueException(</b>
+<i>1029</i>&nbsp;                                    &quot;&#39;&quot; + attr.getID() + &quot;&#39; has no values.&quot;);
+<b class="nc"><i>1030</i>&nbsp;                            } else {</b>
+<i>1031</i>&nbsp;                                encodeAttribute(ber, attr);
+<i>1032</i>&nbsp;                            }
+<b class="nc"><i>1033</i>&nbsp;                        }</b>
+<b class="nc"><i>1034</i>&nbsp;                    ber.endSeq();</b>
+<b class="nc"><i>1035</i>&nbsp;                ber.endSeq();</b>
+<b class="nc"><i>1036</i>&nbsp;                if (isLdapv3) encodeControls(ber, reqCtls);</b>
+<i>1037</i>&nbsp;            ber.endSeq();
+<b class="nc"><i>1038</i>&nbsp;</b>
+<b class="nc"><i>1039</i>&nbsp;        LdapRequest req = conn.writeRequest(ber, curMsgId);</b>
+<i>1040</i>&nbsp;        return processReply(req, res, LDAP_REP_ADD);
+<i>1041</i>&nbsp;    }
+<i>1042</i>&nbsp;
+<i>1043</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1044</i>&nbsp;    //
+<i>1045</i>&nbsp;    // LDAP delete
+<i>1046</i>&nbsp;    //          deletes entry from the Directory
+<i>1047</i>&nbsp;    //
+<i>1048</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1049</i>&nbsp;
+<i>1050</i>&nbsp;    LdapResult delete(String DN, Control[] reqCtls)
+<i>1051</i>&nbsp;        throws IOException, NamingException {
+<b class="nc"><i>1052</i>&nbsp;</b>
+<i>1053</i>&nbsp;        ensureOpen();
+<b class="nc"><i>1054</i>&nbsp;</b>
+<b class="nc"><i>1055</i>&nbsp;        LdapResult res = new LdapResult();</b>
+<i>1056</i>&nbsp;        res.status = LDAP_OPERATIONS_ERROR;
+<b class="nc"><i>1057</i>&nbsp;</b>
+<b class="nc"><i>1058</i>&nbsp;        if (DN == null)</b>
+<i>1059</i>&nbsp;            return res;
+<b class="nc"><i>1060</i>&nbsp;</b>
+<b class="nc"><i>1061</i>&nbsp;        BerEncoder ber = new BerEncoder();</b>
+<i>1062</i>&nbsp;        int curMsgId = conn.getMsgId();
+<b class="nc"><i>1063</i>&nbsp;</b>
+<b class="nc"><i>1064</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>1065</i>&nbsp;                ber.encodeInt(curMsgId);</b>
+<b class="nc"><i>1066</i>&nbsp;                ber.encodeString(DN, LDAP_REQ_DELETE, isLdapv3);</b>
+<b class="nc"><i>1067</i>&nbsp;                if (isLdapv3) encodeControls(ber, reqCtls);</b>
+<i>1068</i>&nbsp;            ber.endSeq();
+<b class="nc"><i>1069</i>&nbsp;</b>
+<i>1070</i>&nbsp;        LdapRequest req = conn.writeRequest(ber, curMsgId);
+<b class="nc"><i>1071</i>&nbsp;</b>
+<i>1072</i>&nbsp;        return processReply(req, res, LDAP_REP_DELETE);
+<i>1073</i>&nbsp;    }
+<i>1074</i>&nbsp;
+<i>1075</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1076</i>&nbsp;    //
+<i>1077</i>&nbsp;    // LDAP modrdn
+<i>1078</i>&nbsp;    //  Changes the last element of DN to newrdn
+<i>1079</i>&nbsp;    //          dn - DN to change
+<i>1080</i>&nbsp;    //          newrdn - new RDN to rename to
+<i>1081</i>&nbsp;    //          deleteoldrdn - boolean whether to delete old attrs or not
+<i>1082</i>&nbsp;    //          newSuperior - new place to put the entry in the tree
+<i>1083</i>&nbsp;    //                        (ignored if server is LDAPv2)
+<i>1084</i>&nbsp;    //          reqCtls - array of request controls
+<i>1085</i>&nbsp;    //
+<i>1086</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1087</i>&nbsp;
+<i>1088</i>&nbsp;    LdapResult moddn(String DN, String newrdn, boolean deleteOldRdn,
+<i>1089</i>&nbsp;                     String newSuperior, Control[] reqCtls)
+<i>1090</i>&nbsp;        throws IOException, NamingException {
+<b class="nc"><i>1091</i>&nbsp;</b>
+<i>1092</i>&nbsp;        ensureOpen();
+<b class="nc"><i>1093</i>&nbsp;</b>
+<b class="nc"><i>1094</i>&nbsp;        boolean changeSuperior = (newSuperior != null &amp;&amp;</b>
+<i>1095</i>&nbsp;                                  newSuperior.length() &gt; 0);
+<b class="nc"><i>1096</i>&nbsp;</b>
+<b class="nc"><i>1097</i>&nbsp;        LdapResult res = new LdapResult();</b>
+<i>1098</i>&nbsp;        res.status = LDAP_OPERATIONS_ERROR;
+<b class="nc"><i>1099</i>&nbsp;</b>
+<b class="nc"><i>1100</i>&nbsp;        if (DN == null || newrdn == null)</b>
+<i>1101</i>&nbsp;            return res;
+<b class="nc"><i>1102</i>&nbsp;</b>
+<b class="nc"><i>1103</i>&nbsp;        BerEncoder ber = new BerEncoder();</b>
+<i>1104</i>&nbsp;        int curMsgId = conn.getMsgId();
+<b class="nc"><i>1105</i>&nbsp;</b>
+<b class="nc"><i>1106</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>1107</i>&nbsp;                ber.encodeInt(curMsgId);</b>
+<b class="nc"><i>1108</i>&nbsp;                ber.beginSeq(LDAP_REQ_MODRDN);</b>
+<b class="nc"><i>1109</i>&nbsp;                    ber.encodeString(DN, isLdapv3);</b>
+<b class="nc"><i>1110</i>&nbsp;                    ber.encodeString(newrdn, isLdapv3);</b>
+<b class="nc"><i>1111</i>&nbsp;                    ber.encodeBoolean(deleteOldRdn);</b>
+<i>1112</i>&nbsp;                    if(isLdapv3 &amp;&amp; changeSuperior) {
+<b class="nc"><i>1113</i>&nbsp;                        //System.err.println(&quot;changin superior&quot;);</b>
+<i>1114</i>&nbsp;                        ber.encodeString(newSuperior, LDAP_SUPERIOR_DN, isLdapv3);
+<b class="nc"><i>1115</i>&nbsp;                    }</b>
+<b class="nc"><i>1116</i>&nbsp;                ber.endSeq();</b>
+<b class="nc"><i>1117</i>&nbsp;                if (isLdapv3) encodeControls(ber, reqCtls);</b>
+<i>1118</i>&nbsp;            ber.endSeq();
+<i>1119</i>&nbsp;
+<b class="nc"><i>1120</i>&nbsp;</b>
+<i>1121</i>&nbsp;        LdapRequest req = conn.writeRequest(ber, curMsgId);
+<b class="nc"><i>1122</i>&nbsp;</b>
+<i>1123</i>&nbsp;        return processReply(req, res, LDAP_REP_MODRDN);
+<i>1124</i>&nbsp;    }
+<i>1125</i>&nbsp;
+<i>1126</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1127</i>&nbsp;    //
+<i>1128</i>&nbsp;    // LDAP compare
+<i>1129</i>&nbsp;    //  Compare attribute-&gt;value pairs in dn
+<i>1130</i>&nbsp;    //
+<i>1131</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1132</i>&nbsp;
+<i>1133</i>&nbsp;    LdapResult compare(String DN, String type, String value, Control[] reqCtls)
+<i>1134</i>&nbsp;        throws IOException, NamingException {
+<b class="nc"><i>1135</i>&nbsp;</b>
+<i>1136</i>&nbsp;        ensureOpen();
+<b class="nc"><i>1137</i>&nbsp;</b>
+<b class="nc"><i>1138</i>&nbsp;        LdapResult res = new LdapResult();</b>
+<i>1139</i>&nbsp;        res.status = LDAP_OPERATIONS_ERROR;
+<b class="nc"><i>1140</i>&nbsp;</b>
+<b class="nc"><i>1141</i>&nbsp;        if (DN == null || type == null || value == null)</b>
+<i>1142</i>&nbsp;            return res;
+<b class="nc"><i>1143</i>&nbsp;</b>
+<b class="nc"><i>1144</i>&nbsp;        BerEncoder ber = new BerEncoder();</b>
+<i>1145</i>&nbsp;        int curMsgId = conn.getMsgId();
+<b class="nc"><i>1146</i>&nbsp;</b>
+<b class="nc"><i>1147</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>1148</i>&nbsp;                ber.encodeInt(curMsgId);</b>
+<b class="nc"><i>1149</i>&nbsp;                ber.beginSeq(LDAP_REQ_COMPARE);</b>
+<b class="nc"><i>1150</i>&nbsp;                    ber.encodeString(DN, isLdapv3);</b>
+<b class="nc"><i>1151</i>&nbsp;                    ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<i>1152</i>&nbsp;                        ber.encodeString(type, isLdapv3);
+<i>1153</i>&nbsp;
+<b class="nc"><i>1154</i>&nbsp;                        // replace any escaped characters in the value</b>
+<b class="nc"><i>1155</i>&nbsp;                        byte[] val = isLdapv3 ?</b>
+<b class="nc"><i>1156</i>&nbsp;                            value.getBytes(&quot;UTF8&quot;) : value.getBytes(&quot;8859_1&quot;);</b>
+<b class="nc"><i>1157</i>&nbsp;                        ber.encodeOctetString(</b>
+<i>1158</i>&nbsp;                            Filter.unescapeFilterValue(val, 0, val.length),
+<i>1159</i>&nbsp;                            Ber.ASN_OCTET_STR);
+<b class="nc"><i>1160</i>&nbsp;</b>
+<b class="nc"><i>1161</i>&nbsp;                    ber.endSeq();</b>
+<b class="nc"><i>1162</i>&nbsp;                ber.endSeq();</b>
+<b class="nc"><i>1163</i>&nbsp;                if (isLdapv3) encodeControls(ber, reqCtls);</b>
+<i>1164</i>&nbsp;            ber.endSeq();
+<b class="nc"><i>1165</i>&nbsp;</b>
+<i>1166</i>&nbsp;        LdapRequest req = conn.writeRequest(ber, curMsgId);
+<b class="nc"><i>1167</i>&nbsp;</b>
+<i>1168</i>&nbsp;        return processReply(req, res, LDAP_REP_COMPARE);
+<i>1169</i>&nbsp;    }
+<i>1170</i>&nbsp;
+<i>1171</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1172</i>&nbsp;    //
+<i>1173</i>&nbsp;    // LDAP extended operation
+<i>1174</i>&nbsp;    //
+<i>1175</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1176</i>&nbsp;
+<i>1177</i>&nbsp;    LdapResult extendedOp(String id, byte[] request, Control[] reqCtls,
+<i>1178</i>&nbsp;        boolean pauseAfterReceipt) throws IOException, NamingException {
+<b class="nc"><i>1179</i>&nbsp;</b>
+<i>1180</i>&nbsp;        ensureOpen();
+<b class="nc"><i>1181</i>&nbsp;</b>
+<b class="nc"><i>1182</i>&nbsp;        LdapResult res = new LdapResult();</b>
+<i>1183</i>&nbsp;        res.status = LDAP_OPERATIONS_ERROR;
+<b class="nc"><i>1184</i>&nbsp;</b>
+<b class="nc"><i>1185</i>&nbsp;        if (id == null)</b>
+<i>1186</i>&nbsp;            return res;
+<b class="nc"><i>1187</i>&nbsp;</b>
+<b class="nc"><i>1188</i>&nbsp;        BerEncoder ber = new BerEncoder();</b>
+<i>1189</i>&nbsp;        int curMsgId = conn.getMsgId();
+<b class="nc"><i>1190</i>&nbsp;</b>
+<b class="nc"><i>1191</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);</b>
+<b class="nc"><i>1192</i>&nbsp;                ber.encodeInt(curMsgId);</b>
+<b class="nc"><i>1193</i>&nbsp;                ber.beginSeq(LDAP_REQ_EXTENSION);</b>
+<i>1194</i>&nbsp;                    ber.encodeString(id,
+<b class="nc"><i>1195</i>&nbsp;                        Ber.ASN_CONTEXT | 0, isLdapv3);//[0]</b>
+<b class="nc"><i>1196</i>&nbsp;                    if (request != null) {</b>
+<i>1197</i>&nbsp;                        ber.encodeOctetString(request,
+<i>1198</i>&nbsp;                            Ber.ASN_CONTEXT | 1);//[1]
+<b class="nc"><i>1199</i>&nbsp;                    }</b>
+<b class="nc"><i>1200</i>&nbsp;                ber.endSeq();</b>
+<b class="nc"><i>1201</i>&nbsp;                encodeControls(ber, reqCtls); // always v3</b>
+<i>1202</i>&nbsp;            ber.endSeq();
+<b class="nc"><i>1203</i>&nbsp;</b>
+<i>1204</i>&nbsp;        LdapRequest req = conn.writeRequest(ber, curMsgId, pauseAfterReceipt);
+<b class="nc"><i>1205</i>&nbsp;</b>
+<i>1206</i>&nbsp;        BerDecoder rber = conn.readReply(req);
+<b class="nc"><i>1207</i>&nbsp;</b>
+<b class="nc"><i>1208</i>&nbsp;        rber.parseSeq(null);    // init seq</b>
+<b class="nc"><i>1209</i>&nbsp;        rber.parseInt();        // msg id</b>
+<b class="nc"><i>1210</i>&nbsp;        if (rber.parseByte() !=  LDAP_REP_EXTENSION) {</b>
+<i>1211</i>&nbsp;            return res;
+<i>1212</i>&nbsp;        }
+<b class="nc"><i>1213</i>&nbsp;</b>
+<b class="nc"><i>1214</i>&nbsp;        rber.parseLength();</b>
+<b class="nc"><i>1215</i>&nbsp;        parseExtResponse(rber, res);</b>
+<i>1216</i>&nbsp;        conn.removeRequest(req);
+<b class="nc"><i>1217</i>&nbsp;</b>
+<i>1218</i>&nbsp;        return res;     // Done with operation
+<i>1219</i>&nbsp;    }
+<i>1220</i>&nbsp;
+<i>1221</i>&nbsp;
+<i>1222</i>&nbsp;
+<i>1223</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1224</i>&nbsp;    //
+<i>1225</i>&nbsp;    // Some BER definitions convenient for LDAP
+<i>1226</i>&nbsp;    //
+<i>1227</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1228</i>&nbsp;
+<i>1229</i>&nbsp;    static final int LDAP_VERSION3_VERSION2 = 32;
+<i>1230</i>&nbsp;    static final int LDAP_VERSION2 = 0x02;
+<i>1231</i>&nbsp;    static final int LDAP_VERSION3 = 0x03;              // LDAPv3
+<i>1232</i>&nbsp;    static final int LDAP_VERSION = LDAP_VERSION3;
+<i>1233</i>&nbsp;
+<i>1234</i>&nbsp;    static final int LDAP_REF_FOLLOW = 0x01;            // follow referrals
+<i>1235</i>&nbsp;    static final int LDAP_REF_THROW = 0x02;             // throw referral ex.
+<i>1236</i>&nbsp;    static final int LDAP_REF_IGNORE = 0x03;            // ignore referrals
+<i>1237</i>&nbsp;    static final int LDAP_REF_FOLLOW_SCHEME = 0x04;     // follow referrals of the same scheme
+<i>1238</i>&nbsp;
+<i>1239</i>&nbsp;    static final String LDAP_URL = &quot;ldap://&quot;;           // LDAPv3
+<i>1240</i>&nbsp;    static final String LDAPS_URL = &quot;ldaps://&quot;;         // LDAPv3
+<i>1241</i>&nbsp;
+<i>1242</i>&nbsp;    static final int LBER_BOOLEAN = 0x01;
+<i>1243</i>&nbsp;    static final int LBER_INTEGER = 0x02;
+<i>1244</i>&nbsp;    static final int LBER_BITSTRING = 0x03;
+<i>1245</i>&nbsp;    static final int LBER_OCTETSTRING = 0x04;
+<i>1246</i>&nbsp;    static final int LBER_NULL = 0x05;
+<i>1247</i>&nbsp;    static final int LBER_ENUMERATED = 0x0a;
+<i>1248</i>&nbsp;    static final int LBER_SEQUENCE = 0x30;
+<i>1249</i>&nbsp;    static final int LBER_SET = 0x31;
+<i>1250</i>&nbsp;
+<i>1251</i>&nbsp;    static final int LDAP_SUPERIOR_DN = 0x80;
+<i>1252</i>&nbsp;
+<i>1253</i>&nbsp;    static final int LDAP_REQ_BIND = 0x60;      // app + constructed
+<i>1254</i>&nbsp;    static final int LDAP_REQ_UNBIND = 0x42;    // app + primitive
+<i>1255</i>&nbsp;    static final int LDAP_REQ_SEARCH = 0x63;    // app + constructed
+<i>1256</i>&nbsp;    static final int LDAP_REQ_MODIFY = 0x66;    // app + constructed
+<i>1257</i>&nbsp;    static final int LDAP_REQ_ADD = 0x68;       // app + constructed
+<i>1258</i>&nbsp;    static final int LDAP_REQ_DELETE = 0x4a;    // app + primitive
+<i>1259</i>&nbsp;    static final int LDAP_REQ_MODRDN = 0x6c;    // app + constructed
+<i>1260</i>&nbsp;    static final int LDAP_REQ_COMPARE = 0x6e;   // app + constructed
+<i>1261</i>&nbsp;    static final int LDAP_REQ_ABANDON = 0x50;   // app + primitive
+<i>1262</i>&nbsp;    static final int LDAP_REQ_EXTENSION = 0x77; // app + constructed    (LDAPv3)
+<i>1263</i>&nbsp;
+<i>1264</i>&nbsp;    static final int LDAP_REP_BIND = 0x61;      // app + constructed | 1
+<i>1265</i>&nbsp;    static final int LDAP_REP_SEARCH = 0x64;    // app + constructed | 4
+<i>1266</i>&nbsp;    static final int LDAP_REP_SEARCH_REF = 0x73;// app + constructed    (LDAPv3)
+<i>1267</i>&nbsp;    static final int LDAP_REP_RESULT = 0x65;    // app + constructed | 5
+<i>1268</i>&nbsp;    static final int LDAP_REP_MODIFY = 0x67;    // app + constructed | 7
+<i>1269</i>&nbsp;    static final int LDAP_REP_ADD = 0x69;       // app + constructed | 9
+<i>1270</i>&nbsp;    static final int LDAP_REP_DELETE = 0x6b;    // app + primitive | b
+<i>1271</i>&nbsp;    static final int LDAP_REP_MODRDN = 0x6d;    // app + primitive | d
+<i>1272</i>&nbsp;    static final int LDAP_REP_COMPARE = 0x6f;   // app + primitive | f
+<i>1273</i>&nbsp;    static final int LDAP_REP_EXTENSION = 0x78; // app + constructed    (LDAPv3)
+<i>1274</i>&nbsp;
+<i>1275</i>&nbsp;    static final int LDAP_REP_REFERRAL = 0xa3;  // ctx + constructed    (LDAPv3)
+<i>1276</i>&nbsp;    static final int LDAP_REP_EXT_OID = 0x8a;   // ctx + primitive      (LDAPv3)
+<i>1277</i>&nbsp;    static final int LDAP_REP_EXT_VAL = 0x8b;   // ctx + primitive      (LDAPv3)
+<i>1278</i>&nbsp;
+<i>1279</i>&nbsp;    // LDAPv3 Controls
+<i>1280</i>&nbsp;
+<i>1281</i>&nbsp;    static final int LDAP_CONTROLS = 0xa0;      // ctx + constructed    (LDAPv3)
+<i>1282</i>&nbsp;    static final String LDAP_CONTROL_MANAGE_DSA_IT = &quot;2.16.840.1.113730.3.4.2&quot;;
+<i>1283</i>&nbsp;    static final String LDAP_CONTROL_PREFERRED_LANG = &quot;1.3.6.1.4.1.1466.20035&quot;;
+<i>1284</i>&nbsp;    static final String LDAP_CONTROL_PAGED_RESULTS = &quot;1.2.840.113556.1.4.319&quot;;
+<i>1285</i>&nbsp;    static final String LDAP_CONTROL_SERVER_SORT_REQ = &quot;1.2.840.113556.1.4.473&quot;;
+<i>1286</i>&nbsp;    static final String LDAP_CONTROL_SERVER_SORT_RES = &quot;1.2.840.113556.1.4.474&quot;;
+<i>1287</i>&nbsp;
+<i>1288</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1289</i>&nbsp;    //
+<i>1290</i>&nbsp;    // return codes
+<i>1291</i>&nbsp;    //
+<i>1292</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1293</i>&nbsp;
+<i>1294</i>&nbsp;    static final int LDAP_SUCCESS = 0;
+<i>1295</i>&nbsp;    static final int LDAP_OPERATIONS_ERROR = 1;
+<i>1296</i>&nbsp;    static final int LDAP_PROTOCOL_ERROR = 2;
+<i>1297</i>&nbsp;    static final int LDAP_TIME_LIMIT_EXCEEDED = 3;
+<i>1298</i>&nbsp;    static final int LDAP_SIZE_LIMIT_EXCEEDED = 4;
+<i>1299</i>&nbsp;    static final int LDAP_COMPARE_FALSE = 5;
+<i>1300</i>&nbsp;    static final int LDAP_COMPARE_TRUE = 6;
+<i>1301</i>&nbsp;    static final int LDAP_AUTH_METHOD_NOT_SUPPORTED = 7;
+<i>1302</i>&nbsp;    static final int LDAP_STRONG_AUTH_REQUIRED = 8;
+<i>1303</i>&nbsp;    static final int LDAP_PARTIAL_RESULTS = 9;                  // Slapd
+<i>1304</i>&nbsp;    static final int LDAP_REFERRAL = 10;                        // LDAPv3
+<i>1305</i>&nbsp;    static final int LDAP_ADMIN_LIMIT_EXCEEDED = 11;            // LDAPv3
+<i>1306</i>&nbsp;    static final int LDAP_UNAVAILABLE_CRITICAL_EXTENSION = 12;  // LDAPv3
+<i>1307</i>&nbsp;    static final int LDAP_CONFIDENTIALITY_REQUIRED = 13;        // LDAPv3
+<i>1308</i>&nbsp;    static final int LDAP_SASL_BIND_IN_PROGRESS = 14;           // LDAPv3
+<i>1309</i>&nbsp;    static final int LDAP_NO_SUCH_ATTRIBUTE = 16;
+<i>1310</i>&nbsp;    static final int LDAP_UNDEFINED_ATTRIBUTE_TYPE = 17;
+<i>1311</i>&nbsp;    static final int LDAP_INAPPROPRIATE_MATCHING = 18;
+<i>1312</i>&nbsp;    static final int LDAP_CONSTRAINT_VIOLATION = 19;
+<i>1313</i>&nbsp;    static final int LDAP_ATTRIBUTE_OR_VALUE_EXISTS = 20;
+<i>1314</i>&nbsp;    static final int LDAP_INVALID_ATTRIBUTE_SYNTAX = 21;
+<i>1315</i>&nbsp;    static final int LDAP_NO_SUCH_OBJECT = 32;
+<i>1316</i>&nbsp;    static final int LDAP_ALIAS_PROBLEM = 33;
+<i>1317</i>&nbsp;    static final int LDAP_INVALID_DN_SYNTAX = 34;
+<i>1318</i>&nbsp;    static final int LDAP_IS_LEAF = 35;
+<i>1319</i>&nbsp;    static final int LDAP_ALIAS_DEREFERENCING_PROBLEM = 36;
+<i>1320</i>&nbsp;    static final int LDAP_INAPPROPRIATE_AUTHENTICATION = 48;
+<i>1321</i>&nbsp;    static final int LDAP_INVALID_CREDENTIALS = 49;
+<i>1322</i>&nbsp;    static final int LDAP_INSUFFICIENT_ACCESS_RIGHTS = 50;
+<i>1323</i>&nbsp;    static final int LDAP_BUSY = 51;
+<i>1324</i>&nbsp;    static final int LDAP_UNAVAILABLE = 52;
+<i>1325</i>&nbsp;    static final int LDAP_UNWILLING_TO_PERFORM = 53;
+<i>1326</i>&nbsp;    static final int LDAP_LOOP_DETECT = 54;
+<i>1327</i>&nbsp;    static final int LDAP_NAMING_VIOLATION = 64;
+<i>1328</i>&nbsp;    static final int LDAP_OBJECT_CLASS_VIOLATION = 65;
+<i>1329</i>&nbsp;    static final int LDAP_NOT_ALLOWED_ON_NON_LEAF = 66;
+<i>1330</i>&nbsp;    static final int LDAP_NOT_ALLOWED_ON_RDN = 67;
+<i>1331</i>&nbsp;    static final int LDAP_ENTRY_ALREADY_EXISTS = 68;
+<i>1332</i>&nbsp;    static final int LDAP_OBJECT_CLASS_MODS_PROHIBITED = 69;
+<i>1333</i>&nbsp;    static final int LDAP_AFFECTS_MULTIPLE_DSAS = 71;           // LDAPv3
+<b class="nc"><i>1334</i>&nbsp;    static final int LDAP_OTHER = 80;</b>
+<i>1335</i>&nbsp;
+<i>1336</i>&nbsp;    static final String[] ldap_error_message = {
+<i>1337</i>&nbsp;        &quot;Success&quot;,                                      // 0
+<i>1338</i>&nbsp;        &quot;Operations Error&quot;,                             // 1
+<i>1339</i>&nbsp;        &quot;Protocol Error&quot;,                               // 2
+<i>1340</i>&nbsp;        &quot;Timelimit Exceeded&quot;,                           // 3
+<i>1341</i>&nbsp;        &quot;Sizelimit Exceeded&quot;,                           // 4
+<i>1342</i>&nbsp;        &quot;Compare False&quot;,                                // 5
+<i>1343</i>&nbsp;        &quot;Compare True&quot;,                                 // 6
+<i>1344</i>&nbsp;        &quot;Authentication Method Not Supported&quot;,          // 7
+<i>1345</i>&nbsp;        &quot;Strong Authentication Required&quot;,               // 8
+<i>1346</i>&nbsp;        null,
+<i>1347</i>&nbsp;        &quot;Referral&quot;,                                     // 10
+<i>1348</i>&nbsp;        &quot;Administrative Limit Exceeded&quot;,                // 11
+<i>1349</i>&nbsp;        &quot;Unavailable Critical Extension&quot;,               // 12
+<i>1350</i>&nbsp;        &quot;Confidentiality Required&quot;,                     // 13
+<i>1351</i>&nbsp;        &quot;SASL Bind In Progress&quot;,                        // 14
+<i>1352</i>&nbsp;        null,
+<i>1353</i>&nbsp;        &quot;No Such Attribute&quot;,                            // 16
+<i>1354</i>&nbsp;        &quot;Undefined Attribute Type&quot;,                     // 17
+<i>1355</i>&nbsp;        &quot;Inappropriate Matching&quot;,                       // 18
+<i>1356</i>&nbsp;        &quot;Constraint Violation&quot;,                         // 19
+<i>1357</i>&nbsp;        &quot;Attribute Or Value Exists&quot;,                    // 20
+<i>1358</i>&nbsp;        &quot;Invalid Attribute Syntax&quot;,                     // 21
+<i>1359</i>&nbsp;        null,
+<i>1360</i>&nbsp;        null,
+<i>1361</i>&nbsp;        null,
+<i>1362</i>&nbsp;        null,
+<i>1363</i>&nbsp;        null,
+<i>1364</i>&nbsp;        null,
+<i>1365</i>&nbsp;        null,
+<i>1366</i>&nbsp;        null,
+<i>1367</i>&nbsp;        null,
+<i>1368</i>&nbsp;        null,
+<i>1369</i>&nbsp;        &quot;No Such Object&quot;,                               // 32
+<i>1370</i>&nbsp;        &quot;Alias Problem&quot;,                                // 33
+<i>1371</i>&nbsp;        &quot;Invalid DN Syntax&quot;,                            // 34
+<i>1372</i>&nbsp;        null,
+<i>1373</i>&nbsp;        &quot;Alias Dereferencing Problem&quot;,                  // 36
+<i>1374</i>&nbsp;        null,
+<i>1375</i>&nbsp;        null,
+<i>1376</i>&nbsp;        null,
+<i>1377</i>&nbsp;        null,
+<i>1378</i>&nbsp;        null,
+<i>1379</i>&nbsp;        null,
+<i>1380</i>&nbsp;        null,
+<i>1381</i>&nbsp;        null,
+<i>1382</i>&nbsp;        null,
+<i>1383</i>&nbsp;        null,
+<i>1384</i>&nbsp;        null,
+<i>1385</i>&nbsp;        &quot;Inappropriate Authentication&quot;,                 // 48
+<i>1386</i>&nbsp;        &quot;Invalid Credentials&quot;,                          // 49
+<i>1387</i>&nbsp;        &quot;Insufficient Access Rights&quot;,                   // 50
+<i>1388</i>&nbsp;        &quot;Busy&quot;,                                         // 51
+<i>1389</i>&nbsp;        &quot;Unavailable&quot;,                                  // 52
+<i>1390</i>&nbsp;        &quot;Unwilling To Perform&quot;,                         // 53
+<i>1391</i>&nbsp;        &quot;Loop Detect&quot;,                                  // 54
+<i>1392</i>&nbsp;        null,
+<i>1393</i>&nbsp;        null,
+<i>1394</i>&nbsp;        null,
+<i>1395</i>&nbsp;        null,
+<i>1396</i>&nbsp;        null,
+<i>1397</i>&nbsp;        null,
+<i>1398</i>&nbsp;        null,
+<i>1399</i>&nbsp;        null,
+<i>1400</i>&nbsp;        null,
+<i>1401</i>&nbsp;        &quot;Naming Violation&quot;,                             // 64
+<i>1402</i>&nbsp;        &quot;Object Class Violation&quot;,                       // 65
+<i>1403</i>&nbsp;        &quot;Not Allowed On Non-leaf&quot;,                      // 66
+<i>1404</i>&nbsp;        &quot;Not Allowed On RDN&quot;,                           // 67
+<i>1405</i>&nbsp;        &quot;Entry Already Exists&quot;,                         // 68
+<i>1406</i>&nbsp;        &quot;Object Class Modifications Prohibited&quot;,        // 69
+<i>1407</i>&nbsp;        null,
+<i>1408</i>&nbsp;        &quot;Affects Multiple DSAs&quot;,                        // 71
+<i>1409</i>&nbsp;        null,
+<i>1410</i>&nbsp;        null,
+<i>1411</i>&nbsp;        null,
+<i>1412</i>&nbsp;        null,
+<i>1413</i>&nbsp;        null,
+<i>1414</i>&nbsp;        null,
+<i>1415</i>&nbsp;        null,
+<i>1416</i>&nbsp;        null,
+<i>1417</i>&nbsp;        &quot;Other&quot;,                                        // 80
+<i>1418</i>&nbsp;        null,
+<i>1419</i>&nbsp;        null,
+<i>1420</i>&nbsp;        null,
+<i>1421</i>&nbsp;        null,
+<i>1422</i>&nbsp;        null,
+<i>1423</i>&nbsp;        null,
+<i>1424</i>&nbsp;        null,
+<i>1425</i>&nbsp;        null,
+<i>1426</i>&nbsp;        null,
+<i>1427</i>&nbsp;        null
+<i>1428</i>&nbsp;    };
+<i>1429</i>&nbsp;
+<i>1430</i>&nbsp;
+<i>1431</i>&nbsp;    /*
+<i>1432</i>&nbsp;     * Generate an error message from the LDAP error code and error diagnostic.
+<i>1433</i>&nbsp;     * The message format is:
+<i>1434</i>&nbsp;     *
+<i>1435</i>&nbsp;     *     &quot;[LDAP: error code &lt;errorCode&gt; - &lt;errorMessage&gt;]&quot;
+<i>1436</i>&nbsp;     *
+<i>1437</i>&nbsp;     * where &lt;errorCode&gt; is a numeric error code
+<i>1438</i>&nbsp;     * and &lt;errorMessage&gt; is a textual description of the error (if available)
+<i>1439</i>&nbsp;     *
+<i>1440</i>&nbsp;     */
+<b class="nc"><i>1441</i>&nbsp;    static String getErrorMessage(int errorCode, String errorMessage) {</b>
+<i>1442</i>&nbsp;
+<b class="nc"><i>1443</i>&nbsp;        String message = &quot;[LDAP: error code &quot; + errorCode;</b>
+<i>1444</i>&nbsp;
+<i>1445</i>&nbsp;        if ((errorMessage != null) &amp;&amp; (errorMessage.length() != 0)) {
+<b class="nc"><i>1446</i>&nbsp;</b>
+<i>1447</i>&nbsp;            // append error message from the server
+<i>1448</i>&nbsp;            message = message + &quot; - &quot; + errorMessage + &quot;]&quot;;
+<i>1449</i>&nbsp;
+<i>1450</i>&nbsp;        } else {
+<i>1451</i>&nbsp;
+<b class="nc"><i>1452</i>&nbsp;            // append built-in error message</b>
+<b class="nc"><i>1453</i>&nbsp;            try {</b>
+<i>1454</i>&nbsp;                if (ldap_error_message[errorCode] != null) {
+<i>1455</i>&nbsp;                    message = message + &quot; - &quot; + ldap_error_message[errorCode] +
+<b class="nc"><i>1456</i>&nbsp;                                &quot;]&quot;;</b>
+<b class="nc"><i>1457</i>&nbsp;                }</b>
+<b class="nc"><i>1458</i>&nbsp;            } catch (ArrayIndexOutOfBoundsException ex) {</b>
+<i>1459</i>&nbsp;                message = message + &quot;]&quot;;
+<b class="nc"><i>1460</i>&nbsp;            }</b>
+<i>1461</i>&nbsp;        }
+<i>1462</i>&nbsp;        return message;
+<i>1463</i>&nbsp;    }
+<i>1464</i>&nbsp;
+<i>1465</i>&nbsp;
+<i>1466</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1467</i>&nbsp;    //
+<i>1468</i>&nbsp;    // Unsolicited notification support.
+<i>1469</i>&nbsp;    //
+<i>1470</i>&nbsp;    // An LdapClient maintains a list of LdapCtx that have registered
+<i>1471</i>&nbsp;    // for UnsolicitedNotifications. This is a list because a single
+<i>1472</i>&nbsp;    // LdapClient might be shared among multiple contexts.
+<i>1473</i>&nbsp;    //
+<i>1474</i>&nbsp;    // When addUnsolicited() is invoked, the LdapCtx is added to the list.
+<i>1475</i>&nbsp;    //
+<i>1476</i>&nbsp;    // When Connection receives an unsolicited notification (msgid == 0),
+<i>1477</i>&nbsp;    // it invokes LdapClient.processUnsolicited(). processUnsolicited()
+<i>1478</i>&nbsp;    // parses the Extended Response. If there are registered listeners,
+<i>1479</i>&nbsp;    // LdapClient creates an UnsolicitedNotification from the response
+<i>1480</i>&nbsp;    // and informs each LdapCtx to fire an event for the notification.
+<i>1481</i>&nbsp;    // If it is a DISCONNECT notification, the connection is closed and a
+<i>1482</i>&nbsp;    // NamingExceptionEvent is fired to the listeners.
+<i>1483</i>&nbsp;    //
+<i>1484</i>&nbsp;    // When the connection is closed out-of-band like this, the next
+<i>1485</i>&nbsp;    // time a method is invoked on LdapClient, an IOException is thrown.
+<i>1486</i>&nbsp;    //
+<i>1487</i>&nbsp;    // removeUnsolicited() is invoked to remove an LdapCtx from this client.
+<b class="nc"><i>1488</i>&nbsp;    //</b>
+<i>1489</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>1490</i>&nbsp;    private Vector&lt;LdapCtx&gt; unsolicited = new Vector&lt;&gt;(3);
+<i>1491</i>&nbsp;    void addUnsolicited(LdapCtx ctx) {
+<i>1492</i>&nbsp;        if (debug &gt; 0) {
+<b class="nc"><i>1493</i>&nbsp;            System.err.println(&quot;LdapClient.addUnsolicited&quot; + ctx);</b>
+<i>1494</i>&nbsp;        }
+<i>1495</i>&nbsp;        unsolicited.addElement(ctx);
+<i>1496</i>&nbsp;    }
+<i>1497</i>&nbsp;
+<i>1498</i>&nbsp;    void removeUnsolicited(LdapCtx ctx) {
+<i>1499</i>&nbsp;        if (debug &gt; 0) {
+<b class="nc"><i>1500</i>&nbsp;            System.err.println(&quot;LdapClient.removeUnsolicited&quot; + ctx);</b>
+<i>1501</i>&nbsp;        }
+<i>1502</i>&nbsp;            unsolicited.removeElement(ctx);
+<i>1503</i>&nbsp;        }
+<i>1504</i>&nbsp;
+<i>1505</i>&nbsp;    // NOTE: Cannot be synchronized because this is called asynchronously
+<i>1506</i>&nbsp;    // by the reader thread in Connection. Instead, sync on &#39;unsolicited&#39; Vector.
+<i>1507</i>&nbsp;    void processUnsolicited(BerDecoder ber) {
+<i>1508</i>&nbsp;        if (debug &gt; 0) {
+<i>1509</i>&nbsp;            System.err.println(&quot;LdapClient.processUnsolicited&quot;);
+<i>1510</i>&nbsp;        }
+<b class="nc"><i>1511</i>&nbsp;        try {</b>
+<i>1512</i>&nbsp;            // Parse the response
+<b class="nc"><i>1513</i>&nbsp;            LdapResult res = new LdapResult();</b>
+<b class="nc"><i>1514</i>&nbsp;</b>
+<b class="nc"><i>1515</i>&nbsp;            ber.parseSeq(null); // init seq</b>
+<b class="nc"><i>1516</i>&nbsp;            ber.parseInt();             // msg id; should be 0; ignored</b>
+<i>1517</i>&nbsp;            if (ber.parseByte() != LDAP_REP_EXTENSION) {
+<i>1518</i>&nbsp;                throw new IOException(
+<b class="nc"><i>1519</i>&nbsp;                    &quot;Unsolicited Notification must be an Extended Response&quot;);</b>
+<b class="nc"><i>1520</i>&nbsp;            }</b>
+<i>1521</i>&nbsp;            ber.parseLength();
+<b class="nc"><i>1522</i>&nbsp;            parseExtResponse(ber, res);</b>
+<i>1523</i>&nbsp;
+<b class="nc"><i>1524</i>&nbsp;            if (DISCONNECT_OID.equals(res.extensionId)) {</b>
+<i>1525</i>&nbsp;                // force closing of connection
+<i>1526</i>&nbsp;                forceClose(pooled);
+<b class="nc"><i>1527</i>&nbsp;            }</b>
+<b class="nc"><i>1528</i>&nbsp;</b>
+<i>1529</i>&nbsp;            LdapCtx first = null;
+<b class="nc"><i>1530</i>&nbsp;            UnsolicitedNotification notice = null;</b>
+<b class="nc"><i>1531</i>&nbsp;</b>
+<b class="nc"><i>1532</i>&nbsp;            synchronized (unsolicited) {</b>
+<i>1533</i>&nbsp;                if (unsolicited.size() &gt; 0) {
+<i>1534</i>&nbsp;                    first = unsolicited.elementAt(0);
+<i>1535</i>&nbsp;
+<i>1536</i>&nbsp;                    // Create an UnsolicitedNotification using the parsed data
+<b class="nc"><i>1537</i>&nbsp;                    // Need a &#39;ctx&#39; object because we want to use the context&#39;s</b>
+<i>1538</i>&nbsp;                    // list of provider control factories.
+<i>1539</i>&nbsp;                    notice = new UnsolicitedResponseImpl(
+<i>1540</i>&nbsp;                        res.extensionId,
+<i>1541</i>&nbsp;                        res.extensionValue,
+<i>1542</i>&nbsp;                        res.referrals,
+<i>1543</i>&nbsp;                        res.status,
+<i>1544</i>&nbsp;                        res.errorMessage,
+<b class="nc"><i>1545</i>&nbsp;                        res.matchedDN,</b>
+<i>1546</i>&nbsp;                        (res.resControls != null) ?
+<i>1547</i>&nbsp;                        first.convertControls(res.resControls) :
+<b class="nc"><i>1548</i>&nbsp;                        null);</b>
+<i>1549</i>&nbsp;                }
+<b class="nc"><i>1550</i>&nbsp;            }</b>
+<i>1551</i>&nbsp;
+<b class="nc"><i>1552</i>&nbsp;            if (notice != null) {</b>
+<i>1553</i>&nbsp;                // Fire UnsolicitedNotification events to listeners
+<i>1554</i>&nbsp;                notifyUnsolicited(notice);
+<i>1555</i>&nbsp;
+<b class="nc"><i>1556</i>&nbsp;                // If &quot;disconnect&quot; notification,</b>
+<b class="nc"><i>1557</i>&nbsp;                // notify unsolicited listeners via NamingException</b>
+<i>1558</i>&nbsp;                if (DISCONNECT_OID.equals(res.extensionId)) {
+<i>1559</i>&nbsp;                    notifyUnsolicited(
+<i>1560</i>&nbsp;                        new CommunicationException(&quot;Connection closed&quot;));
+<b class="nc"><i>1561</i>&nbsp;                }</b>
+<b class="nc"><i>1562</i>&nbsp;            }</b>
+<i>1563</i>&nbsp;        } catch (IOException e) {
+<b class="nc"><i>1564</i>&nbsp;            NamingException ne = new CommunicationException(</b>
+<i>1565</i>&nbsp;                &quot;Problem parsing unsolicited notification&quot;);
+<b class="nc"><i>1566</i>&nbsp;            ne.setRootCause(e);</b>
+<i>1567</i>&nbsp;
+<b class="nc"><i>1568</i>&nbsp;            notifyUnsolicited(ne);</b>
+<b class="nc"><i>1569</i>&nbsp;</b>
+<b class="nc"><i>1570</i>&nbsp;        } catch (NamingException e) {</b>
+<i>1571</i>&nbsp;            notifyUnsolicited(e);
+<i>1572</i>&nbsp;        }
+<i>1573</i>&nbsp;    }
+<i>1574</i>&nbsp;
+<i>1575</i>&nbsp;
+<b class="nc"><i>1576</i>&nbsp;    private void notifyUnsolicited(Object e) {</b>
+<b class="nc"><i>1577</i>&nbsp;        Vector&lt;LdapCtx&gt; unsolicitedCopy;</b>
+<b class="nc"><i>1578</i>&nbsp;        synchronized (unsolicited) {</b>
+<b class="nc"><i>1579</i>&nbsp;            unsolicitedCopy = new Vector&lt;&gt;(unsolicited);</b>
+<i>1580</i>&nbsp;            if (e instanceof NamingException) {
+<b class="nc"><i>1581</i>&nbsp;                unsolicited.setSize(0);  // no more listeners after exception</b>
+<b class="nc"><i>1582</i>&nbsp;            }</b>
+<b class="nc"><i>1583</i>&nbsp;        }</b>
+<i>1584</i>&nbsp;        for (int i = 0; i &lt; unsolicitedCopy.size(); i++) {
+<i>1585</i>&nbsp;            unsolicitedCopy.elementAt(i).fireUnsolicited(e);
+<i>1586</i>&nbsp;        }
+<i>1587</i>&nbsp;    }
+<b class="nc"><i>1588</i>&nbsp;</b>
+<b class="nc"><i>1589</i>&nbsp;    private void ensureOpen() throws IOException {</b>
+<b class="nc"><i>1590</i>&nbsp;        if (conn == null || !conn.useable) {</b>
+<i>1591</i>&nbsp;            if (conn != null &amp;&amp; conn.closureReason != null) {
+<b class="nc"><i>1592</i>&nbsp;                throw conn.closureReason;</b>
+<i>1593</i>&nbsp;            } else {
+<i>1594</i>&nbsp;                throw new IOException(&quot;connection closed&quot;);
+<i>1595</i>&nbsp;            }
+<i>1596</i>&nbsp;        }
+<i>1597</i>&nbsp;    }
+<i>1598</i>&nbsp;
+<i>1599</i>&nbsp;    // package private (used by LdapCtx)
+<i>1600</i>&nbsp;    static LdapClient getInstance(boolean usePool, String hostname, int port,
+<i>1601</i>&nbsp;        String factory, int connectTimeout, int readTimeout, OutputStream trace,
+<i>1602</i>&nbsp;        int version, String authMechanism, Control[] ctls, String protocol,
+<b class="nc"><i>1603</i>&nbsp;        String user, Object passwd, Hashtable&lt;?,?&gt; env) throws NamingException {</b>
+<b class="nc"><i>1604</i>&nbsp;</b>
+<i>1605</i>&nbsp;        if (usePool) {
+<b class="nc"><i>1606</i>&nbsp;            if (LdapPoolManager.isPoolingAllowed(factory, trace,</b>
+<i>1607</i>&nbsp;                    authMechanism, protocol, env)) {
+<i>1608</i>&nbsp;                LdapClient answer = LdapPoolManager.getLdapClient(
+<i>1609</i>&nbsp;                        hostname, port, factory, connectTimeout, readTimeout,
+<b class="nc"><i>1610</i>&nbsp;                        trace, version, authMechanism, ctls, protocol, user,</b>
+<b class="nc"><i>1611</i>&nbsp;                        passwd, env);</b>
+<i>1612</i>&nbsp;                answer.referenceCount = 1;   // always one when starting out
+<i>1613</i>&nbsp;                return answer;
+<b class="nc"><i>1614</i>&nbsp;            }</b>
+<i>1615</i>&nbsp;        }
+<i>1616</i>&nbsp;        return new LdapClient(hostname, port, factory, connectTimeout,
+<i>1617</i>&nbsp;                                        readTimeout, trace, null);
+<i>1618</i>&nbsp;    }
+<i>1619</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

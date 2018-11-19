@@ -1,0 +1,893 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ISO2022_JP</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.cs.ext</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ISO2022_JP (sun.nio.cs.ext)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ISO2022_JP</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 8)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">ISO2022_JP$Decoder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 188)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">ISO2022_JP$Encoder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 11)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 208)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 26)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 404)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2002, 2012, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.cs.ext;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.ByteBuffer;
+<i>29</i>&nbsp;import java.nio.CharBuffer;
+<i>30</i>&nbsp;import java.nio.charset.Charset;
+<i>31</i>&nbsp;import java.nio.charset.CharsetDecoder;
+<i>32</i>&nbsp;import java.nio.charset.CharsetEncoder;
+<i>33</i>&nbsp;import java.nio.charset.CoderResult;
+<i>34</i>&nbsp;import java.nio.charset.CodingErrorAction;
+<i>35</i>&nbsp;import sun.nio.cs.DelegatableDecoder;
+<i>36</i>&nbsp;import sun.nio.cs.DoubleByte;
+<i>37</i>&nbsp;import sun.nio.cs.HistoricallyNamedCharset;
+<i>38</i>&nbsp;import sun.nio.cs.Surrogate;
+<i>39</i>&nbsp;import sun.nio.cs.US_ASCII;
+<i>40</i>&nbsp;import sun.nio.cs.*;
+<i>41</i>&nbsp;import static sun.nio.cs.CharsetMapping.*;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;/*
+<i>44</i>&nbsp; * Implementation notes:
+<i>45</i>&nbsp; *
+<i>46</i>&nbsp; * (1)&quot;Standard based&quot; (ASCII, JIS_X_0201 and JIS_X_0208) ISO2022-JP charset
+<i>47</i>&nbsp; * is provided by the base implementation of this class.
+<i>48</i>&nbsp; *
+<i>49</i>&nbsp; * Three Microsoft ISO2022-JP variants, MS50220, MS50221 and MSISO2022JP
+<i>50</i>&nbsp; * are provided via subclasses.
+<i>51</i>&nbsp; *
+<i>52</i>&nbsp; * (2)MS50220 and MS50221 are assumed to work the same way as Microsoft
+<i>53</i>&nbsp; * CP50220 and CP50221&#39;s 7-bit implementation works by using CP5022X
+<i>54</i>&nbsp; * specific JIS0208 and JIS0212 mapping tables (generated via Microsoft&#39;s
+<i>55</i>&nbsp; * MultiByteToWideChar/WideCharToMultiByte APIs). The only difference
+<i>56</i>&nbsp; * between these 2 classes is that MS50220 does not support singlebyte
+<i>57</i>&nbsp; * halfwidth kana (Uff61-Uff9f) shiftin mechanism when &quot;encoding&quot;, instead
+<i>58</i>&nbsp; * these halfwidth kana characters are converted to their fullwidth JIS0208
+<i>59</i>&nbsp; * counterparts.
+<i>60</i>&nbsp; *
+<i>61</i>&nbsp; * The difference between the standard JIS_X_0208 and JIS_X_0212 mappings
+<i>62</i>&nbsp; * and the CP50220/50221 specific are
+<i>63</i>&nbsp; *
+<i>64</i>&nbsp; * 0208 mapping:
+<i>65</i>&nbsp; *              1)0x213d &lt;-&gt; U2015 (compared to U2014)
+<i>66</i>&nbsp; *              2)One way mappings for 5 characters below
+<i>67</i>&nbsp; *                u2225 (ms) -&gt; 0x2142 &lt;-&gt; u2016 (jis)
+<i>68</i>&nbsp; *                uff0d (ms) -&gt; 0x215d &lt;-&gt; u2212 (jis)
+<i>69</i>&nbsp; *                uffe0 (ms) -&gt; 0x2171 &lt;-&gt; u00a2 (jis)
+<i>70</i>&nbsp; *                uffe1 (ms) -&gt; 0x2172 &lt;-&gt; u00a3 (jis)
+<i>71</i>&nbsp; *                uffe2 (ms) -&gt; 0x224c &lt;-&gt; u00ac (jis)
+<i>72</i>&nbsp; *                //should consider 0xff5e -&gt; 0x2141 &lt;-&gt; U301c?
+<i>73</i>&nbsp; *              3)NEC Row13 0x2d21-0x2d79
+<i>74</i>&nbsp; *              4)85-94 ku &lt;-&gt; UE000,UE3AB (includes NEC selected
+<i>75</i>&nbsp; *                IBM kanji in 89-92ku)
+<i>76</i>&nbsp; *              5)UFF61-UFF9f -&gt; Fullwidth 0208 KANA
+<i>77</i>&nbsp; *
+<i>78</i>&nbsp; * 0212 mapping:
+<i>79</i>&nbsp; *              1)0x2237 &lt;-&gt; UFF5E (Fullwidth Tilde)
+<i>80</i>&nbsp; *              2)0x2271 &lt;-&gt; U2116 (Numero Sign)
+<i>81</i>&nbsp; *              3)85-94 ku &lt;-&gt; UE3AC - UE757
+<i>82</i>&nbsp; *
+<i>83</i>&nbsp; * (3)MSISO2022JP uses a JIS0208 mapping generated from MS932DB.b2c
+<i>84</i>&nbsp; * and MS932DB.c2b by converting the SJIS codepoints back to their
+<i>85</i>&nbsp; * JIS0208 counterparts. With the exception of
+<i>86</i>&nbsp; *
+<i>87</i>&nbsp; * (a)Codepoints with a resulting JIS0208 codepoints beyond 0x7e00 are
+<i>88</i>&nbsp; *    dropped (this includs the IBM Extended Kanji/Non-kanji from 0x9321
+<i>89</i>&nbsp; *    to 0x972c)
+<i>90</i>&nbsp; * (b)The Unicode codepoints that the IBM Extended Kanji/Non-kanji are
+<i>91</i>&nbsp; *    mapped to (in MS932) are mapped back to NEC selected IBM Kanji/
+<i>92</i>&nbsp; *    Non-kanji area at 0x7921-0x7c7e.
+<i>93</i>&nbsp; *
+<i>94</i>&nbsp; * Compared to JIS_X_0208 mapping, this MS932 based mapping has
+<i>95</i>&nbsp;
+<i>96</i>&nbsp; * (a)different mappings for 7 JIS codepoints
+<i>97</i>&nbsp; *        0x213d &lt;-&gt; U2015
+<i>98</i>&nbsp; *        0x2141 &lt;-&gt; UFF5E
+<i>99</i>&nbsp; *        0x2142 &lt;-&gt; U2225
+<i>100</i>&nbsp; *        0x215d &lt;-&gt; Uff0d
+<i>101</i>&nbsp; *        0x2171 &lt;-&gt; Uffe0
+<i>102</i>&nbsp; *        0x2172 &lt;-&gt; Uffe1
+<i>103</i>&nbsp; *        0x224c &lt;-&gt; Uffe2
+<i>104</i>&nbsp; * (b)added one-way c2b mappings for
+<i>105</i>&nbsp; *        U00b8 -&gt; 0x2124
+<i>106</i>&nbsp; *        U00b7 -&gt; 0x2126
+<i>107</i>&nbsp; *        U00af -&gt; 0x2131
+<i>108</i>&nbsp; *        U00ab -&gt; 0x2263
+<i>109</i>&nbsp; *        U00bb -&gt; 0x2264
+<i>110</i>&nbsp; *        U3094 -&gt; 0x2574
+<i>111</i>&nbsp; *        U00b5 -&gt; 0x264c
+<i>112</i>&nbsp; * (c)NEC Row 13
+<i>113</i>&nbsp; * (d)NEC selected IBM extended Kanji/Non-kanji
+<i>114</i>&nbsp; *    These codepoints are mapped to the same Unicode codepoints as
+<i>115</i>&nbsp; *    the MS932 does, while MS50220/50221 maps them to the Unicode
+<i>116</i>&nbsp; *    private area.
+<i>117</i>&nbsp; *
+<i>118</i>&nbsp; * # There is also an interesting difference when compared to MS5022X
+<i>119</i>&nbsp; *   0208 mapping for JIS codepoint &quot;0x2D60&quot;, MS932 maps it to U301d
+<i>120</i>&nbsp; *   but MS5022X maps it to U301e, obvious MS5022X is wrong, but...
+<i>121</i>&nbsp; */
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;public class ISO2022_JP
+<i>124</i>&nbsp;    extends Charset
+<i>125</i>&nbsp;    implements HistoricallyNamedCharset
+<i>126</i>&nbsp;{
+<i>127</i>&nbsp;    private static final int ASCII = 0;                 // ESC ( B
+<i>128</i>&nbsp;    private static final int JISX0201_1976 = 1;         // ESC ( J
+<i>129</i>&nbsp;    private static final int JISX0208_1978 = 2;         // ESC $ @
+<i>130</i>&nbsp;    private static final int JISX0208_1983 = 3;         // ESC $ B
+<i>131</i>&nbsp;    private static final int JISX0212_1990 = 4;         // ESC $ ( D
+<i>132</i>&nbsp;    private static final int JISX0201_1976_KANA = 5;    // ESC ( I
+<i>133</i>&nbsp;    private static final int SHIFTOUT = 6;
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;    private static final int ESC = 0x1b;
+<i>136</i>&nbsp;    private static final int SO = 0x0e;
+<b class="nc"><i>137</i>&nbsp;    private static final int SI = 0x0f;</b>
+<b class="nc"><i>138</i>&nbsp;</b>
+<i>139</i>&nbsp;    public ISO2022_JP() {
+<i>140</i>&nbsp;        super(&quot;ISO-2022-JP&quot;,
+<i>141</i>&nbsp;              ExtendedCharsets.aliasesFor(&quot;ISO-2022-JP&quot;));
+<i>142</i>&nbsp;    }
+<b class="nc"><i>143</i>&nbsp;</b>
+<i>144</i>&nbsp;    protected ISO2022_JP(String canonicalName,
+<i>145</i>&nbsp;                         String[] aliases) {
+<i>146</i>&nbsp;        super(canonicalName, aliases);
+<b class="nc"><i>147</i>&nbsp;    }</b>
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;    public String historicalName() {
+<i>150</i>&nbsp;        return &quot;ISO2022JP&quot;;
+<b class="nc"><i>151</i>&nbsp;    }</b>
+<i>152</i>&nbsp;
+<i>153</i>&nbsp;    public boolean contains(Charset cs) {
+<i>154</i>&nbsp;        return ((cs instanceof JIS_X_0201)
+<i>155</i>&nbsp;                || (cs instanceof US_ASCII)
+<i>156</i>&nbsp;                || (cs instanceof JIS_X_0208)
+<i>157</i>&nbsp;                || (cs instanceof ISO2022_JP));
+<b class="nc"><i>158</i>&nbsp;    }</b>
+<i>159</i>&nbsp;
+<i>160</i>&nbsp;    public CharsetDecoder newDecoder() {
+<i>161</i>&nbsp;        return new Decoder(this);
+<b class="nc"><i>162</i>&nbsp;    }</b>
+<i>163</i>&nbsp;
+<i>164</i>&nbsp;    public CharsetEncoder newEncoder() {
+<i>165</i>&nbsp;        return new Encoder(this);
+<b class="nc"><i>166</i>&nbsp;    }</b>
+<i>167</i>&nbsp;
+<i>168</i>&nbsp;    protected boolean doSBKANA() {
+<b class="nc"><i>169</i>&nbsp;        return true;</b>
+<i>170</i>&nbsp;    }
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;    static class Decoder extends CharsetDecoder
+<b class="nc"><i>173</i>&nbsp;        implements DelegatableDecoder {</b>
+<i>174</i>&nbsp;
+<i>175</i>&nbsp;        final static DoubleByte.Decoder DEC0208 =
+<i>176</i>&nbsp;            (DoubleByte.Decoder)new JIS_X_0208().newDecoder();
+<i>177</i>&nbsp;
+<i>178</i>&nbsp;        private int currentState;
+<i>179</i>&nbsp;        private int previousState;
+<i>180</i>&nbsp;
+<i>181</i>&nbsp;        private DoubleByte.Decoder dec0208;
+<b class="nc"><i>182</i>&nbsp;        private DoubleByte.Decoder dec0212;</b>
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;        private Decoder(Charset cs) {
+<i>185</i>&nbsp;            this(cs, DEC0208, null);
+<i>186</i>&nbsp;        }
+<i>187</i>&nbsp;
+<b class="nc"><i>188</i>&nbsp;        protected Decoder(Charset cs,</b>
+<b class="nc"><i>189</i>&nbsp;                          DoubleByte.Decoder dec0208,</b>
+<b class="nc"><i>190</i>&nbsp;                          DoubleByte.Decoder dec0212) {</b>
+<b class="nc"><i>191</i>&nbsp;            super(cs, 0.5f, 1.0f);</b>
+<b class="nc"><i>192</i>&nbsp;            this.dec0208 = dec0208;</b>
+<i>193</i>&nbsp;            this.dec0212 = dec0212;
+<i>194</i>&nbsp;            currentState = ASCII;
+<i>195</i>&nbsp;            previousState = ASCII;
+<b class="nc"><i>196</i>&nbsp;        }</b>
+<b class="nc"><i>197</i>&nbsp;</b>
+<i>198</i>&nbsp;        public void implReset() {
+<i>199</i>&nbsp;            currentState = ASCII;
+<i>200</i>&nbsp;            previousState = ASCII;
+<i>201</i>&nbsp;        }
+<i>202</i>&nbsp;
+<b class="nc"><i>203</i>&nbsp;        private CoderResult decodeArrayLoop(ByteBuffer src,</b>
+<b class="nc"><i>204</i>&nbsp;                                            CharBuffer dst)</b>
+<b class="nc"><i>205</i>&nbsp;        {</b>
+<b class="nc"><i>206</i>&nbsp;            int inputSize = 0;</b>
+<b class="nc"><i>207</i>&nbsp;            int b1 = 0, b2 = 0, b3 = 0, b4 = 0;</b>
+<b class="nc"><i>208</i>&nbsp;            char c = UNMAPPABLE_DECODING;</b>
+<b class="nc"><i>209</i>&nbsp;            byte[] sa = src.array();</b>
+<b class="nc"><i>210</i>&nbsp;            int sp = src.arrayOffset() + src.position();</b>
+<i>211</i>&nbsp;            int sl = src.arrayOffset() + src.limit();
+<b class="nc"><i>212</i>&nbsp;            assert (sp &lt;= sl);</b>
+<b class="nc"><i>213</i>&nbsp;            sp = (sp &lt;= sl ? sp : sl);</b>
+<b class="nc"><i>214</i>&nbsp;</b>
+<b class="nc"><i>215</i>&nbsp;            char[] da = dst.array();</b>
+<b class="nc"><i>216</i>&nbsp;            int dp = dst.arrayOffset() + dst.position();</b>
+<i>217</i>&nbsp;            int dl = dst.arrayOffset() + dst.limit();
+<i>218</i>&nbsp;            assert (dp &lt;= dl);
+<b class="nc"><i>219</i>&nbsp;            dp = (dp &lt;= dl ? dp : dl);</b>
+<b class="nc"><i>220</i>&nbsp;</b>
+<b class="nc"><i>221</i>&nbsp;            try {</b>
+<b class="nc"><i>222</i>&nbsp;                while (sp &lt; sl) {</b>
+<b class="nc"><i>223</i>&nbsp;                    b1 = sa[sp] &amp; 0xff;</b>
+<i>224</i>&nbsp;                    inputSize = 1;
+<b class="nc"><i>225</i>&nbsp;                    if ((b1 &amp; 0x80) != 0) {</b>
+<b class="nc"><i>226</i>&nbsp;                        return CoderResult.malformedForLength(inputSize);</b>
+<b class="nc"><i>227</i>&nbsp;                    }</b>
+<b class="nc"><i>228</i>&nbsp;                    if (b1 == ESC || b1 == SO || b1 == SI) {</b>
+<b class="nc"><i>229</i>&nbsp;                        if (b1 == ESC) {</b>
+<b class="nc"><i>230</i>&nbsp;                            if (sp + inputSize + 2 &gt; sl)</b>
+<b class="nc"><i>231</i>&nbsp;                                return CoderResult.UNDERFLOW;</b>
+<b class="nc"><i>232</i>&nbsp;                            b2 = sa[sp + inputSize++] &amp; 0xff;</b>
+<b class="nc"><i>233</i>&nbsp;                            if (b2 == &#39;(&#39;) {</b>
+<b class="nc"><i>234</i>&nbsp;                                b3 = sa[sp + inputSize++] &amp; 0xff;</b>
+<b class="nc"><i>235</i>&nbsp;                                if (b3 == &#39;B&#39;){</b>
+<b class="nc"><i>236</i>&nbsp;                                    currentState = ASCII;</b>
+<b class="nc"><i>237</i>&nbsp;                                } else if (b3 == &#39;J&#39;){</b>
+<i>238</i>&nbsp;                                    currentState = JISX0201_1976;
+<b class="nc"><i>239</i>&nbsp;                                } else if (b3 == &#39;I&#39;){</b>
+<i>240</i>&nbsp;                                    currentState = JISX0201_1976_KANA;
+<b class="nc"><i>241</i>&nbsp;                                } else {</b>
+<b class="nc"><i>242</i>&nbsp;                                    return CoderResult.malformedForLength(inputSize);</b>
+<b class="nc"><i>243</i>&nbsp;                                }</b>
+<b class="nc"><i>244</i>&nbsp;                            } else if (b2 == &#39;$&#39;){</b>
+<b class="nc"><i>245</i>&nbsp;                                b3 = sa[sp + inputSize++] &amp; 0xff;</b>
+<b class="nc"><i>246</i>&nbsp;                                if (b3 == &#39;@&#39;){</b>
+<b class="nc"><i>247</i>&nbsp;                                    currentState = JISX0208_1978;</b>
+<b class="nc"><i>248</i>&nbsp;                                } else if (b3 == &#39;B&#39;){</b>
+<b class="nc"><i>249</i>&nbsp;                                    currentState = JISX0208_1983;</b>
+<b class="nc"><i>250</i>&nbsp;                                } else if (b3 == &#39;(&#39; &amp;&amp; dec0212 != null) {</b>
+<b class="nc"><i>251</i>&nbsp;                                    if (sp + inputSize + 1 &gt; sl)</b>
+<b class="nc"><i>252</i>&nbsp;                                        return CoderResult.UNDERFLOW;</b>
+<i>253</i>&nbsp;                                    b4 = sa[sp + inputSize++] &amp; 0xff;
+<b class="nc"><i>254</i>&nbsp;                                    if (b4 == &#39;D&#39;) {</b>
+<i>255</i>&nbsp;                                        currentState = JISX0212_1990;
+<i>256</i>&nbsp;                                    } else {
+<b class="nc"><i>257</i>&nbsp;                                        return CoderResult.malformedForLength(inputSize);</b>
+<i>258</i>&nbsp;                                    }
+<i>259</i>&nbsp;                                } else {
+<b class="nc"><i>260</i>&nbsp;                                    return CoderResult.malformedForLength(inputSize);</b>
+<i>261</i>&nbsp;                                }
+<b class="nc"><i>262</i>&nbsp;                            } else {</b>
+<b class="nc"><i>263</i>&nbsp;                                return CoderResult.malformedForLength(inputSize);</b>
+<b class="nc"><i>264</i>&nbsp;                            }</b>
+<b class="nc"><i>265</i>&nbsp;                        } else if (b1 == SO) {</b>
+<b class="nc"><i>266</i>&nbsp;                            previousState = currentState;</b>
+<i>267</i>&nbsp;                            currentState = SHIFTOUT;
+<b class="nc"><i>268</i>&nbsp;                        } else if (b1 == SI) {</b>
+<b class="nc"><i>269</i>&nbsp;                            currentState = previousState;</b>
+<i>270</i>&nbsp;                        }
+<b class="nc"><i>271</i>&nbsp;                        sp += inputSize;</b>
+<b class="nc"><i>272</i>&nbsp;                        continue;</b>
+<i>273</i>&nbsp;                    }
+<b class="nc"><i>274</i>&nbsp;                    if (dp + 1 &gt; dl)</b>
+<i>275</i>&nbsp;                        return CoderResult.OVERFLOW;
+<b class="nc"><i>276</i>&nbsp;</b>
+<b class="nc"><i>277</i>&nbsp;                    switch (currentState){</b>
+<i>278</i>&nbsp;                        case ASCII:
+<b class="nc"><i>279</i>&nbsp;                            da[dp++] = (char)(b1 &amp; 0xff);</b>
+<i>280</i>&nbsp;                            break;
+<b class="nc"><i>281</i>&nbsp;                        case JISX0201_1976:</b>
+<b class="nc"><i>282</i>&nbsp;                          switch (b1) {</b>
+<i>283</i>&nbsp;                              case 0x5c:  // Yen/tilde substitution
+<b class="nc"><i>284</i>&nbsp;                                da[dp++] = &#39;\u00a5&#39;;</b>
+<b class="nc"><i>285</i>&nbsp;                                break;</b>
+<i>286</i>&nbsp;                              case 0x7e:
+<b class="nc"><i>287</i>&nbsp;                                da[dp++] = &#39;\u203e&#39;;</b>
+<b class="nc"><i>288</i>&nbsp;                                break;</b>
+<i>289</i>&nbsp;                              default:
+<i>290</i>&nbsp;                                da[dp++] = (char)b1;
+<i>291</i>&nbsp;                                break;
+<i>292</i>&nbsp;                            }
+<b class="nc"><i>293</i>&nbsp;                            break;</b>
+<b class="nc"><i>294</i>&nbsp;                        case JISX0208_1978:</b>
+<b class="nc"><i>295</i>&nbsp;                        case JISX0208_1983:</b>
+<b class="nc"><i>296</i>&nbsp;                            if (sp + inputSize + 1 &gt; sl)</b>
+<b class="nc"><i>297</i>&nbsp;                                return CoderResult.UNDERFLOW;</b>
+<b class="nc"><i>298</i>&nbsp;                            b2 = sa[sp + inputSize++] &amp; 0xff;</b>
+<b class="nc"><i>299</i>&nbsp;                            c = dec0208.decodeDouble(b1,b2);</b>
+<b class="nc"><i>300</i>&nbsp;                            if (c == UNMAPPABLE_DECODING)</b>
+<i>301</i>&nbsp;                                return CoderResult.unmappableForLength(inputSize);
+<b class="nc"><i>302</i>&nbsp;                            da[dp++] = c;</b>
+<b class="nc"><i>303</i>&nbsp;                            break;</b>
+<b class="nc"><i>304</i>&nbsp;                        case JISX0212_1990:</b>
+<b class="nc"><i>305</i>&nbsp;                            if (sp + inputSize + 1 &gt; sl)</b>
+<b class="nc"><i>306</i>&nbsp;                                return CoderResult.UNDERFLOW;</b>
+<b class="nc"><i>307</i>&nbsp;                            b2 = sa[sp + inputSize++] &amp; 0xff;</b>
+<b class="nc"><i>308</i>&nbsp;                            c = dec0212.decodeDouble(b1,b2);</b>
+<b class="nc"><i>309</i>&nbsp;                            if (c == UNMAPPABLE_DECODING)</b>
+<i>310</i>&nbsp;                                return CoderResult.unmappableForLength(inputSize);
+<i>311</i>&nbsp;                            da[dp++] = c;
+<b class="nc"><i>312</i>&nbsp;                            break;</b>
+<b class="nc"><i>313</i>&nbsp;                        case JISX0201_1976_KANA:</b>
+<i>314</i>&nbsp;                        case SHIFTOUT:
+<b class="nc"><i>315</i>&nbsp;                            if (b1 &gt; 0x60) {</b>
+<i>316</i>&nbsp;                                return CoderResult.malformedForLength(inputSize);
+<i>317</i>&nbsp;                            }
+<b class="nc"><i>318</i>&nbsp;                            da[dp++] = (char)(b1 + 0xff40);</b>
+<i>319</i>&nbsp;                            break;
+<b class="nc"><i>320</i>&nbsp;                    }</b>
+<i>321</i>&nbsp;                    sp += inputSize;
+<b class="nc"><i>322</i>&nbsp;                }</b>
+<b class="nc"><i>323</i>&nbsp;                return CoderResult.UNDERFLOW;</b>
+<i>324</i>&nbsp;            } finally {
+<i>325</i>&nbsp;                src.position(sp - src.arrayOffset());
+<i>326</i>&nbsp;                dst.position(dp - dst.arrayOffset());
+<i>327</i>&nbsp;            }
+<i>328</i>&nbsp;        }
+<i>329</i>&nbsp;
+<b class="nc"><i>330</i>&nbsp;        private CoderResult decodeBufferLoop(ByteBuffer src,</b>
+<b class="nc"><i>331</i>&nbsp;                                             CharBuffer dst)</b>
+<b class="nc"><i>332</i>&nbsp;        {</b>
+<b class="nc"><i>333</i>&nbsp;            int mark = src.position();</b>
+<i>334</i>&nbsp;            int b1 = 0, b2 = 0, b3 = 0, b4=0;
+<b class="nc"><i>335</i>&nbsp;            char c = UNMAPPABLE_DECODING;</b>
+<b class="nc"><i>336</i>&nbsp;            int inputSize = 0;</b>
+<b class="nc"><i>337</i>&nbsp;            try {</b>
+<b class="nc"><i>338</i>&nbsp;                while (src.hasRemaining()) {</b>
+<b class="nc"><i>339</i>&nbsp;                    b1 = src.get() &amp; 0xff;</b>
+<b class="nc"><i>340</i>&nbsp;                    inputSize = 1;</b>
+<b class="nc"><i>341</i>&nbsp;                    if ((b1 &amp; 0x80) != 0)</b>
+<b class="nc"><i>342</i>&nbsp;                        return CoderResult.malformedForLength(inputSize);</b>
+<b class="nc"><i>343</i>&nbsp;                    if (b1 == ESC || b1 == SO || b1 == SI) {</b>
+<b class="nc"><i>344</i>&nbsp;                        if (b1 == ESC) {  // ESC</b>
+<b class="nc"><i>345</i>&nbsp;                            if (src.remaining() &lt; 2)</b>
+<b class="nc"><i>346</i>&nbsp;                                return CoderResult.UNDERFLOW;</b>
+<b class="nc"><i>347</i>&nbsp;                            b2 = src.get() &amp; 0xff;</b>
+<b class="nc"><i>348</i>&nbsp;                            inputSize++;</b>
+<b class="nc"><i>349</i>&nbsp;                            if (b2 == &#39;(&#39;) {</b>
+<b class="nc"><i>350</i>&nbsp;                                b3 = src.get() &amp; 0xff;</b>
+<b class="nc"><i>351</i>&nbsp;                                inputSize++;</b>
+<b class="nc"><i>352</i>&nbsp;                                if (b3 == &#39;B&#39;){</b>
+<b class="nc"><i>353</i>&nbsp;                                    currentState = ASCII;</b>
+<b class="nc"><i>354</i>&nbsp;                                } else if (b3 == &#39;J&#39;){</b>
+<i>355</i>&nbsp;                                    currentState = JISX0201_1976;
+<b class="nc"><i>356</i>&nbsp;                                } else if (b3 == &#39;I&#39;){</b>
+<i>357</i>&nbsp;                                    currentState = JISX0201_1976_KANA;
+<b class="nc"><i>358</i>&nbsp;                                } else {</b>
+<b class="nc"><i>359</i>&nbsp;                                   return CoderResult.malformedForLength(inputSize);</b>
+<b class="nc"><i>360</i>&nbsp;                                }</b>
+<b class="nc"><i>361</i>&nbsp;                            } else if (b2 == &#39;$&#39;){</b>
+<b class="nc"><i>362</i>&nbsp;                                b3 = src.get() &amp; 0xff;</b>
+<b class="nc"><i>363</i>&nbsp;                                inputSize++;</b>
+<b class="nc"><i>364</i>&nbsp;                                if (b3 == &#39;@&#39;){</b>
+<b class="nc"><i>365</i>&nbsp;                                    currentState = JISX0208_1978;</b>
+<b class="nc"><i>366</i>&nbsp;                                } else if (b3 == &#39;B&#39;){</b>
+<b class="nc"><i>367</i>&nbsp;                                    currentState = JISX0208_1983;</b>
+<b class="nc"><i>368</i>&nbsp;                                } else if (b3 == &#39;(&#39; &amp;&amp; dec0212 != null) {</b>
+<b class="nc"><i>369</i>&nbsp;                                    if (!src.hasRemaining())</b>
+<b class="nc"><i>370</i>&nbsp;                                        return CoderResult.UNDERFLOW;</b>
+<b class="nc"><i>371</i>&nbsp;                                    b4 = src.get() &amp; 0xff;</b>
+<i>372</i>&nbsp;                                    inputSize++;
+<b class="nc"><i>373</i>&nbsp;                                    if (b4 == &#39;D&#39;) {</b>
+<i>374</i>&nbsp;                                        currentState = JISX0212_1990;
+<i>375</i>&nbsp;                                    } else {
+<b class="nc"><i>376</i>&nbsp;                                        return CoderResult.malformedForLength(inputSize);</b>
+<i>377</i>&nbsp;                                    }
+<i>378</i>&nbsp;                                } else {
+<b class="nc"><i>379</i>&nbsp;                                    return CoderResult.malformedForLength(inputSize);</b>
+<i>380</i>&nbsp;                                }
+<b class="nc"><i>381</i>&nbsp;                            } else {</b>
+<b class="nc"><i>382</i>&nbsp;                                return CoderResult.malformedForLength(inputSize);</b>
+<b class="nc"><i>383</i>&nbsp;                            }</b>
+<b class="nc"><i>384</i>&nbsp;                        } else if (b1 == SO) {</b>
+<b class="nc"><i>385</i>&nbsp;                            previousState = currentState;</b>
+<i>386</i>&nbsp;                            currentState = SHIFTOUT;
+<b class="nc"><i>387</i>&nbsp;                        } else if (b1 == SI) { // shift back in</b>
+<b class="nc"><i>388</i>&nbsp;                            currentState = previousState;</b>
+<i>389</i>&nbsp;                        }
+<b class="nc"><i>390</i>&nbsp;                        mark += inputSize;</b>
+<b class="nc"><i>391</i>&nbsp;                        continue;</b>
+<i>392</i>&nbsp;                    }
+<b class="nc"><i>393</i>&nbsp;                    if (!dst.hasRemaining())</b>
+<i>394</i>&nbsp;                        return CoderResult.OVERFLOW;
+<b class="nc"><i>395</i>&nbsp;</b>
+<b class="nc"><i>396</i>&nbsp;                    switch (currentState){</b>
+<i>397</i>&nbsp;                        case ASCII:
+<b class="nc"><i>398</i>&nbsp;                            dst.put((char)(b1 &amp; 0xff));</b>
+<i>399</i>&nbsp;                            break;
+<b class="nc"><i>400</i>&nbsp;                        case JISX0201_1976:</b>
+<b class="nc"><i>401</i>&nbsp;                            switch (b1) {</b>
+<i>402</i>&nbsp;                              case 0x5c:  // Yen/tilde substitution
+<b class="nc"><i>403</i>&nbsp;                                dst.put(&#39;\u00a5&#39;);</b>
+<b class="nc"><i>404</i>&nbsp;                                break;</b>
+<i>405</i>&nbsp;                              case 0x7e:
+<b class="nc"><i>406</i>&nbsp;                                dst.put(&#39;\u203e&#39;);</b>
+<b class="nc"><i>407</i>&nbsp;                                break;</b>
+<i>408</i>&nbsp;                              default:
+<i>409</i>&nbsp;                                dst.put((char)b1);
+<i>410</i>&nbsp;                                break;
+<i>411</i>&nbsp;                            }
+<b class="nc"><i>412</i>&nbsp;                            break;</b>
+<b class="nc"><i>413</i>&nbsp;                        case JISX0208_1978:</b>
+<b class="nc"><i>414</i>&nbsp;                        case JISX0208_1983:</b>
+<b class="nc"><i>415</i>&nbsp;                            if (!src.hasRemaining())</b>
+<b class="nc"><i>416</i>&nbsp;                                return CoderResult.UNDERFLOW;</b>
+<b class="nc"><i>417</i>&nbsp;                            b2 = src.get() &amp; 0xff;</b>
+<b class="nc"><i>418</i>&nbsp;                            inputSize++;</b>
+<b class="nc"><i>419</i>&nbsp;                            c = dec0208.decodeDouble(b1,b2);</b>
+<b class="nc"><i>420</i>&nbsp;                            if (c == UNMAPPABLE_DECODING)</b>
+<i>421</i>&nbsp;                                return CoderResult.unmappableForLength(inputSize);
+<b class="nc"><i>422</i>&nbsp;                            dst.put(c);</b>
+<b class="nc"><i>423</i>&nbsp;                            break;</b>
+<b class="nc"><i>424</i>&nbsp;                        case JISX0212_1990:</b>
+<b class="nc"><i>425</i>&nbsp;                            if (!src.hasRemaining())</b>
+<b class="nc"><i>426</i>&nbsp;                                return CoderResult.UNDERFLOW;</b>
+<b class="nc"><i>427</i>&nbsp;                            b2 = src.get() &amp; 0xff;</b>
+<b class="nc"><i>428</i>&nbsp;                            inputSize++;</b>
+<b class="nc"><i>429</i>&nbsp;                            c = dec0212.decodeDouble(b1,b2);</b>
+<b class="nc"><i>430</i>&nbsp;                            if (c == UNMAPPABLE_DECODING)</b>
+<i>431</i>&nbsp;                                return CoderResult.unmappableForLength(inputSize);
+<i>432</i>&nbsp;                            dst.put(c);
+<b class="nc"><i>433</i>&nbsp;                            break;</b>
+<b class="nc"><i>434</i>&nbsp;                        case JISX0201_1976_KANA:</b>
+<i>435</i>&nbsp;                        case SHIFTOUT:
+<b class="nc"><i>436</i>&nbsp;                            if (b1 &gt; 0x60) {</b>
+<i>437</i>&nbsp;                                return CoderResult.malformedForLength(inputSize);
+<i>438</i>&nbsp;                            }
+<b class="nc"><i>439</i>&nbsp;                            dst.put((char)(b1 + 0xff40));</b>
+<i>440</i>&nbsp;                            break;
+<b class="nc"><i>441</i>&nbsp;                    }</b>
+<i>442</i>&nbsp;                    mark += inputSize;
+<b class="nc"><i>443</i>&nbsp;                }</b>
+<i>444</i>&nbsp;                return CoderResult.UNDERFLOW;
+<i>445</i>&nbsp;            } finally {
+<i>446</i>&nbsp;                src.position(mark);
+<i>447</i>&nbsp;            }
+<i>448</i>&nbsp;        }
+<b class="nc"><i>449</i>&nbsp;</b>
+<b class="nc"><i>450</i>&nbsp;        // Make some protected methods public for use by JISAutoDetect</b>
+<i>451</i>&nbsp;        public CoderResult decodeLoop(ByteBuffer src, CharBuffer dst) {
+<b class="nc"><i>452</i>&nbsp;            if (src.hasArray() &amp;&amp; dst.hasArray())</b>
+<i>453</i>&nbsp;                return decodeArrayLoop(src, dst);
+<i>454</i>&nbsp;            else
+<i>455</i>&nbsp;                return decodeBufferLoop(src, dst);
+<b class="nc"><i>456</i>&nbsp;        }</b>
+<i>457</i>&nbsp;
+<i>458</i>&nbsp;        public CoderResult implFlush(CharBuffer out) {
+<i>459</i>&nbsp;            return super.implFlush(out);
+<b class="nc"><i>460</i>&nbsp;        }</b>
+<i>461</i>&nbsp;    }
+<b class="nc"><i>462</i>&nbsp;</b>
+<b class="nc"><i>463</i>&nbsp;    static class Encoder extends CharsetEncoder {</b>
+<i>464</i>&nbsp;
+<b class="nc"><i>465</i>&nbsp;        final static DoubleByte.Encoder ENC0208 =</b>
+<b class="nc"><i>466</i>&nbsp;            (DoubleByte.Encoder)new JIS_X_0208().newEncoder();</b>
+<b class="nc"><i>467</i>&nbsp;</b>
+<i>468</i>&nbsp;        private static byte[] repl = { (byte)0x21, (byte)0x29 };
+<i>469</i>&nbsp;        private int currentMode = ASCII;
+<i>470</i>&nbsp;        private int replaceMode = JISX0208_1983;
+<i>471</i>&nbsp;        private DoubleByte.Encoder enc0208;
+<i>472</i>&nbsp;        private DoubleByte.Encoder enc0212;
+<b class="nc"><i>473</i>&nbsp;        private boolean doSBKANA;</b>
+<i>474</i>&nbsp;
+<i>475</i>&nbsp;        private Encoder(Charset cs) {
+<i>476</i>&nbsp;            this(cs, ENC0208, null, true);
+<i>477</i>&nbsp;        }
+<i>478</i>&nbsp;
+<i>479</i>&nbsp;        Encoder(Charset cs,
+<b class="nc"><i>480</i>&nbsp;                DoubleByte.Encoder enc0208,</b>
+<b class="nc"><i>481</i>&nbsp;                DoubleByte.Encoder enc0212,</b>
+<b class="nc"><i>482</i>&nbsp;                boolean doSBKANA) {</b>
+<b class="nc"><i>483</i>&nbsp;            super(cs, 4.0f, (enc0212 != null)? 9.0f : 8.0f, repl);</b>
+<i>484</i>&nbsp;            this.enc0208 = enc0208;
+<i>485</i>&nbsp;            this.enc0212 = enc0212;
+<i>486</i>&nbsp;            this.doSBKANA = doSBKANA;
+<b class="nc"><i>487</i>&nbsp;        }</b>
+<i>488</i>&nbsp;
+<i>489</i>&nbsp;        protected int encodeSingle(char inputChar) {
+<i>490</i>&nbsp;            return -1;
+<b class="nc"><i>491</i>&nbsp;        }</b>
+<i>492</i>&nbsp;
+<i>493</i>&nbsp;        protected void implReset() {
+<i>494</i>&nbsp;            currentMode = ASCII;
+<i>495</i>&nbsp;        }
+<i>496</i>&nbsp;
+<i>497</i>&nbsp;        protected void implReplaceWith(byte[] newReplacement) {
+<i>498</i>&nbsp;            /* It&#39;s almost impossible to decide which charset they belong
+<b class="nc"><i>499</i>&nbsp;               to. The best thing we can do here is to &quot;guess&quot; based on</b>
+<b class="nc"><i>500</i>&nbsp;               the length of newReplacement.</b>
+<b class="nc"><i>501</i>&nbsp;             */</b>
+<b class="nc"><i>502</i>&nbsp;            if (newReplacement.length == 1) {</b>
+<i>503</i>&nbsp;                replaceMode = ASCII;
+<i>504</i>&nbsp;            } else if (newReplacement.length == 2) {
+<i>505</i>&nbsp;                replaceMode = JISX0208_1983;
+<i>506</i>&nbsp;            }
+<b class="nc"><i>507</i>&nbsp;        }</b>
+<b class="nc"><i>508</i>&nbsp;</b>
+<b class="nc"><i>509</i>&nbsp;        protected CoderResult implFlush(ByteBuffer out) {</b>
+<b class="nc"><i>510</i>&nbsp;            if (currentMode != ASCII) {</b>
+<b class="nc"><i>511</i>&nbsp;                if (out.remaining() &lt; 3)</b>
+<b class="nc"><i>512</i>&nbsp;                    return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>513</i>&nbsp;                out.put((byte)0x1b);</b>
+<i>514</i>&nbsp;                out.put((byte)0x28);
+<b class="nc"><i>515</i>&nbsp;                out.put((byte)0x42);</b>
+<i>516</i>&nbsp;                currentMode = ASCII;
+<i>517</i>&nbsp;            }
+<i>518</i>&nbsp;            return CoderResult.UNDERFLOW;
+<b class="nc"><i>519</i>&nbsp;        }</b>
+<i>520</i>&nbsp;
+<i>521</i>&nbsp;        public boolean canEncode(char c) {
+<i>522</i>&nbsp;            return ((c &lt;= &#39;\u007F&#39;) ||
+<b class="nc"><i>523</i>&nbsp;                    (c &gt;= 0xFF61 &amp;&amp; c &lt;= 0xFF9F) ||</b>
+<b class="nc"><i>524</i>&nbsp;                    (c == &#39;\u00A5&#39;) ||</b>
+<i>525</i>&nbsp;                    (c == &#39;\u203E&#39;) ||
+<i>526</i>&nbsp;                    enc0208.canEncode(c) ||
+<b class="nc"><i>527</i>&nbsp;                    (enc0212!=null &amp;&amp; enc0212.canEncode(c)));</b>
+<i>528</i>&nbsp;        }
+<i>529</i>&nbsp;
+<i>530</i>&nbsp;        private final Surrogate.Parser sgp = new Surrogate.Parser();
+<i>531</i>&nbsp;
+<b class="nc"><i>532</i>&nbsp;        private CoderResult encodeArrayLoop(CharBuffer src,</b>
+<b class="nc"><i>533</i>&nbsp;                                            ByteBuffer dst)</b>
+<b class="nc"><i>534</i>&nbsp;        {</b>
+<b class="nc"><i>535</i>&nbsp;            char[] sa = src.array();</b>
+<b class="nc"><i>536</i>&nbsp;            int sp = src.arrayOffset() + src.position();</b>
+<b class="nc"><i>537</i>&nbsp;            int sl = src.arrayOffset() + src.limit();</b>
+<b class="nc"><i>538</i>&nbsp;            assert (sp &lt;= sl);</b>
+<b class="nc"><i>539</i>&nbsp;            sp = (sp &lt;= sl ? sp : sl);</b>
+<b class="nc"><i>540</i>&nbsp;            byte[] da = dst.array();</b>
+<b class="nc"><i>541</i>&nbsp;            int dp = dst.arrayOffset() + dst.position();</b>
+<i>542</i>&nbsp;            int dl = dst.arrayOffset() + dst.limit();
+<i>543</i>&nbsp;            assert (dp &lt;= dl);
+<b class="nc"><i>544</i>&nbsp;            dp = (dp &lt;= dl ? dp : dl);</b>
+<b class="nc"><i>545</i>&nbsp;</b>
+<b class="nc"><i>546</i>&nbsp;            try {</b>
+<b class="nc"><i>547</i>&nbsp;                while (sp &lt; sl) {</b>
+<b class="nc"><i>548</i>&nbsp;                    char c = sa[sp];</b>
+<b class="nc"><i>549</i>&nbsp;                    if (c &lt;= &#39;\u007F&#39;) {</b>
+<b class="nc"><i>550</i>&nbsp;                        if (currentMode != ASCII) {</b>
+<b class="nc"><i>551</i>&nbsp;                            if (dl - dp &lt; 3)</b>
+<b class="nc"><i>552</i>&nbsp;                                return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>553</i>&nbsp;                            da[dp++] = (byte)0x1b;</b>
+<i>554</i>&nbsp;                            da[dp++] = (byte)0x28;
+<b class="nc"><i>555</i>&nbsp;                            da[dp++] = (byte)0x42;</b>
+<b class="nc"><i>556</i>&nbsp;                            currentMode = ASCII;</b>
+<b class="nc"><i>557</i>&nbsp;                        }</b>
+<b class="nc"><i>558</i>&nbsp;                        if (dl - dp &lt; 1)</b>
+<i>559</i>&nbsp;                            return CoderResult.OVERFLOW;
+<b class="nc"><i>560</i>&nbsp;                        da[dp++] = (byte)c;</b>
+<b class="nc"><i>561</i>&nbsp;                    } else if (c &gt;= 0xff61 &amp;&amp; c &lt;= 0xff9f &amp;&amp; doSBKANA) {</b>
+<b class="nc"><i>562</i>&nbsp;                        //a single byte kana</b>
+<b class="nc"><i>563</i>&nbsp;                        if (currentMode != JISX0201_1976_KANA) {</b>
+<b class="nc"><i>564</i>&nbsp;                            if (dl - dp &lt; 3)</b>
+<b class="nc"><i>565</i>&nbsp;                                return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>566</i>&nbsp;                            da[dp++] = (byte)0x1b;</b>
+<i>567</i>&nbsp;                            da[dp++] = (byte)0x28;
+<b class="nc"><i>568</i>&nbsp;                            da[dp++] = (byte)0x49;</b>
+<b class="nc"><i>569</i>&nbsp;                            currentMode = JISX0201_1976_KANA;</b>
+<b class="nc"><i>570</i>&nbsp;                        }</b>
+<b class="nc"><i>571</i>&nbsp;                        if (dl - dp &lt; 1)</b>
+<i>572</i>&nbsp;                            return CoderResult.OVERFLOW;
+<b class="nc"><i>573</i>&nbsp;                        da[dp++] = (byte)(c - 0xff40);</b>
+<b class="nc"><i>574</i>&nbsp;                    } else if (c == &#39;\u00A5&#39; || c == &#39;\u203E&#39;) {</b>
+<b class="nc"><i>575</i>&nbsp;                        //backslash or tilde</b>
+<b class="nc"><i>576</i>&nbsp;                        if (currentMode != JISX0201_1976) {</b>
+<b class="nc"><i>577</i>&nbsp;                            if (dl - dp &lt; 3)</b>
+<b class="nc"><i>578</i>&nbsp;                                return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>579</i>&nbsp;                            da[dp++] = (byte)0x1b;</b>
+<i>580</i>&nbsp;                            da[dp++] = (byte)0x28;
+<b class="nc"><i>581</i>&nbsp;                            da[dp++] = (byte)0x4a;</b>
+<b class="nc"><i>582</i>&nbsp;                            currentMode = JISX0201_1976;</b>
+<b class="nc"><i>583</i>&nbsp;                        }</b>
+<i>584</i>&nbsp;                        if (dl - dp &lt; 1)
+<b class="nc"><i>585</i>&nbsp;                            return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>586</i>&nbsp;                        da[dp++] = (c == &#39;\u00A5&#39;)?(byte)0x5C:(byte)0x7e;</b>
+<b class="nc"><i>587</i>&nbsp;                    } else {</b>
+<b class="nc"><i>588</i>&nbsp;                        int index = enc0208.encodeChar(c);</b>
+<b class="nc"><i>589</i>&nbsp;                        if (index != UNMAPPABLE_ENCODING) {</b>
+<b class="nc"><i>590</i>&nbsp;                            if (currentMode != JISX0208_1983) {</b>
+<b class="nc"><i>591</i>&nbsp;                                if (dl - dp &lt; 3)</b>
+<b class="nc"><i>592</i>&nbsp;                                    return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>593</i>&nbsp;                                da[dp++] = (byte)0x1b;</b>
+<i>594</i>&nbsp;                                da[dp++] = (byte)0x24;
+<b class="nc"><i>595</i>&nbsp;                                da[dp++] = (byte)0x42;</b>
+<b class="nc"><i>596</i>&nbsp;                                currentMode = JISX0208_1983;</b>
+<b class="nc"><i>597</i>&nbsp;                            }</b>
+<b class="nc"><i>598</i>&nbsp;                            if (dl - dp &lt; 2)</b>
+<b class="nc"><i>599</i>&nbsp;                                return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>600</i>&nbsp;                            da[dp++] = (byte)(index &gt;&gt; 8);</b>
+<b class="nc"><i>601</i>&nbsp;                            da[dp++] = (byte)(index &amp; 0xff);</b>
+<b class="nc"><i>602</i>&nbsp;                        } else if (enc0212 != null &amp;&amp;</b>
+<b class="nc"><i>603</i>&nbsp;                                   (index = enc0212.encodeChar(c)) != UNMAPPABLE_ENCODING) {</b>
+<b class="nc"><i>604</i>&nbsp;                            if (currentMode != JISX0212_1990) {</b>
+<b class="nc"><i>605</i>&nbsp;                                if (dl - dp &lt; 4)</b>
+<b class="nc"><i>606</i>&nbsp;                                    return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>607</i>&nbsp;                                da[dp++] = (byte)0x1b;</b>
+<b class="nc"><i>608</i>&nbsp;                                da[dp++] = (byte)0x24;</b>
+<i>609</i>&nbsp;                                da[dp++] = (byte)0x28;
+<b class="nc"><i>610</i>&nbsp;                                da[dp++] = (byte)0x44;</b>
+<b class="nc"><i>611</i>&nbsp;                                currentMode = JISX0212_1990;</b>
+<b class="nc"><i>612</i>&nbsp;                            }</b>
+<b class="nc"><i>613</i>&nbsp;                            if (dl - dp &lt; 2)</b>
+<i>614</i>&nbsp;                                return CoderResult.OVERFLOW;
+<b class="nc"><i>615</i>&nbsp;                            da[dp++] = (byte)(index &gt;&gt; 8);</b>
+<b class="nc"><i>616</i>&nbsp;                            da[dp++] = (byte)(index &amp; 0xff);</b>
+<b class="nc"><i>617</i>&nbsp;                        } else {</b>
+<i>618</i>&nbsp;                            if (Character.isSurrogate(c) &amp;&amp; sgp.parse(c, sa, sp, sl) &lt; 0)
+<i>619</i>&nbsp;                                return sgp.error();
+<b class="nc"><i>620</i>&nbsp;                            if (unmappableCharacterAction()</b>
+<b class="nc"><i>621</i>&nbsp;                                == CodingErrorAction.REPLACE</b>
+<b class="nc"><i>622</i>&nbsp;                                &amp;&amp; currentMode != replaceMode) {</b>
+<b class="nc"><i>623</i>&nbsp;                                if (dl - dp &lt; 3)</b>
+<b class="nc"><i>624</i>&nbsp;                                    return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>625</i>&nbsp;                                if (replaceMode == ASCII) {</b>
+<i>626</i>&nbsp;                                    da[dp++] = (byte)0x1b;
+<b class="nc"><i>627</i>&nbsp;                                    da[dp++] = (byte)0x28;</b>
+<b class="nc"><i>628</i>&nbsp;                                    da[dp++] = (byte)0x42;</b>
+<b class="nc"><i>629</i>&nbsp;                                } else {</b>
+<i>630</i>&nbsp;                                    da[dp++] = (byte)0x1b;
+<b class="nc"><i>631</i>&nbsp;                                    da[dp++] = (byte)0x24;</b>
+<i>632</i>&nbsp;                                    da[dp++] = (byte)0x42;
+<b class="nc"><i>633</i>&nbsp;                                }</b>
+<b class="nc"><i>634</i>&nbsp;                                currentMode = replaceMode;</b>
+<b class="nc"><i>635</i>&nbsp;                            }</b>
+<i>636</i>&nbsp;                            if (Character.isSurrogate(c))
+<i>637</i>&nbsp;                                return sgp.unmappableResult();
+<b class="nc"><i>638</i>&nbsp;                            return CoderResult.unmappableForLength(1);</b>
+<b class="nc"><i>639</i>&nbsp;                        }</b>
+<b class="nc"><i>640</i>&nbsp;                    }</b>
+<i>641</i>&nbsp;                    sp++;
+<b class="nc"><i>642</i>&nbsp;                }</b>
+<b class="nc"><i>643</i>&nbsp;                return CoderResult.UNDERFLOW;</b>
+<i>644</i>&nbsp;            } finally {
+<i>645</i>&nbsp;                src.position(sp - src.arrayOffset());
+<i>646</i>&nbsp;                dst.position(dp - dst.arrayOffset());
+<i>647</i>&nbsp;            }
+<i>648</i>&nbsp;        }
+<i>649</i>&nbsp;
+<b class="nc"><i>650</i>&nbsp;        private CoderResult encodeBufferLoop(CharBuffer src,</b>
+<i>651</i>&nbsp;                                             ByteBuffer dst)
+<b class="nc"><i>652</i>&nbsp;        {</b>
+<b class="nc"><i>653</i>&nbsp;            int mark = src.position();</b>
+<i>654</i>&nbsp;            try {
+<b class="nc"><i>655</i>&nbsp;                while (src.hasRemaining()) {</b>
+<b class="nc"><i>656</i>&nbsp;                    char c = src.get();</b>
+<b class="nc"><i>657</i>&nbsp;</b>
+<b class="nc"><i>658</i>&nbsp;                    if (c &lt;= &#39;\u007F&#39;) {</b>
+<b class="nc"><i>659</i>&nbsp;                        if (currentMode != ASCII) {</b>
+<b class="nc"><i>660</i>&nbsp;                            if (dst.remaining() &lt; 3)</b>
+<b class="nc"><i>661</i>&nbsp;                                return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>662</i>&nbsp;                            dst.put((byte)0x1b);</b>
+<i>663</i>&nbsp;                            dst.put((byte)0x28);
+<b class="nc"><i>664</i>&nbsp;                            dst.put((byte)0x42);</b>
+<b class="nc"><i>665</i>&nbsp;                            currentMode = ASCII;</b>
+<b class="nc"><i>666</i>&nbsp;                        }</b>
+<b class="nc"><i>667</i>&nbsp;                        if (dst.remaining() &lt; 1)</b>
+<i>668</i>&nbsp;                            return CoderResult.OVERFLOW;
+<b class="nc"><i>669</i>&nbsp;                        dst.put((byte)c);</b>
+<b class="nc"><i>670</i>&nbsp;                    } else if (c &gt;= 0xff61 &amp;&amp; c &lt;= 0xff9f &amp;&amp; doSBKANA) {</b>
+<b class="nc"><i>671</i>&nbsp;                        //Is it a single byte kana?</b>
+<b class="nc"><i>672</i>&nbsp;                        if (currentMode != JISX0201_1976_KANA) {</b>
+<b class="nc"><i>673</i>&nbsp;                            if (dst.remaining() &lt; 3)</b>
+<b class="nc"><i>674</i>&nbsp;                                return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>675</i>&nbsp;                            dst.put((byte)0x1b);</b>
+<i>676</i>&nbsp;                            dst.put((byte)0x28);
+<b class="nc"><i>677</i>&nbsp;                            dst.put((byte)0x49);</b>
+<b class="nc"><i>678</i>&nbsp;                            currentMode = JISX0201_1976_KANA;</b>
+<b class="nc"><i>679</i>&nbsp;                        }</b>
+<b class="nc"><i>680</i>&nbsp;                        if (dst.remaining() &lt; 1)</b>
+<b class="nc"><i>681</i>&nbsp;                            return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>682</i>&nbsp;                        dst.put((byte)(c - 0xff40));</b>
+<b class="nc"><i>683</i>&nbsp;                    } else if (c == &#39;\u00a5&#39; || c == &#39;\u203E&#39;) {</b>
+<b class="nc"><i>684</i>&nbsp;                        if (currentMode != JISX0201_1976) {</b>
+<b class="nc"><i>685</i>&nbsp;                            if (dst.remaining() &lt; 3)</b>
+<b class="nc"><i>686</i>&nbsp;                                return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>687</i>&nbsp;                            dst.put((byte)0x1b);</b>
+<i>688</i>&nbsp;                            dst.put((byte)0x28);
+<b class="nc"><i>689</i>&nbsp;                            dst.put((byte)0x4a);</b>
+<b class="nc"><i>690</i>&nbsp;                            currentMode = JISX0201_1976;</b>
+<b class="nc"><i>691</i>&nbsp;                        }</b>
+<i>692</i>&nbsp;                        if (dst.remaining() &lt; 1)
+<b class="nc"><i>693</i>&nbsp;                            return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>694</i>&nbsp;                        dst.put((c == &#39;\u00A5&#39;)?(byte)0x5C:(byte)0x7e);</b>
+<b class="nc"><i>695</i>&nbsp;                    } else {</b>
+<b class="nc"><i>696</i>&nbsp;                        int index = enc0208.encodeChar(c);</b>
+<b class="nc"><i>697</i>&nbsp;                        if (index != UNMAPPABLE_ENCODING) {</b>
+<b class="nc"><i>698</i>&nbsp;                            if (currentMode != JISX0208_1983) {</b>
+<b class="nc"><i>699</i>&nbsp;                                if (dst.remaining() &lt; 3)</b>
+<b class="nc"><i>700</i>&nbsp;                                    return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>701</i>&nbsp;                                dst.put((byte)0x1b);</b>
+<i>702</i>&nbsp;                                dst.put((byte)0x24);
+<b class="nc"><i>703</i>&nbsp;                                dst.put((byte)0x42);</b>
+<b class="nc"><i>704</i>&nbsp;                                currentMode = JISX0208_1983;</b>
+<b class="nc"><i>705</i>&nbsp;                            }</b>
+<b class="nc"><i>706</i>&nbsp;                            if (dst.remaining() &lt; 2)</b>
+<b class="nc"><i>707</i>&nbsp;                                return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>708</i>&nbsp;                            dst.put((byte)(index &gt;&gt; 8));</b>
+<b class="nc"><i>709</i>&nbsp;                            dst.put((byte)(index &amp; 0xff));</b>
+<b class="nc"><i>710</i>&nbsp;                        } else if (enc0212 != null &amp;&amp;</b>
+<b class="nc"><i>711</i>&nbsp;                                   (index = enc0212.encodeChar(c)) != UNMAPPABLE_ENCODING) {</b>
+<b class="nc"><i>712</i>&nbsp;                            if (currentMode != JISX0212_1990) {</b>
+<b class="nc"><i>713</i>&nbsp;                                if (dst.remaining() &lt; 4)</b>
+<b class="nc"><i>714</i>&nbsp;                                    return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>715</i>&nbsp;                                dst.put((byte)0x1b);</b>
+<b class="nc"><i>716</i>&nbsp;                                dst.put((byte)0x24);</b>
+<i>717</i>&nbsp;                                dst.put((byte)0x28);
+<b class="nc"><i>718</i>&nbsp;                                dst.put((byte)0x44);</b>
+<b class="nc"><i>719</i>&nbsp;                                currentMode = JISX0212_1990;</b>
+<b class="nc"><i>720</i>&nbsp;                            }</b>
+<b class="nc"><i>721</i>&nbsp;                            if (dst.remaining() &lt; 2)</b>
+<i>722</i>&nbsp;                                return CoderResult.OVERFLOW;
+<b class="nc"><i>723</i>&nbsp;                            dst.put((byte)(index &gt;&gt; 8));</b>
+<b class="nc"><i>724</i>&nbsp;                            dst.put((byte)(index &amp; 0xff));</b>
+<b class="nc"><i>725</i>&nbsp;                        } else {</b>
+<i>726</i>&nbsp;                            if (Character.isSurrogate(c) &amp;&amp; sgp.parse(c, src) &lt; 0)
+<b class="nc"><i>727</i>&nbsp;                                return sgp.error();</b>
+<b class="nc"><i>728</i>&nbsp;                            if (unmappableCharacterAction() == CodingErrorAction.REPLACE</b>
+<b class="nc"><i>729</i>&nbsp;                                &amp;&amp; currentMode != replaceMode) {</b>
+<b class="nc"><i>730</i>&nbsp;                                if (dst.remaining() &lt; 3)</b>
+<b class="nc"><i>731</i>&nbsp;                                    return CoderResult.OVERFLOW;</b>
+<b class="nc"><i>732</i>&nbsp;                                if (replaceMode == ASCII) {</b>
+<i>733</i>&nbsp;                                    dst.put((byte)0x1b);
+<b class="nc"><i>734</i>&nbsp;                                    dst.put((byte)0x28);</b>
+<b class="nc"><i>735</i>&nbsp;                                    dst.put((byte)0x42);</b>
+<b class="nc"><i>736</i>&nbsp;                                } else {</b>
+<i>737</i>&nbsp;                                    dst.put((byte)0x1b);
+<b class="nc"><i>738</i>&nbsp;                                    dst.put((byte)0x24);</b>
+<i>739</i>&nbsp;                                    dst.put((byte)0x42);
+<b class="nc"><i>740</i>&nbsp;                                }</b>
+<b class="nc"><i>741</i>&nbsp;                                currentMode = replaceMode;</b>
+<b class="nc"><i>742</i>&nbsp;                            }</b>
+<i>743</i>&nbsp;                            if (Character.isSurrogate(c))
+<i>744</i>&nbsp;                                return sgp.unmappableResult();
+<b class="nc"><i>745</i>&nbsp;                            return CoderResult.unmappableForLength(1);</b>
+<b class="nc"><i>746</i>&nbsp;                        }</b>
+<b class="nc"><i>747</i>&nbsp;                    }</b>
+<i>748</i>&nbsp;                    mark++;
+<b class="nc"><i>749</i>&nbsp;                }</b>
+<i>750</i>&nbsp;                return CoderResult.UNDERFLOW;
+<i>751</i>&nbsp;              } finally {
+<i>752</i>&nbsp;                src.position(mark);
+<i>753</i>&nbsp;            }
+<i>754</i>&nbsp;        }
+<i>755</i>&nbsp;
+<b class="nc"><i>756</i>&nbsp;        protected CoderResult encodeLoop(CharBuffer src,</b>
+<b class="nc"><i>757</i>&nbsp;                                         ByteBuffer dst)</b>
+<i>758</i>&nbsp;        {
+<b class="nc"><i>759</i>&nbsp;            if (src.hasArray() &amp;&amp; dst.hasArray())</b>
+<i>760</i>&nbsp;                return encodeArrayLoop(src, dst);
+<i>761</i>&nbsp;            else
+<i>762</i>&nbsp;                return encodeBufferLoop(src, dst);
+<i>763</i>&nbsp;        }
+<i>764</i>&nbsp;    }
+<i>765</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

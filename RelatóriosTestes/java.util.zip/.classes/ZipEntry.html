@@ -1,0 +1,768 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ZipEntry</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.zip</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ZipEntry (java.util.zip)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ZipEntry</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 29)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 112)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1995, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.util.zip;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import static java.util.zip.ZipUtils.*;
+<i>29</i>&nbsp;import java.nio.file.attribute.FileTime;
+<i>30</i>&nbsp;import java.util.Objects;
+<i>31</i>&nbsp;import java.util.concurrent.TimeUnit;
+<i>32</i>&nbsp;import java.time.LocalDateTime;
+<i>33</i>&nbsp;import java.time.ZonedDateTime;
+<i>34</i>&nbsp;import java.time.ZoneId;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import static java.util.zip.ZipConstants64.*;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * This class is used to represent a ZIP file entry.
+<i>40</i>&nbsp; *
+<i>41</i>&nbsp; * @author      David Connelly
+<i>42</i>&nbsp; * @since 1.1
+<i>43</i>&nbsp; */
+<b class="nc"><i>44</i>&nbsp;public</b>
+<i>45</i>&nbsp;class ZipEntry implements ZipConstants, Cloneable {
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;    String name;        // entry name
+<i>48</i>&nbsp;    long xdostime = -1; // last modification time (in extended DOS time,
+<i>49</i>&nbsp;                        // where milliseconds lost in conversion might
+<b class="nc"><i>50</i>&nbsp;                        // be encoded into the upper half)</b>
+<b class="nc"><i>51</i>&nbsp;    FileTime mtime;     // last modification time, from extra field data</b>
+<b class="nc"><i>52</i>&nbsp;    FileTime atime;     // last access time, from extra field data</b>
+<b class="nc"><i>53</i>&nbsp;    FileTime ctime;     // creation time, from extra field data</b>
+<b class="nc"><i>54</i>&nbsp;    long crc = -1;      // crc-32 of entry data</b>
+<i>55</i>&nbsp;    long size = -1;     // uncompressed size of entry data
+<i>56</i>&nbsp;    long csize = -1;    // compressed size of entry data
+<i>57</i>&nbsp;    int method = -1;    // compression method
+<i>58</i>&nbsp;    int flag = 0;       // general purpose flag
+<i>59</i>&nbsp;    byte[] extra;       // optional extra field data for entry
+<i>60</i>&nbsp;    String comment;     // optional comment string for entry
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;    /**
+<i>63</i>&nbsp;     * Compression method for uncompressed entries.
+<i>64</i>&nbsp;     */
+<i>65</i>&nbsp;    public static final int STORED = 0;
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;    /**
+<i>68</i>&nbsp;     * Compression method for compressed (deflated) entries.
+<i>69</i>&nbsp;     */
+<i>70</i>&nbsp;    public static final int DEFLATED = 8;
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    /**
+<i>73</i>&nbsp;     * DOS time constant for representing timestamps before 1980.
+<i>74</i>&nbsp;     */
+<i>75</i>&nbsp;    static final long DOSTIME_BEFORE_1980 = (1 &lt;&lt; 21) | (1 &lt;&lt; 16);
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    /**
+<i>78</i>&nbsp;     * Approximately 128 years, in milliseconds (ignoring leap years etc).
+<i>79</i>&nbsp;     *
+<i>80</i>&nbsp;     * This establish an approximate high-bound value for DOS times in
+<i>81</i>&nbsp;     * milliseconds since epoch, used to enable an efficient but
+<i>82</i>&nbsp;     * sufficient bounds check to avoid generating extended last modified
+<i>83</i>&nbsp;     * time entries.
+<i>84</i>&nbsp;     *
+<i>85</i>&nbsp;     * Calculating the exact number is locale dependent, would require loading
+<i>86</i>&nbsp;     * TimeZone data eagerly, and would make little practical sense. Since DOS
+<i>87</i>&nbsp;     * times theoretically go to 2107 - with compatibility not guaranteed
+<i>88</i>&nbsp;     * after 2099 - setting this to a time that is before but near 2099
+<i>89</i>&nbsp;     * should be sufficient.
+<i>90</i>&nbsp;     */
+<i>91</i>&nbsp;    private static final long UPPER_DOSTIME_BOUND =
+<i>92</i>&nbsp;            128L * 365 * 24 * 60 * 60 * 1000;
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;    /**
+<i>95</i>&nbsp;     * Creates a new zip entry with the specified name.
+<i>96</i>&nbsp;     *
+<i>97</i>&nbsp;     * @param  name
+<i>98</i>&nbsp;     *         The entry name
+<i>99</i>&nbsp;     *
+<b class="nc"><i>100</i>&nbsp;     * @throws NullPointerException if the entry name is null</b>
+<b class="nc"><i>101</i>&nbsp;     * @throws IllegalArgumentException if the entry name is longer than</b>
+<b class="nc"><i>102</i>&nbsp;     *         0xFFFF bytes</b>
+<b class="nc"><i>103</i>&nbsp;     */</b>
+<i>104</i>&nbsp;    public ZipEntry(String name) {
+<b class="nc"><i>105</i>&nbsp;        Objects.requireNonNull(name, &quot;name&quot;);</b>
+<i>106</i>&nbsp;        if (name.length() &gt; 0xFFFF) {
+<i>107</i>&nbsp;            throw new IllegalArgumentException(&quot;entry name too long&quot;);
+<i>108</i>&nbsp;        }
+<i>109</i>&nbsp;        this.name = name;
+<i>110</i>&nbsp;    }
+<i>111</i>&nbsp;
+<i>112</i>&nbsp;    /**
+<i>113</i>&nbsp;     * Creates a new zip entry with fields taken from the specified
+<i>114</i>&nbsp;     * zip entry.
+<i>115</i>&nbsp;     *
+<i>116</i>&nbsp;     * @param  e
+<b class="nc"><i>117</i>&nbsp;     *         A zip Entry object</b>
+<b class="nc"><i>118</i>&nbsp;     *</b>
+<b class="nc"><i>119</i>&nbsp;     * @throws NullPointerException if the entry object is null</b>
+<b class="nc"><i>120</i>&nbsp;     */</b>
+<b class="nc"><i>121</i>&nbsp;    public ZipEntry(ZipEntry e) {</b>
+<b class="nc"><i>122</i>&nbsp;        Objects.requireNonNull(e, &quot;entry&quot;);</b>
+<b class="nc"><i>123</i>&nbsp;        name = e.name;</b>
+<b class="nc"><i>124</i>&nbsp;        xdostime = e.xdostime;</b>
+<b class="nc"><i>125</i>&nbsp;        mtime = e.mtime;</b>
+<b class="nc"><i>126</i>&nbsp;        atime = e.atime;</b>
+<b class="nc"><i>127</i>&nbsp;        ctime = e.ctime;</b>
+<b class="nc"><i>128</i>&nbsp;        crc = e.crc;</b>
+<b class="nc"><i>129</i>&nbsp;        size = e.size;</b>
+<b class="nc"><i>130</i>&nbsp;        csize = e.csize;</b>
+<i>131</i>&nbsp;        method = e.method;
+<i>132</i>&nbsp;        flag = e.flag;
+<i>133</i>&nbsp;        extra = e.extra;
+<i>134</i>&nbsp;        comment = e.comment;
+<i>135</i>&nbsp;    }
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;    /**
+<i>138</i>&nbsp;     * Creates a new un-initialized zip entry
+<i>139</i>&nbsp;     */
+<i>140</i>&nbsp;    ZipEntry() {}
+<i>141</i>&nbsp;
+<i>142</i>&nbsp;    /**
+<b class="nc"><i>143</i>&nbsp;     * Returns the name of the entry.</b>
+<i>144</i>&nbsp;     * @return the name of the entry
+<i>145</i>&nbsp;     */
+<i>146</i>&nbsp;    public String getName() {
+<i>147</i>&nbsp;        return name;
+<i>148</i>&nbsp;    }
+<i>149</i>&nbsp;
+<i>150</i>&nbsp;    /**
+<i>151</i>&nbsp;     * Sets the last modification time of the entry.
+<i>152</i>&nbsp;     *
+<i>153</i>&nbsp;     * &lt;p&gt; If the entry is output to a ZIP file or ZIP file formatted
+<i>154</i>&nbsp;     * output stream the last modification time set by this method will
+<i>155</i>&nbsp;     * be stored into the {@code date and time fields} of the zip file
+<i>156</i>&nbsp;     * entry and encoded in standard {@code MS-DOS date and time format}.
+<i>157</i>&nbsp;     * The {@link java.util.TimeZone#getDefault() default TimeZone} is
+<i>158</i>&nbsp;     * used to convert the epoch time to the MS-DOS data and time.
+<i>159</i>&nbsp;     *
+<i>160</i>&nbsp;     * @param  time
+<i>161</i>&nbsp;     *         The last modification time of the entry in milliseconds
+<i>162</i>&nbsp;     *         since the epoch
+<i>163</i>&nbsp;     *
+<b class="nc"><i>164</i>&nbsp;     * @see #getTime()</b>
+<i>165</i>&nbsp;     * @see #getLastModifiedTime()
+<i>166</i>&nbsp;     */
+<b class="nc"><i>167</i>&nbsp;    public void setTime(long time) {</b>
+<b class="nc"><i>168</i>&nbsp;        this.xdostime = javaToExtendedDosTime(time);</b>
+<i>169</i>&nbsp;        // Avoid setting the mtime field if time is in the valid
+<b class="nc"><i>170</i>&nbsp;        // range for a DOS time</b>
+<i>171</i>&nbsp;        if (xdostime != DOSTIME_BEFORE_1980 &amp;&amp; time &lt;= UPPER_DOSTIME_BOUND) {
+<i>172</i>&nbsp;            this.mtime = null;
+<i>173</i>&nbsp;        } else {
+<i>174</i>&nbsp;            this.mtime = FileTime.from(time, TimeUnit.MILLISECONDS);
+<i>175</i>&nbsp;        }
+<i>176</i>&nbsp;    }
+<i>177</i>&nbsp;
+<i>178</i>&nbsp;    /**
+<i>179</i>&nbsp;     * Returns the last modification time of the entry.
+<i>180</i>&nbsp;     *
+<i>181</i>&nbsp;     * &lt;p&gt; If the entry is read from a ZIP file or ZIP file formatted
+<i>182</i>&nbsp;     * input stream, this is the last modification time from the {@code
+<i>183</i>&nbsp;     * date and time fields} of the zip file entry. The
+<i>184</i>&nbsp;     * {@link java.util.TimeZone#getDefault() default TimeZone} is used
+<i>185</i>&nbsp;     * to convert the standard MS-DOS formatted date and time to the
+<i>186</i>&nbsp;     * epoch time.
+<i>187</i>&nbsp;     *
+<i>188</i>&nbsp;     * @return  The last modification time of the entry in milliseconds
+<i>189</i>&nbsp;     *          since the epoch, or -1 if not specified
+<i>190</i>&nbsp;     *
+<b class="nc"><i>191</i>&nbsp;     * @see #setTime(long)</b>
+<b class="nc"><i>192</i>&nbsp;     * @see #setLastModifiedTime(FileTime)</b>
+<i>193</i>&nbsp;     */
+<b class="nc"><i>194</i>&nbsp;    public long getTime() {</b>
+<i>195</i>&nbsp;        if (mtime != null) {
+<i>196</i>&nbsp;            return mtime.toMillis();
+<i>197</i>&nbsp;        }
+<i>198</i>&nbsp;        return (xdostime != -1) ? extendedDosToJavaTime(xdostime) : -1;
+<i>199</i>&nbsp;    }
+<i>200</i>&nbsp;
+<i>201</i>&nbsp;    /**
+<i>202</i>&nbsp;     * Sets the last modification time of the entry in local date-time.
+<i>203</i>&nbsp;     *
+<i>204</i>&nbsp;     * &lt;p&gt; If the entry is output to a ZIP file or ZIP file formatted
+<i>205</i>&nbsp;     * output stream the last modification time set by this method will
+<i>206</i>&nbsp;     * be stored into the {@code date and time fields} of the zip file
+<i>207</i>&nbsp;     * entry and encoded in standard {@code MS-DOS date and time format}.
+<i>208</i>&nbsp;     * If the date-time set is out of the range of the standard {@code
+<i>209</i>&nbsp;     * MS-DOS date and time format}, the time will also be stored into
+<i>210</i>&nbsp;     * zip file entry&#39;s extended timestamp fields in {@code optional
+<i>211</i>&nbsp;     * extra data} in UTC time. The {@link java.time.ZoneId#systemDefault()
+<i>212</i>&nbsp;     * system default TimeZone} is used to convert the local date-time
+<i>213</i>&nbsp;     * to UTC time.
+<i>214</i>&nbsp;     *
+<i>215</i>&nbsp;     * &lt;p&gt; {@code LocalDateTime} uses a precision of nanoseconds, whereas
+<b class="nc"><i>216</i>&nbsp;     * this class uses a precision of milliseconds. The conversion will</b>
+<b class="nc"><i>217</i>&nbsp;     * truncate any excess precision information as though the amount in</b>
+<b class="nc"><i>218</i>&nbsp;     * nanoseconds was subject to integer division by one million.</b>
+<i>219</i>&nbsp;     *
+<i>220</i>&nbsp;     * @param  time
+<i>221</i>&nbsp;     *         The last modification time of the entry in local date-time
+<i>222</i>&nbsp;     *
+<i>223</i>&nbsp;     * @see #getTimeLocal()
+<i>224</i>&nbsp;     * @since 9
+<i>225</i>&nbsp;     */
+<i>226</i>&nbsp;    public void setTimeLocal(LocalDateTime time) {
+<i>227</i>&nbsp;        int year = time.getYear() - 1980;
+<i>228</i>&nbsp;        if (year &lt; 0) {
+<i>229</i>&nbsp;            this.xdostime = DOSTIME_BEFORE_1980;
+<i>230</i>&nbsp;        } else {
+<i>231</i>&nbsp;            this.xdostime = ((year &lt;&lt; 25 |
+<i>232</i>&nbsp;                time.getMonthValue() &lt;&lt; 21 |
+<i>233</i>&nbsp;                time.getDayOfMonth() &lt;&lt; 16 |
+<i>234</i>&nbsp;                time.getHour() &lt;&lt; 11 |
+<i>235</i>&nbsp;                time.getMinute() &lt;&lt; 5 |
+<i>236</i>&nbsp;                time.getSecond() &gt;&gt; 1) &amp; 0xffffffffL)
+<i>237</i>&nbsp;                + ((long)(((time.getSecond() &amp; 0x1) * 1000) +
+<b class="nc"><i>238</i>&nbsp;                      time.getNano() / 1000_000) &lt;&lt; 32);</b>
+<b class="nc"><i>239</i>&nbsp;        }</b>
+<b class="nc"><i>240</i>&nbsp;        if (xdostime != DOSTIME_BEFORE_1980 &amp;&amp; year &lt;= 0x7f) {</b>
+<b class="nc"><i>241</i>&nbsp;            this.mtime = null;</b>
+<b class="nc"><i>242</i>&nbsp;        } else {</b>
+<i>243</i>&nbsp;            this.mtime = FileTime.from(
+<i>244</i>&nbsp;                ZonedDateTime.of(time, ZoneId.systemDefault()).toInstant());
+<i>245</i>&nbsp;        }
+<i>246</i>&nbsp;    }
+<i>247</i>&nbsp;
+<i>248</i>&nbsp;    /**
+<i>249</i>&nbsp;     * Returns the last modification time of the entry in local date-time.
+<i>250</i>&nbsp;     *
+<i>251</i>&nbsp;     * &lt;p&gt; If the entry is read from a ZIP file or ZIP file formatted
+<i>252</i>&nbsp;     * input stream, this is the last modification time from the zip
+<i>253</i>&nbsp;     * file entry&#39;s {@code optional extra data} if the extended timestamp
+<i>254</i>&nbsp;     * fields are present. Otherwise, the last modification time is read
+<i>255</i>&nbsp;     * from entry&#39;s standard MS-DOS formatted {@code date and time fields}.
+<i>256</i>&nbsp;     *
+<i>257</i>&nbsp;     * &lt;p&gt; The {@link java.time.ZoneId#systemDefault() system default TimeZone}
+<i>258</i>&nbsp;     * is used to convert the UTC time to local date-time.
+<i>259</i>&nbsp;     *
+<i>260</i>&nbsp;     * @return  The last modification time of the entry in local date-time
+<i>261</i>&nbsp;     *
+<b class="nc"><i>262</i>&nbsp;     * @see #setTimeLocal(LocalDateTime)</b>
+<b class="nc"><i>263</i>&nbsp;     * @since 9</b>
+<i>264</i>&nbsp;     */
+<i>265</i>&nbsp;    public LocalDateTime getTimeLocal() {
+<i>266</i>&nbsp;        if (mtime != null) {
+<i>267</i>&nbsp;            return LocalDateTime.ofInstant(mtime.toInstant(), ZoneId.systemDefault());
+<i>268</i>&nbsp;        }
+<i>269</i>&nbsp;        int ms = (int)(xdostime &gt;&gt; 32);
+<i>270</i>&nbsp;        return LocalDateTime.of((int)(((xdostime &gt;&gt; 25) &amp; 0x7f) + 1980),
+<i>271</i>&nbsp;                             (int)((xdostime &gt;&gt; 21) &amp; 0x0f),
+<i>272</i>&nbsp;                             (int)((xdostime &gt;&gt; 16) &amp; 0x1f),
+<i>273</i>&nbsp;                             (int)((xdostime &gt;&gt; 11) &amp; 0x1f),
+<i>274</i>&nbsp;                             (int)((xdostime &gt;&gt; 5) &amp; 0x3f),
+<i>275</i>&nbsp;                             (int)((xdostime &lt;&lt; 1) &amp; 0x3e) + ms / 1000,
+<i>276</i>&nbsp;                             (ms % 1000) * 1000_000);
+<i>277</i>&nbsp;    }
+<i>278</i>&nbsp;
+<b class="nc"><i>279</i>&nbsp;</b>
+<i>280</i>&nbsp;    /**
+<i>281</i>&nbsp;     * Sets the last modification time of the entry.
+<i>282</i>&nbsp;     *
+<i>283</i>&nbsp;     * &lt;p&gt; When output to a ZIP file or ZIP file formatted output stream
+<i>284</i>&nbsp;     * the last modification time set by this method will be stored into
+<i>285</i>&nbsp;     * zip file entry&#39;s {@code date and time fields} in {@code standard
+<i>286</i>&nbsp;     * MS-DOS date and time format}), and the extended timestamp fields
+<i>287</i>&nbsp;     * in {@code optional extra data} in UTC time.
+<i>288</i>&nbsp;     *
+<i>289</i>&nbsp;     * @param  time
+<i>290</i>&nbsp;     *         The last modification time of the entry
+<i>291</i>&nbsp;     * @return This zip entry
+<i>292</i>&nbsp;     *
+<i>293</i>&nbsp;     * @throws NullPointerException if the {@code time} is null
+<i>294</i>&nbsp;     *
+<i>295</i>&nbsp;     * @see #getLastModifiedTime()
+<i>296</i>&nbsp;     * @since 1.8
+<i>297</i>&nbsp;     */
+<i>298</i>&nbsp;    public ZipEntry setLastModifiedTime(FileTime time) {
+<b class="nc"><i>299</i>&nbsp;        this.mtime = Objects.requireNonNull(time, &quot;lastModifiedTime&quot;);</b>
+<b class="nc"><i>300</i>&nbsp;        this.xdostime = javaToExtendedDosTime(time.to(TimeUnit.MILLISECONDS));</b>
+<i>301</i>&nbsp;        return this;
+<i>302</i>&nbsp;    }
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;    /**
+<i>305</i>&nbsp;     * Returns the last modification time of the entry.
+<i>306</i>&nbsp;     *
+<i>307</i>&nbsp;     * &lt;p&gt; If the entry is read from a ZIP file or ZIP file formatted
+<i>308</i>&nbsp;     * input stream, this is the last modification time from the zip
+<i>309</i>&nbsp;     * file entry&#39;s {@code optional extra data} if the extended timestamp
+<i>310</i>&nbsp;     * fields are present. Otherwise the last modification time is read
+<i>311</i>&nbsp;     * from the entry&#39;s {@code date and time fields}, the {@link
+<i>312</i>&nbsp;     * java.util.TimeZone#getDefault() default TimeZone} is used to convert
+<i>313</i>&nbsp;     * the standard MS-DOS formatted date and time to the epoch time.
+<i>314</i>&nbsp;     *
+<b class="nc"><i>315</i>&nbsp;     * @return The last modification time of the entry, null if not specified</b>
+<i>316</i>&nbsp;     *
+<i>317</i>&nbsp;     * @see #setLastModifiedTime(FileTime)
+<i>318</i>&nbsp;     * @since 1.8
+<i>319</i>&nbsp;     */
+<i>320</i>&nbsp;    public FileTime getLastModifiedTime() {
+<i>321</i>&nbsp;        if (mtime != null)
+<i>322</i>&nbsp;            return mtime;
+<i>323</i>&nbsp;        if (xdostime == -1)
+<i>324</i>&nbsp;            return null;
+<i>325</i>&nbsp;        return FileTime.from(getTime(), TimeUnit.MILLISECONDS);
+<i>326</i>&nbsp;    }
+<i>327</i>&nbsp;
+<i>328</i>&nbsp;    /**
+<i>329</i>&nbsp;     * Sets the last access time of the entry.
+<b class="nc"><i>330</i>&nbsp;     *</b>
+<b class="nc"><i>331</i>&nbsp;     * &lt;p&gt; If set, the last access time will be stored into the extended</b>
+<i>332</i>&nbsp;     * timestamp fields of entry&#39;s {@code optional extra data}, when output
+<b class="nc"><i>333</i>&nbsp;     * to a ZIP file or ZIP file formatted stream.</b>
+<i>334</i>&nbsp;     *
+<i>335</i>&nbsp;     * @param  time
+<i>336</i>&nbsp;     *         The last access time of the entry
+<i>337</i>&nbsp;     * @return This zip entry
+<i>338</i>&nbsp;     *
+<i>339</i>&nbsp;     * @throws NullPointerException if the {@code time} is null
+<i>340</i>&nbsp;     *
+<i>341</i>&nbsp;     * @see #getLastAccessTime()
+<i>342</i>&nbsp;     * @since 1.8
+<b class="nc"><i>343</i>&nbsp;     */</b>
+<i>344</i>&nbsp;    public ZipEntry setLastAccessTime(FileTime time) {
+<i>345</i>&nbsp;        this.atime = Objects.requireNonNull(time, &quot;lastAccessTime&quot;);
+<i>346</i>&nbsp;        return this;
+<i>347</i>&nbsp;    }
+<i>348</i>&nbsp;
+<i>349</i>&nbsp;    /**
+<i>350</i>&nbsp;     * Returns the last access time of the entry.
+<i>351</i>&nbsp;     *
+<i>352</i>&nbsp;     * &lt;p&gt; The last access time is from the extended timestamp fields
+<i>353</i>&nbsp;     * of entry&#39;s {@code optional extra data} when read from a ZIP file
+<i>354</i>&nbsp;     * or ZIP file formatted stream.
+<i>355</i>&nbsp;     *
+<b class="nc"><i>356</i>&nbsp;     * @return The last access time of the entry, null if not specified</b>
+<i>357</i>&nbsp;     * @see #setLastAccessTime(FileTime)
+<i>358</i>&nbsp;     * @since 1.8
+<i>359</i>&nbsp;     */
+<i>360</i>&nbsp;    public FileTime getLastAccessTime() {
+<i>361</i>&nbsp;        return atime;
+<i>362</i>&nbsp;    }
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;    /**
+<i>365</i>&nbsp;     * Sets the creation time of the entry.
+<i>366</i>&nbsp;     *
+<b class="nc"><i>367</i>&nbsp;     * &lt;p&gt; If set, the creation time will be stored into the extended</b>
+<i>368</i>&nbsp;     * timestamp fields of entry&#39;s {@code optional extra data}, when
+<i>369</i>&nbsp;     * output to a ZIP file or ZIP file formatted stream.
+<i>370</i>&nbsp;     *
+<i>371</i>&nbsp;     * @param  time
+<i>372</i>&nbsp;     *         The creation time of the entry
+<i>373</i>&nbsp;     * @return This zip entry
+<i>374</i>&nbsp;     *
+<i>375</i>&nbsp;     * @throws NullPointerException if the {@code time} is null
+<i>376</i>&nbsp;     *
+<i>377</i>&nbsp;     * @see #getCreationTime()
+<i>378</i>&nbsp;     * @since 1.8
+<i>379</i>&nbsp;     */
+<b class="nc"><i>380</i>&nbsp;    public ZipEntry setCreationTime(FileTime time) {</b>
+<b class="nc"><i>381</i>&nbsp;        this.ctime = Objects.requireNonNull(time, &quot;creationTime&quot;);</b>
+<i>382</i>&nbsp;        return this;
+<b class="nc"><i>383</i>&nbsp;    }</b>
+<i>384</i>&nbsp;
+<i>385</i>&nbsp;    /**
+<i>386</i>&nbsp;     * Returns the creation time of the entry.
+<i>387</i>&nbsp;     *
+<i>388</i>&nbsp;     * &lt;p&gt; The creation time is from the extended timestamp fields of
+<i>389</i>&nbsp;     * entry&#39;s {@code optional extra data} when read from a ZIP file
+<i>390</i>&nbsp;     * or ZIP file formatted stream.
+<i>391</i>&nbsp;     *
+<i>392</i>&nbsp;     * @return the creation time of the entry, null if not specified
+<i>393</i>&nbsp;     * @see #setCreationTime(FileTime)
+<i>394</i>&nbsp;     * @since 1.8
+<b class="nc"><i>395</i>&nbsp;     */</b>
+<i>396</i>&nbsp;    public FileTime getCreationTime() {
+<i>397</i>&nbsp;        return ctime;
+<i>398</i>&nbsp;    }
+<i>399</i>&nbsp;
+<i>400</i>&nbsp;    /**
+<i>401</i>&nbsp;     * Sets the uncompressed size of the entry data.
+<i>402</i>&nbsp;     *
+<i>403</i>&nbsp;     * @param size the uncompressed size in bytes
+<i>404</i>&nbsp;     *
+<i>405</i>&nbsp;     * @throws IllegalArgumentException if the specified size is less
+<i>406</i>&nbsp;     *         than 0, is greater than 0xFFFFFFFF when
+<i>407</i>&nbsp;     *         &lt;a href=&quot;package-summary.html#zip64&quot;&gt;ZIP64 format&lt;/a&gt; is not supported,
+<b class="nc"><i>408</i>&nbsp;     *         or is less than 0 when ZIP64 is supported</b>
+<b class="nc"><i>409</i>&nbsp;     * @see #getSize()</b>
+<i>410</i>&nbsp;     */
+<b class="nc"><i>411</i>&nbsp;    public void setSize(long size) {</b>
+<i>412</i>&nbsp;        if (size &lt; 0) {
+<i>413</i>&nbsp;            throw new IllegalArgumentException(&quot;invalid entry size&quot;);
+<i>414</i>&nbsp;        }
+<i>415</i>&nbsp;        this.size = size;
+<i>416</i>&nbsp;    }
+<i>417</i>&nbsp;
+<i>418</i>&nbsp;    /**
+<i>419</i>&nbsp;     * Returns the uncompressed size of the entry data.
+<i>420</i>&nbsp;     *
+<b class="nc"><i>421</i>&nbsp;     * @return the uncompressed size of the entry data, or -1 if not known</b>
+<i>422</i>&nbsp;     * @see #setSize(long)
+<i>423</i>&nbsp;     */
+<i>424</i>&nbsp;    public long getSize() {
+<i>425</i>&nbsp;        return size;
+<i>426</i>&nbsp;    }
+<i>427</i>&nbsp;
+<i>428</i>&nbsp;    /**
+<i>429</i>&nbsp;     * Returns the size of the compressed entry data.
+<i>430</i>&nbsp;     *
+<i>431</i>&nbsp;     * &lt;p&gt; In the case of a stored entry, the compressed size will be the same
+<i>432</i>&nbsp;     * as the uncompressed size of the entry.
+<i>433</i>&nbsp;     *
+<i>434</i>&nbsp;     * @return the size of the compressed entry data, or -1 if not known
+<i>435</i>&nbsp;     * @see #setCompressedSize(long)
+<i>436</i>&nbsp;     */
+<i>437</i>&nbsp;    public long getCompressedSize() {
+<i>438</i>&nbsp;        return csize;
+<i>439</i>&nbsp;    }
+<i>440</i>&nbsp;
+<i>441</i>&nbsp;    /**
+<i>442</i>&nbsp;     * Sets the size of the compressed entry data.
+<b class="nc"><i>443</i>&nbsp;     *</b>
+<i>444</i>&nbsp;     * @param csize the compressed size to set
+<i>445</i>&nbsp;     *
+<i>446</i>&nbsp;     * @see #getCompressedSize()
+<i>447</i>&nbsp;     */
+<i>448</i>&nbsp;    public void setCompressedSize(long csize) {
+<i>449</i>&nbsp;        this.csize = csize;
+<i>450</i>&nbsp;    }
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;    /**
+<i>453</i>&nbsp;     * Sets the CRC-32 checksum of the uncompressed entry data.
+<i>454</i>&nbsp;     *
+<b class="nc"><i>455</i>&nbsp;     * @param crc the CRC-32 value</b>
+<b class="nc"><i>456</i>&nbsp;     *</b>
+<b class="nc"><i>457</i>&nbsp;     * @throws IllegalArgumentException if the specified CRC-32 value is</b>
+<i>458</i>&nbsp;     *         less than 0 or greater than 0xFFFFFFFF
+<i>459</i>&nbsp;     * @see #getCrc()
+<b class="nc"><i>460</i>&nbsp;     */</b>
+<b class="nc"><i>461</i>&nbsp;    public void setCrc(long crc) {</b>
+<b class="nc"><i>462</i>&nbsp;        if (crc &lt; 0 || crc &gt; 0xFFFFFFFFL) {</b>
+<b class="nc"><i>463</i>&nbsp;            throw new IllegalArgumentException(&quot;invalid entry crc-32&quot;);</b>
+<b class="nc"><i>464</i>&nbsp;        }</b>
+<b class="nc"><i>465</i>&nbsp;        this.crc = crc;</b>
+<b class="nc"><i>466</i>&nbsp;    }</b>
+<b class="nc"><i>467</i>&nbsp;</b>
+<b class="nc"><i>468</i>&nbsp;    /**</b>
+<i>469</i>&nbsp;     * Returns the CRC-32 checksum of the uncompressed entry data.
+<b class="nc"><i>470</i>&nbsp;     *</b>
+<i>471</i>&nbsp;     * @return the CRC-32 checksum of the uncompressed entry data, or -1 if
+<i>472</i>&nbsp;     * not known
+<i>473</i>&nbsp;     *
+<i>474</i>&nbsp;     * @see #setCrc(long)
+<i>475</i>&nbsp;     */
+<i>476</i>&nbsp;    public long getCrc() {
+<b class="nc"><i>477</i>&nbsp;        return crc;</b>
+<b class="nc"><i>478</i>&nbsp;    }</b>
+<b class="nc"><i>479</i>&nbsp;</b>
+<i>480</i>&nbsp;    /**
+<i>481</i>&nbsp;     * Sets the compression method for the entry.
+<i>482</i>&nbsp;     *
+<i>483</i>&nbsp;     * @param method the compression method, either STORED or DEFLATED
+<b class="nc"><i>484</i>&nbsp;     *</b>
+<b class="nc"><i>485</i>&nbsp;     * @throws  IllegalArgumentException if the specified compression</b>
+<b class="nc"><i>486</i>&nbsp;     *          method is invalid</b>
+<b class="nc"><i>487</i>&nbsp;     * @see #getMethod()</b>
+<b class="nc"><i>488</i>&nbsp;     */</b>
+<b class="nc"><i>489</i>&nbsp;    public void setMethod(int method) {</b>
+<b class="nc"><i>490</i>&nbsp;        if (method != STORED &amp;&amp; method != DEFLATED) {</b>
+<b class="nc"><i>491</i>&nbsp;            throw new IllegalArgumentException(&quot;invalid compression method&quot;);</b>
+<b class="nc"><i>492</i>&nbsp;        }</b>
+<i>493</i>&nbsp;        this.method = method;
+<b class="nc"><i>494</i>&nbsp;    }</b>
+<b class="nc"><i>495</i>&nbsp;</b>
+<i>496</i>&nbsp;    /**
+<i>497</i>&nbsp;     * Returns the compression method of the entry.
+<i>498</i>&nbsp;     *
+<i>499</i>&nbsp;     * @return the compression method of the entry, or -1 if not specified
+<b class="nc"><i>500</i>&nbsp;     * @see #setMethod(int)</b>
+<b class="nc"><i>501</i>&nbsp;     */</b>
+<b class="nc"><i>502</i>&nbsp;    public int getMethod() {</b>
+<i>503</i>&nbsp;        return method;
+<b class="nc"><i>504</i>&nbsp;    }</b>
+<b class="nc"><i>505</i>&nbsp;</b>
+<b class="nc"><i>506</i>&nbsp;    /**</b>
+<i>507</i>&nbsp;     * Sets the optional extra field data for the entry.
+<b class="nc"><i>508</i>&nbsp;     *</b>
+<b class="nc"><i>509</i>&nbsp;     * &lt;p&gt; Invoking this method may change this entry&#39;s last modification</b>
+<b class="nc"><i>510</i>&nbsp;     * time, last access time and creation time, if the {@code extra} field</b>
+<i>511</i>&nbsp;     * data includes the extensible timestamp fields, such as {@code NTFS tag
+<i>512</i>&nbsp;     * 0x0001} or {@code Info-ZIP Extended Timestamp}, as specified in
+<i>513</i>&nbsp;     * &lt;a href=&quot;http://www.info-zip.org/doc/appnote-19970311-iz.zip&quot;&gt;Info-ZIP
+<i>514</i>&nbsp;     * Application Note 970311&lt;/a&gt;.
+<b class="nc"><i>515</i>&nbsp;     *</b>
+<b class="nc"><i>516</i>&nbsp;     * @param  extra</b>
+<i>517</i>&nbsp;     *         The extra field data bytes
+<b class="nc"><i>518</i>&nbsp;     *</b>
+<i>519</i>&nbsp;     * @throws IllegalArgumentException if the length of the specified
+<i>520</i>&nbsp;     *         extra field data is greater than 0xFFFF bytes
+<i>521</i>&nbsp;     *
+<i>522</i>&nbsp;     * @see #getExtra()
+<i>523</i>&nbsp;     */
+<i>524</i>&nbsp;    public void setExtra(byte[] extra) {
+<i>525</i>&nbsp;        setExtra0(extra, false);
+<i>526</i>&nbsp;    }
+<i>527</i>&nbsp;
+<i>528</i>&nbsp;    /**
+<b class="nc"><i>529</i>&nbsp;     * Sets the optional extra field data for the entry.</b>
+<i>530</i>&nbsp;     *
+<i>531</i>&nbsp;     * @param extra
+<i>532</i>&nbsp;     *        the extra field data bytes
+<i>533</i>&nbsp;     * @param doZIP64
+<i>534</i>&nbsp;     *        if true, set size and csize from ZIP64 fields if present
+<i>535</i>&nbsp;     */
+<i>536</i>&nbsp;    void setExtra0(byte[] extra, boolean doZIP64) {
+<i>537</i>&nbsp;        if (extra != null) {
+<i>538</i>&nbsp;            if (extra.length &gt; 0xFFFF) {
+<i>539</i>&nbsp;                throw new IllegalArgumentException(&quot;invalid extra field length&quot;);
+<i>540</i>&nbsp;            }
+<i>541</i>&nbsp;            // extra fields are in &quot;HeaderID(2)DataSize(2)Data... format
+<i>542</i>&nbsp;            int off = 0;
+<i>543</i>&nbsp;            int len = extra.length;
+<b class="nc"><i>544</i>&nbsp;            while (off + 4 &lt; len) {</b>
+<i>545</i>&nbsp;                int tag = get16(extra, off);
+<i>546</i>&nbsp;                int sz = get16(extra, off + 2);
+<i>547</i>&nbsp;                off += 4;
+<i>548</i>&nbsp;                if (off + sz &gt; len)         // invalid data
+<i>549</i>&nbsp;                    break;
+<i>550</i>&nbsp;                switch (tag) {
+<i>551</i>&nbsp;                case EXTID_ZIP64:
+<i>552</i>&nbsp;                    if (doZIP64) {
+<i>553</i>&nbsp;                        // LOC extra zip64 entry MUST include BOTH original
+<i>554</i>&nbsp;                        // and compressed file size fields.
+<b class="nc"><i>555</i>&nbsp;                        // If invalid zip64 extra fields, simply skip. Even</b>
+<i>556</i>&nbsp;                        // it&#39;s rare, it&#39;s possible the entry size happens to
+<i>557</i>&nbsp;                        // be the magic value and it &quot;accidently&quot; has some
+<i>558</i>&nbsp;                        // bytes in extra match the id.
+<i>559</i>&nbsp;                        if (sz &gt;= 16) {
+<i>560</i>&nbsp;                            size = get64(extra, off);
+<i>561</i>&nbsp;                            csize = get64(extra, off + 8);
+<i>562</i>&nbsp;                        }
+<i>563</i>&nbsp;                    }
+<b class="nc"><i>564</i>&nbsp;                    break;</b>
+<i>565</i>&nbsp;                case EXTID_NTFS:
+<i>566</i>&nbsp;                    if (sz &lt; 32) // reserved  4 bytes + tag 2 bytes + size 2 bytes
+<i>567</i>&nbsp;                        break;   // m[a|c]time 24 bytes
+<i>568</i>&nbsp;                    int pos = off + 4;               // reserved 4 bytes
+<i>569</i>&nbsp;                    if (get16(extra, pos) !=  0x0001 || get16(extra, pos + 2) != 24)
+<i>570</i>&nbsp;                        break;
+<b class="nc"><i>571</i>&nbsp;                    long wtime = get64(extra, pos + 4);</b>
+<i>572</i>&nbsp;                    if (wtime != WINDOWS_TIME_NOT_AVAILABLE) {
+<i>573</i>&nbsp;                        mtime = winTimeToFileTime(wtime);
+<i>574</i>&nbsp;                    }
+<i>575</i>&nbsp;                    wtime = get64(extra, pos + 12);
+<i>576</i>&nbsp;                    if (wtime != WINDOWS_TIME_NOT_AVAILABLE) {
+<i>577</i>&nbsp;                        atime = winTimeToFileTime(wtime);
+<b class="nc"><i>578</i>&nbsp;                    }</b>
+<i>579</i>&nbsp;                    wtime = get64(extra, pos + 20);
+<i>580</i>&nbsp;                    if (wtime != WINDOWS_TIME_NOT_AVAILABLE) {
+<i>581</i>&nbsp;                        ctime = winTimeToFileTime(wtime);
+<i>582</i>&nbsp;                    }
+<i>583</i>&nbsp;                    break;
+<i>584</i>&nbsp;                case EXTID_EXTT:
+<i>585</i>&nbsp;                    int flag = Byte.toUnsignedInt(extra[off]);
+<b class="nc"><i>586</i>&nbsp;                    int sz0 = 1;</b>
+<b class="nc"><i>587</i>&nbsp;                    // The CEN-header extra field contains the modification</b>
+<b class="nc"><i>588</i>&nbsp;                    // time only, or no timestamp at all. &#39;sz&#39; is used to</b>
+<b class="nc"><i>589</i>&nbsp;                    // flag its presence or absence. But if mtime is present</b>
+<i>590</i>&nbsp;                    // in LOC it must be present in CEN as well.
+<b class="nc"><i>591</i>&nbsp;                    if ((flag &amp; 0x1) != 0 &amp;&amp; (sz0 + 4) &lt;= sz) {</b>
+<i>592</i>&nbsp;                        mtime = unixTimeToFileTime(get32S(extra, off + sz0));
+<i>593</i>&nbsp;                        sz0 += 4;
+<i>594</i>&nbsp;                    }
+<i>595</i>&nbsp;                    if ((flag &amp; 0x2) != 0 &amp;&amp; (sz0 + 4) &lt;= sz) {
+<i>596</i>&nbsp;                        atime = unixTimeToFileTime(get32S(extra, off + sz0));
+<i>597</i>&nbsp;                        sz0 += 4;
+<i>598</i>&nbsp;                    }
+<i>599</i>&nbsp;                    if ((flag &amp; 0x4) != 0 &amp;&amp; (sz0 + 4) &lt;= sz) {
+<i>600</i>&nbsp;                        ctime = unixTimeToFileTime(get32S(extra, off + sz0));
+<i>601</i>&nbsp;                        sz0 += 4;
+<i>602</i>&nbsp;                    }
+<i>603</i>&nbsp;                    break;
+<i>604</i>&nbsp;                 default:
+<i>605</i>&nbsp;                }
+<i>606</i>&nbsp;                off += sz;
+<i>607</i>&nbsp;            }
+<i>608</i>&nbsp;        }
+<i>609</i>&nbsp;        this.extra = extra;
+<i>610</i>&nbsp;    }
+<i>611</i>&nbsp;
+<i>612</i>&nbsp;    /**
+<i>613</i>&nbsp;     * Returns the extra field data for the entry.
+<i>614</i>&nbsp;     *
+<i>615</i>&nbsp;     * @return the extra field data for the entry, or null if none
+<i>616</i>&nbsp;     *
+<i>617</i>&nbsp;     * @see #setExtra(byte[])
+<i>618</i>&nbsp;     */
+<i>619</i>&nbsp;    public byte[] getExtra() {
+<i>620</i>&nbsp;        return extra;
+<i>621</i>&nbsp;    }
+<i>622</i>&nbsp;
+<i>623</i>&nbsp;    /**
+<i>624</i>&nbsp;     * Sets the optional comment string for the entry.
+<i>625</i>&nbsp;     *
+<i>626</i>&nbsp;     * &lt;p&gt;ZIP entry comments have maximum length of 0xffff. If the length of the
+<i>627</i>&nbsp;     * specified comment string is greater than 0xFFFF bytes after encoding, only
+<i>628</i>&nbsp;     * the first 0xFFFF bytes are output to the ZIP file entry.
+<i>629</i>&nbsp;     *
+<i>630</i>&nbsp;     * @param comment the comment string
+<i>631</i>&nbsp;     *
+<i>632</i>&nbsp;     * @see #getComment()
+<i>633</i>&nbsp;     */
+<i>634</i>&nbsp;    public void setComment(String comment) {
+<i>635</i>&nbsp;        this.comment = comment;
+<i>636</i>&nbsp;    }
+<i>637</i>&nbsp;
+<i>638</i>&nbsp;    /**
+<i>639</i>&nbsp;     * Returns the comment string for the entry.
+<i>640</i>&nbsp;     *
+<i>641</i>&nbsp;     * @return the comment string for the entry, or null if none
+<i>642</i>&nbsp;     *
+<i>643</i>&nbsp;     * @see #setComment(String)
+<i>644</i>&nbsp;     */
+<i>645</i>&nbsp;    public String getComment() {
+<i>646</i>&nbsp;        return comment;
+<i>647</i>&nbsp;    }
+<i>648</i>&nbsp;
+<i>649</i>&nbsp;    /**
+<i>650</i>&nbsp;     * Returns true if this is a directory entry. A directory entry is
+<i>651</i>&nbsp;     * defined to be one whose name ends with a &#39;/&#39;.
+<i>652</i>&nbsp;     * @return true if this is a directory entry
+<i>653</i>&nbsp;     */
+<i>654</i>&nbsp;    public boolean isDirectory() {
+<i>655</i>&nbsp;        return name.endsWith(&quot;/&quot;);
+<i>656</i>&nbsp;    }
+<i>657</i>&nbsp;
+<i>658</i>&nbsp;    /**
+<i>659</i>&nbsp;     * Returns a string representation of the ZIP entry.
+<i>660</i>&nbsp;     */
+<i>661</i>&nbsp;    public String toString() {
+<i>662</i>&nbsp;        return getName();
+<i>663</i>&nbsp;    }
+<i>664</i>&nbsp;
+<i>665</i>&nbsp;    /**
+<i>666</i>&nbsp;     * Returns the hash code value for this entry.
+<i>667</i>&nbsp;     */
+<i>668</i>&nbsp;    public int hashCode() {
+<i>669</i>&nbsp;        return name.hashCode();
+<i>670</i>&nbsp;    }
+<i>671</i>&nbsp;
+<i>672</i>&nbsp;    /**
+<i>673</i>&nbsp;     * Returns a copy of this entry.
+<i>674</i>&nbsp;     */
+<i>675</i>&nbsp;    public Object clone() {
+<i>676</i>&nbsp;        try {
+<i>677</i>&nbsp;            ZipEntry e = (ZipEntry)super.clone();
+<i>678</i>&nbsp;            e.extra = (extra == null) ? null : extra.clone();
+<i>679</i>&nbsp;            return e;
+<i>680</i>&nbsp;        } catch (CloneNotSupportedException e) {
+<i>681</i>&nbsp;            // This should never happen, since we are Cloneable
+<i>682</i>&nbsp;            throw new InternalError(e);
+<i>683</i>&nbsp;        }
+<i>684</i>&nbsp;    }
+<i>685</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:10</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,588 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: RSAPadding</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.rsa</a> ]
+</div>
+
+<h1>Coverage Summary for Class: RSAPadding (sun.security.rsa)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">RSAPadding</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 16)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 182)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2003, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.rsa;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.*;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;import java.security.*;
+<i>31</i>&nbsp;import java.security.spec.*;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;import javax.crypto.BadPaddingException;
+<i>34</i>&nbsp;import javax.crypto.spec.PSource;
+<i>35</i>&nbsp;import javax.crypto.spec.OAEPParameterSpec;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;import sun.security.jca.JCAUtil;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp; * RSA padding and unpadding.
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * The various PKCS#1 versions can be found in the IETF RFCs
+<i>43</i>&nbsp; * tracking the corresponding PKCS#1 standards.
+<i>44</i>&nbsp; *
+<i>45</i>&nbsp; *     RFC 2313: PKCS#1 v1.5
+<i>46</i>&nbsp; *     RFC 2437: PKCS#1 v2.0
+<i>47</i>&nbsp; *     RFC 3447: PKCS#1 v2.1
+<i>48</i>&nbsp; *     RFC 8017: PKCS#1 v2.2
+<i>49</i>&nbsp; *
+<i>50</i>&nbsp; * The format of PKCS#1 v1.5 padding is:
+<i>51</i>&nbsp; *
+<i>52</i>&nbsp; *   0x00 | BT | PS...PS | 0x00 | data...data
+<i>53</i>&nbsp; *
+<i>54</i>&nbsp; * where BT is the blocktype (1 or 2). The length of the entire string
+<i>55</i>&nbsp; * must be the same as the size of the modulus (i.e. 128 byte for a 1024 bit
+<i>56</i>&nbsp; * key). Per spec, the padding string must be at least 8 bytes long. That
+<i>57</i>&nbsp; * leaves up to (length of key in bytes) - 11 bytes for the data.
+<i>58</i>&nbsp; *
+<i>59</i>&nbsp; * OAEP padding was introduced in PKCS#1 v2.0 and is a bit more complicated
+<i>60</i>&nbsp; * and has a number of options. We support:
+<i>61</i>&nbsp; *
+<i>62</i>&nbsp; *   . arbitrary hash functions (&#39;Hash&#39; in the specification), MessageDigest
+<i>63</i>&nbsp; *     implementation must be available
+<i>64</i>&nbsp; *   . MGF1 as the mask generation function
+<i>65</i>&nbsp; *   . the empty string as the default value for label L and whatever
+<i>66</i>&nbsp; *     specified in javax.crypto.spec.OAEPParameterSpec
+<i>67</i>&nbsp; *
+<i>68</i>&nbsp; * The algorithms (representations) are forwards-compatible: that is,
+<i>69</i>&nbsp; * the algorithm described in previous releases are in later releases.
+<i>70</i>&nbsp; * However, additional comments/checks/clarifications were added to the
+<i>71</i>&nbsp; * later versions based on real-world experience (e.g. stricter v1.5
+<i>72</i>&nbsp; * format checking.)
+<i>73</i>&nbsp; *
+<i>74</i>&nbsp; * Note: RSA keys should be at least 512 bits long
+<i>75</i>&nbsp; *
+<i>76</i>&nbsp; * @since   1.5
+<i>77</i>&nbsp; * @author  Andreas Sterbenz
+<i>78</i>&nbsp; */
+<i>79</i>&nbsp;public final class RSAPadding {
+<i>80</i>&nbsp;
+<i>81</i>&nbsp;    // NOTE: the constants below are embedded in the JCE RSACipher class
+<i>82</i>&nbsp;    // file. Do not change without coordinating the update
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    // PKCS#1 v1.5 padding, blocktype 1 (signing)
+<i>85</i>&nbsp;    public static final int PAD_BLOCKTYPE_1    = 1;
+<i>86</i>&nbsp;    // PKCS#1 v1.5 padding, blocktype 2 (encryption)
+<i>87</i>&nbsp;    public static final int PAD_BLOCKTYPE_2    = 2;
+<i>88</i>&nbsp;    // nopadding. Does not do anything, but allows simpler RSACipher code
+<i>89</i>&nbsp;    public static final int PAD_NONE           = 3;
+<i>90</i>&nbsp;    // PKCS#1 v2.1 OAEP padding
+<i>91</i>&nbsp;    public static final int PAD_OAEP_MGF1 = 4;
+<i>92</i>&nbsp;
+<i>93</i>&nbsp;    // type, one of PAD_*
+<i>94</i>&nbsp;    private final int type;
+<i>95</i>&nbsp;
+<i>96</i>&nbsp;    // size of the padded block (i.e. size of the modulus)
+<i>97</i>&nbsp;    private final int paddedSize;
+<i>98</i>&nbsp;
+<i>99</i>&nbsp;    // PRNG used to generate padding bytes (PAD_BLOCKTYPE_2, PAD_OAEP_MGF1)
+<i>100</i>&nbsp;    private SecureRandom random;
+<i>101</i>&nbsp;
+<i>102</i>&nbsp;    // maximum size of the data
+<i>103</i>&nbsp;    private final int maxDataSize;
+<i>104</i>&nbsp;
+<i>105</i>&nbsp;    // OAEP: main message digest
+<i>106</i>&nbsp;    private MessageDigest md;
+<i>107</i>&nbsp;
+<i>108</i>&nbsp;    // OAEP: MGF1
+<i>109</i>&nbsp;    private MGF1 mgf;
+<i>110</i>&nbsp;
+<i>111</i>&nbsp;    // OAEP: value of digest of data (user-supplied or zero-length) using md
+<i>112</i>&nbsp;    private byte[] lHash;
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    /**
+<i>115</i>&nbsp;     * Get a RSAPadding instance of the specified type.
+<i>116</i>&nbsp;     * Keys used with this padding must be paddedSize bytes long.
+<i>117</i>&nbsp;     */
+<i>118</i>&nbsp;    public static RSAPadding getInstance(int type, int paddedSize)
+<i>119</i>&nbsp;            throws InvalidKeyException, InvalidAlgorithmParameterException {
+<i>120</i>&nbsp;        return new RSAPadding(type, paddedSize, null, null);
+<i>121</i>&nbsp;    }
+<i>122</i>&nbsp;
+<b class="nc"><i>123</i>&nbsp;    /**</b>
+<i>124</i>&nbsp;     * Get a RSAPadding instance of the specified type.
+<i>125</i>&nbsp;     * Keys used with this padding must be paddedSize bytes long.
+<i>126</i>&nbsp;     */
+<i>127</i>&nbsp;    public static RSAPadding getInstance(int type, int paddedSize,
+<i>128</i>&nbsp;            SecureRandom random) throws InvalidKeyException,
+<i>129</i>&nbsp;            InvalidAlgorithmParameterException {
+<i>130</i>&nbsp;        return new RSAPadding(type, paddedSize, random, null);
+<i>131</i>&nbsp;    }
+<i>132</i>&nbsp;
+<b class="nc"><i>133</i>&nbsp;    /**</b>
+<i>134</i>&nbsp;     * Get a RSAPadding instance of the specified type, which must be
+<i>135</i>&nbsp;     * OAEP. Keys used with this padding must be paddedSize bytes long.
+<i>136</i>&nbsp;     */
+<i>137</i>&nbsp;    public static RSAPadding getInstance(int type, int paddedSize,
+<i>138</i>&nbsp;            SecureRandom random, OAEPParameterSpec spec)
+<i>139</i>&nbsp;        throws InvalidKeyException, InvalidAlgorithmParameterException {
+<i>140</i>&nbsp;        return new RSAPadding(type, paddedSize, random, spec);
+<i>141</i>&nbsp;    }
+<i>142</i>&nbsp;
+<b class="nc"><i>143</i>&nbsp;    // internal constructor</b>
+<i>144</i>&nbsp;    private RSAPadding(int type, int paddedSize, SecureRandom random,
+<i>145</i>&nbsp;            OAEPParameterSpec spec) throws InvalidKeyException,
+<i>146</i>&nbsp;            InvalidAlgorithmParameterException {
+<i>147</i>&nbsp;        this.type = type;
+<i>148</i>&nbsp;        this.paddedSize = paddedSize;
+<b class="nc"><i>149</i>&nbsp;        this.random = random;</b>
+<b class="nc"><i>150</i>&nbsp;        if (paddedSize &lt; 64) {</b>
+<b class="nc"><i>151</i>&nbsp;            // sanity check, already verified in RSASignature/RSACipher</b>
+<b class="nc"><i>152</i>&nbsp;            throw new InvalidKeyException(&quot;Padded size must be at least 64&quot;);</b>
+<b class="nc"><i>153</i>&nbsp;        }</b>
+<i>154</i>&nbsp;        switch (type) {
+<b class="nc"><i>155</i>&nbsp;        case PAD_BLOCKTYPE_1:</b>
+<i>156</i>&nbsp;        case PAD_BLOCKTYPE_2:
+<b class="nc"><i>157</i>&nbsp;            maxDataSize = paddedSize - 11;</b>
+<i>158</i>&nbsp;            break;
+<i>159</i>&nbsp;        case PAD_NONE:
+<b class="nc"><i>160</i>&nbsp;            maxDataSize = paddedSize;</b>
+<b class="nc"><i>161</i>&nbsp;            break;</b>
+<i>162</i>&nbsp;        case PAD_OAEP_MGF1:
+<b class="nc"><i>163</i>&nbsp;            String mdName = &quot;SHA-1&quot;;</b>
+<b class="nc"><i>164</i>&nbsp;            String mgfMdName = mdName;</b>
+<i>165</i>&nbsp;            byte[] digestInput = null;
+<b class="nc"><i>166</i>&nbsp;            try {</b>
+<b class="nc"><i>167</i>&nbsp;                if (spec != null) {</b>
+<b class="nc"><i>168</i>&nbsp;                    mdName = spec.getDigestAlgorithm();</b>
+<i>169</i>&nbsp;                    String mgfName = spec.getMGFAlgorithm();
+<b class="nc"><i>170</i>&nbsp;                    if (!mgfName.equalsIgnoreCase(&quot;MGF1&quot;)) {</b>
+<b class="nc"><i>171</i>&nbsp;                        throw new InvalidAlgorithmParameterException</b>
+<b class="nc"><i>172</i>&nbsp;                            (&quot;Unsupported MGF algo: &quot; + mgfName);</b>
+<b class="nc"><i>173</i>&nbsp;                    }</b>
+<b class="nc"><i>174</i>&nbsp;                    mgfMdName = ((MGF1ParameterSpec)spec.getMGFParameters())</b>
+<i>175</i>&nbsp;                            .getDigestAlgorithm();
+<i>176</i>&nbsp;                    PSource pSrc = spec.getPSource();
+<b class="nc"><i>177</i>&nbsp;                    String pSrcAlgo = pSrc.getAlgorithm();</b>
+<b class="nc"><i>178</i>&nbsp;                    if (!pSrcAlgo.equalsIgnoreCase(&quot;PSpecified&quot;)) {</b>
+<b class="nc"><i>179</i>&nbsp;                        throw new InvalidAlgorithmParameterException</b>
+<b class="nc"><i>180</i>&nbsp;                            (&quot;Unsupported pSource algo: &quot; + pSrcAlgo);</b>
+<b class="nc"><i>181</i>&nbsp;                    }</b>
+<b class="nc"><i>182</i>&nbsp;                    digestInput = ((PSource.PSpecified) pSrc).getValue();</b>
+<i>183</i>&nbsp;                }
+<i>184</i>&nbsp;                md = MessageDigest.getInstance(mdName);
+<b class="nc"><i>185</i>&nbsp;                mgf = new MGF1(mgfMdName);</b>
+<i>186</i>&nbsp;            } catch (NoSuchAlgorithmException e) {
+<b class="nc"><i>187</i>&nbsp;                throw new InvalidKeyException(&quot;Digest not available&quot;, e);</b>
+<b class="nc"><i>188</i>&nbsp;            }</b>
+<b class="nc"><i>189</i>&nbsp;            lHash = getInitialHash(md, digestInput);</b>
+<b class="nc"><i>190</i>&nbsp;            int digestLen = lHash.length;</b>
+<i>191</i>&nbsp;            maxDataSize = paddedSize - 2 - 2 * digestLen;
+<b class="nc"><i>192</i>&nbsp;            if (maxDataSize &lt;= 0) {</b>
+<b class="nc"><i>193</i>&nbsp;                throw new InvalidKeyException</b>
+<b class="nc"><i>194</i>&nbsp;                        (&quot;Key is too short for encryption using OAEPPadding&quot; +</b>
+<b class="nc"><i>195</i>&nbsp;                         &quot; with &quot; + mdName + &quot; and &quot; + mgf.getName());</b>
+<b class="nc"><i>196</i>&nbsp;            }</b>
+<b class="nc"><i>197</i>&nbsp;            break;</b>
+<i>198</i>&nbsp;        default:
+<i>199</i>&nbsp;            throw new InvalidKeyException(&quot;Invalid padding: &quot; + type);
+<i>200</i>&nbsp;        }
+<i>201</i>&nbsp;    }
+<i>202</i>&nbsp;
+<b class="nc"><i>203</i>&nbsp;    // cache of hashes of zero length data</b>
+<i>204</i>&nbsp;    private static final Map&lt;String,byte[]&gt; emptyHashes =
+<i>205</i>&nbsp;        Collections.synchronizedMap(new HashMap&lt;String,byte[]&gt;());
+<i>206</i>&nbsp;
+<i>207</i>&nbsp;    /**
+<i>208</i>&nbsp;     * Return the value of the digest using the specified message digest
+<b class="nc"><i>209</i>&nbsp;     * &lt;code&gt;md&lt;/code&gt; and the digest input &lt;code&gt;digestInput&lt;/code&gt;.</b>
+<i>210</i>&nbsp;     * if &lt;code&gt;digestInput&lt;/code&gt; is null or 0-length, zero length
+<i>211</i>&nbsp;     * is used to generate the initial digest.
+<i>212</i>&nbsp;     * Note: the md object must be in reset state
+<i>213</i>&nbsp;     */
+<i>214</i>&nbsp;    private static byte[] getInitialHash(MessageDigest md,
+<i>215</i>&nbsp;        byte[] digestInput) {
+<i>216</i>&nbsp;        byte[] result;
+<i>217</i>&nbsp;        if ((digestInput == null) || (digestInput.length == 0)) {
+<i>218</i>&nbsp;            String digestName = md.getAlgorithm();
+<i>219</i>&nbsp;            result = emptyHashes.get(digestName);
+<i>220</i>&nbsp;            if (result == null) {
+<b class="nc"><i>221</i>&nbsp;                result = md.digest();</b>
+<b class="nc"><i>222</i>&nbsp;                emptyHashes.put(digestName, result);</b>
+<b class="nc"><i>223</i>&nbsp;            }</b>
+<b class="nc"><i>224</i>&nbsp;        } else {</b>
+<b class="nc"><i>225</i>&nbsp;            result = md.digest(digestInput);</b>
+<b class="nc"><i>226</i>&nbsp;        }</b>
+<i>227</i>&nbsp;        return result;
+<b class="nc"><i>228</i>&nbsp;    }</b>
+<b class="nc"><i>229</i>&nbsp;</b>
+<i>230</i>&nbsp;    /**
+<b class="nc"><i>231</i>&nbsp;     * Return the maximum size of the plaintext data that can be processed</b>
+<i>232</i>&nbsp;     * using this object.
+<i>233</i>&nbsp;     */
+<i>234</i>&nbsp;    public int getMaxDataSize() {
+<i>235</i>&nbsp;        return maxDataSize;
+<i>236</i>&nbsp;    }
+<i>237</i>&nbsp;
+<i>238</i>&nbsp;    /**
+<b class="nc"><i>239</i>&nbsp;     * Pad the data and return the padded block.</b>
+<i>240</i>&nbsp;     */
+<i>241</i>&nbsp;    public byte[] pad(byte[] data, int ofs, int len)
+<i>242</i>&nbsp;            throws BadPaddingException {
+<i>243</i>&nbsp;        return pad(RSACore.convert(data, ofs, len));
+<i>244</i>&nbsp;    }
+<i>245</i>&nbsp;
+<i>246</i>&nbsp;    /**
+<b class="nc"><i>247</i>&nbsp;     * Pad the data and return the padded block.</b>
+<i>248</i>&nbsp;     */
+<i>249</i>&nbsp;    public byte[] pad(byte[] data) throws BadPaddingException {
+<i>250</i>&nbsp;        if (data.length &gt; maxDataSize) {
+<i>251</i>&nbsp;            throw new BadPaddingException(&quot;Data must be shorter than &quot;
+<i>252</i>&nbsp;                + (maxDataSize + 1) + &quot; bytes but received &quot;
+<i>253</i>&nbsp;                + data.length + &quot; bytes.&quot;);
+<b class="nc"><i>254</i>&nbsp;        }</b>
+<b class="nc"><i>255</i>&nbsp;        switch (type) {</b>
+<i>256</i>&nbsp;        case PAD_NONE:
+<i>257</i>&nbsp;            return data;
+<b class="nc"><i>258</i>&nbsp;        case PAD_BLOCKTYPE_1:</b>
+<i>259</i>&nbsp;        case PAD_BLOCKTYPE_2:
+<b class="nc"><i>260</i>&nbsp;            return padV15(data);</b>
+<i>261</i>&nbsp;        case PAD_OAEP_MGF1:
+<i>262</i>&nbsp;            return padOAEP(data);
+<b class="nc"><i>263</i>&nbsp;        default:</b>
+<i>264</i>&nbsp;            throw new AssertionError();
+<b class="nc"><i>265</i>&nbsp;        }</b>
+<i>266</i>&nbsp;    }
+<b class="nc"><i>267</i>&nbsp;</b>
+<i>268</i>&nbsp;    /**
+<i>269</i>&nbsp;     * Unpad the padded block and return the data.
+<i>270</i>&nbsp;     */
+<i>271</i>&nbsp;    public byte[] unpad(byte[] padded, int ofs, int len)
+<i>272</i>&nbsp;            throws BadPaddingException {
+<i>273</i>&nbsp;        return unpad(RSACore.convert(padded, ofs, len));
+<i>274</i>&nbsp;    }
+<i>275</i>&nbsp;
+<b class="nc"><i>276</i>&nbsp;    /**</b>
+<i>277</i>&nbsp;     * Unpad the padded block and return the data.
+<i>278</i>&nbsp;     */
+<i>279</i>&nbsp;    public byte[] unpad(byte[] padded) throws BadPaddingException {
+<i>280</i>&nbsp;        if (padded.length != paddedSize) {
+<i>281</i>&nbsp;            throw new BadPaddingException(&quot;Decryption error.&quot; +
+<i>282</i>&nbsp;                &quot;The padded array length (&quot; + padded.length +
+<b class="nc"><i>283</i>&nbsp;                &quot;) is not the specified padded size (&quot; + paddedSize + &quot;)&quot;);</b>
+<b class="nc"><i>284</i>&nbsp;        }</b>
+<i>285</i>&nbsp;        switch (type) {
+<b class="nc"><i>286</i>&nbsp;        case PAD_NONE:</b>
+<i>287</i>&nbsp;            return padded;
+<b class="nc"><i>288</i>&nbsp;        case PAD_BLOCKTYPE_1:</b>
+<i>289</i>&nbsp;        case PAD_BLOCKTYPE_2:
+<i>290</i>&nbsp;            return unpadV15(padded);
+<b class="nc"><i>291</i>&nbsp;        case PAD_OAEP_MGF1:</b>
+<i>292</i>&nbsp;            return unpadOAEP(padded);
+<b class="nc"><i>293</i>&nbsp;        default:</b>
+<i>294</i>&nbsp;            throw new AssertionError();
+<b class="nc"><i>295</i>&nbsp;        }</b>
+<i>296</i>&nbsp;    }
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;    /**
+<i>299</i>&nbsp;     * PKCS#1 v1.5 padding (blocktype 1 and 2).
+<i>300</i>&nbsp;     */
+<i>301</i>&nbsp;    private byte[] padV15(byte[] data) throws BadPaddingException {
+<i>302</i>&nbsp;        byte[] padded = new byte[paddedSize];
+<b class="nc"><i>303</i>&nbsp;        System.arraycopy(data, 0, padded, paddedSize - data.length,</b>
+<b class="nc"><i>304</i>&nbsp;            data.length);</b>
+<i>305</i>&nbsp;        int psSize = paddedSize - 3 - data.length;
+<b class="nc"><i>306</i>&nbsp;        int k = 0;</b>
+<b class="nc"><i>307</i>&nbsp;        padded[k++] = 0;</b>
+<b class="nc"><i>308</i>&nbsp;        padded[k++] = (byte)type;</b>
+<b class="nc"><i>309</i>&nbsp;        if (type == PAD_BLOCKTYPE_1) {</b>
+<b class="nc"><i>310</i>&nbsp;            // blocktype 1: all padding bytes are 0xff</b>
+<i>311</i>&nbsp;            while (psSize-- &gt; 0) {
+<b class="nc"><i>312</i>&nbsp;                padded[k++] = (byte)0xff;</b>
+<b class="nc"><i>313</i>&nbsp;            }</b>
+<i>314</i>&nbsp;        } else {
+<i>315</i>&nbsp;            // blocktype 2: padding bytes are random non-zero bytes
+<i>316</i>&nbsp;            if (random == null) {
+<b class="nc"><i>317</i>&nbsp;                random = JCAUtil.getSecureRandom();</b>
+<b class="nc"><i>318</i>&nbsp;            }</b>
+<i>319</i>&nbsp;            // generate non-zero padding bytes
+<i>320</i>&nbsp;            // use a buffer to reduce calls to SecureRandom
+<i>321</i>&nbsp;            while (psSize &gt; 0) {
+<b class="nc"><i>322</i>&nbsp;                // extra bytes to avoid zero bytes,</b>
+<b class="nc"><i>323</i>&nbsp;                // number of zero bytes &lt;= 4 in 98% cases</b>
+<b class="nc"><i>324</i>&nbsp;                byte[] r = new byte[psSize + 4];</b>
+<i>325</i>&nbsp;                random.nextBytes(r);
+<i>326</i>&nbsp;                for (int i = 0; i &lt; r.length &amp;&amp; psSize &gt; 0; i++) {
+<b class="nc"><i>327</i>&nbsp;                    if (r[i] != 0) {</b>
+<b class="nc"><i>328</i>&nbsp;                        padded[k++] = r[i];</b>
+<b class="nc"><i>329</i>&nbsp;                        psSize--;</b>
+<i>330</i>&nbsp;                    }
+<b class="nc"><i>331</i>&nbsp;                }</b>
+<b class="nc"><i>332</i>&nbsp;            }</b>
+<b class="nc"><i>333</i>&nbsp;        }</b>
+<b class="nc"><i>334</i>&nbsp;        return padded;</b>
+<i>335</i>&nbsp;    }
+<b class="nc"><i>336</i>&nbsp;</b>
+<i>337</i>&nbsp;    /**
+<i>338</i>&nbsp;     * PKCS#1 v1.5 unpadding (blocktype 1 (signature) and 2 (encryption)).
+<i>339</i>&nbsp;     *
+<i>340</i>&nbsp;     * Note that we want to make it a constant-time operation
+<i>341</i>&nbsp;     */
+<i>342</i>&nbsp;    private byte[] unpadV15(byte[] padded) throws BadPaddingException {
+<i>343</i>&nbsp;        int k = 0;
+<i>344</i>&nbsp;        boolean bp = false;
+<b class="nc"><i>345</i>&nbsp;</b>
+<b class="nc"><i>346</i>&nbsp;        if (padded[k++] != 0) {</b>
+<i>347</i>&nbsp;            bp = true;
+<b class="nc"><i>348</i>&nbsp;        }</b>
+<b class="nc"><i>349</i>&nbsp;        if (padded[k++] != type) {</b>
+<i>350</i>&nbsp;            bp = true;
+<b class="nc"><i>351</i>&nbsp;        }</b>
+<b class="nc"><i>352</i>&nbsp;        int p = 0;</b>
+<i>353</i>&nbsp;        while (k &lt; padded.length) {
+<b class="nc"><i>354</i>&nbsp;            int b = padded[k++] &amp; 0xff;</b>
+<b class="nc"><i>355</i>&nbsp;            if ((b == 0) &amp;&amp; (p == 0)) {</b>
+<b class="nc"><i>356</i>&nbsp;                p = k;</b>
+<b class="nc"><i>357</i>&nbsp;            }</b>
+<b class="nc"><i>358</i>&nbsp;            if ((k == padded.length) &amp;&amp; (p == 0)) {</b>
+<i>359</i>&nbsp;                bp = true;
+<b class="nc"><i>360</i>&nbsp;            }</b>
+<b class="nc"><i>361</i>&nbsp;            if ((type == PAD_BLOCKTYPE_1) &amp;&amp; (b != 0xff) &amp;&amp;</b>
+<i>362</i>&nbsp;                    (p == 0)) {
+<b class="nc"><i>363</i>&nbsp;                bp = true;</b>
+<i>364</i>&nbsp;            }
+<b class="nc"><i>365</i>&nbsp;        }</b>
+<i>366</i>&nbsp;        int n = padded.length - p;
+<b class="nc"><i>367</i>&nbsp;        if (n &gt; maxDataSize) {</b>
+<b class="nc"><i>368</i>&nbsp;            bp = true;</b>
+<b class="nc"><i>369</i>&nbsp;        }</b>
+<b class="nc"><i>370</i>&nbsp;</b>
+<i>371</i>&nbsp;        // copy useless padding array for a constant-time method
+<i>372</i>&nbsp;        byte[] padding = new byte[p];
+<i>373</i>&nbsp;        System.arraycopy(padded, 0, padding, 0, p);
+<b class="nc"><i>374</i>&nbsp;</b>
+<b class="nc"><i>375</i>&nbsp;        byte[] data = new byte[n];</b>
+<i>376</i>&nbsp;        System.arraycopy(padded, p, data, 0, n);
+<b class="nc"><i>377</i>&nbsp;</b>
+<b class="nc"><i>378</i>&nbsp;        BadPaddingException bpe = new BadPaddingException(&quot;Decryption error&quot;);</b>
+<i>379</i>&nbsp;
+<b class="nc"><i>380</i>&nbsp;        if (bp) {</b>
+<i>381</i>&nbsp;            throw bpe;
+<b class="nc"><i>382</i>&nbsp;        } else {</b>
+<b class="nc"><i>383</i>&nbsp;            return data;</b>
+<i>384</i>&nbsp;        }
+<b class="nc"><i>385</i>&nbsp;    }</b>
+<i>386</i>&nbsp;
+<i>387</i>&nbsp;    /**
+<i>388</i>&nbsp;     * PKCS#1 v2.0 OAEP padding (MGF1).
+<i>389</i>&nbsp;     * Paragraph references refer to PKCS#1 v2.1 (June 14, 2002)
+<i>390</i>&nbsp;     */
+<i>391</i>&nbsp;    private byte[] padOAEP(byte[] M) throws BadPaddingException {
+<i>392</i>&nbsp;        if (random == null) {
+<i>393</i>&nbsp;            random = JCAUtil.getSecureRandom();
+<b class="nc"><i>394</i>&nbsp;        }</b>
+<b class="nc"><i>395</i>&nbsp;        int hLen = lHash.length;</b>
+<i>396</i>&nbsp;
+<b class="nc"><i>397</i>&nbsp;        // 2.d: generate a random octet string seed of length hLen</b>
+<i>398</i>&nbsp;        // if necessary
+<i>399</i>&nbsp;        byte[] seed = new byte[hLen];
+<i>400</i>&nbsp;        random.nextBytes(seed);
+<b class="nc"><i>401</i>&nbsp;</b>
+<b class="nc"><i>402</i>&nbsp;        // buffer for encoded message EM</b>
+<i>403</i>&nbsp;        byte[] EM = new byte[paddedSize];
+<i>404</i>&nbsp;
+<b class="nc"><i>405</i>&nbsp;        // start and length of seed (as index into EM)</b>
+<i>406</i>&nbsp;        int seedStart = 1;
+<i>407</i>&nbsp;        int seedLen = hLen;
+<b class="nc"><i>408</i>&nbsp;</b>
+<b class="nc"><i>409</i>&nbsp;        // copy seed into EM</b>
+<i>410</i>&nbsp;        System.arraycopy(seed, 0, EM, seedStart, seedLen);
+<i>411</i>&nbsp;
+<b class="nc"><i>412</i>&nbsp;        // start and length of data block DB in EM</b>
+<i>413</i>&nbsp;        // we place it inside of EM to reduce copying
+<i>414</i>&nbsp;        int dbStart = hLen + 1;
+<i>415</i>&nbsp;        int dbLen = EM.length - dbStart;
+<b class="nc"><i>416</i>&nbsp;</b>
+<b class="nc"><i>417</i>&nbsp;        // start of message M in EM</b>
+<i>418</i>&nbsp;        int mStart = paddedSize - M.length;
+<i>419</i>&nbsp;
+<b class="nc"><i>420</i>&nbsp;        // build DB</b>
+<i>421</i>&nbsp;        // 2.b: Concatenate lHash, PS, a single octet with hexadecimal value
+<i>422</i>&nbsp;        // 0x01, and the message M to form a data block DB of length
+<i>423</i>&nbsp;        // k - hLen -1 octets as DB = lHash || PS || 0x01 || M
+<i>424</i>&nbsp;        // (note that PS is all zeros)
+<i>425</i>&nbsp;        System.arraycopy(lHash, 0, EM, dbStart, hLen);
+<i>426</i>&nbsp;        EM[mStart - 1] = 1;
+<b class="nc"><i>427</i>&nbsp;        System.arraycopy(M, 0, EM, mStart, M.length);</b>
+<b class="nc"><i>428</i>&nbsp;</b>
+<b class="nc"><i>429</i>&nbsp;        // produce maskedDB</b>
+<i>430</i>&nbsp;        mgf.generateAndXor(EM, seedStart, seedLen, dbLen, EM, dbStart);
+<i>431</i>&nbsp;
+<b class="nc"><i>432</i>&nbsp;        // produce maskSeed</b>
+<i>433</i>&nbsp;        mgf.generateAndXor(EM, dbStart, dbLen, seedLen, EM, seedStart);
+<i>434</i>&nbsp;
+<b class="nc"><i>435</i>&nbsp;        return EM;</b>
+<i>436</i>&nbsp;    }
+<b class="nc"><i>437</i>&nbsp;</b>
+<i>438</i>&nbsp;    /**
+<i>439</i>&nbsp;     * PKCS#1 v2.1 OAEP unpadding (MGF1).
+<i>440</i>&nbsp;     */
+<i>441</i>&nbsp;    private byte[] unpadOAEP(byte[] padded) throws BadPaddingException {
+<i>442</i>&nbsp;        byte[] EM = padded;
+<i>443</i>&nbsp;        boolean bp = false;
+<b class="nc"><i>444</i>&nbsp;        int hLen = lHash.length;</b>
+<b class="nc"><i>445</i>&nbsp;</b>
+<b class="nc"><i>446</i>&nbsp;        if (EM[0] != 0) {</b>
+<i>447</i>&nbsp;            bp = true;
+<b class="nc"><i>448</i>&nbsp;        }</b>
+<b class="nc"><i>449</i>&nbsp;</b>
+<i>450</i>&nbsp;        int seedStart = 1;
+<i>451</i>&nbsp;        int seedLen = hLen;
+<b class="nc"><i>452</i>&nbsp;</b>
+<b class="nc"><i>453</i>&nbsp;        int dbStart = hLen + 1;</b>
+<i>454</i>&nbsp;        int dbLen = EM.length - dbStart;
+<b class="nc"><i>455</i>&nbsp;</b>
+<b class="nc"><i>456</i>&nbsp;        mgf.generateAndXor(EM, dbStart, dbLen, seedLen, EM, seedStart);</b>
+<i>457</i>&nbsp;        mgf.generateAndXor(EM, seedStart, seedLen, dbLen, EM, dbStart);
+<b class="nc"><i>458</i>&nbsp;</b>
+<b class="nc"><i>459</i>&nbsp;        // verify lHash == lHash&#39;</b>
+<i>460</i>&nbsp;        for (int i = 0; i &lt; hLen; i++) {
+<i>461</i>&nbsp;            if (lHash[i] != EM[dbStart + i]) {
+<b class="nc"><i>462</i>&nbsp;                bp = true;</b>
+<b class="nc"><i>463</i>&nbsp;            }</b>
+<b class="nc"><i>464</i>&nbsp;        }</b>
+<i>465</i>&nbsp;
+<i>466</i>&nbsp;        int padStart = dbStart + hLen;
+<i>467</i>&nbsp;        int onePos = -1;
+<b class="nc"><i>468</i>&nbsp;</b>
+<b class="nc"><i>469</i>&nbsp;        for (int i = padStart; i &lt; EM.length; i++) {</b>
+<i>470</i>&nbsp;            int value = EM[i];
+<b class="nc"><i>471</i>&nbsp;            if (onePos == -1) {</b>
+<b class="nc"><i>472</i>&nbsp;                if (value == 0x00) {</b>
+<b class="nc"><i>473</i>&nbsp;                    // continue;</b>
+<b class="nc"><i>474</i>&nbsp;                } else if (value == 0x01) {</b>
+<i>475</i>&nbsp;                    onePos = i;
+<b class="nc"><i>476</i>&nbsp;                } else {  // Anything other than {0,1} is bad.</b>
+<b class="nc"><i>477</i>&nbsp;                    bp = true;</b>
+<i>478</i>&nbsp;                }
+<b class="nc"><i>479</i>&nbsp;            }</b>
+<i>480</i>&nbsp;        }
+<i>481</i>&nbsp;
+<i>482</i>&nbsp;        // We either ran off the rails or found something other than 0/1.
+<i>483</i>&nbsp;        if (onePos == -1) {
+<i>484</i>&nbsp;            bp = true;
+<b class="nc"><i>485</i>&nbsp;            onePos = EM.length - 1;  // Don&#39;t inadvertently return any data.</b>
+<b class="nc"><i>486</i>&nbsp;        }</b>
+<b class="nc"><i>487</i>&nbsp;</b>
+<i>488</i>&nbsp;        int mStart = onePos + 1;
+<i>489</i>&nbsp;
+<b class="nc"><i>490</i>&nbsp;        // copy useless padding array for a constant-time method</b>
+<i>491</i>&nbsp;        byte [] tmp = new byte[mStart - padStart];
+<i>492</i>&nbsp;        System.arraycopy(EM, padStart, tmp, 0, tmp.length);
+<b class="nc"><i>493</i>&nbsp;</b>
+<b class="nc"><i>494</i>&nbsp;        byte [] m = new byte[EM.length - mStart];</b>
+<i>495</i>&nbsp;        System.arraycopy(EM, mStart, m, 0, m.length);
+<b class="nc"><i>496</i>&nbsp;</b>
+<b class="nc"><i>497</i>&nbsp;        BadPaddingException bpe = new BadPaddingException(&quot;Decryption error&quot;);</b>
+<i>498</i>&nbsp;
+<b class="nc"><i>499</i>&nbsp;        if (bp) {</b>
+<i>500</i>&nbsp;            throw bpe;
+<b class="nc"><i>501</i>&nbsp;        } else {</b>
+<b class="nc"><i>502</i>&nbsp;            return m;</b>
+<i>503</i>&nbsp;        }
+<b class="nc"><i>504</i>&nbsp;    }</b>
+<i>505</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,364 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ManifestEntryVerifier</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.util</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ManifestEntryVerifier (sun.security.util)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ManifestEntryVerifier</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 73)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">ManifestEntryVerifier$SunProviderHolder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 75)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.util;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.security.*;
+<i>29</i>&nbsp;import java.io.*;
+<i>30</i>&nbsp;import java.security.CodeSigner;
+<i>31</i>&nbsp;import java.util.*;
+<i>32</i>&nbsp;import java.util.jar.*;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import java.util.Base64;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import sun.security.jca.Providers;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * This class is used to verify each entry in a jar file with its
+<i>40</i>&nbsp; * manifest value.
+<i>41</i>&nbsp; */
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;public class ManifestEntryVerifier {
+<i>44</i>&nbsp;
+<b class="nc"><i>45</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;jar&quot;);</b>
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;    /**
+<i>48</i>&nbsp;     * Holder class to lazily load Sun provider. NOTE: if
+<i>49</i>&nbsp;     * Providers.getSunProvider returned a cached provider, we could avoid the
+<i>50</i>&nbsp;     * need for caching the provider with this holder class; we should try to
+<i>51</i>&nbsp;     * revisit this in JDK 8.
+<i>52</i>&nbsp;     */
+<b class="nc"><i>53</i>&nbsp;    private static class SunProviderHolder {</b>
+<b class="nc"><i>54</i>&nbsp;        private static final Provider instance = Providers.getSunProvider();</b>
+<i>55</i>&nbsp;    }
+<i>56</i>&nbsp;
+<i>57</i>&nbsp;    /** the created digest objects */
+<i>58</i>&nbsp;    HashMap&lt;String, MessageDigest&gt; createdDigests;
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    /** the digests in use for a given entry*/
+<i>61</i>&nbsp;    ArrayList&lt;MessageDigest&gt; digests;
+<i>62</i>&nbsp;
+<i>63</i>&nbsp;    /** the manifest hashes for the digests in use */
+<i>64</i>&nbsp;    ArrayList&lt;byte[]&gt; manifestHashes;
+<i>65</i>&nbsp;
+<b class="nc"><i>66</i>&nbsp;    private String name = null;</b>
+<i>67</i>&nbsp;    private Manifest man;
+<i>68</i>&nbsp;
+<b class="nc"><i>69</i>&nbsp;    private boolean skip = true;</b>
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;    private JarEntry entry;
+<i>72</i>&nbsp;
+<b class="nc"><i>73</i>&nbsp;    private CodeSigner[] signers = null;</b>
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    /**
+<i>76</i>&nbsp;     * Create a new ManifestEntryVerifier object.
+<i>77</i>&nbsp;     */
+<i>78</i>&nbsp;    public ManifestEntryVerifier(Manifest man)
+<b class="nc"><i>79</i>&nbsp;    {</b>
+<b class="nc"><i>80</i>&nbsp;        createdDigests = new HashMap&lt;&gt;(11);</b>
+<b class="nc"><i>81</i>&nbsp;        digests = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>82</i>&nbsp;        manifestHashes = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i>83</i>&nbsp;        this.man = man;</b>
+<i>84</i>&nbsp;    }
+<i>85</i>&nbsp;
+<i>86</i>&nbsp;    /**
+<i>87</i>&nbsp;     * Find the hashes in the
+<i>88</i>&nbsp;     * manifest for this entry, save them, and set the MessageDigest
+<i>89</i>&nbsp;     * objects to calculate the hashes on the fly. If name is
+<i>90</i>&nbsp;     * null it signifies that update/verify should ignore this entry.
+<i>91</i>&nbsp;     */
+<i>92</i>&nbsp;    public void setEntry(String name, JarEntry entry)
+<i>93</i>&nbsp;        throws IOException
+<i>94</i>&nbsp;    {
+<b class="nc"><i>95</i>&nbsp;        digests.clear();</b>
+<b class="nc"><i>96</i>&nbsp;        manifestHashes.clear();</b>
+<b class="nc"><i>97</i>&nbsp;        this.name = name;</b>
+<b class="nc"><i>98</i>&nbsp;        this.entry = entry;</b>
+<i>99</i>&nbsp;
+<b class="nc"><i>100</i>&nbsp;        skip = true;</b>
+<b class="nc"><i>101</i>&nbsp;        signers = null;</b>
+<i>102</i>&nbsp;
+<b class="nc"><i>103</i>&nbsp;        if (man == null || name == null) {</b>
+<i>104</i>&nbsp;            return;
+<i>105</i>&nbsp;        }
+<i>106</i>&nbsp;
+<i>107</i>&nbsp;        /* get the headers from the manifest for this entry */
+<i>108</i>&nbsp;        /* if there aren&#39;t any, we can&#39;t verify any digests for this entry */
+<i>109</i>&nbsp;
+<b class="nc"><i>110</i>&nbsp;        skip = false;</b>
+<b class="nc"><i>111</i>&nbsp;</b>
+<i>112</i>&nbsp;        Attributes attr = man.getAttributes(name);
+<i>113</i>&nbsp;        if (attr == null) {
+<i>114</i>&nbsp;            // ugh. we should be able to remove this at some point.
+<b class="nc"><i>115</i>&nbsp;            // there are broken jars floating around with ./name and /name</b>
+<b class="nc"><i>116</i>&nbsp;            // in the manifest, and &quot;name&quot; in the zip/jar file.</b>
+<b class="nc"><i>117</i>&nbsp;            attr = man.getAttributes(&quot;./&quot;+name);</b>
+<b class="nc"><i>118</i>&nbsp;            if (attr == null) {</b>
+<i>119</i>&nbsp;                attr = man.getAttributes(&quot;/&quot;+name);
+<i>120</i>&nbsp;                if (attr == null)
+<i>121</i>&nbsp;                    return;
+<i>122</i>&nbsp;            }
+<b class="nc"><i>123</i>&nbsp;        }</b>
+<b class="nc"><i>124</i>&nbsp;</b>
+<i>125</i>&nbsp;        for (Map.Entry&lt;Object,Object&gt; se : attr.entrySet()) {
+<b class="nc"><i>126</i>&nbsp;            String key = se.getKey().toString();</b>
+<i>127</i>&nbsp;
+<b class="nc"><i>128</i>&nbsp;            if (key.toUpperCase(Locale.ENGLISH).endsWith(&quot;-DIGEST&quot;)) {</b>
+<i>129</i>&nbsp;                // 7 is length of &quot;-Digest&quot;
+<b class="nc"><i>130</i>&nbsp;                String algorithm = key.substring(0, key.length()-7);</b>
+<i>131</i>&nbsp;
+<b class="nc"><i>132</i>&nbsp;                MessageDigest digest = createdDigests.get(algorithm);</b>
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;                if (digest == null) {
+<b class="nc"><i>135</i>&nbsp;                    try {</b>
+<b class="nc"><i>136</i>&nbsp;</b>
+<b class="nc"><i>137</i>&nbsp;                        digest = MessageDigest.getInstance</b>
+<b class="nc"><i>138</i>&nbsp;                                        (algorithm, SunProviderHolder.instance);</b>
+<i>139</i>&nbsp;                        createdDigests.put(algorithm, digest);
+<b class="nc"><i>140</i>&nbsp;                    } catch (NoSuchAlgorithmException nsae) {</b>
+<i>141</i>&nbsp;                        // ignore
+<i>142</i>&nbsp;                    }
+<b class="nc"><i>143</i>&nbsp;                }</b>
+<b class="nc"><i>144</i>&nbsp;</b>
+<b class="nc"><i>145</i>&nbsp;                if (digest != null) {</b>
+<b class="nc"><i>146</i>&nbsp;                    digest.reset();</b>
+<b class="nc"><i>147</i>&nbsp;                    digests.add(digest);</b>
+<b class="nc"><i>148</i>&nbsp;                    manifestHashes.add(</b>
+<i>149</i>&nbsp;                                Base64.getMimeDecoder().decode((String)se.getValue()));
+<i>150</i>&nbsp;                }
+<b class="nc"><i>151</i>&nbsp;            }</b>
+<i>152</i>&nbsp;        }
+<i>153</i>&nbsp;    }
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    /**
+<i>156</i>&nbsp;     * update the digests for the digests we are interested in
+<i>157</i>&nbsp;     */
+<b class="nc"><i>158</i>&nbsp;    public void update(byte buffer) {</b>
+<i>159</i>&nbsp;        if (skip) return;
+<b class="nc"><i>160</i>&nbsp;</b>
+<b class="nc"><i>161</i>&nbsp;        for (int i=0; i &lt; digests.size(); i++) {</b>
+<i>162</i>&nbsp;            digests.get(i).update(buffer);
+<i>163</i>&nbsp;        }
+<i>164</i>&nbsp;    }
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;    /**
+<i>167</i>&nbsp;     * update the digests for the digests we are interested in
+<i>168</i>&nbsp;     */
+<b class="nc"><i>169</i>&nbsp;    public void update(byte[] buffer, int off, int len) {</b>
+<i>170</i>&nbsp;        if (skip) return;
+<b class="nc"><i>171</i>&nbsp;</b>
+<b class="nc"><i>172</i>&nbsp;        for (int i=0; i &lt; digests.size(); i++) {</b>
+<i>173</i>&nbsp;            digests.get(i).update(buffer, off, len);
+<i>174</i>&nbsp;        }
+<i>175</i>&nbsp;    }
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * get the JarEntry for this object
+<i>179</i>&nbsp;     */
+<i>180</i>&nbsp;    public JarEntry getEntry()
+<b class="nc"><i>181</i>&nbsp;    {</b>
+<i>182</i>&nbsp;        return entry;
+<i>183</i>&nbsp;    }
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;    /**
+<i>186</i>&nbsp;     * go through all the digests, calculating the final digest
+<i>187</i>&nbsp;     * and comparing it to the one in the manifest. If this is
+<i>188</i>&nbsp;     * the first time we have verified this object, remove its
+<i>189</i>&nbsp;     * code signers from sigFileSigners and place in verifiedSigners.
+<i>190</i>&nbsp;     *
+<i>191</i>&nbsp;     *
+<i>192</i>&nbsp;     */
+<i>193</i>&nbsp;    public CodeSigner[] verify(Hashtable&lt;String, CodeSigner[]&gt; verifiedSigners,
+<i>194</i>&nbsp;                Hashtable&lt;String, CodeSigner[]&gt; sigFileSigners)
+<i>195</i>&nbsp;        throws JarException
+<b class="nc"><i>196</i>&nbsp;    {</b>
+<b class="nc"><i>197</i>&nbsp;        if (skip) {</b>
+<i>198</i>&nbsp;            return null;
+<i>199</i>&nbsp;        }
+<b class="nc"><i>200</i>&nbsp;</b>
+<b class="nc"><i>201</i>&nbsp;        if (digests.isEmpty()) {</b>
+<i>202</i>&nbsp;            throw new SecurityException(&quot;digest missing for &quot; + name);
+<b class="nc"><i>203</i>&nbsp;        }</b>
+<i>204</i>&nbsp;
+<b class="nc"><i>205</i>&nbsp;        if (signers != null)</b>
+<b class="nc"><i>206</i>&nbsp;            return signers;</b>
+<b class="nc"><i>207</i>&nbsp;</b>
+<i>208</i>&nbsp;        for (int i=0; i &lt; digests.size(); i++) {
+<b class="nc"><i>209</i>&nbsp;</b>
+<b class="nc"><i>210</i>&nbsp;            MessageDigest digest  = digests.get(i);</b>
+<b class="nc"><i>211</i>&nbsp;            byte [] manHash = manifestHashes.get(i);</b>
+<b class="nc"><i>212</i>&nbsp;            byte [] theHash = digest.digest();</b>
+<b class="nc"><i>213</i>&nbsp;</b>
+<b class="nc"><i>214</i>&nbsp;            if (debug != null) {</b>
+<i>215</i>&nbsp;                debug.println(&quot;Manifest Entry: &quot; +
+<i>216</i>&nbsp;                                   name + &quot; digest=&quot; + digest.getAlgorithm());
+<b class="nc"><i>217</i>&nbsp;                debug.println(&quot;  manifest &quot; + toHex(manHash));</b>
+<b class="nc"><i>218</i>&nbsp;                debug.println(&quot;  computed &quot; + toHex(theHash));</b>
+<i>219</i>&nbsp;                debug.println();
+<i>220</i>&nbsp;            }
+<i>221</i>&nbsp;
+<i>222</i>&nbsp;            if (!MessageDigest.isEqual(theHash, manHash))
+<b class="nc"><i>223</i>&nbsp;                throw new SecurityException(digest.getAlgorithm()+</b>
+<b class="nc"><i>224</i>&nbsp;                                            &quot; digest error for &quot;+name);</b>
+<b class="nc"><i>225</i>&nbsp;        }</b>
+<i>226</i>&nbsp;
+<b class="nc"><i>227</i>&nbsp;        // take it out of sigFileSigners and put it in verifiedSigners...</b>
+<i>228</i>&nbsp;        signers = sigFileSigners.remove(name);
+<i>229</i>&nbsp;        if (signers != null) {
+<i>230</i>&nbsp;            verifiedSigners.put(name, signers);
+<b class="nc"><i>231</i>&nbsp;        }</b>
+<i>232</i>&nbsp;        return signers;
+<i>233</i>&nbsp;    }
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;    // for the toHex function
+<i>236</i>&nbsp;    private static final char[] hexc =
+<i>237</i>&nbsp;            {&#39;0&#39;,&#39;1&#39;,&#39;2&#39;,&#39;3&#39;,&#39;4&#39;,&#39;5&#39;,&#39;6&#39;,&#39;7&#39;,&#39;8&#39;,&#39;9&#39;,&#39;a&#39;,&#39;b&#39;,&#39;c&#39;,&#39;d&#39;,&#39;e&#39;,&#39;f&#39;};
+<i>238</i>&nbsp;    /**
+<i>239</i>&nbsp;     * convert a byte array to a hex string for debugging purposes
+<i>240</i>&nbsp;     * @param data the binary data to be converted to a hex string
+<b class="nc"><i>241</i>&nbsp;     * @return an ASCII hex string</b>
+<i>242</i>&nbsp;     */
+<b class="nc"><i>243</i>&nbsp;</b>
+<b class="nc"><i>244</i>&nbsp;    static String toHex(byte[] data) {</b>
+<b class="nc"><i>245</i>&nbsp;</b>
+<i>246</i>&nbsp;        StringBuilder sb = new StringBuilder(data.length*2);
+<b class="nc"><i>247</i>&nbsp;</b>
+<i>248</i>&nbsp;        for (int i=0; i&lt;data.length; i++) {
+<i>249</i>&nbsp;            sb.append(hexc[(data[i] &gt;&gt;4) &amp; 0x0f]);
+<i>250</i>&nbsp;            sb.append(hexc[data[i] &amp; 0x0f]);
+<i>251</i>&nbsp;        }
+<i>252</i>&nbsp;        return sb.toString();
+<i>253</i>&nbsp;    }
+<i>254</i>&nbsp;
+<i>255</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

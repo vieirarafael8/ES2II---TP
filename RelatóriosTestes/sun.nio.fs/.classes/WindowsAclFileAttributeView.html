@@ -1,0 +1,309 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: WindowsAclFileAttributeView</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.nio.fs</a> ]
+</div>
+
+<h1>Coverage Summary for Class: WindowsAclFileAttributeView (sun.nio.fs)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WindowsAclFileAttributeView</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 81)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2008, 2009, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.nio.fs;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.nio.file.ProviderMismatchException;
+<i>29</i>&nbsp;import java.nio.file.attribute.*;
+<i>30</i>&nbsp;import java.util.*;
+<i>31</i>&nbsp;import java.io.IOException;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;import static sun.nio.fs.WindowsNativeDispatcher.*;
+<i>34</i>&nbsp;import static sun.nio.fs.WindowsConstants.*;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;/**
+<i>37</i>&nbsp; * Windows implementation of AclFileAttributeView.
+<i>38</i>&nbsp; */
+<i>39</i>&nbsp;
+<b class="nc"><i>40</i>&nbsp;class WindowsAclFileAttributeView</b>
+<i>41</i>&nbsp;    extends AbstractAclFileAttributeView
+<i>42</i>&nbsp;{
+<i>43</i>&nbsp;    /**
+<i>44</i>&nbsp;     * typedef struct _SECURITY_DESCRIPTOR {
+<i>45</i>&nbsp;     *     BYTE  Revision;
+<i>46</i>&nbsp;     *     BYTE  Sbz1;
+<i>47</i>&nbsp;     *     SECURITY_DESCRIPTOR_CONTROL Control;
+<i>48</i>&nbsp;     *     PSID Owner;
+<i>49</i>&nbsp;     *     PSID Group;
+<i>50</i>&nbsp;     *     PACL Sacl;
+<i>51</i>&nbsp;     *     PACL Dacl;
+<i>52</i>&nbsp;     * } SECURITY_DESCRIPTOR;
+<i>53</i>&nbsp;     */
+<i>54</i>&nbsp;    private static final short SIZEOF_SECURITY_DESCRIPTOR   = 20;
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;    private final WindowsPath file;
+<i>57</i>&nbsp;    private final boolean followLinks;
+<i>58</i>&nbsp;
+<b class="nc"><i>59</i>&nbsp;    WindowsAclFileAttributeView(WindowsPath file, boolean followLinks) {</b>
+<b class="nc"><i>60</i>&nbsp;        this.file = file;</b>
+<b class="nc"><i>61</i>&nbsp;        this.followLinks = followLinks;</b>
+<i>62</i>&nbsp;    }
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    // permission check
+<i>65</i>&nbsp;    private void checkAccess(WindowsPath file,
+<i>66</i>&nbsp;                             boolean checkRead,
+<i>67</i>&nbsp;                             boolean checkWrite)
+<i>68</i>&nbsp;    {
+<b class="nc"><i>69</i>&nbsp;        SecurityManager sm = System.getSecurityManager();</b>
+<b class="nc"><i>70</i>&nbsp;        if (sm != null) {</b>
+<b class="nc"><i>71</i>&nbsp;            if (checkRead)</b>
+<b class="nc"><i>72</i>&nbsp;                sm.checkRead(file.getPathForPermissionCheck());</b>
+<b class="nc"><i>73</i>&nbsp;            if (checkWrite)</b>
+<b class="nc"><i>74</i>&nbsp;                sm.checkWrite(file.getPathForPermissionCheck());</b>
+<b class="nc"><i>75</i>&nbsp;            sm.checkPermission(new RuntimePermission(&quot;accessUserInformation&quot;));</b>
+<i>76</i>&nbsp;        }
+<i>77</i>&nbsp;    }
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    // invokes GetFileSecurity to get requested security information
+<i>80</i>&nbsp;    static NativeBuffer getFileSecurity(String path, int request)
+<i>81</i>&nbsp;        throws IOException
+<i>82</i>&nbsp;    {
+<i>83</i>&nbsp;        // invoke get to buffer size
+<b class="nc"><i>84</i>&nbsp;        int size = 0;</b>
+<i>85</i>&nbsp;        try {
+<b class="nc"><i>86</i>&nbsp;            size = GetFileSecurity(path, request, 0L, 0);</b>
+<b class="nc"><i>87</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>88</i>&nbsp;            x.rethrowAsIOException(path);</b>
+<b class="nc"><i>89</i>&nbsp;        }</b>
+<b class="nc"><i>90</i>&nbsp;        assert size &gt; 0;</b>
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;        // allocate buffer and re-invoke to get security information
+<b class="nc"><i>93</i>&nbsp;        NativeBuffer buffer = NativeBuffers.getNativeBuffer(size);</b>
+<i>94</i>&nbsp;        try {
+<i>95</i>&nbsp;            for (;;) {
+<b class="nc"><i>96</i>&nbsp;                int newSize = GetFileSecurity(path, request, buffer.address(), size);</b>
+<b class="nc"><i>97</i>&nbsp;                if (newSize &lt;= size)</b>
+<b class="nc"><i>98</i>&nbsp;                    return buffer;</b>
+<i>99</i>&nbsp;
+<i>100</i>&nbsp;                // buffer was insufficient
+<b class="nc"><i>101</i>&nbsp;                buffer.release();</b>
+<b class="nc"><i>102</i>&nbsp;                buffer = NativeBuffers.getNativeBuffer(newSize);</b>
+<b class="nc"><i>103</i>&nbsp;                size = newSize;</b>
+<b class="nc"><i>104</i>&nbsp;            }</b>
+<b class="nc"><i>105</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>106</i>&nbsp;            buffer.release();</b>
+<b class="nc"><i>107</i>&nbsp;            x.rethrowAsIOException(path);</b>
+<b class="nc"><i>108</i>&nbsp;            return null;</b>
+<i>109</i>&nbsp;        }
+<i>110</i>&nbsp;    }
+<i>111</i>&nbsp;
+<i>112</i>&nbsp;    @Override
+<i>113</i>&nbsp;    public UserPrincipal getOwner()
+<i>114</i>&nbsp;        throws IOException
+<i>115</i>&nbsp;    {
+<b class="nc"><i>116</i>&nbsp;        checkAccess(file, true, false);</b>
+<i>117</i>&nbsp;
+<i>118</i>&nbsp;        // GetFileSecurity does not follow links so when following links we
+<i>119</i>&nbsp;        // need the final target
+<b class="nc"><i>120</i>&nbsp;        String path = WindowsLinkSupport.getFinalPath(file, followLinks);</b>
+<b class="nc"><i>121</i>&nbsp;        NativeBuffer buffer = getFileSecurity(path, OWNER_SECURITY_INFORMATION);</b>
+<i>122</i>&nbsp;        try {
+<i>123</i>&nbsp;            // get the address of the SID
+<b class="nc"><i>124</i>&nbsp;            long sidAddress = GetSecurityDescriptorOwner(buffer.address());</b>
+<b class="nc"><i>125</i>&nbsp;            if (sidAddress == 0L)</b>
+<b class="nc"><i>126</i>&nbsp;                throw new IOException(&quot;no owner&quot;);</b>
+<b class="nc"><i>127</i>&nbsp;            return WindowsUserPrincipals.fromSid(sidAddress);</b>
+<b class="nc"><i>128</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>129</i>&nbsp;            x.rethrowAsIOException(file);</b>
+<b class="nc"><i>130</i>&nbsp;            return null;</b>
+<i>131</i>&nbsp;        } finally {
+<b class="nc"><i>132</i>&nbsp;            buffer.release();</b>
+<i>133</i>&nbsp;        }
+<i>134</i>&nbsp;    }
+<i>135</i>&nbsp;
+<i>136</i>&nbsp;    @Override
+<i>137</i>&nbsp;    public List&lt;AclEntry&gt; getAcl()
+<i>138</i>&nbsp;        throws IOException
+<i>139</i>&nbsp;    {
+<b class="nc"><i>140</i>&nbsp;        checkAccess(file, true, false);</b>
+<i>141</i>&nbsp;
+<i>142</i>&nbsp;        // GetFileSecurity does not follow links so when following links we
+<i>143</i>&nbsp;        // need the final target
+<b class="nc"><i>144</i>&nbsp;        String path = WindowsLinkSupport.getFinalPath(file, followLinks);</b>
+<i>145</i>&nbsp;
+<i>146</i>&nbsp;        // ALLOW and DENY entries in DACL;
+<i>147</i>&nbsp;        // AUDIT entries in SACL (ignore for now as it requires privileges)
+<b class="nc"><i>148</i>&nbsp;        NativeBuffer buffer = getFileSecurity(path, DACL_SECURITY_INFORMATION);</b>
+<i>149</i>&nbsp;        try {
+<b class="nc"><i>150</i>&nbsp;            return WindowsSecurityDescriptor.getAcl(buffer.address());</b>
+<i>151</i>&nbsp;        } finally {
+<b class="nc"><i>152</i>&nbsp;            buffer.release();</b>
+<i>153</i>&nbsp;        }
+<i>154</i>&nbsp;    }
+<i>155</i>&nbsp;
+<i>156</i>&nbsp;    @Override
+<i>157</i>&nbsp;    public void setOwner(UserPrincipal obj)
+<i>158</i>&nbsp;        throws IOException
+<i>159</i>&nbsp;    {
+<b class="nc"><i>160</i>&nbsp;        if (obj == null)</b>
+<b class="nc"><i>161</i>&nbsp;            throw new NullPointerException(&quot;&#39;owner&#39; is null&quot;);</b>
+<b class="nc"><i>162</i>&nbsp;        if (!(obj instanceof WindowsUserPrincipals.User))</b>
+<b class="nc"><i>163</i>&nbsp;            throw new ProviderMismatchException();</b>
+<b class="nc"><i>164</i>&nbsp;        WindowsUserPrincipals.User owner = (WindowsUserPrincipals.User)obj;</b>
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;        // permission check
+<b class="nc"><i>167</i>&nbsp;        checkAccess(file, false, true);</b>
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;        // SetFileSecurity does not follow links so when following links we
+<i>170</i>&nbsp;        // need the final target
+<b class="nc"><i>171</i>&nbsp;        String path = WindowsLinkSupport.getFinalPath(file, followLinks);</b>
+<i>172</i>&nbsp;
+<i>173</i>&nbsp;        // ConvertStringSidToSid allocates memory for SID so must invoke
+<i>174</i>&nbsp;        // LocalFree to free it when we are done
+<b class="nc"><i>175</i>&nbsp;        long pOwner = 0L;</b>
+<i>176</i>&nbsp;        try {
+<b class="nc"><i>177</i>&nbsp;            pOwner = ConvertStringSidToSid(owner.sidString());</b>
+<b class="nc"><i>178</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>179</i>&nbsp;            throw new IOException(&quot;Failed to get SID for &quot; + owner.getName()</b>
+<b class="nc"><i>180</i>&nbsp;                + &quot;: &quot; + x.errorString());</b>
+<b class="nc"><i>181</i>&nbsp;        }</b>
+<i>182</i>&nbsp;
+<i>183</i>&nbsp;        // Allocate buffer for security descriptor, initialize it, set
+<i>184</i>&nbsp;        // owner information and update the file.
+<i>185</i>&nbsp;        try {
+<b class="nc"><i>186</i>&nbsp;            NativeBuffer buffer = NativeBuffers.getNativeBuffer(SIZEOF_SECURITY_DESCRIPTOR);</b>
+<i>187</i>&nbsp;            try {
+<b class="nc"><i>188</i>&nbsp;                InitializeSecurityDescriptor(buffer.address());</b>
+<b class="nc"><i>189</i>&nbsp;                SetSecurityDescriptorOwner(buffer.address(), pOwner);</b>
+<i>190</i>&nbsp;                // may need SeRestorePrivilege to set the owner
+<b class="nc"><i>191</i>&nbsp;                WindowsSecurity.Privilege priv =</b>
+<b class="nc"><i>192</i>&nbsp;                    WindowsSecurity.enablePrivilege(&quot;SeRestorePrivilege&quot;);</b>
+<i>193</i>&nbsp;                try {
+<b class="nc"><i>194</i>&nbsp;                    SetFileSecurity(path,</b>
+<i>195</i>&nbsp;                                    OWNER_SECURITY_INFORMATION,
+<b class="nc"><i>196</i>&nbsp;                                    buffer.address());</b>
+<i>197</i>&nbsp;                } finally {
+<b class="nc"><i>198</i>&nbsp;                    priv.drop();</b>
+<b class="nc"><i>199</i>&nbsp;                }</b>
+<b class="nc"><i>200</i>&nbsp;            } catch (WindowsException x) {</b>
+<b class="nc"><i>201</i>&nbsp;                x.rethrowAsIOException(file);</b>
+<i>202</i>&nbsp;            } finally {
+<b class="nc"><i>203</i>&nbsp;                buffer.release();</b>
+<b class="nc"><i>204</i>&nbsp;            }</b>
+<i>205</i>&nbsp;        } finally {
+<b class="nc"><i>206</i>&nbsp;            LocalFree(pOwner);</b>
+<b class="nc"><i>207</i>&nbsp;        }</b>
+<i>208</i>&nbsp;    }
+<i>209</i>&nbsp;
+<i>210</i>&nbsp;    @Override
+<i>211</i>&nbsp;    public void setAcl(List&lt;AclEntry&gt; acl) throws IOException {
+<b class="nc"><i>212</i>&nbsp;        checkAccess(file, false, true);</b>
+<i>213</i>&nbsp;
+<i>214</i>&nbsp;        // SetFileSecurity does not follow links so when following links we
+<i>215</i>&nbsp;        // need the final target
+<b class="nc"><i>216</i>&nbsp;        String path = WindowsLinkSupport.getFinalPath(file, followLinks);</b>
+<b class="nc"><i>217</i>&nbsp;        WindowsSecurityDescriptor sd = WindowsSecurityDescriptor.create(acl);</b>
+<i>218</i>&nbsp;        try {
+<b class="nc"><i>219</i>&nbsp;            SetFileSecurity(path, DACL_SECURITY_INFORMATION, sd.address());</b>
+<b class="nc"><i>220</i>&nbsp;        } catch (WindowsException x) {</b>
+<b class="nc"><i>221</i>&nbsp;             x.rethrowAsIOException(file);</b>
+<i>222</i>&nbsp;        } finally {
+<b class="nc"><i>223</i>&nbsp;            sd.release();</b>
+<b class="nc"><i>224</i>&nbsp;        }</b>
+<i>225</i>&nbsp;    }
+<i>226</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

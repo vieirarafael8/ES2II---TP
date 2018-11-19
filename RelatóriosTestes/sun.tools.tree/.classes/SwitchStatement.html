@@ -1,0 +1,347 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: SwitchStatement</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.tree</a> ]
+</div>
+
+<h1>Coverage Summary for Class: SwitchStatement (sun.tools.tree)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SwitchStatement</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 103)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1994, 2003, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.tree;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import sun.tools.java.*;
+<i>29</i>&nbsp;import sun.tools.asm.Assembler;
+<i>30</i>&nbsp;import sun.tools.asm.Label;
+<i>31</i>&nbsp;import sun.tools.asm.SwitchData;
+<i>32</i>&nbsp;import java.io.PrintStream;
+<i>33</i>&nbsp;import java.util.Hashtable;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;/**
+<i>36</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>37</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>38</i>&nbsp; * they are subject to change or removal without notice.
+<i>39</i>&nbsp; */
+<i>40</i>&nbsp;public
+<i>41</i>&nbsp;class SwitchStatement extends Statement {
+<i>42</i>&nbsp;    Expression expr;
+<i>43</i>&nbsp;    Statement args[];
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;    /**
+<i>46</i>&nbsp;     * Constructor
+<i>47</i>&nbsp;     */
+<i>48</i>&nbsp;    public SwitchStatement(long where, Expression expr, Statement args[]) {
+<b class="nc"><i>49</i>&nbsp;        super(SWITCH, where);</b>
+<b class="nc"><i>50</i>&nbsp;        this.expr = expr;</b>
+<b class="nc"><i>51</i>&nbsp;        this.args = args;</b>
+<i>52</i>&nbsp;    }
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;    /**
+<i>55</i>&nbsp;     * Check statement
+<i>56</i>&nbsp;     */
+<i>57</i>&nbsp;    Vset check(Environment env, Context ctx, Vset vset, Hashtable&lt;Object, Object&gt; exp) {
+<b class="nc"><i>58</i>&nbsp;        checkLabel(env, ctx);</b>
+<b class="nc"><i>59</i>&nbsp;        CheckContext newctx = new CheckContext(ctx, this);</b>
+<b class="nc"><i>60</i>&nbsp;        vset = expr.checkValue(env, newctx, reach(env, vset), exp);</b>
+<b class="nc"><i>61</i>&nbsp;        Type switchType = expr.type;</b>
+<i>62</i>&nbsp;
+<b class="nc"><i>63</i>&nbsp;        expr = convert(env, newctx, Type.tInt, expr);</b>
+<i>64</i>&nbsp;
+<b class="nc"><i>65</i>&nbsp;        Hashtable&lt;Expression, Statement&gt; tab = new Hashtable&lt;&gt;();</b>
+<b class="nc"><i>66</i>&nbsp;        boolean hasDefault = false;</b>
+<i>67</i>&nbsp;        // Note that vs is reset to vset.copy() on every case label.
+<i>68</i>&nbsp;        // If the first substatement is not a case label, it is unreached.
+<b class="nc"><i>69</i>&nbsp;        Vset vs = DEAD_END;</b>
+<i>70</i>&nbsp;
+<b class="nc"><i>71</i>&nbsp;        for (int i = 0 ; i &lt; args.length ; i++) {</b>
+<b class="nc"><i>72</i>&nbsp;            Statement s = args[i];</b>
+<i>73</i>&nbsp;
+<b class="nc"><i>74</i>&nbsp;            if (s.op == CASE) {</b>
+<i>75</i>&nbsp;
+<b class="nc"><i>76</i>&nbsp;                vs = s.check(env, newctx, vs.join(vset.copy()), exp);</b>
+<i>77</i>&nbsp;
+<b class="nc"><i>78</i>&nbsp;                Expression lbl = ((CaseStatement)s).expr;</b>
+<b class="nc"><i>79</i>&nbsp;                if (lbl != null) {</b>
+<b class="nc"><i>80</i>&nbsp;                    if (lbl instanceof IntegerExpression) {</b>
+<b class="nc"><i>81</i>&nbsp;                        Integer Ivalue =</b>
+<b class="nc"><i>82</i>&nbsp;                            (Integer)(((IntegerExpression)lbl).getValue());</b>
+<b class="nc"><i>83</i>&nbsp;                        int ivalue = Ivalue.intValue();</b>
+<b class="nc"><i>84</i>&nbsp;                        if (tab.get(lbl) != null) {</b>
+<b class="nc"><i>85</i>&nbsp;                            env.error(s.where, &quot;duplicate.label&quot;, Ivalue);</b>
+<i>86</i>&nbsp;                        } else {
+<b class="nc"><i>87</i>&nbsp;                            tab.put(lbl, s);</b>
+<i>88</i>&nbsp;                            boolean overflow;
+<b class="nc"><i>89</i>&nbsp;                            switch (switchType.getTypeCode()) {</b>
+<i>90</i>&nbsp;                                case TC_BYTE:
+<b class="nc"><i>91</i>&nbsp;                                    overflow = (ivalue != (byte)ivalue); break;</b>
+<i>92</i>&nbsp;                                case TC_SHORT:
+<b class="nc"><i>93</i>&nbsp;                                    overflow = (ivalue != (short)ivalue); break;</b>
+<i>94</i>&nbsp;                                case TC_CHAR:
+<b class="nc"><i>95</i>&nbsp;                                    overflow = (ivalue != (char)ivalue); break;</b>
+<i>96</i>&nbsp;                                default:
+<b class="nc"><i>97</i>&nbsp;                                    overflow = false;</b>
+<i>98</i>&nbsp;                            }
+<b class="nc"><i>99</i>&nbsp;                            if (overflow) {</b>
+<b class="nc"><i>100</i>&nbsp;                                env.error(s.where, &quot;switch.overflow&quot;,</b>
+<i>101</i>&nbsp;                                          Ivalue, switchType);
+<i>102</i>&nbsp;                            }
+<i>103</i>&nbsp;                        }
+<b class="nc"><i>104</i>&nbsp;                    } else {</b>
+<i>105</i>&nbsp;                        // Suppose a class got an error early on during
+<i>106</i>&nbsp;                        // checking.  It will set all of its members to
+<i>107</i>&nbsp;                        // have the status &quot;ERROR&quot;.  Now suppose that a
+<i>108</i>&nbsp;                        // case label refers to one of this class&#39;s
+<i>109</i>&nbsp;                        // fields.  When we check the case label, the
+<i>110</i>&nbsp;                        // compiler will try to inline the FieldExpression.
+<i>111</i>&nbsp;                        // Since the expression has ERROR status, it doesn&#39;t
+<i>112</i>&nbsp;                        // inline.  This means that instead of the case
+<i>113</i>&nbsp;                        // label being an IntegerExpression, it will still
+<i>114</i>&nbsp;                        // be a FieldExpression, and we will end up in this
+<i>115</i>&nbsp;                        // else block.  So, before we just assume that
+<i>116</i>&nbsp;                        // the expression isn&#39;t constant, do a check to
+<i>117</i>&nbsp;                        // see if it was constant but unable to inline.
+<i>118</i>&nbsp;                        // This eliminates some spurious error messages.
+<i>119</i>&nbsp;                        // (Bug id 4067498).
+<b class="nc"><i>120</i>&nbsp;                        if (!lbl.isConstant() ||</b>
+<b class="nc"><i>121</i>&nbsp;                            lbl.getType() != Type.tInt) {</b>
+<b class="nc"><i>122</i>&nbsp;                            env.error(s.where, &quot;const.expr.required&quot;);</b>
+<i>123</i>&nbsp;                        }
+<i>124</i>&nbsp;                    }
+<i>125</i>&nbsp;                } else {
+<b class="nc"><i>126</i>&nbsp;                    if (hasDefault) {</b>
+<b class="nc"><i>127</i>&nbsp;                        env.error(s.where, &quot;duplicate.default&quot;);</b>
+<i>128</i>&nbsp;                    }
+<b class="nc"><i>129</i>&nbsp;                    hasDefault = true;</b>
+<i>130</i>&nbsp;                }
+<b class="nc"><i>131</i>&nbsp;            } else {</b>
+<b class="nc"><i>132</i>&nbsp;                vs = s.checkBlockStatement(env, newctx, vs, exp);</b>
+<i>133</i>&nbsp;            }
+<i>134</i>&nbsp;        }
+<b class="nc"><i>135</i>&nbsp;        if (!vs.isDeadEnd()) {</b>
+<b class="nc"><i>136</i>&nbsp;            newctx.vsBreak = newctx.vsBreak.join(vs);</b>
+<i>137</i>&nbsp;        }
+<b class="nc"><i>138</i>&nbsp;        if (hasDefault)</b>
+<b class="nc"><i>139</i>&nbsp;            vset = newctx.vsBreak;</b>
+<b class="nc"><i>140</i>&nbsp;        return ctx.removeAdditionalVars(vset);</b>
+<i>141</i>&nbsp;    }
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;    /**
+<i>144</i>&nbsp;     * Inline
+<i>145</i>&nbsp;     */
+<i>146</i>&nbsp;    public Statement inline(Environment env, Context ctx) {
+<b class="nc"><i>147</i>&nbsp;        ctx = new Context(ctx, this);</b>
+<b class="nc"><i>148</i>&nbsp;        expr = expr.inlineValue(env, ctx);</b>
+<b class="nc"><i>149</i>&nbsp;        for (int i = 0 ; i &lt; args.length ; i++) {</b>
+<b class="nc"><i>150</i>&nbsp;            if (args[i] != null) {</b>
+<b class="nc"><i>151</i>&nbsp;                args[i] = args[i].inline(env, ctx);</b>
+<i>152</i>&nbsp;            }
+<i>153</i>&nbsp;        }
+<b class="nc"><i>154</i>&nbsp;        return this;</b>
+<i>155</i>&nbsp;    }
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;    /**
+<i>158</i>&nbsp;     * Create a copy of the statement for method inlining
+<i>159</i>&nbsp;     */
+<i>160</i>&nbsp;    public Statement copyInline(Context ctx, boolean valNeeded) {
+<b class="nc"><i>161</i>&nbsp;        SwitchStatement s = (SwitchStatement)clone();</b>
+<b class="nc"><i>162</i>&nbsp;        s.expr = expr.copyInline(ctx);</b>
+<b class="nc"><i>163</i>&nbsp;        s.args = new Statement[args.length];</b>
+<b class="nc"><i>164</i>&nbsp;        for (int i = 0 ; i &lt; args.length ; i++) {</b>
+<b class="nc"><i>165</i>&nbsp;            if (args[i] != null) {</b>
+<b class="nc"><i>166</i>&nbsp;                s.args[i] = args[i].copyInline(ctx, valNeeded);</b>
+<i>167</i>&nbsp;            }
+<i>168</i>&nbsp;        }
+<b class="nc"><i>169</i>&nbsp;        return s;</b>
+<i>170</i>&nbsp;    }
+<i>171</i>&nbsp;
+<i>172</i>&nbsp;    /**
+<i>173</i>&nbsp;     * The cost of inlining this statement
+<i>174</i>&nbsp;     */
+<i>175</i>&nbsp;    public int costInline(int thresh, Environment env, Context ctx) {
+<b class="nc"><i>176</i>&nbsp;        int cost = expr.costInline(thresh, env, ctx);</b>
+<b class="nc"><i>177</i>&nbsp;        for (int i = 0 ; (i &lt; args.length) &amp;&amp; (cost &lt; thresh) ; i++) {</b>
+<b class="nc"><i>178</i>&nbsp;            if (args[i] != null) {</b>
+<b class="nc"><i>179</i>&nbsp;                cost += args[i].costInline(thresh, env, ctx);</b>
+<i>180</i>&nbsp;            }
+<i>181</i>&nbsp;        }
+<b class="nc"><i>182</i>&nbsp;        return cost;</b>
+<i>183</i>&nbsp;    }
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;    /**
+<i>186</i>&nbsp;     * Code
+<i>187</i>&nbsp;     */
+<i>188</i>&nbsp;    public void code(Environment env, Context ctx, Assembler asm) {
+<b class="nc"><i>189</i>&nbsp;        CodeContext newctx = new CodeContext(ctx, this);</b>
+<i>190</i>&nbsp;
+<b class="nc"><i>191</i>&nbsp;        expr.codeValue(env, newctx, asm);</b>
+<i>192</i>&nbsp;
+<b class="nc"><i>193</i>&nbsp;        SwitchData sw = new SwitchData();</b>
+<b class="nc"><i>194</i>&nbsp;        boolean hasDefault = false;</b>
+<i>195</i>&nbsp;
+<b class="nc"><i>196</i>&nbsp;        for (int i = 0 ; i &lt; args.length ; i++) {</b>
+<b class="nc"><i>197</i>&nbsp;            Statement s = args[i];</b>
+<b class="nc"><i>198</i>&nbsp;            if ((s != null) &amp;&amp; (s.op == CASE)) {</b>
+<b class="nc"><i>199</i>&nbsp;                Expression e = ((CaseStatement)s).expr;</b>
+<b class="nc"><i>200</i>&nbsp;                if (e != null) {</b>
+<b class="nc"><i>201</i>&nbsp;                    sw.add(((IntegerExpression)e).value, new Label());</b>
+<i>202</i>&nbsp;                }
+<i>203</i>&nbsp;// JCOV
+<i>204</i>&nbsp;                else {
+<b class="nc"><i>205</i>&nbsp;                    hasDefault = true;</b>
+<i>206</i>&nbsp;                }
+<i>207</i>&nbsp;// end JCOV
+<i>208</i>&nbsp;            }
+<i>209</i>&nbsp;        }
+<i>210</i>&nbsp;
+<i>211</i>&nbsp;// JCOV
+<b class="nc"><i>212</i>&nbsp;        if (env.coverage())</b>
+<b class="nc"><i>213</i>&nbsp;            sw.initTableCase();</b>
+<i>214</i>&nbsp;// end JCOV
+<b class="nc"><i>215</i>&nbsp;        asm.add(where, opc_tableswitch, sw);</b>
+<i>216</i>&nbsp;
+<b class="nc"><i>217</i>&nbsp;        for (int i = 0 ; i &lt; args.length ; i++) {</b>
+<b class="nc"><i>218</i>&nbsp;            Statement s = args[i];</b>
+<b class="nc"><i>219</i>&nbsp;            if (s != null) {</b>
+<b class="nc"><i>220</i>&nbsp;                if (s.op == CASE) {</b>
+<b class="nc"><i>221</i>&nbsp;                    Expression e = ((CaseStatement)s).expr;</b>
+<b class="nc"><i>222</i>&nbsp;                    if (e != null) {</b>
+<b class="nc"><i>223</i>&nbsp;                        asm.add(sw.get(((IntegerExpression)e).value));</b>
+<i>224</i>&nbsp;// JCOV
+<b class="nc"><i>225</i>&nbsp;                        sw.addTableCase(((IntegerExpression)e).value, s.where);</b>
+<i>226</i>&nbsp;// end JCOV
+<i>227</i>&nbsp;                    } else {
+<b class="nc"><i>228</i>&nbsp;                        asm.add(sw.getDefaultLabel());</b>
+<i>229</i>&nbsp;// JCOV
+<b class="nc"><i>230</i>&nbsp;                        sw.addTableDefault(s.where);</b>
+<i>231</i>&nbsp;// end JCOV
+<i>232</i>&nbsp;/* JCOV                 hasDefault = true;   end JCOV */
+<i>233</i>&nbsp;                    }
+<b class="nc"><i>234</i>&nbsp;                } else {</b>
+<b class="nc"><i>235</i>&nbsp;                    s.code(env, newctx, asm);</b>
+<i>236</i>&nbsp;                }
+<i>237</i>&nbsp;            }
+<i>238</i>&nbsp;        }
+<i>239</i>&nbsp;
+<b class="nc"><i>240</i>&nbsp;        if (!hasDefault) {</b>
+<b class="nc"><i>241</i>&nbsp;            asm.add(sw.getDefaultLabel());</b>
+<i>242</i>&nbsp;        }
+<b class="nc"><i>243</i>&nbsp;        asm.add(newctx.breakLabel);</b>
+<i>244</i>&nbsp;    }
+<i>245</i>&nbsp;
+<i>246</i>&nbsp;    /**
+<i>247</i>&nbsp;     * Print
+<i>248</i>&nbsp;     */
+<i>249</i>&nbsp;    public void print(PrintStream out, int indent) {
+<b class="nc"><i>250</i>&nbsp;        super.print(out, indent);</b>
+<b class="nc"><i>251</i>&nbsp;        out.print(&quot;switch (&quot;);</b>
+<b class="nc"><i>252</i>&nbsp;        expr.print(out);</b>
+<b class="nc"><i>253</i>&nbsp;        out.print(&quot;) {\n&quot;);</b>
+<b class="nc"><i>254</i>&nbsp;        for (int i = 0 ; i &lt; args.length ; i++) {</b>
+<b class="nc"><i>255</i>&nbsp;            if (args[i] != null) {</b>
+<b class="nc"><i>256</i>&nbsp;                printIndent(out, indent + 1);</b>
+<b class="nc"><i>257</i>&nbsp;                args[i].print(out, indent + 1);</b>
+<b class="nc"><i>258</i>&nbsp;                out.print(&quot;\n&quot;);</b>
+<i>259</i>&nbsp;            }
+<i>260</i>&nbsp;        }
+<b class="nc"><i>261</i>&nbsp;        printIndent(out, indent);</b>
+<b class="nc"><i>262</i>&nbsp;        out.print(&quot;}&quot;);</b>
+<i>263</i>&nbsp;    }
+<i>264</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,774 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Invokers</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.lang.invoke</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Invokers (java.lang.invoke)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Invokers</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 25)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 189)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">Invokers$Lazy</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 27)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 195)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2008, 2016, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.lang.invoke;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import jdk.internal.vm.annotation.DontInline;
+<i>29</i>&nbsp;import jdk.internal.vm.annotation.ForceInline;
+<i>30</i>&nbsp;import jdk.internal.vm.annotation.Stable;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;import java.lang.reflect.Array;
+<i>33</i>&nbsp;import java.util.Arrays;
+<i>34</i>&nbsp;
+<i>35</i>&nbsp;import static java.lang.invoke.MethodHandleStatics.*;
+<i>36</i>&nbsp;import static java.lang.invoke.MethodHandleNatives.Constants.*;
+<i>37</i>&nbsp;import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
+<i>38</i>&nbsp;import static java.lang.invoke.LambdaForm.*;
+<i>39</i>&nbsp;import static java.lang.invoke.LambdaForm.Kind.*;
+<b class="nc"><i>40</i>&nbsp;</b>
+<i>41</i>&nbsp;/**
+<i>42</i>&nbsp; * Construction and caching of often-used invokers.
+<i>43</i>&nbsp; * @author jrose
+<i>44</i>&nbsp; */
+<b class="nc"><i>45</i>&nbsp;class Invokers {</b>
+<i>46</i>&nbsp;    // exact type (sans leading target MH) for the outgoing call
+<i>47</i>&nbsp;    private final MethodType targetType;
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;    // Cached adapter information:
+<i>50</i>&nbsp;    private final @Stable MethodHandle[] invokers = new MethodHandle[INV_LIMIT];
+<i>51</i>&nbsp;    // Indexes into invokers:
+<i>52</i>&nbsp;    static final int
+<i>53</i>&nbsp;            INV_EXACT          =  0,  // MethodHandles.exactInvoker
+<i>54</i>&nbsp;            INV_GENERIC        =  1,  // MethodHandles.invoker (generic invocation)
+<i>55</i>&nbsp;            INV_BASIC          =  2,  // MethodHandles.basicInvoker
+<b class="nc"><i>56</i>&nbsp;            INV_LIMIT          =  3;</b>
+<b class="nc"><i>57</i>&nbsp;</b>
+<i>58</i>&nbsp;    /** Compute and cache information common to all collecting adapters
+<i>59</i>&nbsp;     *  that implement members of the erasure-family of the given erased type.
+<i>60</i>&nbsp;     */
+<b class="nc"><i>61</i>&nbsp;    /*non-public*/ Invokers(MethodType targetType) {</b>
+<b class="nc"><i>62</i>&nbsp;        this.targetType = targetType;</b>
+<b class="nc"><i>63</i>&nbsp;    }</b>
+<b class="nc"><i>64</i>&nbsp;</b>
+<i>65</i>&nbsp;    /*non-public*/ MethodHandle exactInvoker() {
+<i>66</i>&nbsp;        MethodHandle invoker = cachedInvoker(INV_EXACT);
+<i>67</i>&nbsp;        if (invoker != null)  return invoker;
+<b class="nc"><i>68</i>&nbsp;        invoker = makeExactOrGeneralInvoker(true);</b>
+<b class="nc"><i>69</i>&nbsp;        return setCachedInvoker(INV_EXACT, invoker);</b>
+<b class="nc"><i>70</i>&nbsp;    }</b>
+<b class="nc"><i>71</i>&nbsp;</b>
+<i>72</i>&nbsp;    /*non-public*/ MethodHandle genericInvoker() {
+<i>73</i>&nbsp;        MethodHandle invoker = cachedInvoker(INV_GENERIC);
+<i>74</i>&nbsp;        if (invoker != null)  return invoker;
+<b class="nc"><i>75</i>&nbsp;        invoker = makeExactOrGeneralInvoker(false);</b>
+<b class="nc"><i>76</i>&nbsp;        return setCachedInvoker(INV_GENERIC, invoker);</b>
+<b class="nc"><i>77</i>&nbsp;    }</b>
+<b class="nc"><i>78</i>&nbsp;</b>
+<i>79</i>&nbsp;    /*non-public*/ MethodHandle basicInvoker() {
+<b class="nc"><i>80</i>&nbsp;        MethodHandle invoker = cachedInvoker(INV_BASIC);</b>
+<i>81</i>&nbsp;        if (invoker != null)  return invoker;
+<b class="nc"><i>82</i>&nbsp;        MethodType basicType = targetType.basicType();</b>
+<b class="nc"><i>83</i>&nbsp;        if (basicType != targetType) {</b>
+<b class="nc"><i>84</i>&nbsp;            // double cache; not used significantly</b>
+<b class="nc"><i>85</i>&nbsp;            return setCachedInvoker(INV_BASIC, basicType.invokers().basicInvoker());</b>
+<b class="nc"><i>86</i>&nbsp;        }</b>
+<b class="nc"><i>87</i>&nbsp;        invoker = basicType.form().cachedMethodHandle(MethodTypeForm.MH_BASIC_INV);</b>
+<i>88</i>&nbsp;        if (invoker == null) {
+<b class="nc"><i>89</i>&nbsp;            MemberName method = invokeBasicMethod(basicType);</b>
+<i>90</i>&nbsp;            invoker = DirectMethodHandle.make(method);
+<i>91</i>&nbsp;            assert(checkInvoker(invoker));
+<i>92</i>&nbsp;            invoker = basicType.form().setCachedMethodHandle(MethodTypeForm.MH_BASIC_INV, invoker);
+<b class="nc"><i>93</i>&nbsp;        }</b>
+<i>94</i>&nbsp;        return setCachedInvoker(INV_BASIC, invoker);
+<i>95</i>&nbsp;    }
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;    /*non-public*/ MethodHandle varHandleMethodInvoker(VarHandle.AccessMode ak) {
+<b class="nc"><i>98</i>&nbsp;        // TODO cache invoker</b>
+<b class="nc"><i>99</i>&nbsp;        return makeVarHandleMethodInvoker(ak, false);</b>
+<b class="nc"><i>100</i>&nbsp;    }</b>
+<i>101</i>&nbsp;
+<i>102</i>&nbsp;    /*non-public*/ MethodHandle varHandleMethodExactInvoker(VarHandle.AccessMode ak) {
+<i>103</i>&nbsp;        // TODO cache invoker
+<b class="nc"><i>104</i>&nbsp;        return makeVarHandleMethodInvoker(ak, true);</b>
+<b class="nc"><i>105</i>&nbsp;    }</b>
+<b class="nc"><i>106</i>&nbsp;</b>
+<b class="nc"><i>107</i>&nbsp;    private MethodHandle cachedInvoker(int idx) {</b>
+<b class="nc"><i>108</i>&nbsp;        return invokers[idx];</b>
+<b class="nc"><i>109</i>&nbsp;    }</b>
+<b class="nc"><i>110</i>&nbsp;</b>
+<b class="nc"><i>111</i>&nbsp;    private synchronized MethodHandle setCachedInvoker(int idx, final MethodHandle invoker) {</b>
+<b class="nc"><i>112</i>&nbsp;        // Simulate a CAS, to avoid racy duplication of results.</b>
+<b class="nc"><i>113</i>&nbsp;        MethodHandle prev = invokers[idx];</b>
+<i>114</i>&nbsp;        if (prev != null)  return prev;
+<i>115</i>&nbsp;        return invokers[idx] = invoker;
+<i>116</i>&nbsp;    }
+<i>117</i>&nbsp;
+<i>118</i>&nbsp;    private MethodHandle makeExactOrGeneralInvoker(boolean isExact) {
+<b class="nc"><i>119</i>&nbsp;        MethodType mtype = targetType;</b>
+<b class="nc"><i>120</i>&nbsp;        MethodType invokerType = mtype.invokerType();</b>
+<b class="nc"><i>121</i>&nbsp;        int which = (isExact ? MethodTypeForm.LF_EX_INVOKER : MethodTypeForm.LF_GEN_INVOKER);</b>
+<i>122</i>&nbsp;        LambdaForm lform = invokeHandleForm(mtype, false, which);
+<i>123</i>&nbsp;        MethodHandle invoker = BoundMethodHandle.bindSingle(invokerType, lform, mtype);
+<i>124</i>&nbsp;        String whichName = (isExact ? &quot;invokeExact&quot; : &quot;invoke&quot;);
+<i>125</i>&nbsp;        invoker = invoker.withInternalMemberName(MemberName.makeMethodHandleInvoke(whichName, mtype), false);
+<i>126</i>&nbsp;        assert(checkInvoker(invoker));
+<b class="nc"><i>127</i>&nbsp;        maybeCompileToBytecode(invoker);</b>
+<i>128</i>&nbsp;        return invoker;
+<i>129</i>&nbsp;    }
+<b class="nc"><i>130</i>&nbsp;</b>
+<b class="nc"><i>131</i>&nbsp;    private MethodHandle makeVarHandleMethodInvoker(VarHandle.AccessMode ak, boolean isExact) {</b>
+<b class="nc"><i>132</i>&nbsp;        MethodType mtype = targetType;</b>
+<i>133</i>&nbsp;        MethodType invokerType = mtype.insertParameterTypes(0, VarHandle.class);
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;        LambdaForm lform = varHandleMethodInvokerHandleForm(ak, mtype, isExact);
+<i>136</i>&nbsp;        VarHandle.AccessDescriptor ad = new VarHandle.AccessDescriptor(mtype, ak.at.ordinal(), ak.ordinal());
+<b class="nc"><i>137</i>&nbsp;        MethodHandle invoker = BoundMethodHandle.bindSingle(invokerType, lform, ad);</b>
+<b class="nc"><i>138</i>&nbsp;</b>
+<b class="nc"><i>139</i>&nbsp;        invoker = invoker.withInternalMemberName(MemberName.makeVarHandleMethodInvoke(ak.methodName(), mtype), false);</b>
+<b class="nc"><i>140</i>&nbsp;        assert(checkVarHandleInvoker(invoker));</b>
+<b class="nc"><i>141</i>&nbsp;</b>
+<b class="nc"><i>142</i>&nbsp;        maybeCompileToBytecode(invoker);</b>
+<i>143</i>&nbsp;        return invoker;
+<i>144</i>&nbsp;    }
+<i>145</i>&nbsp;
+<i>146</i>&nbsp;    /** If the target type seems to be common enough, eagerly compile the invoker to bytecodes. */
+<i>147</i>&nbsp;    private void maybeCompileToBytecode(MethodHandle invoker) {
+<i>148</i>&nbsp;        final int EAGER_COMPILE_ARITY_LIMIT = 10;
+<i>149</i>&nbsp;        if (targetType == targetType.erase() &amp;&amp;
+<i>150</i>&nbsp;            targetType.parameterCount() &lt; EAGER_COMPILE_ARITY_LIMIT) {
+<i>151</i>&nbsp;            invoker.form.compileToBytecode();
+<i>152</i>&nbsp;        }
+<i>153</i>&nbsp;    }
+<b class="nc"><i>154</i>&nbsp;</b>
+<b class="nc"><i>155</i>&nbsp;    // This next one is called from LambdaForm.NamedFunction.&lt;init&gt;.</b>
+<b class="nc"><i>156</i>&nbsp;    /*non-public*/ static MemberName invokeBasicMethod(MethodType basicType) {</b>
+<b class="nc"><i>157</i>&nbsp;        assert(basicType == basicType.basicType());</b>
+<b class="nc"><i>158</i>&nbsp;        try {</b>
+<i>159</i>&nbsp;            //Lookup.findVirtual(MethodHandle.class, name, type);
+<i>160</i>&nbsp;            return IMPL_LOOKUP.resolveOrFail(REF_invokeVirtual, MethodHandle.class, &quot;invokeBasic&quot;, basicType);
+<i>161</i>&nbsp;        } catch (ReflectiveOperationException ex) {
+<i>162</i>&nbsp;            throw newInternalError(&quot;JVM cannot find invoker for &quot;+basicType, ex);
+<b class="nc"><i>163</i>&nbsp;        }</b>
+<b class="nc"><i>164</i>&nbsp;    }</b>
+<b class="nc"><i>165</i>&nbsp;</b>
+<b class="nc"><i>166</i>&nbsp;    private boolean checkInvoker(MethodHandle invoker) {</b>
+<b class="nc"><i>167</i>&nbsp;        assert(targetType.invokerType().equals(invoker.type()))</b>
+<i>168</i>&nbsp;                : java.util.Arrays.asList(targetType, targetType.invokerType(), invoker);
+<i>169</i>&nbsp;        assert(invoker.internalMemberName() == null ||
+<i>170</i>&nbsp;               invoker.internalMemberName().getMethodType().equals(targetType));
+<b class="nc"><i>171</i>&nbsp;        assert(!invoker.isVarargsCollector());</b>
+<b class="nc"><i>172</i>&nbsp;        return true;</b>
+<b class="nc"><i>173</i>&nbsp;    }</b>
+<b class="nc"><i>174</i>&nbsp;</b>
+<b class="nc"><i>175</i>&nbsp;    private boolean checkVarHandleInvoker(MethodHandle invoker) {</b>
+<b class="nc"><i>176</i>&nbsp;        MethodType invokerType = targetType.insertParameterTypes(0, VarHandle.class);</b>
+<b class="nc"><i>177</i>&nbsp;        assert(invokerType.equals(invoker.type()))</b>
+<i>178</i>&nbsp;                : java.util.Arrays.asList(targetType, invokerType, invoker);
+<b class="nc"><i>179</i>&nbsp;        assert(invoker.internalMemberName() == null ||</b>
+<b class="nc"><i>180</i>&nbsp;               invoker.internalMemberName().getMethodType().equals(targetType));</b>
+<i>181</i>&nbsp;        assert(!invoker.isVarargsCollector());
+<i>182</i>&nbsp;        return true;
+<i>183</i>&nbsp;    }
+<b class="nc"><i>184</i>&nbsp;</b>
+<i>185</i>&nbsp;    /**
+<i>186</i>&nbsp;     * Find or create an invoker which passes unchanged a given number of arguments
+<i>187</i>&nbsp;     * and spreads the rest from a trailing array argument.
+<i>188</i>&nbsp;     * The invoker target type is the post-spread type {@code (TYPEOF(uarg*), TYPEOF(sarg*))=&gt;RT}.
+<i>189</i>&nbsp;     * All the {@code sarg}s must have a common type {@code C}.  (If there are none, {@code Object} is assumed.}
+<i>190</i>&nbsp;     * @param leadingArgCount the number of unchanged (non-spread) arguments
+<b class="nc"><i>191</i>&nbsp;     * @return {@code invoker.invokeExact(mh, uarg*, C[]{sarg*}) := (RT)mh.invoke(uarg*, sarg*)}</b>
+<b class="nc"><i>192</i>&nbsp;     */</b>
+<b class="nc"><i>193</i>&nbsp;    /*non-public*/ MethodHandle spreadInvoker(int leadingArgCount) {</b>
+<b class="nc"><i>194</i>&nbsp;        int spreadArgCount = targetType.parameterCount() - leadingArgCount;</b>
+<i>195</i>&nbsp;        MethodType postSpreadType = targetType;
+<i>196</i>&nbsp;        Class&lt;?&gt; argArrayType = impliedRestargType(postSpreadType, leadingArgCount);
+<b class="nc"><i>197</i>&nbsp;        if (postSpreadType.parameterSlotCount() &lt;= MethodType.MAX_MH_INVOKER_ARITY) {</b>
+<b class="nc"><i>198</i>&nbsp;            return genericInvoker().asSpreader(argArrayType, spreadArgCount);</b>
+<b class="nc"><i>199</i>&nbsp;        }</b>
+<i>200</i>&nbsp;        // Cannot build a generic invoker here of type ginvoker.invoke(mh, a*[254]).
+<b class="nc"><i>201</i>&nbsp;        // Instead, factor sinvoker.invoke(mh, a) into ainvoker.invoke(filter(mh), a)</b>
+<i>202</i>&nbsp;        // where filter(mh) == mh.asSpreader(Object[], spreadArgCount)
+<b class="nc"><i>203</i>&nbsp;        MethodType preSpreadType = postSpreadType</b>
+<i>204</i>&nbsp;            .replaceParameterTypes(leadingArgCount, postSpreadType.parameterCount(), argArrayType);
+<i>205</i>&nbsp;        MethodHandle arrayInvoker = MethodHandles.invoker(preSpreadType);
+<i>206</i>&nbsp;        MethodHandle makeSpreader = MethodHandles.insertArguments(Lazy.MH_asSpreader, 1, argArrayType, spreadArgCount);
+<i>207</i>&nbsp;        return MethodHandles.filterArgument(arrayInvoker, 0, makeSpreader);
+<i>208</i>&nbsp;    }
+<i>209</i>&nbsp;
+<i>210</i>&nbsp;    private static Class&lt;?&gt; impliedRestargType(MethodType restargType, int fromPos) {
+<i>211</i>&nbsp;        if (restargType.isGeneric())  return Object[].class;  // can be nothing else
+<i>212</i>&nbsp;        int maxPos = restargType.parameterCount();
+<i>213</i>&nbsp;        if (fromPos &gt;= maxPos)  return Object[].class;  // reasonable default
+<i>214</i>&nbsp;        Class&lt;?&gt; argType = restargType.parameterType(fromPos);
+<i>215</i>&nbsp;        for (int i = fromPos+1; i &lt; maxPos; i++) {
+<i>216</i>&nbsp;            if (argType != restargType.parameterType(i))
+<i>217</i>&nbsp;                throw newIllegalArgumentException(&quot;need homogeneous rest arguments&quot;, restargType);
+<i>218</i>&nbsp;        }
+<i>219</i>&nbsp;        if (argType == Object.class)  return Object[].class;
+<b class="nc"><i>220</i>&nbsp;        return Array.newInstance(argType, 0).getClass();</b>
+<b class="nc"><i>221</i>&nbsp;    }</b>
+<b class="nc"><i>222</i>&nbsp;</b>
+<i>223</i>&nbsp;    public String toString() {
+<b class="nc"><i>224</i>&nbsp;        return &quot;Invokers&quot;+targetType;</b>
+<i>225</i>&nbsp;    }
+<i>226</i>&nbsp;
+<i>227</i>&nbsp;    static MemberName methodHandleInvokeLinkerMethod(String name,
+<b class="nc"><i>228</i>&nbsp;                                                     MethodType mtype,</b>
+<b class="nc"><i>229</i>&nbsp;                                                     Object[] appendixResult) {</b>
+<b class="nc"><i>230</i>&nbsp;        int which;</b>
+<b class="nc"><i>231</i>&nbsp;        switch (name) {</b>
+<b class="nc"><i>232</i>&nbsp;            case &quot;invokeExact&quot;:  which = MethodTypeForm.LF_EX_LINKER; break;</b>
+<b class="nc"><i>233</i>&nbsp;            case &quot;invoke&quot;:       which = MethodTypeForm.LF_GEN_LINKER; break;</b>
+<i>234</i>&nbsp;            default:             throw new InternalError(&quot;not invoker: &quot;+name);
+<i>235</i>&nbsp;        }
+<b class="nc"><i>236</i>&nbsp;        LambdaForm lform;</b>
+<b class="nc"><i>237</i>&nbsp;        if (mtype.parameterSlotCount() &lt;= MethodType.MAX_MH_ARITY - MH_LINKER_ARG_APPENDED) {</b>
+<b class="nc"><i>238</i>&nbsp;            lform = invokeHandleForm(mtype, false, which);</b>
+<i>239</i>&nbsp;            appendixResult[0] = mtype;
+<i>240</i>&nbsp;        } else {
+<i>241</i>&nbsp;            lform = invokeHandleForm(mtype, true, which);
+<i>242</i>&nbsp;        }
+<b class="nc"><i>243</i>&nbsp;        return lform.vmentry;</b>
+<b class="nc"><i>244</i>&nbsp;    }</b>
+<b class="nc"><i>245</i>&nbsp;</b>
+<b class="nc"><i>246</i>&nbsp;    // argument count to account for trailing &quot;appendix value&quot; (typically the mtype)</b>
+<b class="nc"><i>247</i>&nbsp;    private static final int MH_LINKER_ARG_APPENDED = 1;</b>
+<b class="nc"><i>248</i>&nbsp;</b>
+<b class="nc"><i>249</i>&nbsp;    /** Returns an adapter for invokeExact or generic invoke, as a MH or constant pool linker.</b>
+<b class="nc"><i>250</i>&nbsp;     * If !customized, caller is responsible for supplying, during adapter execution,</b>
+<b class="nc"><i>251</i>&nbsp;     * a copy of the exact mtype.  This is because the adapter might be generalized to</b>
+<b class="nc"><i>252</i>&nbsp;     * a basic type.</b>
+<b class="nc"><i>253</i>&nbsp;     * @param mtype the caller&#39;s method type (either basic or full-custom)</b>
+<b class="nc"><i>254</i>&nbsp;     * @param customized whether to use a trailing appendix argument (to carry the mtype)</b>
+<b class="nc"><i>255</i>&nbsp;     * @param which bit-encoded 0x01 whether it is a CP adapter (&quot;linker&quot;) or MHs.invoker value (&quot;invoker&quot;);</b>
+<i>256</i>&nbsp;     *                          0x02 whether it is for invokeExact or generic invoke
+<b class="nc"><i>257</i>&nbsp;     */</b>
+<i>258</i>&nbsp;    static LambdaForm invokeHandleForm(MethodType mtype, boolean customized, int which) {
+<b class="nc"><i>259</i>&nbsp;        boolean isCached;</b>
+<b class="nc"><i>260</i>&nbsp;        if (!customized) {</b>
+<b class="nc"><i>261</i>&nbsp;            mtype = mtype.basicType();  // normalize Z to I, String to Object, etc.</b>
+<b class="nc"><i>262</i>&nbsp;            isCached = true;</b>
+<b class="nc"><i>263</i>&nbsp;        } else {</b>
+<b class="nc"><i>264</i>&nbsp;            isCached = false;  // maybe cache if mtype == mtype.basicType()</b>
+<b class="nc"><i>265</i>&nbsp;        }</b>
+<b class="nc"><i>266</i>&nbsp;        boolean isLinker, isGeneric;</b>
+<b class="nc"><i>267</i>&nbsp;        Kind kind;</b>
+<i>268</i>&nbsp;        switch (which) {
+<i>269</i>&nbsp;        case MethodTypeForm.LF_EX_LINKER:   isLinker = true;  isGeneric = false; kind = EXACT_LINKER; break;
+<i>270</i>&nbsp;        case MethodTypeForm.LF_EX_INVOKER:  isLinker = false; isGeneric = false; kind = EXACT_INVOKER; break;
+<i>271</i>&nbsp;        case MethodTypeForm.LF_GEN_LINKER:  isLinker = true;  isGeneric = true;  kind = GENERIC_LINKER; break;
+<b class="nc"><i>272</i>&nbsp;        case MethodTypeForm.LF_GEN_INVOKER: isLinker = false; isGeneric = true;  kind = GENERIC_INVOKER; break;</b>
+<b class="nc"><i>273</i>&nbsp;        default: throw new InternalError();</b>
+<b class="nc"><i>274</i>&nbsp;        }</b>
+<b class="nc"><i>275</i>&nbsp;        LambdaForm lform;</b>
+<b class="nc"><i>276</i>&nbsp;        if (isCached) {</b>
+<i>277</i>&nbsp;            lform = mtype.form().cachedLambdaForm(which);
+<i>278</i>&nbsp;            if (lform != null)  return lform;
+<b class="nc"><i>279</i>&nbsp;        }</b>
+<i>280</i>&nbsp;        // exactInvokerForm (Object,Object)Object
+<b class="nc"><i>281</i>&nbsp;        //   link with java.lang.invoke.MethodHandle.invokeBasic(MethodHandle,Object,Object)Object/invokeSpecial</b>
+<i>282</i>&nbsp;        final int THIS_MH      = 0;
+<b class="nc"><i>283</i>&nbsp;        final int CALL_MH      = THIS_MH + (isLinker ? 0 : 1);</b>
+<b class="nc"><i>284</i>&nbsp;        final int ARG_BASE     = CALL_MH + 1;</b>
+<i>285</i>&nbsp;        final int OUTARG_LIMIT = ARG_BASE + mtype.parameterCount();
+<b class="nc"><i>286</i>&nbsp;        final int INARG_LIMIT  = OUTARG_LIMIT + (isLinker &amp;&amp; !customized ? 1 : 0);</b>
+<b class="nc"><i>287</i>&nbsp;        int nameCursor = OUTARG_LIMIT;</b>
+<b class="nc"><i>288</i>&nbsp;        final int MTYPE_ARG    = customized ? -1 : nameCursor++;  // might be last in-argument</b>
+<b class="nc"><i>289</i>&nbsp;        final int CHECK_TYPE   = nameCursor++;</b>
+<b class="nc"><i>290</i>&nbsp;        final int CHECK_CUSTOM = (CUSTOMIZE_THRESHOLD &gt;= 0) ? nameCursor++ : -1;</b>
+<b class="nc"><i>291</i>&nbsp;        final int LINKER_CALL  = nameCursor++;</b>
+<b class="nc"><i>292</i>&nbsp;        MethodType invokerFormType = mtype.invokerType();</b>
+<i>293</i>&nbsp;        if (isLinker) {
+<i>294</i>&nbsp;            if (!customized)
+<i>295</i>&nbsp;                invokerFormType = invokerFormType.appendParameterTypes(MemberName.class);
+<i>296</i>&nbsp;        } else {
+<i>297</i>&nbsp;            invokerFormType = invokerFormType.invokerType();
+<b class="nc"><i>298</i>&nbsp;        }</b>
+<i>299</i>&nbsp;        Name[] names = arguments(nameCursor - INARG_LIMIT, invokerFormType);
+<i>300</i>&nbsp;        assert(names.length == nameCursor)
+<i>301</i>&nbsp;                : Arrays.asList(mtype, customized, which, nameCursor, names.length);
+<i>302</i>&nbsp;        if (MTYPE_ARG &gt;= INARG_LIMIT) {
+<i>303</i>&nbsp;            assert(names[MTYPE_ARG] == null);
+<i>304</i>&nbsp;            BoundMethodHandle.SpeciesData speciesData = BoundMethodHandle.speciesData_L();
+<b class="nc"><i>305</i>&nbsp;            names[THIS_MH] = names[THIS_MH].withConstraint(speciesData);</b>
+<b class="nc"><i>306</i>&nbsp;            NamedFunction getter = speciesData.getterFunction(0);</b>
+<b class="nc"><i>307</i>&nbsp;            names[MTYPE_ARG] = new Name(getter, names[THIS_MH]);</b>
+<b class="nc"><i>308</i>&nbsp;            // else if isLinker, then MTYPE is passed in from the caller (e.g., the JVM)</b>
+<b class="nc"><i>309</i>&nbsp;        }</b>
+<i>310</i>&nbsp;
+<i>311</i>&nbsp;        // Make the final call.  If isGeneric, then prepend the result of type checking.
+<i>312</i>&nbsp;        MethodType outCallType = mtype.basicType();
+<i>313</i>&nbsp;        Object[] outArgs = Arrays.copyOfRange(names, CALL_MH, OUTARG_LIMIT, Object[].class);
+<i>314</i>&nbsp;        Object mtypeArg = (customized ? mtype : names[MTYPE_ARG]);
+<i>315</i>&nbsp;        if (!isGeneric) {
+<i>316</i>&nbsp;            names[CHECK_TYPE] = new Name(getFunction(NF_checkExactType), names[CALL_MH], mtypeArg);
+<i>317</i>&nbsp;            // mh.invokeExact(a*):R =&gt; checkExactType(mh, TYPEOF(a*:R)); mh.invokeBasic(a*)
+<i>318</i>&nbsp;        } else {
+<b class="nc"><i>319</i>&nbsp;            names[CHECK_TYPE] = new Name(getFunction(NF_checkGenericType), names[CALL_MH], mtypeArg);</b>
+<b class="nc"><i>320</i>&nbsp;            // mh.invokeGeneric(a*):R =&gt; checkGenericType(mh, TYPEOF(a*:R)).invokeBasic(a*)</b>
+<b class="nc"><i>321</i>&nbsp;            outArgs[0] = names[CHECK_TYPE];</b>
+<i>322</i>&nbsp;        }
+<i>323</i>&nbsp;        if (CHECK_CUSTOM != -1) {
+<i>324</i>&nbsp;            names[CHECK_CUSTOM] = new Name(getFunction(NF_checkCustomized), outArgs[0]);
+<i>325</i>&nbsp;        }
+<i>326</i>&nbsp;        names[LINKER_CALL] = new Name(outCallType, outArgs);
+<i>327</i>&nbsp;        if (customized) {
+<i>328</i>&nbsp;            lform = new LambdaForm(INARG_LIMIT, names);
+<i>329</i>&nbsp;        } else {
+<i>330</i>&nbsp;            lform = new LambdaForm(INARG_LIMIT, names, kind);
+<i>331</i>&nbsp;        }
+<i>332</i>&nbsp;        if (isLinker)
+<i>333</i>&nbsp;            lform.compileToBytecode();  // JVM needs a real methodOop
+<i>334</i>&nbsp;        if (isCached)
+<i>335</i>&nbsp;            lform = mtype.form().setCachedLambdaForm(which, lform);
+<i>336</i>&nbsp;        return lform;
+<i>337</i>&nbsp;    }
+<i>338</i>&nbsp;
+<i>339</i>&nbsp;
+<i>340</i>&nbsp;    static MemberName varHandleInvokeLinkerMethod(VarHandle.AccessMode ak, MethodType mtype) {
+<i>341</i>&nbsp;        LambdaForm lform;
+<b class="nc"><i>342</i>&nbsp;        if (mtype.parameterSlotCount() &lt;= MethodType.MAX_MH_ARITY - MH_LINKER_ARG_APPENDED) {</b>
+<b class="nc"><i>343</i>&nbsp;            lform = varHandleMethodGenericLinkerHandleForm(ak, mtype);</b>
+<i>344</i>&nbsp;        } else {
+<i>345</i>&nbsp;            // TODO
+<i>346</i>&nbsp;            throw newInternalError(&quot;Unsupported parameter slot count &quot; + mtype.parameterSlotCount());
+<b class="nc"><i>347</i>&nbsp;        }</b>
+<b class="nc"><i>348</i>&nbsp;        return lform.vmentry;</b>
+<i>349</i>&nbsp;    }
+<i>350</i>&nbsp;
+<i>351</i>&nbsp;    private static LambdaForm varHandleMethodGenericLinkerHandleForm(VarHandle.AccessMode ak,
+<i>352</i>&nbsp;            MethodType mtype) {
+<b class="nc"><i>353</i>&nbsp;        // TODO Cache form?</b>
+<b class="nc"><i>354</i>&nbsp;</b>
+<b class="nc"><i>355</i>&nbsp;        final int THIS_VH      = 0;</b>
+<b class="nc"><i>356</i>&nbsp;        final int ARG_BASE     = THIS_VH + 1;</b>
+<i>357</i>&nbsp;        final int ARG_LIMIT = ARG_BASE + mtype.parameterCount();
+<i>358</i>&nbsp;        int nameCursor = ARG_LIMIT;
+<i>359</i>&nbsp;        final int VAD_ARG      = nameCursor++;
+<b class="nc"><i>360</i>&nbsp;        final int CHECK_TYPE   = nameCursor++;</b>
+<b class="nc"><i>361</i>&nbsp;        final int CHECK_CUSTOM = (CUSTOMIZE_THRESHOLD &gt;= 0) ? nameCursor++ : -1;</b>
+<b class="nc"><i>362</i>&nbsp;        final int LINKER_CALL  = nameCursor++;</b>
+<b class="nc"><i>363</i>&nbsp;</b>
+<b class="nc"><i>364</i>&nbsp;        Name[] names = new Name[LINKER_CALL + 1];</b>
+<b class="nc"><i>365</i>&nbsp;        names[THIS_VH] = argument(THIS_VH, BasicType.basicType(Object.class));</b>
+<b class="nc"><i>366</i>&nbsp;        for (int i = 0; i &lt; mtype.parameterCount(); i++) {</b>
+<b class="nc"><i>367</i>&nbsp;            names[ARG_BASE + i] = argument(ARG_BASE + i, BasicType.basicType(mtype.parameterType(i)));</b>
+<b class="nc"><i>368</i>&nbsp;        }</b>
+<b class="nc"><i>369</i>&nbsp;        names[VAD_ARG] = new Name(ARG_LIMIT, BasicType.basicType(Object.class));</b>
+<b class="nc"><i>370</i>&nbsp;</b>
+<b class="nc"><i>371</i>&nbsp;        names[CHECK_TYPE] = new Name(getFunction(NF_checkVarHandleGenericType), names[THIS_VH], names[VAD_ARG]);</b>
+<b class="nc"><i>372</i>&nbsp;</b>
+<i>373</i>&nbsp;        Object[] outArgs = new Object[ARG_LIMIT + 1];
+<i>374</i>&nbsp;        outArgs[0] = names[CHECK_TYPE];
+<b class="nc"><i>375</i>&nbsp;        for (int i = 0; i &lt; ARG_LIMIT; i++) {</b>
+<i>376</i>&nbsp;            outArgs[i + 1] = names[i];
+<b class="nc"><i>377</i>&nbsp;        }</b>
+<b class="nc"><i>378</i>&nbsp;</b>
+<b class="nc"><i>379</i>&nbsp;        if (CHECK_CUSTOM != -1) {</b>
+<b class="nc"><i>380</i>&nbsp;            names[CHECK_CUSTOM] = new Name(getFunction(NF_checkCustomized), outArgs[0]);</b>
+<b class="nc"><i>381</i>&nbsp;        }</b>
+<b class="nc"><i>382</i>&nbsp;</b>
+<b class="nc"><i>383</i>&nbsp;        MethodType outCallType = mtype.insertParameterTypes(0, VarHandle.class)</b>
+<i>384</i>&nbsp;                .basicType();
+<i>385</i>&nbsp;        names[LINKER_CALL] = new Name(outCallType, outArgs);
+<i>386</i>&nbsp;        LambdaForm lform = new LambdaForm(ARG_LIMIT + 1, names, VARHANDLE_LINKER);
+<i>387</i>&nbsp;        if (LambdaForm.debugNames()) {
+<i>388</i>&nbsp;            String name = ak.methodName() + &quot;:VarHandle_invoke_MT_&quot; +
+<i>389</i>&nbsp;                    shortenSignature(basicTypeSignature(mtype));
+<b class="nc"><i>390</i>&nbsp;            LambdaForm.associateWithDebugName(lform, name);</b>
+<i>391</i>&nbsp;        }
+<i>392</i>&nbsp;        lform.compileToBytecode();
+<i>393</i>&nbsp;        return lform;
+<i>394</i>&nbsp;    }
+<i>395</i>&nbsp;
+<b class="nc"><i>396</i>&nbsp;    private static LambdaForm varHandleMethodInvokerHandleForm(VarHandle.AccessMode ak,</b>
+<b class="nc"><i>397</i>&nbsp;            MethodType mtype, boolean isExact) {</b>
+<b class="nc"><i>398</i>&nbsp;        // TODO Cache form?</b>
+<i>399</i>&nbsp;
+<i>400</i>&nbsp;        final int THIS_MH      = 0;
+<i>401</i>&nbsp;        final int CALL_VH      = THIS_MH + 1;
+<i>402</i>&nbsp;        final int ARG_BASE     = CALL_VH + 1;
+<i>403</i>&nbsp;        final int ARG_LIMIT = ARG_BASE + mtype.parameterCount();
+<i>404</i>&nbsp;        int nameCursor = ARG_LIMIT;
+<b class="nc"><i>405</i>&nbsp;        final int VAD_ARG      = nameCursor++;</b>
+<b class="nc"><i>406</i>&nbsp;        final int CHECK_TYPE   = nameCursor++;</b>
+<b class="nc"><i>407</i>&nbsp;        final int LINKER_CALL  = nameCursor++;</b>
+<i>408</i>&nbsp;
+<b class="nc"><i>409</i>&nbsp;        Name[] names = new Name[LINKER_CALL + 1];</b>
+<i>410</i>&nbsp;        names[THIS_MH] = argument(THIS_MH, BasicType.basicType(Object.class));
+<i>411</i>&nbsp;        names[CALL_VH] = argument(CALL_VH, BasicType.basicType(Object.class));
+<i>412</i>&nbsp;        for (int i = 0; i &lt; mtype.parameterCount(); i++) {
+<i>413</i>&nbsp;            names[ARG_BASE + i] = argument(ARG_BASE + i, BasicType.basicType(mtype.parameterType(i)));
+<i>414</i>&nbsp;        }
+<i>415</i>&nbsp;
+<i>416</i>&nbsp;        BoundMethodHandle.SpeciesData speciesData = BoundMethodHandle.speciesData_L();
+<i>417</i>&nbsp;        names[THIS_MH] = names[THIS_MH].withConstraint(speciesData);
+<i>418</i>&nbsp;
+<i>419</i>&nbsp;        NamedFunction getter = speciesData.getterFunction(0);
+<i>420</i>&nbsp;        names[VAD_ARG] = new Name(getter, names[THIS_MH]);
+<b class="nc"><i>421</i>&nbsp;</b>
+<i>422</i>&nbsp;        if (isExact) {
+<b class="nc"><i>423</i>&nbsp;            names[CHECK_TYPE] = new Name(getFunction(NF_checkVarHandleExactType), names[CALL_VH], names[VAD_ARG]);</b>
+<i>424</i>&nbsp;        } else {
+<b class="nc"><i>425</i>&nbsp;            names[CHECK_TYPE] = new Name(getFunction(NF_checkVarHandleGenericType), names[CALL_VH], names[VAD_ARG]);</b>
+<i>426</i>&nbsp;        }
+<b class="nc"><i>427</i>&nbsp;        Object[] outArgs = new Object[ARG_LIMIT];</b>
+<i>428</i>&nbsp;        outArgs[0] = names[CHECK_TYPE];
+<b class="nc"><i>429</i>&nbsp;        for (int i = 1; i &lt; ARG_LIMIT; i++) {</b>
+<i>430</i>&nbsp;            outArgs[i] = names[i];
+<b class="nc"><i>431</i>&nbsp;        }</b>
+<i>432</i>&nbsp;
+<b class="nc"><i>433</i>&nbsp;        MethodType outCallType = mtype.insertParameterTypes(0, VarHandle.class)</b>
+<b class="nc"><i>434</i>&nbsp;                .basicType();</b>
+<i>435</i>&nbsp;        names[LINKER_CALL] = new Name(outCallType, outArgs);
+<b class="nc"><i>436</i>&nbsp;        Kind kind = isExact ? VARHANDLE_EXACT_INVOKER : VARHANDLE_INVOKER;</b>
+<b class="nc"><i>437</i>&nbsp;        LambdaForm lform = new LambdaForm(ARG_LIMIT, names, kind);</b>
+<b class="nc"><i>438</i>&nbsp;        if (LambdaForm.debugNames()) {</b>
+<i>439</i>&nbsp;            String name = ak.methodName() +
+<i>440</i>&nbsp;                    (isExact ? &quot;:VarHandle_exactInvoker_&quot; : &quot;:VarHandle_invoker_&quot;) +
+<b class="nc"><i>441</i>&nbsp;                    shortenSignature(basicTypeSignature(mtype));</b>
+<i>442</i>&nbsp;            LambdaForm.associateWithDebugName(lform, name);
+<i>443</i>&nbsp;        }
+<i>444</i>&nbsp;        lform.prepare();
+<i>445</i>&nbsp;        return lform;
+<b class="nc"><i>446</i>&nbsp;    }</b>
+<b class="nc"><i>447</i>&nbsp;</b>
+<b class="nc"><i>448</i>&nbsp;    /*non-public*/ static</b>
+<b class="nc"><i>449</i>&nbsp;    @ForceInline</b>
+<b class="nc"><i>450</i>&nbsp;    MethodHandle checkVarHandleGenericType(VarHandle handle, VarHandle.AccessDescriptor ad) {</b>
+<i>451</i>&nbsp;        // Test for exact match on invoker types
+<i>452</i>&nbsp;        // TODO match with erased types and add cast of return value to lambda form
+<i>453</i>&nbsp;        MethodHandle mh = handle.getMethodHandle(ad.mode);
+<i>454</i>&nbsp;        if (mh.type() == ad.symbolicMethodTypeInvoker) {
+<i>455</i>&nbsp;            return mh;
+<i>456</i>&nbsp;        }
+<i>457</i>&nbsp;        else {
+<i>458</i>&nbsp;            return mh.asType(ad.symbolicMethodTypeInvoker);
+<i>459</i>&nbsp;        }
+<i>460</i>&nbsp;    }
+<i>461</i>&nbsp;
+<i>462</i>&nbsp;    /*non-public*/ static
+<i>463</i>&nbsp;    @ForceInline
+<i>464</i>&nbsp;    MethodHandle checkVarHandleExactType(VarHandle handle, VarHandle.AccessDescriptor ad) {
+<i>465</i>&nbsp;        MethodHandle mh = handle.getMethodHandle(ad.mode);
+<i>466</i>&nbsp;        MethodType mt = mh.type();
+<i>467</i>&nbsp;        if (mt != ad.symbolicMethodTypeInvoker) {
+<i>468</i>&nbsp;            throw newWrongMethodTypeException(mt, ad.symbolicMethodTypeInvoker);
+<i>469</i>&nbsp;        }
+<i>470</i>&nbsp;        return mh;
+<i>471</i>&nbsp;    }
+<i>472</i>&nbsp;
+<i>473</i>&nbsp;    /*non-public*/ static
+<i>474</i>&nbsp;    WrongMethodTypeException newWrongMethodTypeException(MethodType actual, MethodType expected) {
+<i>475</i>&nbsp;        // FIXME: merge with JVM logic for throwing WMTE
+<i>476</i>&nbsp;        return new WrongMethodTypeException(&quot;expected &quot;+expected+&quot; but found &quot;+actual);
+<i>477</i>&nbsp;    }
+<i>478</i>&nbsp;
+<i>479</i>&nbsp;    /** Static definition of MethodHandle.invokeExact checking code. */
+<i>480</i>&nbsp;    /*non-public*/ static
+<i>481</i>&nbsp;    @ForceInline
+<i>482</i>&nbsp;    void checkExactType(MethodHandle mh, MethodType expected) {
+<i>483</i>&nbsp;        MethodType actual = mh.type();
+<i>484</i>&nbsp;        if (actual != expected)
+<i>485</i>&nbsp;            throw newWrongMethodTypeException(expected, actual);
+<i>486</i>&nbsp;    }
+<i>487</i>&nbsp;
+<i>488</i>&nbsp;    /** Static definition of MethodHandle.invokeGeneric checking code.
+<i>489</i>&nbsp;     * Directly returns the type-adjusted MH to invoke, as follows:
+<i>490</i>&nbsp;     * {@code (R)MH.invoke(a*) =&gt; MH.asType(TYPEOF(a*:R)).invokeBasic(a*)}
+<i>491</i>&nbsp;     */
+<i>492</i>&nbsp;    /*non-public*/ static
+<i>493</i>&nbsp;    @ForceInline
+<i>494</i>&nbsp;    MethodHandle checkGenericType(MethodHandle mh,  MethodType expected) {
+<i>495</i>&nbsp;        return mh.asType(expected);
+<i>496</i>&nbsp;        /* Maybe add more paths here.  Possible optimizations:
+<i>497</i>&nbsp;         * for (R)MH.invoke(a*),
+<i>498</i>&nbsp;         * let MT0 = TYPEOF(a*:R), MT1 = MH.type
+<i>499</i>&nbsp;         *
+<i>500</i>&nbsp;         * if MT0==MT1 or MT1 can be safely called by MT0
+<i>501</i>&nbsp;         *  =&gt; MH.invokeBasic(a*)
+<i>502</i>&nbsp;         * if MT1 can be safely called by MT0[R := Object]
+<i>503</i>&nbsp;         *  =&gt; MH.invokeBasic(a*) &amp; checkcast(R)
+<i>504</i>&nbsp;         * if MT1 can be safely called by MT0[* := Object]
+<i>505</i>&nbsp;         *  =&gt; checkcast(A)* &amp; MH.invokeBasic(a*) &amp; checkcast(R)
+<i>506</i>&nbsp;         * if a big adapter BA can be pulled out of (MT0,MT1)
+<i>507</i>&nbsp;         *  =&gt; BA.invokeBasic(MT0,MH,a*)
+<i>508</i>&nbsp;         * if a local adapter LA can cached on static CS0 = new GICS(MT0)
+<i>509</i>&nbsp;         *  =&gt; CS0.LA.invokeBasic(MH,a*)
+<i>510</i>&nbsp;         * else
+<i>511</i>&nbsp;         *  =&gt; MH.asType(MT0).invokeBasic(A*)
+<i>512</i>&nbsp;         */
+<i>513</i>&nbsp;    }
+<i>514</i>&nbsp;
+<i>515</i>&nbsp;    static MemberName linkToCallSiteMethod(MethodType mtype) {
+<i>516</i>&nbsp;        LambdaForm lform = callSiteForm(mtype, false);
+<i>517</i>&nbsp;        return lform.vmentry;
+<i>518</i>&nbsp;    }
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;    static MemberName linkToTargetMethod(MethodType mtype) {
+<i>521</i>&nbsp;        LambdaForm lform = callSiteForm(mtype, true);
+<i>522</i>&nbsp;        return lform.vmentry;
+<i>523</i>&nbsp;    }
+<i>524</i>&nbsp;
+<i>525</i>&nbsp;    // skipCallSite is true if we are optimizing a ConstantCallSite
+<i>526</i>&nbsp;    static LambdaForm callSiteForm(MethodType mtype, boolean skipCallSite) {
+<i>527</i>&nbsp;        mtype = mtype.basicType();  // normalize Z to I, String to Object, etc.
+<i>528</i>&nbsp;        final int which = (skipCallSite ? MethodTypeForm.LF_MH_LINKER : MethodTypeForm.LF_CS_LINKER);
+<i>529</i>&nbsp;        LambdaForm lform = mtype.form().cachedLambdaForm(which);
+<i>530</i>&nbsp;        if (lform != null)  return lform;
+<i>531</i>&nbsp;        // exactInvokerForm (Object,Object)Object
+<i>532</i>&nbsp;        //   link with java.lang.invoke.MethodHandle.invokeBasic(MethodHandle,Object,Object)Object/invokeSpecial
+<i>533</i>&nbsp;        final int ARG_BASE     = 0;
+<i>534</i>&nbsp;        final int OUTARG_LIMIT = ARG_BASE + mtype.parameterCount();
+<i>535</i>&nbsp;        final int INARG_LIMIT  = OUTARG_LIMIT + 1;
+<i>536</i>&nbsp;        int nameCursor = OUTARG_LIMIT;
+<i>537</i>&nbsp;        final int APPENDIX_ARG = nameCursor++;  // the last in-argument
+<i>538</i>&nbsp;        final int CSITE_ARG    = skipCallSite ? -1 : APPENDIX_ARG;
+<i>539</i>&nbsp;        final int CALL_MH      = skipCallSite ? APPENDIX_ARG : nameCursor++;  // result of getTarget
+<i>540</i>&nbsp;        final int LINKER_CALL  = nameCursor++;
+<i>541</i>&nbsp;        MethodType invokerFormType = mtype.appendParameterTypes(skipCallSite ? MethodHandle.class : CallSite.class);
+<i>542</i>&nbsp;        Name[] names = arguments(nameCursor - INARG_LIMIT, invokerFormType);
+<i>543</i>&nbsp;        assert(names.length == nameCursor);
+<i>544</i>&nbsp;        assert(names[APPENDIX_ARG] != null);
+<i>545</i>&nbsp;        if (!skipCallSite)
+<i>546</i>&nbsp;            names[CALL_MH] = new Name(getFunction(NF_getCallSiteTarget), names[CSITE_ARG]);
+<i>547</i>&nbsp;        // (site.)invokedynamic(a*):R =&gt; mh = site.getTarget(); mh.invokeBasic(a*)
+<i>548</i>&nbsp;        final int PREPEND_MH = 0, PREPEND_COUNT = 1;
+<i>549</i>&nbsp;        Object[] outArgs = Arrays.copyOfRange(names, ARG_BASE, OUTARG_LIMIT + PREPEND_COUNT, Object[].class);
+<i>550</i>&nbsp;        // prepend MH argument:
+<i>551</i>&nbsp;        System.arraycopy(outArgs, 0, outArgs, PREPEND_COUNT, outArgs.length - PREPEND_COUNT);
+<i>552</i>&nbsp;        outArgs[PREPEND_MH] = names[CALL_MH];
+<i>553</i>&nbsp;        names[LINKER_CALL] = new Name(mtype, outArgs);
+<i>554</i>&nbsp;        lform = new LambdaForm(INARG_LIMIT, names,
+<i>555</i>&nbsp;                (skipCallSite ? LINK_TO_TARGET_METHOD : LINK_TO_CALL_SITE));
+<i>556</i>&nbsp;        lform.compileToBytecode();  // JVM needs a real methodOop
+<i>557</i>&nbsp;        lform = mtype.form().setCachedLambdaForm(which, lform);
+<i>558</i>&nbsp;        return lform;
+<i>559</i>&nbsp;    }
+<i>560</i>&nbsp;
+<i>561</i>&nbsp;    /** Static definition of MethodHandle.invokeGeneric checking code. */
+<i>562</i>&nbsp;    /*non-public*/ static
+<i>563</i>&nbsp;    @ForceInline
+<i>564</i>&nbsp;    MethodHandle getCallSiteTarget(CallSite site) {
+<i>565</i>&nbsp;        return site.getTarget();
+<i>566</i>&nbsp;    }
+<i>567</i>&nbsp;
+<i>568</i>&nbsp;    /*non-public*/ static
+<i>569</i>&nbsp;    @ForceInline
+<i>570</i>&nbsp;    void checkCustomized(MethodHandle mh) {
+<i>571</i>&nbsp;        if (MethodHandleImpl.isCompileConstant(mh)) return;
+<i>572</i>&nbsp;        if (mh.form.customized == null) {
+<i>573</i>&nbsp;            maybeCustomize(mh);
+<i>574</i>&nbsp;        }
+<i>575</i>&nbsp;    }
+<i>576</i>&nbsp;
+<i>577</i>&nbsp;    /*non-public*/ static
+<i>578</i>&nbsp;    @DontInline
+<i>579</i>&nbsp;    void maybeCustomize(MethodHandle mh) {
+<i>580</i>&nbsp;        byte count = mh.customizationCount;
+<i>581</i>&nbsp;        if (count &gt;= CUSTOMIZE_THRESHOLD) {
+<i>582</i>&nbsp;            mh.customize();
+<i>583</i>&nbsp;        } else {
+<i>584</i>&nbsp;            mh.customizationCount = (byte)(count+1);
+<i>585</i>&nbsp;        }
+<i>586</i>&nbsp;    }
+<i>587</i>&nbsp;
+<i>588</i>&nbsp;    // Local constant functions:
+<i>589</i>&nbsp;    private static final byte NF_checkExactType = 0,
+<i>590</i>&nbsp;        NF_checkGenericType = 1,
+<i>591</i>&nbsp;        NF_getCallSiteTarget = 2,
+<i>592</i>&nbsp;        NF_checkCustomized = 3,
+<i>593</i>&nbsp;        NF_checkVarHandleGenericType = 4,
+<i>594</i>&nbsp;        NF_checkVarHandleExactType = 5,
+<i>595</i>&nbsp;        NF_LIMIT = 6;
+<i>596</i>&nbsp;
+<i>597</i>&nbsp;    private static final @Stable NamedFunction[] NFS = new NamedFunction[NF_LIMIT];
+<i>598</i>&nbsp;
+<i>599</i>&nbsp;    private static NamedFunction getFunction(byte func) {
+<i>600</i>&nbsp;        NamedFunction nf = NFS[func];
+<i>601</i>&nbsp;        if (nf != null) {
+<i>602</i>&nbsp;            return nf;
+<i>603</i>&nbsp;        }
+<i>604</i>&nbsp;        NFS[func] = nf = createFunction(func);
+<i>605</i>&nbsp;        // Each nf must be statically invocable or we get tied up in our bootstraps.
+<i>606</i>&nbsp;        assert(InvokerBytecodeGenerator.isStaticallyInvocable(nf));
+<i>607</i>&nbsp;        return nf;
+<i>608</i>&nbsp;    }
+<i>609</i>&nbsp;
+<i>610</i>&nbsp;    private static NamedFunction createFunction(byte func) {
+<i>611</i>&nbsp;        try {
+<i>612</i>&nbsp;            switch (func) {
+<i>613</i>&nbsp;                case NF_checkExactType:
+<i>614</i>&nbsp;                    return getNamedFunction(&quot;checkExactType&quot;, MethodType.methodType(void.class, MethodHandle.class, MethodType.class));
+<i>615</i>&nbsp;                case NF_checkGenericType:
+<i>616</i>&nbsp;                    return getNamedFunction(&quot;checkGenericType&quot;, MethodType.methodType(MethodHandle.class, MethodHandle.class, MethodType.class));
+<i>617</i>&nbsp;                case NF_getCallSiteTarget:
+<i>618</i>&nbsp;                    return getNamedFunction(&quot;getCallSiteTarget&quot;, MethodType.methodType(MethodHandle.class, CallSite.class));
+<i>619</i>&nbsp;                case NF_checkCustomized:
+<i>620</i>&nbsp;                    return getNamedFunction(&quot;checkCustomized&quot;, MethodType.methodType(void.class, MethodHandle.class));
+<i>621</i>&nbsp;                case NF_checkVarHandleGenericType:
+<i>622</i>&nbsp;                    return getNamedFunction(&quot;checkVarHandleGenericType&quot;, MethodType.methodType(MethodHandle.class, VarHandle.class, VarHandle.AccessDescriptor.class));
+<i>623</i>&nbsp;                case NF_checkVarHandleExactType:
+<i>624</i>&nbsp;                    return getNamedFunction(&quot;checkVarHandleExactType&quot;, MethodType.methodType(MethodHandle.class, VarHandle.class, VarHandle.AccessDescriptor.class));
+<i>625</i>&nbsp;                default:
+<i>626</i>&nbsp;                    throw newInternalError(&quot;Unknown function: &quot; + func);
+<i>627</i>&nbsp;            }
+<i>628</i>&nbsp;        } catch (ReflectiveOperationException ex) {
+<i>629</i>&nbsp;            throw newInternalError(ex);
+<i>630</i>&nbsp;        }
+<i>631</i>&nbsp;    }
+<i>632</i>&nbsp;
+<i>633</i>&nbsp;    private static NamedFunction getNamedFunction(String name, MethodType type)
+<i>634</i>&nbsp;        throws ReflectiveOperationException
+<i>635</i>&nbsp;    {
+<i>636</i>&nbsp;        MemberName member = new MemberName(Invokers.class, name, type, REF_invokeStatic);
+<i>637</i>&nbsp;        return new NamedFunction(
+<i>638</i>&nbsp;                MemberName.getFactory()
+<i>639</i>&nbsp;                        .resolveOrFail(REF_invokeStatic, member, Invokers.class, NoSuchMethodException.class));
+<i>640</i>&nbsp;    }
+<i>641</i>&nbsp;
+<i>642</i>&nbsp;    private static class Lazy {
+<i>643</i>&nbsp;        private static final MethodHandle MH_asSpreader;
+<i>644</i>&nbsp;
+<i>645</i>&nbsp;        static {
+<i>646</i>&nbsp;            try {
+<i>647</i>&nbsp;                MH_asSpreader = IMPL_LOOKUP.findVirtual(MethodHandle.class, &quot;asSpreader&quot;,
+<i>648</i>&nbsp;                        MethodType.methodType(MethodHandle.class, Class.class, int.class));
+<i>649</i>&nbsp;            } catch (ReflectiveOperationException ex) {
+<i>650</i>&nbsp;                throw newInternalError(ex);
+<i>651</i>&nbsp;            }
+<i>652</i>&nbsp;        }
+<i>653</i>&nbsp;    }
+<i>654</i>&nbsp;
+<i>655</i>&nbsp;    static {
+<i>656</i>&nbsp;        // The Holder class will contain pre-generated Invokers resolved
+<i>657</i>&nbsp;        // speculatively using MemberName.getFactory().resolveOrNull. However, that
+<i>658</i>&nbsp;        // doesn&#39;t initialize the class, which subtly breaks inlining etc. By forcing
+<i>659</i>&nbsp;        // initialization of the Holder class we avoid these issues.
+<i>660</i>&nbsp;        UNSAFE.ensureClassInitialized(Holder.class);
+<i>661</i>&nbsp;    }
+<i>662</i>&nbsp;
+<i>663</i>&nbsp;    /* Placeholder class for Invokers generated ahead of time */
+<i>664</i>&nbsp;    final class Holder {}
+<i>665</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,488 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: JarURLConnection</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.net.www.protocol.jar</a> ]
+</div>
+
+<h1>Coverage Summary for Class: JarURLConnection (sun.net.www.protocol.jar)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">JarURLConnection</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 24)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 80)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">JarURLConnection$JarURLInputStream</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 5)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 26)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 85)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.net.www.protocol.jar;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.InputStream;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import java.io.FileNotFoundException;
+<i>31</i>&nbsp;import java.io.BufferedInputStream;
+<i>32</i>&nbsp;import java.net.URL;
+<i>33</i>&nbsp;import java.net.URLConnection;
+<i>34</i>&nbsp;import java.net.MalformedURLException;
+<i>35</i>&nbsp;import java.net.UnknownServiceException;
+<i>36</i>&nbsp;import java.util.Enumeration;
+<i>37</i>&nbsp;import java.util.Map;
+<i>38</i>&nbsp;import java.util.List;
+<i>39</i>&nbsp;import java.util.jar.JarEntry;
+<i>40</i>&nbsp;import java.util.jar.JarFile;
+<i>41</i>&nbsp;import java.util.jar.Manifest;
+<i>42</i>&nbsp;import java.security.Permission;
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;/**
+<i>45</i>&nbsp; * @author Benjamin Renaud
+<i>46</i>&nbsp; * @since 1.2
+<i>47</i>&nbsp; */
+<b class="nc"><i>48</i>&nbsp;public class JarURLConnection extends java.net.JarURLConnection {</b>
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;    private static final boolean debug = false;
+<i>51</i>&nbsp;
+<i>52</i>&nbsp;    /* the Jar file factory. It handles both retrieval and caching.
+<i>53</i>&nbsp;     */
+<b class="nc"><i>54</i>&nbsp;    private static final JarFileFactory factory = JarFileFactory.getInstance();</b>
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;    /* the url for the Jar file */
+<i>57</i>&nbsp;    private URL jarFileURL;
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    /* the permission to get this JAR file. This is the actual, ultimate,
+<i>60</i>&nbsp;     * permission, returned by the jar file factory.
+<i>61</i>&nbsp;     */
+<i>62</i>&nbsp;    private Permission permission;
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    /* the url connection for the JAR file */
+<i>65</i>&nbsp;    private URLConnection jarFileURLConnection;
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;    /* the entry name, if any */
+<i>68</i>&nbsp;    private String entryName;
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    /* the JarEntry */
+<i>71</i>&nbsp;    private JarEntry jarEntry;
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;    /* the jar file corresponding to this connection */
+<i>74</i>&nbsp;    private JarFile jarFile;
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    /* the content type for this connection */
+<i>77</i>&nbsp;    private String contentType;
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    public JarURLConnection(URL url, Handler handler)
+<i>80</i>&nbsp;    throws MalformedURLException, IOException {
+<b class="nc"><i>81</i>&nbsp;        super(url);</b>
+<i>82</i>&nbsp;
+<b class="nc"><i>83</i>&nbsp;        jarFileURL = getJarFileURL();</b>
+<b class="nc"><i>84</i>&nbsp;        jarFileURLConnection = jarFileURL.openConnection();</b>
+<b class="nc"><i>85</i>&nbsp;        // whether, or not, the embedded URL should use the cache will depend</b>
+<i>86</i>&nbsp;        // on this instance&#39;s cache value
+<i>87</i>&nbsp;        jarFileURLConnection.setUseCaches(useCaches);
+<i>88</i>&nbsp;        entryName = getEntryName();
+<b class="nc"><i>89</i>&nbsp;    }</b>
+<b class="nc"><i>90</i>&nbsp;</b>
+<i>91</i>&nbsp;    public JarFile getJarFile() throws IOException {
+<i>92</i>&nbsp;        connect();
+<i>93</i>&nbsp;        return jarFile;
+<b class="nc"><i>94</i>&nbsp;    }</b>
+<b class="nc"><i>95</i>&nbsp;</b>
+<i>96</i>&nbsp;    public JarEntry getJarEntry() throws IOException {
+<i>97</i>&nbsp;        connect();
+<i>98</i>&nbsp;        return jarEntry;
+<b class="nc"><i>99</i>&nbsp;    }</b>
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;    public Permission getPermission() throws IOException {
+<i>102</i>&nbsp;        return jarFileURLConnection.getPermission();
+<b class="nc"><i>103</i>&nbsp;    }</b>
+<b class="nc"><i>104</i>&nbsp;</b>
+<i>105</i>&nbsp;    class JarURLInputStream extends java.io.FilterInputStream {
+<i>106</i>&nbsp;        JarURLInputStream (InputStream src) {
+<i>107</i>&nbsp;            super (src);
+<b class="nc"><i>108</i>&nbsp;        }</b>
+<i>109</i>&nbsp;        public void close () throws IOException {
+<b class="nc"><i>110</i>&nbsp;            try {</b>
+<b class="nc"><i>111</i>&nbsp;                super.close();</b>
+<i>112</i>&nbsp;            } finally {
+<i>113</i>&nbsp;                if (!getUseCaches()) {
+<i>114</i>&nbsp;                    jarFile.close();
+<i>115</i>&nbsp;                }
+<i>116</i>&nbsp;            }
+<i>117</i>&nbsp;        }
+<i>118</i>&nbsp;    }
+<i>119</i>&nbsp;
+<b class="nc"><i>120</i>&nbsp;</b>
+<i>121</i>&nbsp;
+<b class="nc"><i>122</i>&nbsp;    public void connect() throws IOException {</b>
+<i>123</i>&nbsp;        if (!connected) {
+<i>124</i>&nbsp;            /* the factory call will do the security checks */
+<i>125</i>&nbsp;            jarFile = factory.get(getJarFileURL(), getUseCaches());
+<i>126</i>&nbsp;
+<b class="nc"><i>127</i>&nbsp;            /* we also ask the factory the permission that was required</b>
+<b class="nc"><i>128</i>&nbsp;             * to get the jarFile, and set it as our permission.</b>
+<b class="nc"><i>129</i>&nbsp;             */</b>
+<b class="nc"><i>130</i>&nbsp;            if (getUseCaches()) {</b>
+<i>131</i>&nbsp;                boolean oldUseCaches = jarFileURLConnection.getUseCaches();
+<i>132</i>&nbsp;                jarFileURLConnection = factory.getConnection(jarFile);
+<b class="nc"><i>133</i>&nbsp;                jarFileURLConnection.setUseCaches(oldUseCaches);</b>
+<b class="nc"><i>134</i>&nbsp;            }</b>
+<b class="nc"><i>135</i>&nbsp;</b>
+<i>136</i>&nbsp;            if ((entryName != null)) {
+<b class="nc"><i>137</i>&nbsp;                jarEntry = (JarEntry)jarFile.getEntry(entryName);</b>
+<b class="nc"><i>138</i>&nbsp;                if (jarEntry == null) {</b>
+<i>139</i>&nbsp;                    try {
+<b class="nc"><i>140</i>&nbsp;                        if (!getUseCaches()) {</b>
+<b class="nc"><i>141</i>&nbsp;                            jarFile.close();</b>
+<b class="nc"><i>142</i>&nbsp;                        }</b>
+<i>143</i>&nbsp;                    } catch (Exception e) {
+<b class="nc"><i>144</i>&nbsp;                    }</b>
+<i>145</i>&nbsp;                    throw new FileNotFoundException(&quot;JAR entry &quot; + entryName +
+<i>146</i>&nbsp;                                                    &quot; not found in &quot; +
+<b class="nc"><i>147</i>&nbsp;                                                    jarFile.getName());</b>
+<i>148</i>&nbsp;                }
+<i>149</i>&nbsp;            }
+<i>150</i>&nbsp;            connected = true;
+<i>151</i>&nbsp;        }
+<b class="nc"><i>152</i>&nbsp;    }</b>
+<i>153</i>&nbsp;
+<b class="nc"><i>154</i>&nbsp;    public InputStream getInputStream() throws IOException {</b>
+<i>155</i>&nbsp;        connect();
+<b class="nc"><i>156</i>&nbsp;</b>
+<b class="nc"><i>157</i>&nbsp;        InputStream result = null;</b>
+<i>158</i>&nbsp;
+<b class="nc"><i>159</i>&nbsp;        if (entryName == null) {</b>
+<b class="nc"><i>160</i>&nbsp;            throw new IOException(&quot;no entry name specified&quot;);</b>
+<i>161</i>&nbsp;        } else {
+<b class="nc"><i>162</i>&nbsp;            if (jarEntry == null) {</b>
+<i>163</i>&nbsp;                throw new FileNotFoundException(&quot;JAR entry &quot; + entryName +
+<b class="nc"><i>164</i>&nbsp;                                                &quot; not found in &quot; +</b>
+<i>165</i>&nbsp;                                                jarFile.getName());
+<b class="nc"><i>166</i>&nbsp;            }</b>
+<i>167</i>&nbsp;            result = new JarURLInputStream (jarFile.getInputStream(jarEntry));
+<i>168</i>&nbsp;        }
+<i>169</i>&nbsp;        return result;
+<b class="nc"><i>170</i>&nbsp;    }</b>
+<b class="nc"><i>171</i>&nbsp;</b>
+<b class="nc"><i>172</i>&nbsp;    public int getContentLength() {</b>
+<b class="nc"><i>173</i>&nbsp;        long result = getContentLengthLong();</b>
+<i>174</i>&nbsp;        if (result &gt; Integer.MAX_VALUE)
+<i>175</i>&nbsp;            return -1;
+<i>176</i>&nbsp;        return (int) result;
+<b class="nc"><i>177</i>&nbsp;    }</b>
+<i>178</i>&nbsp;
+<b class="nc"><i>179</i>&nbsp;    public long getContentLengthLong() {</b>
+<b class="nc"><i>180</i>&nbsp;        long result = -1;</b>
+<i>181</i>&nbsp;        try {
+<b class="nc"><i>182</i>&nbsp;            connect();</b>
+<i>183</i>&nbsp;            if (jarEntry == null) {
+<i>184</i>&nbsp;                /* if the URL referes to an archive */
+<b class="nc"><i>185</i>&nbsp;                result = jarFileURLConnection.getContentLengthLong();</b>
+<i>186</i>&nbsp;            } else {
+<b class="nc"><i>187</i>&nbsp;                /* if the URL referes to an archive entry */</b>
+<b class="nc"><i>188</i>&nbsp;                result = getJarEntry().getSize();</b>
+<b class="nc"><i>189</i>&nbsp;            }</b>
+<i>190</i>&nbsp;        } catch (IOException e) {
+<i>191</i>&nbsp;        }
+<i>192</i>&nbsp;        return result;
+<b class="nc"><i>193</i>&nbsp;    }</b>
+<i>194</i>&nbsp;
+<b class="nc"><i>195</i>&nbsp;    public Object getContent() throws IOException {</b>
+<b class="nc"><i>196</i>&nbsp;        Object result = null;</b>
+<b class="nc"><i>197</i>&nbsp;</b>
+<i>198</i>&nbsp;        connect();
+<b class="nc"><i>199</i>&nbsp;        if (entryName == null) {</b>
+<i>200</i>&nbsp;            result = jarFile;
+<b class="nc"><i>201</i>&nbsp;        } else {</b>
+<i>202</i>&nbsp;            result = super.getContent();
+<i>203</i>&nbsp;        }
+<i>204</i>&nbsp;        return result;
+<b class="nc"><i>205</i>&nbsp;    }</b>
+<b class="nc"><i>206</i>&nbsp;</b>
+<b class="nc"><i>207</i>&nbsp;    public String getContentType() {</b>
+<i>208</i>&nbsp;        if (contentType == null) {
+<i>209</i>&nbsp;            if (entryName == null) {
+<b class="nc"><i>210</i>&nbsp;                contentType = &quot;x-java/jar&quot;;</b>
+<b class="nc"><i>211</i>&nbsp;            } else {</b>
+<b class="nc"><i>212</i>&nbsp;                try {</b>
+<i>213</i>&nbsp;                    connect();
+<b class="nc"><i>214</i>&nbsp;                    InputStream in = jarFile.getInputStream(jarEntry);</b>
+<b class="nc"><i>215</i>&nbsp;                    contentType = guessContentTypeFromStream(</b>
+<i>216</i>&nbsp;                                        new BufferedInputStream(in));
+<b class="nc"><i>217</i>&nbsp;                    in.close();</b>
+<i>218</i>&nbsp;                } catch (IOException e) {
+<b class="nc"><i>219</i>&nbsp;                    // don&#39;t do anything</b>
+<b class="nc"><i>220</i>&nbsp;                }</b>
+<i>221</i>&nbsp;            }
+<b class="nc"><i>222</i>&nbsp;            if (contentType == null) {</b>
+<b class="nc"><i>223</i>&nbsp;                contentType = guessContentTypeFromName(entryName);</b>
+<i>224</i>&nbsp;            }
+<i>225</i>&nbsp;            if (contentType == null) {
+<b class="nc"><i>226</i>&nbsp;                contentType = &quot;content/unknown&quot;;</b>
+<i>227</i>&nbsp;            }
+<i>228</i>&nbsp;        }
+<i>229</i>&nbsp;        return contentType;
+<b class="nc"><i>230</i>&nbsp;    }</b>
+<i>231</i>&nbsp;
+<i>232</i>&nbsp;    public String getHeaderField(String name) {
+<i>233</i>&nbsp;        return jarFileURLConnection.getHeaderField(name);
+<i>234</i>&nbsp;    }
+<i>235</i>&nbsp;
+<i>236</i>&nbsp;    /**
+<i>237</i>&nbsp;     * Sets the general request property.
+<i>238</i>&nbsp;     *
+<i>239</i>&nbsp;     * @param   key     the keyword by which the request is known
+<i>240</i>&nbsp;     *                  (e.g., &quot;&lt;code&gt;accept&lt;/code&gt;&quot;).
+<b class="nc"><i>241</i>&nbsp;     * @param   value   the value associated with it.</b>
+<i>242</i>&nbsp;     */
+<i>243</i>&nbsp;    public void setRequestProperty(String key, String value) {
+<i>244</i>&nbsp;        jarFileURLConnection.setRequestProperty(key, value);
+<i>245</i>&nbsp;    }
+<i>246</i>&nbsp;
+<i>247</i>&nbsp;    /**
+<i>248</i>&nbsp;     * Returns the value of the named general request property for this
+<i>249</i>&nbsp;     * connection.
+<i>250</i>&nbsp;     *
+<i>251</i>&nbsp;     * @return  the value of the named general request property for this
+<b class="nc"><i>252</i>&nbsp;     *           connection.</b>
+<i>253</i>&nbsp;     */
+<i>254</i>&nbsp;    public String getRequestProperty(String key) {
+<i>255</i>&nbsp;        return jarFileURLConnection.getRequestProperty(key);
+<i>256</i>&nbsp;    }
+<i>257</i>&nbsp;
+<i>258</i>&nbsp;    /**
+<i>259</i>&nbsp;     * Adds a general request property specified by a
+<i>260</i>&nbsp;     * key-value pair.  This method will not overwrite
+<i>261</i>&nbsp;     * existing values associated with the same key.
+<i>262</i>&nbsp;     *
+<i>263</i>&nbsp;     * @param   key     the keyword by which the request is known
+<i>264</i>&nbsp;     *                  (e.g., &quot;&lt;code&gt;accept&lt;/code&gt;&quot;).
+<b class="nc"><i>265</i>&nbsp;     * @param   value   the value associated with it.</b>
+<i>266</i>&nbsp;     */
+<i>267</i>&nbsp;    public void addRequestProperty(String key, String value) {
+<i>268</i>&nbsp;        jarFileURLConnection.addRequestProperty(key, value);
+<i>269</i>&nbsp;    }
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;    /**
+<i>272</i>&nbsp;     * Returns an unmodifiable Map of general request
+<i>273</i>&nbsp;     * properties for this connection. The Map keys
+<i>274</i>&nbsp;     * are Strings that represent the request-header
+<i>275</i>&nbsp;     * field names. Each Map value is a unmodifiable List
+<i>276</i>&nbsp;     * of Strings that represents the corresponding
+<i>277</i>&nbsp;     * field values.
+<i>278</i>&nbsp;     *
+<b class="nc"><i>279</i>&nbsp;     * @return  a Map of the general request properties for this connection.</b>
+<i>280</i>&nbsp;     */
+<i>281</i>&nbsp;    public Map&lt;String,List&lt;String&gt;&gt; getRequestProperties() {
+<i>282</i>&nbsp;        return jarFileURLConnection.getRequestProperties();
+<i>283</i>&nbsp;    }
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;    /**
+<i>286</i>&nbsp;     * Set the value of the &lt;code&gt;allowUserInteraction&lt;/code&gt; field of
+<i>287</i>&nbsp;     * this &lt;code&gt;URLConnection&lt;/code&gt;.
+<i>288</i>&nbsp;     *
+<i>289</i>&nbsp;     * @param   allowuserinteraction   the new value.
+<b class="nc"><i>290</i>&nbsp;     * @see     java.net.URLConnection#allowUserInteraction</b>
+<i>291</i>&nbsp;     */
+<i>292</i>&nbsp;    public void setAllowUserInteraction(boolean allowuserinteraction) {
+<i>293</i>&nbsp;        jarFileURLConnection.setAllowUserInteraction(allowuserinteraction);
+<i>294</i>&nbsp;    }
+<i>295</i>&nbsp;
+<i>296</i>&nbsp;    /**
+<i>297</i>&nbsp;     * Returns the value of the &lt;code&gt;allowUserInteraction&lt;/code&gt; field for
+<i>298</i>&nbsp;     * this object.
+<i>299</i>&nbsp;     *
+<i>300</i>&nbsp;     * @return  the value of the &lt;code&gt;allowUserInteraction&lt;/code&gt; field for
+<i>301</i>&nbsp;     *          this object.
+<b class="nc"><i>302</i>&nbsp;     * @see     java.net.URLConnection#allowUserInteraction</b>
+<i>303</i>&nbsp;     */
+<i>304</i>&nbsp;    public boolean getAllowUserInteraction() {
+<i>305</i>&nbsp;        return jarFileURLConnection.getAllowUserInteraction();
+<i>306</i>&nbsp;    }
+<i>307</i>&nbsp;
+<i>308</i>&nbsp;    /*
+<i>309</i>&nbsp;     * cache control
+<i>310</i>&nbsp;     */
+<i>311</i>&nbsp;
+<i>312</i>&nbsp;    /**
+<i>313</i>&nbsp;     * Sets the value of the &lt;code&gt;useCaches&lt;/code&gt; field of this
+<i>314</i>&nbsp;     * &lt;code&gt;URLConnection&lt;/code&gt; to the specified value.
+<i>315</i>&nbsp;     * &lt;p&gt;
+<i>316</i>&nbsp;     * Some protocols do caching of documents.  Occasionally, it is important
+<i>317</i>&nbsp;     * to be able to &quot;tunnel through&quot; and ignore the caches (e.g., the
+<i>318</i>&nbsp;     * &quot;reload&quot; button in a browser).  If the UseCaches flag on a connection
+<i>319</i>&nbsp;     * is true, the connection is allowed to use whatever caches it can.
+<i>320</i>&nbsp;     *  If false, caches are to be ignored.
+<i>321</i>&nbsp;     *  The default value comes from DefaultUseCaches, which defaults to
+<i>322</i>&nbsp;     * true.
+<i>323</i>&nbsp;     *
+<b class="nc"><i>324</i>&nbsp;     * @see     java.net.URLConnection#useCaches</b>
+<i>325</i>&nbsp;     */
+<i>326</i>&nbsp;    public void setUseCaches(boolean usecaches) {
+<i>327</i>&nbsp;        jarFileURLConnection.setUseCaches(usecaches);
+<i>328</i>&nbsp;    }
+<i>329</i>&nbsp;
+<i>330</i>&nbsp;    /**
+<i>331</i>&nbsp;     * Returns the value of this &lt;code&gt;URLConnection&lt;/code&gt;&#39;s
+<i>332</i>&nbsp;     * &lt;code&gt;useCaches&lt;/code&gt; field.
+<i>333</i>&nbsp;     *
+<i>334</i>&nbsp;     * @return  the value of this &lt;code&gt;URLConnection&lt;/code&gt;&#39;s
+<i>335</i>&nbsp;     *          &lt;code&gt;useCaches&lt;/code&gt; field.
+<b class="nc"><i>336</i>&nbsp;     * @see     java.net.URLConnection#useCaches</b>
+<i>337</i>&nbsp;     */
+<i>338</i>&nbsp;    public boolean getUseCaches() {
+<i>339</i>&nbsp;        return jarFileURLConnection.getUseCaches();
+<i>340</i>&nbsp;    }
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;    /**
+<i>343</i>&nbsp;     * Sets the value of the &lt;code&gt;ifModifiedSince&lt;/code&gt; field of
+<i>344</i>&nbsp;     * this &lt;code&gt;URLConnection&lt;/code&gt; to the specified value.
+<i>345</i>&nbsp;     *
+<i>346</i>&nbsp;     * @param   ifmodifiedsince   the new value.
+<b class="nc"><i>347</i>&nbsp;     * @see     java.net.URLConnection#ifModifiedSince</b>
+<i>348</i>&nbsp;     */
+<i>349</i>&nbsp;    public void setIfModifiedSince(long ifmodifiedsince) {
+<i>350</i>&nbsp;        jarFileURLConnection.setIfModifiedSince(ifmodifiedsince);
+<i>351</i>&nbsp;    }
+<i>352</i>&nbsp;
+<i>353</i>&nbsp;   /**
+<i>354</i>&nbsp;     * Sets the default value of the &lt;code&gt;useCaches&lt;/code&gt; field to the
+<i>355</i>&nbsp;     * specified value.
+<i>356</i>&nbsp;     *
+<i>357</i>&nbsp;     * @param   defaultusecaches   the new value.
+<b class="nc"><i>358</i>&nbsp;     * @see     java.net.URLConnection#useCaches</b>
+<i>359</i>&nbsp;     */
+<i>360</i>&nbsp;    public void setDefaultUseCaches(boolean defaultusecaches) {
+<i>361</i>&nbsp;        jarFileURLConnection.setDefaultUseCaches(defaultusecaches);
+<i>362</i>&nbsp;    }
+<i>363</i>&nbsp;
+<i>364</i>&nbsp;   /**
+<i>365</i>&nbsp;     * Returns the default value of a &lt;code&gt;URLConnection&lt;/code&gt;&#39;s
+<i>366</i>&nbsp;     * &lt;code&gt;useCaches&lt;/code&gt; flag.
+<i>367</i>&nbsp;     * &lt;p&gt;
+<i>368</i>&nbsp;     * Ths default is &quot;sticky&quot;, being a part of the static state of all
+<i>369</i>&nbsp;     * URLConnections.  This flag applies to the next, and all following
+<i>370</i>&nbsp;     * URLConnections that are created.
+<i>371</i>&nbsp;     *
+<i>372</i>&nbsp;     * @return  the default value of a &lt;code&gt;URLConnection&lt;/code&gt;&#39;s
+<i>373</i>&nbsp;     *          &lt;code&gt;useCaches&lt;/code&gt; flag.
+<b class="nc"><i>374</i>&nbsp;     * @see     java.net.URLConnection#useCaches</b>
+<i>375</i>&nbsp;     */
+<i>376</i>&nbsp;    public boolean getDefaultUseCaches() {
+<i>377</i>&nbsp;        return jarFileURLConnection.getDefaultUseCaches();
+<i>378</i>&nbsp;    }
+<i>379</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

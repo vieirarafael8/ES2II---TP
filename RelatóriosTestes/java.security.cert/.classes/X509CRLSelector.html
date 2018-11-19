@@ -1,0 +1,801 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: X509CRLSelector</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.security.cert</a> ]
+</div>
+
+<h1>Coverage Summary for Class: X509CRLSelector (java.security.cert)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">X509CRLSelector</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 25)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 153)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.security.cert;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.math.BigInteger;
+<i>30</i>&nbsp;import java.util.*;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;import javax.security.auth.x500.X500Principal;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;import sun.security.util.Debug;
+<i>35</i>&nbsp;import sun.security.util.DerInputStream;
+<i>36</i>&nbsp;import sun.security.x509.CRLNumberExtension;
+<i>37</i>&nbsp;import sun.security.x509.X500Name;
+<i>38</i>&nbsp;
+<i>39</i>&nbsp;/**
+<i>40</i>&nbsp; * A {@code CRLSelector} that selects {@code X509CRLs} that
+<i>41</i>&nbsp; * match all specified criteria. This class is particularly useful when
+<i>42</i>&nbsp; * selecting CRLs from a {@code CertStore} to check revocation status
+<i>43</i>&nbsp; * of a particular certificate.
+<i>44</i>&nbsp; * &lt;p&gt;
+<i>45</i>&nbsp; * When first constructed, an {@code X509CRLSelector} has no criteria
+<i>46</i>&nbsp; * enabled and each of the {@code get} methods return a default
+<i>47</i>&nbsp; * value ({@code null}). Therefore, the {@link #match match} method
+<i>48</i>&nbsp; * would return {@code true} for any {@code X509CRL}. Typically,
+<i>49</i>&nbsp; * several criteria are enabled (by calling {@link #setIssuers setIssuers}
+<i>50</i>&nbsp; * or {@link #setDateAndTime setDateAndTime}, for instance) and then the
+<i>51</i>&nbsp; * {@code X509CRLSelector} is passed to
+<i>52</i>&nbsp; * {@link CertStore#getCRLs CertStore.getCRLs} or some similar
+<i>53</i>&nbsp; * method.
+<i>54</i>&nbsp; * &lt;p&gt;
+<i>55</i>&nbsp; * Please refer to &lt;a href=&quot;http://tools.ietf.org/html/rfc5280&quot;&gt;RFC 5280:
+<i>56</i>&nbsp; * Internet X.509 Public Key Infrastructure Certificate and CRL Profile&lt;/a&gt;
+<i>57</i>&nbsp; * for definitions of the X.509 CRL fields and extensions mentioned below.
+<i>58</i>&nbsp; * &lt;p&gt;
+<i>59</i>&nbsp; * &lt;b&gt;Concurrent Access&lt;/b&gt;
+<i>60</i>&nbsp; * &lt;p&gt;
+<i>61</i>&nbsp; * Unless otherwise specified, the methods defined in this class are not
+<i>62</i>&nbsp; * thread-safe. Multiple threads that need to access a single
+<i>63</i>&nbsp; * object concurrently should synchronize amongst themselves and
+<i>64</i>&nbsp; * provide the necessary locking. Multiple threads each manipulating
+<i>65</i>&nbsp; * separate objects need not synchronize.
+<i>66</i>&nbsp; *
+<i>67</i>&nbsp; * @see CRLSelector
+<i>68</i>&nbsp; * @see X509CRL
+<i>69</i>&nbsp; *
+<i>70</i>&nbsp; * @since       1.4
+<i>71</i>&nbsp; * @author      Steve Hanna
+<i>72</i>&nbsp; */
+<i>73</i>&nbsp;public class X509CRLSelector implements CRLSelector {
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    static {
+<b class="nc"><i>76</i>&nbsp;        CertPathHelperImpl.initialize();</b>
+<i>77</i>&nbsp;    }
+<i>78</i>&nbsp;
+<b class="nc"><i>79</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;certpath&quot;);</b>
+<i>80</i>&nbsp;    private HashSet&lt;Object&gt; issuerNames;
+<i>81</i>&nbsp;    private HashSet&lt;X500Principal&gt; issuerX500Principals;
+<i>82</i>&nbsp;    private BigInteger minCRL;
+<i>83</i>&nbsp;    private BigInteger maxCRL;
+<i>84</i>&nbsp;    private Date dateAndTime;
+<i>85</i>&nbsp;    private X509Certificate certChecking;
+<b class="nc"><i>86</i>&nbsp;    private long skew = 0;</b>
+<i>87</i>&nbsp;
+<i>88</i>&nbsp;    /**
+<i>89</i>&nbsp;     * Creates an {@code X509CRLSelector}. Initially, no criteria are set
+<i>90</i>&nbsp;     * so any {@code X509CRL} will match.
+<i>91</i>&nbsp;     */
+<i>92</i>&nbsp;    public X509CRLSelector() {}
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;    /**
+<i>95</i>&nbsp;     * Sets the issuerNames criterion. The issuer distinguished name in the
+<i>96</i>&nbsp;     * {@code X509CRL} must match at least one of the specified
+<i>97</i>&nbsp;     * distinguished names. If {@code null}, any issuer distinguished name
+<i>98</i>&nbsp;     * will do.
+<i>99</i>&nbsp;     * &lt;p&gt;
+<i>100</i>&nbsp;     * This method allows the caller to specify, with a single method call,
+<i>101</i>&nbsp;     * the complete set of issuer names which {@code X509CRLs} may contain.
+<i>102</i>&nbsp;     * The specified value replaces the previous value for the issuerNames
+<i>103</i>&nbsp;     * criterion.
+<i>104</i>&nbsp;     * &lt;p&gt;
+<i>105</i>&nbsp;     * The {@code names} parameter (if not {@code null}) is a
+<i>106</i>&nbsp;     * {@code Collection} of {@code X500Principal}s.
+<i>107</i>&nbsp;     * &lt;p&gt;
+<i>108</i>&nbsp;     * Note that the {@code names} parameter can contain duplicate
+<i>109</i>&nbsp;     * distinguished names, but they may be removed from the
+<i>110</i>&nbsp;     * {@code Collection} of names returned by the
+<i>111</i>&nbsp;     * {@link #getIssuers getIssuers} method.
+<i>112</i>&nbsp;     * &lt;p&gt;
+<i>113</i>&nbsp;     * Note that a copy is performed on the {@code Collection} to
+<i>114</i>&nbsp;     * protect against subsequent modifications.
+<i>115</i>&nbsp;     *
+<i>116</i>&nbsp;     * @param issuers a {@code Collection} of X500Principals
+<i>117</i>&nbsp;     *   (or {@code null})
+<i>118</i>&nbsp;     * @see #getIssuers
+<i>119</i>&nbsp;     * @since 1.5
+<i>120</i>&nbsp;     */
+<i>121</i>&nbsp;    public void setIssuers(Collection&lt;X500Principal&gt; issuers) {
+<b class="nc"><i>122</i>&nbsp;        if ((issuers == null) || issuers.isEmpty()) {</b>
+<b class="nc"><i>123</i>&nbsp;            issuerNames = null;</b>
+<b class="nc"><i>124</i>&nbsp;            issuerX500Principals = null;</b>
+<i>125</i>&nbsp;        } else {
+<i>126</i>&nbsp;            // clone
+<b class="nc"><i>127</i>&nbsp;            issuerX500Principals = new HashSet&lt;&gt;(issuers);</b>
+<b class="nc"><i>128</i>&nbsp;            issuerNames = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>129</i>&nbsp;            for (X500Principal p : issuerX500Principals) {</b>
+<b class="nc"><i>130</i>&nbsp;                issuerNames.add(p.getEncoded());</b>
+<b class="nc"><i>131</i>&nbsp;            }</b>
+<i>132</i>&nbsp;        }
+<i>133</i>&nbsp;    }
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;    /**
+<i>136</i>&nbsp;     * &lt;strong&gt;Note:&lt;/strong&gt; use {@linkplain #setIssuers(Collection)} instead
+<i>137</i>&nbsp;     * or only specify the byte array form of distinguished names when using
+<i>138</i>&nbsp;     * this method. See {@link #addIssuerName(String)} for more information.
+<i>139</i>&nbsp;     * &lt;p&gt;
+<i>140</i>&nbsp;     * Sets the issuerNames criterion. The issuer distinguished name in the
+<i>141</i>&nbsp;     * {@code X509CRL} must match at least one of the specified
+<i>142</i>&nbsp;     * distinguished names. If {@code null}, any issuer distinguished name
+<i>143</i>&nbsp;     * will do.
+<i>144</i>&nbsp;     * &lt;p&gt;
+<i>145</i>&nbsp;     * This method allows the caller to specify, with a single method call,
+<i>146</i>&nbsp;     * the complete set of issuer names which {@code X509CRLs} may contain.
+<i>147</i>&nbsp;     * The specified value replaces the previous value for the issuerNames
+<i>148</i>&nbsp;     * criterion.
+<i>149</i>&nbsp;     * &lt;p&gt;
+<i>150</i>&nbsp;     * The {@code names} parameter (if not {@code null}) is a
+<i>151</i>&nbsp;     * {@code Collection} of names. Each name is a {@code String}
+<i>152</i>&nbsp;     * or a byte array representing a distinguished name (in
+<i>153</i>&nbsp;     * &lt;a href=&quot;http://www.ietf.org/rfc/rfc2253.txt&quot;&gt;RFC 2253&lt;/a&gt; or
+<i>154</i>&nbsp;     * ASN.1 DER encoded form, respectively). If {@code null} is supplied
+<i>155</i>&nbsp;     * as the value for this argument, no issuerNames check will be performed.
+<i>156</i>&nbsp;     * &lt;p&gt;
+<i>157</i>&nbsp;     * Note that the {@code names} parameter can contain duplicate
+<i>158</i>&nbsp;     * distinguished names, but they may be removed from the
+<i>159</i>&nbsp;     * {@code Collection} of names returned by the
+<i>160</i>&nbsp;     * {@link #getIssuerNames getIssuerNames} method.
+<i>161</i>&nbsp;     * &lt;p&gt;
+<i>162</i>&nbsp;     * If a name is specified as a byte array, it should contain a single DER
+<i>163</i>&nbsp;     * encoded distinguished name, as defined in X.501. The ASN.1 notation for
+<i>164</i>&nbsp;     * this structure is as follows.
+<i>165</i>&nbsp;     * &lt;pre&gt;{@code
+<i>166</i>&nbsp;     * Name ::= CHOICE {
+<i>167</i>&nbsp;     *   RDNSequence }
+<i>168</i>&nbsp;     *
+<i>169</i>&nbsp;     * RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
+<i>170</i>&nbsp;     *
+<i>171</i>&nbsp;     * RelativeDistinguishedName ::=
+<i>172</i>&nbsp;     *   SET SIZE (1 .. MAX) OF AttributeTypeAndValue
+<i>173</i>&nbsp;     *
+<i>174</i>&nbsp;     * AttributeTypeAndValue ::= SEQUENCE {
+<i>175</i>&nbsp;     *   type     AttributeType,
+<i>176</i>&nbsp;     *   value    AttributeValue }
+<i>177</i>&nbsp;     *
+<i>178</i>&nbsp;     * AttributeType ::= OBJECT IDENTIFIER
+<i>179</i>&nbsp;     *
+<i>180</i>&nbsp;     * AttributeValue ::= ANY DEFINED BY AttributeType
+<i>181</i>&nbsp;     * ....
+<i>182</i>&nbsp;     * DirectoryString ::= CHOICE {
+<i>183</i>&nbsp;     *       teletexString           TeletexString (SIZE (1..MAX)),
+<i>184</i>&nbsp;     *       printableString         PrintableString (SIZE (1..MAX)),
+<i>185</i>&nbsp;     *       universalString         UniversalString (SIZE (1..MAX)),
+<i>186</i>&nbsp;     *       utf8String              UTF8String (SIZE (1.. MAX)),
+<i>187</i>&nbsp;     *       bmpString               BMPString (SIZE (1..MAX)) }
+<i>188</i>&nbsp;     * }&lt;/pre&gt;
+<i>189</i>&nbsp;     * &lt;p&gt;
+<i>190</i>&nbsp;     * Note that a deep copy is performed on the {@code Collection} to
+<i>191</i>&nbsp;     * protect against subsequent modifications.
+<i>192</i>&nbsp;     *
+<i>193</i>&nbsp;     * @param names a {@code Collection} of names (or {@code null})
+<i>194</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>195</i>&nbsp;     * @see #getIssuerNames
+<i>196</i>&nbsp;     */
+<i>197</i>&nbsp;    public void setIssuerNames(Collection&lt;?&gt; names) throws IOException {
+<b class="nc"><i>198</i>&nbsp;        if (names == null || names.size() == 0) {</b>
+<b class="nc"><i>199</i>&nbsp;            issuerNames = null;</b>
+<b class="nc"><i>200</i>&nbsp;            issuerX500Principals = null;</b>
+<i>201</i>&nbsp;        } else {
+<b class="nc"><i>202</i>&nbsp;            HashSet&lt;Object&gt; tempNames = cloneAndCheckIssuerNames(names);</b>
+<i>203</i>&nbsp;            // Ensure that we either set both of these or neither
+<b class="nc"><i>204</i>&nbsp;            issuerX500Principals = parseIssuerNames(tempNames);</b>
+<b class="nc"><i>205</i>&nbsp;            issuerNames = tempNames;</b>
+<i>206</i>&nbsp;        }
+<i>207</i>&nbsp;    }
+<i>208</i>&nbsp;
+<i>209</i>&nbsp;    /**
+<i>210</i>&nbsp;     * Adds a name to the issuerNames criterion. The issuer distinguished
+<i>211</i>&nbsp;     * name in the {@code X509CRL} must match at least one of the specified
+<i>212</i>&nbsp;     * distinguished names.
+<i>213</i>&nbsp;     * &lt;p&gt;
+<i>214</i>&nbsp;     * This method allows the caller to add a name to the set of issuer names
+<i>215</i>&nbsp;     * which {@code X509CRLs} may contain. The specified name is added to
+<i>216</i>&nbsp;     * any previous value for the issuerNames criterion.
+<i>217</i>&nbsp;     * If the specified name is a duplicate, it may be ignored.
+<i>218</i>&nbsp;     *
+<i>219</i>&nbsp;     * @param issuer the issuer as X500Principal
+<i>220</i>&nbsp;     * @since 1.5
+<i>221</i>&nbsp;     */
+<i>222</i>&nbsp;    public void addIssuer(X500Principal issuer) {
+<b class="nc"><i>223</i>&nbsp;        addIssuerNameInternal(issuer.getEncoded(), issuer);</b>
+<i>224</i>&nbsp;    }
+<i>225</i>&nbsp;
+<i>226</i>&nbsp;    /**
+<i>227</i>&nbsp;     * &lt;strong&gt;Denigrated&lt;/strong&gt;, use
+<i>228</i>&nbsp;     * {@linkplain #addIssuer(X500Principal)} or
+<i>229</i>&nbsp;     * {@linkplain #addIssuerName(byte[])} instead. This method should not be
+<i>230</i>&nbsp;     * relied on as it can fail to match some CRLs because of a loss of
+<i>231</i>&nbsp;     * encoding information in the RFC 2253 String form of some distinguished
+<i>232</i>&nbsp;     * names.
+<i>233</i>&nbsp;     * &lt;p&gt;
+<i>234</i>&nbsp;     * Adds a name to the issuerNames criterion. The issuer distinguished
+<i>235</i>&nbsp;     * name in the {@code X509CRL} must match at least one of the specified
+<i>236</i>&nbsp;     * distinguished names.
+<i>237</i>&nbsp;     * &lt;p&gt;
+<i>238</i>&nbsp;     * This method allows the caller to add a name to the set of issuer names
+<i>239</i>&nbsp;     * which {@code X509CRLs} may contain. The specified name is added to
+<i>240</i>&nbsp;     * any previous value for the issuerNames criterion.
+<i>241</i>&nbsp;     * If the specified name is a duplicate, it may be ignored.
+<i>242</i>&nbsp;     *
+<i>243</i>&nbsp;     * @param name the name in RFC 2253 form
+<i>244</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>245</i>&nbsp;     */
+<i>246</i>&nbsp;    public void addIssuerName(String name) throws IOException {
+<b class="nc"><i>247</i>&nbsp;        addIssuerNameInternal(name, new X500Name(name).asX500Principal());</b>
+<i>248</i>&nbsp;    }
+<i>249</i>&nbsp;
+<i>250</i>&nbsp;    /**
+<i>251</i>&nbsp;     * Adds a name to the issuerNames criterion. The issuer distinguished
+<i>252</i>&nbsp;     * name in the {@code X509CRL} must match at least one of the specified
+<i>253</i>&nbsp;     * distinguished names.
+<i>254</i>&nbsp;     * &lt;p&gt;
+<i>255</i>&nbsp;     * This method allows the caller to add a name to the set of issuer names
+<i>256</i>&nbsp;     * which {@code X509CRLs} may contain. The specified name is added to
+<i>257</i>&nbsp;     * any previous value for the issuerNames criterion. If the specified name
+<i>258</i>&nbsp;     * is a duplicate, it may be ignored.
+<i>259</i>&nbsp;     * If a name is specified as a byte array, it should contain a single DER
+<i>260</i>&nbsp;     * encoded distinguished name, as defined in X.501. The ASN.1 notation for
+<i>261</i>&nbsp;     * this structure is as follows.
+<i>262</i>&nbsp;     * &lt;p&gt;
+<i>263</i>&nbsp;     * The name is provided as a byte array. This byte array should contain
+<i>264</i>&nbsp;     * a single DER encoded distinguished name, as defined in X.501. The ASN.1
+<i>265</i>&nbsp;     * notation for this structure appears in the documentation for
+<i>266</i>&nbsp;     * {@link #setIssuerNames setIssuerNames(Collection names)}.
+<i>267</i>&nbsp;     * &lt;p&gt;
+<i>268</i>&nbsp;     * Note that the byte array supplied here is cloned to protect against
+<i>269</i>&nbsp;     * subsequent modifications.
+<i>270</i>&nbsp;     *
+<i>271</i>&nbsp;     * @param name a byte array containing the name in ASN.1 DER encoded form
+<i>272</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>273</i>&nbsp;     */
+<i>274</i>&nbsp;    public void addIssuerName(byte[] name) throws IOException {
+<i>275</i>&nbsp;        // clone because byte arrays are modifiable
+<b class="nc"><i>276</i>&nbsp;        addIssuerNameInternal(name.clone(), new X500Name(name).asX500Principal());</b>
+<i>277</i>&nbsp;    }
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;    /**
+<i>280</i>&nbsp;     * A private method that adds a name (String or byte array) to the
+<i>281</i>&nbsp;     * issuerNames criterion. The issuer distinguished
+<i>282</i>&nbsp;     * name in the {@code X509CRL} must match at least one of the specified
+<i>283</i>&nbsp;     * distinguished names.
+<i>284</i>&nbsp;     *
+<i>285</i>&nbsp;     * @param name the name in string or byte array form
+<i>286</i>&nbsp;     * @param principal the name in X500Principal form
+<i>287</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>288</i>&nbsp;     */
+<i>289</i>&nbsp;    private void addIssuerNameInternal(Object name, X500Principal principal) {
+<b class="nc"><i>290</i>&nbsp;        if (issuerNames == null) {</b>
+<b class="nc"><i>291</i>&nbsp;            issuerNames = new HashSet&lt;&gt;();</b>
+<i>292</i>&nbsp;        }
+<b class="nc"><i>293</i>&nbsp;        if (issuerX500Principals == null) {</b>
+<b class="nc"><i>294</i>&nbsp;            issuerX500Principals = new HashSet&lt;&gt;();</b>
+<i>295</i>&nbsp;        }
+<b class="nc"><i>296</i>&nbsp;        issuerNames.add(name);</b>
+<b class="nc"><i>297</i>&nbsp;        issuerX500Principals.add(principal);</b>
+<i>298</i>&nbsp;    }
+<i>299</i>&nbsp;
+<i>300</i>&nbsp;    /**
+<i>301</i>&nbsp;     * Clone and check an argument of the form passed to
+<i>302</i>&nbsp;     * setIssuerNames. Throw an IOException if the argument is malformed.
+<i>303</i>&nbsp;     *
+<i>304</i>&nbsp;     * @param names a {@code Collection} of names. Each entry is a
+<i>305</i>&nbsp;     *              String or a byte array (the name, in string or ASN.1
+<i>306</i>&nbsp;     *              DER encoded form, respectively). {@code null} is
+<i>307</i>&nbsp;     *              not an acceptable value.
+<i>308</i>&nbsp;     * @return a deep copy of the specified {@code Collection}
+<i>309</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>310</i>&nbsp;     */
+<i>311</i>&nbsp;    private static HashSet&lt;Object&gt; cloneAndCheckIssuerNames(Collection&lt;?&gt; names)
+<i>312</i>&nbsp;        throws IOException
+<i>313</i>&nbsp;    {
+<b class="nc"><i>314</i>&nbsp;        HashSet&lt;Object&gt; namesCopy = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>315</i>&nbsp;        Iterator&lt;?&gt; i = names.iterator();</b>
+<b class="nc"><i>316</i>&nbsp;        while (i.hasNext()) {</b>
+<b class="nc"><i>317</i>&nbsp;            Object nameObject = i.next();</b>
+<b class="nc"><i>318</i>&nbsp;            if (!(nameObject instanceof byte []) &amp;&amp;</b>
+<i>319</i>&nbsp;                !(nameObject instanceof String))
+<b class="nc"><i>320</i>&nbsp;                throw new IOException(&quot;name not byte array or String&quot;);</b>
+<b class="nc"><i>321</i>&nbsp;            if (nameObject instanceof byte [])</b>
+<b class="nc"><i>322</i>&nbsp;                namesCopy.add(((byte []) nameObject).clone());</b>
+<i>323</i>&nbsp;            else
+<b class="nc"><i>324</i>&nbsp;                namesCopy.add(nameObject);</b>
+<b class="nc"><i>325</i>&nbsp;        }</b>
+<b class="nc"><i>326</i>&nbsp;        return(namesCopy);</b>
+<i>327</i>&nbsp;    }
+<i>328</i>&nbsp;
+<i>329</i>&nbsp;    /**
+<i>330</i>&nbsp;     * Clone an argument of the form passed to setIssuerNames.
+<i>331</i>&nbsp;     * Throw a RuntimeException if the argument is malformed.
+<i>332</i>&nbsp;     * &lt;p&gt;
+<i>333</i>&nbsp;     * This method wraps cloneAndCheckIssuerNames, changing any IOException
+<i>334</i>&nbsp;     * into a RuntimeException. This method should be used when the object being
+<i>335</i>&nbsp;     * cloned has already been checked, so there should never be any exceptions.
+<i>336</i>&nbsp;     *
+<i>337</i>&nbsp;     * @param names a {@code Collection} of names. Each entry is a
+<i>338</i>&nbsp;     *              String or a byte array (the name, in string or ASN.1
+<i>339</i>&nbsp;     *              DER encoded form, respectively). {@code null} is
+<i>340</i>&nbsp;     *              not an acceptable value.
+<i>341</i>&nbsp;     * @return a deep copy of the specified {@code Collection}
+<i>342</i>&nbsp;     * @throws RuntimeException if a parsing error occurs
+<i>343</i>&nbsp;     */
+<i>344</i>&nbsp;    private static HashSet&lt;Object&gt; cloneIssuerNames(Collection&lt;Object&gt; names) {
+<i>345</i>&nbsp;        try {
+<b class="nc"><i>346</i>&nbsp;            return cloneAndCheckIssuerNames(names);</b>
+<b class="nc"><i>347</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>348</i>&nbsp;            throw new RuntimeException(ioe);</b>
+<i>349</i>&nbsp;        }
+<i>350</i>&nbsp;    }
+<i>351</i>&nbsp;
+<i>352</i>&nbsp;    /**
+<i>353</i>&nbsp;     * Parse an argument of the form passed to setIssuerNames,
+<i>354</i>&nbsp;     * returning a Collection of issuerX500Principals.
+<i>355</i>&nbsp;     * Throw an IOException if the argument is malformed.
+<i>356</i>&nbsp;     *
+<i>357</i>&nbsp;     * @param names a {@code Collection} of names. Each entry is a
+<i>358</i>&nbsp;     *              String or a byte array (the name, in string or ASN.1
+<i>359</i>&nbsp;     *              DER encoded form, respectively). &lt;Code&gt;Null&lt;/Code&gt; is
+<i>360</i>&nbsp;     *              not an acceptable value.
+<i>361</i>&nbsp;     * @return a HashSet of issuerX500Principals
+<i>362</i>&nbsp;     * @throws IOException if a parsing error occurs
+<i>363</i>&nbsp;     */
+<i>364</i>&nbsp;    private static HashSet&lt;X500Principal&gt; parseIssuerNames(Collection&lt;Object&gt; names)
+<i>365</i>&nbsp;    throws IOException {
+<b class="nc"><i>366</i>&nbsp;        HashSet&lt;X500Principal&gt; x500Principals = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>367</i>&nbsp;        for (Iterator&lt;Object&gt; t = names.iterator(); t.hasNext(); ) {</b>
+<b class="nc"><i>368</i>&nbsp;            Object nameObject = t.next();</b>
+<b class="nc"><i>369</i>&nbsp;            if (nameObject instanceof String) {</b>
+<b class="nc"><i>370</i>&nbsp;                x500Principals.add(new X500Name((String)nameObject).asX500Principal());</b>
+<i>371</i>&nbsp;            } else {
+<i>372</i>&nbsp;                try {
+<b class="nc"><i>373</i>&nbsp;                    x500Principals.add(new X500Principal((byte[])nameObject));</b>
+<b class="nc"><i>374</i>&nbsp;                } catch (IllegalArgumentException e) {</b>
+<b class="nc"><i>375</i>&nbsp;                    throw (IOException)new IOException(&quot;Invalid name&quot;).initCause(e);</b>
+<b class="nc"><i>376</i>&nbsp;                }</b>
+<i>377</i>&nbsp;            }
+<b class="nc"><i>378</i>&nbsp;        }</b>
+<b class="nc"><i>379</i>&nbsp;        return x500Principals;</b>
+<i>380</i>&nbsp;    }
+<i>381</i>&nbsp;
+<i>382</i>&nbsp;    /**
+<i>383</i>&nbsp;     * Sets the minCRLNumber criterion. The {@code X509CRL} must have a
+<i>384</i>&nbsp;     * CRL number extension whose value is greater than or equal to the
+<i>385</i>&nbsp;     * specified value. If {@code null}, no minCRLNumber check will be
+<i>386</i>&nbsp;     * done.
+<i>387</i>&nbsp;     *
+<i>388</i>&nbsp;     * @param minCRL the minimum CRL number accepted (or {@code null})
+<i>389</i>&nbsp;     */
+<i>390</i>&nbsp;    public void setMinCRLNumber(BigInteger minCRL) {
+<b class="nc"><i>391</i>&nbsp;        this.minCRL = minCRL;</b>
+<i>392</i>&nbsp;    }
+<i>393</i>&nbsp;
+<i>394</i>&nbsp;    /**
+<i>395</i>&nbsp;     * Sets the maxCRLNumber criterion. The {@code X509CRL} must have a
+<i>396</i>&nbsp;     * CRL number extension whose value is less than or equal to the
+<i>397</i>&nbsp;     * specified value. If {@code null}, no maxCRLNumber check will be
+<i>398</i>&nbsp;     * done.
+<i>399</i>&nbsp;     *
+<i>400</i>&nbsp;     * @param maxCRL the maximum CRL number accepted (or {@code null})
+<i>401</i>&nbsp;     */
+<i>402</i>&nbsp;    public void setMaxCRLNumber(BigInteger maxCRL) {
+<b class="nc"><i>403</i>&nbsp;        this.maxCRL = maxCRL;</b>
+<i>404</i>&nbsp;    }
+<i>405</i>&nbsp;
+<i>406</i>&nbsp;    /**
+<i>407</i>&nbsp;     * Sets the dateAndTime criterion. The specified date must be
+<i>408</i>&nbsp;     * equal to or later than the value of the thisUpdate component
+<i>409</i>&nbsp;     * of the {@code X509CRL} and earlier than the value of the
+<i>410</i>&nbsp;     * nextUpdate component. There is no match if the {@code X509CRL}
+<i>411</i>&nbsp;     * does not contain a nextUpdate component.
+<i>412</i>&nbsp;     * If {@code null}, no dateAndTime check will be done.
+<i>413</i>&nbsp;     * &lt;p&gt;
+<i>414</i>&nbsp;     * Note that the {@code Date} supplied here is cloned to protect
+<i>415</i>&nbsp;     * against subsequent modifications.
+<i>416</i>&nbsp;     *
+<i>417</i>&nbsp;     * @param dateAndTime the {@code Date} to match against
+<i>418</i>&nbsp;     *                    (or {@code null})
+<i>419</i>&nbsp;     * @see #getDateAndTime
+<i>420</i>&nbsp;     */
+<i>421</i>&nbsp;    public void setDateAndTime(Date dateAndTime) {
+<b class="nc"><i>422</i>&nbsp;        if (dateAndTime == null)</b>
+<b class="nc"><i>423</i>&nbsp;            this.dateAndTime = null;</b>
+<i>424</i>&nbsp;        else
+<b class="nc"><i>425</i>&nbsp;            this.dateAndTime = new Date(dateAndTime.getTime());</b>
+<b class="nc"><i>426</i>&nbsp;        this.skew = 0;</b>
+<i>427</i>&nbsp;    }
+<i>428</i>&nbsp;
+<i>429</i>&nbsp;    /**
+<i>430</i>&nbsp;     * Sets the dateAndTime criterion and allows for the specified clock skew
+<i>431</i>&nbsp;     * (in milliseconds) when checking against the validity period of the CRL.
+<i>432</i>&nbsp;     */
+<i>433</i>&nbsp;    void setDateAndTime(Date dateAndTime, long skew) {
+<b class="nc"><i>434</i>&nbsp;        this.dateAndTime =</b>
+<b class="nc"><i>435</i>&nbsp;            (dateAndTime == null ? null : new Date(dateAndTime.getTime()));</b>
+<b class="nc"><i>436</i>&nbsp;        this.skew = skew;</b>
+<i>437</i>&nbsp;    }
+<i>438</i>&nbsp;
+<i>439</i>&nbsp;    /**
+<i>440</i>&nbsp;     * Sets the certificate being checked. This is not a criterion. Rather,
+<i>441</i>&nbsp;     * it is optional information that may help a {@code CertStore}
+<i>442</i>&nbsp;     * find CRLs that would be relevant when checking revocation for the
+<i>443</i>&nbsp;     * specified certificate. If {@code null} is specified, then no
+<i>444</i>&nbsp;     * such optional information is provided.
+<i>445</i>&nbsp;     *
+<i>446</i>&nbsp;     * @param cert the {@code X509Certificate} being checked
+<i>447</i>&nbsp;     *             (or {@code null})
+<i>448</i>&nbsp;     * @see #getCertificateChecking
+<i>449</i>&nbsp;     */
+<i>450</i>&nbsp;    public void setCertificateChecking(X509Certificate cert) {
+<b class="nc"><i>451</i>&nbsp;        certChecking = cert;</b>
+<i>452</i>&nbsp;    }
+<i>453</i>&nbsp;
+<i>454</i>&nbsp;    /**
+<i>455</i>&nbsp;     * Returns the issuerNames criterion. The issuer distinguished
+<i>456</i>&nbsp;     * name in the {@code X509CRL} must match at least one of the specified
+<i>457</i>&nbsp;     * distinguished names. If the value returned is {@code null}, any
+<i>458</i>&nbsp;     * issuer distinguished name will do.
+<i>459</i>&nbsp;     * &lt;p&gt;
+<i>460</i>&nbsp;     * If the value returned is not {@code null}, it is a
+<i>461</i>&nbsp;     * unmodifiable {@code Collection} of {@code X500Principal}s.
+<i>462</i>&nbsp;     *
+<i>463</i>&nbsp;     * @return an unmodifiable {@code Collection} of names
+<i>464</i>&nbsp;     *   (or {@code null})
+<i>465</i>&nbsp;     * @see #setIssuers
+<i>466</i>&nbsp;     * @since 1.5
+<i>467</i>&nbsp;     */
+<i>468</i>&nbsp;    public Collection&lt;X500Principal&gt; getIssuers() {
+<b class="nc"><i>469</i>&nbsp;        if (issuerX500Principals == null) {</b>
+<b class="nc"><i>470</i>&nbsp;            return null;</b>
+<i>471</i>&nbsp;        }
+<b class="nc"><i>472</i>&nbsp;        return Collections.unmodifiableCollection(issuerX500Principals);</b>
+<i>473</i>&nbsp;    }
+<i>474</i>&nbsp;
+<i>475</i>&nbsp;    /**
+<i>476</i>&nbsp;     * Returns a copy of the issuerNames criterion. The issuer distinguished
+<i>477</i>&nbsp;     * name in the {@code X509CRL} must match at least one of the specified
+<i>478</i>&nbsp;     * distinguished names. If the value returned is {@code null}, any
+<i>479</i>&nbsp;     * issuer distinguished name will do.
+<i>480</i>&nbsp;     * &lt;p&gt;
+<i>481</i>&nbsp;     * If the value returned is not {@code null}, it is a
+<i>482</i>&nbsp;     * {@code Collection} of names. Each name is a {@code String}
+<i>483</i>&nbsp;     * or a byte array representing a distinguished name (in RFC 2253 or
+<i>484</i>&nbsp;     * ASN.1 DER encoded form, respectively).  Note that the
+<i>485</i>&nbsp;     * {@code Collection} returned may contain duplicate names.
+<i>486</i>&nbsp;     * &lt;p&gt;
+<i>487</i>&nbsp;     * If a name is specified as a byte array, it should contain a single DER
+<i>488</i>&nbsp;     * encoded distinguished name, as defined in X.501. The ASN.1 notation for
+<i>489</i>&nbsp;     * this structure is given in the documentation for
+<i>490</i>&nbsp;     * {@link #setIssuerNames setIssuerNames(Collection names)}.
+<i>491</i>&nbsp;     * &lt;p&gt;
+<i>492</i>&nbsp;     * Note that a deep copy is performed on the {@code Collection} to
+<i>493</i>&nbsp;     * protect against subsequent modifications.
+<i>494</i>&nbsp;     *
+<i>495</i>&nbsp;     * @return a {@code Collection} of names (or {@code null})
+<i>496</i>&nbsp;     * @see #setIssuerNames
+<i>497</i>&nbsp;     */
+<i>498</i>&nbsp;    public Collection&lt;Object&gt; getIssuerNames() {
+<b class="nc"><i>499</i>&nbsp;        if (issuerNames == null) {</b>
+<b class="nc"><i>500</i>&nbsp;            return null;</b>
+<i>501</i>&nbsp;        }
+<b class="nc"><i>502</i>&nbsp;        return cloneIssuerNames(issuerNames);</b>
+<i>503</i>&nbsp;    }
+<i>504</i>&nbsp;
+<i>505</i>&nbsp;    /**
+<i>506</i>&nbsp;     * Returns the minCRLNumber criterion. The {@code X509CRL} must have a
+<i>507</i>&nbsp;     * CRL number extension whose value is greater than or equal to the
+<i>508</i>&nbsp;     * specified value. If {@code null}, no minCRLNumber check will be done.
+<i>509</i>&nbsp;     *
+<i>510</i>&nbsp;     * @return the minimum CRL number accepted (or {@code null})
+<i>511</i>&nbsp;     */
+<i>512</i>&nbsp;    public BigInteger getMinCRL() {
+<b class="nc"><i>513</i>&nbsp;        return minCRL;</b>
+<i>514</i>&nbsp;    }
+<i>515</i>&nbsp;
+<i>516</i>&nbsp;    /**
+<i>517</i>&nbsp;     * Returns the maxCRLNumber criterion. The {@code X509CRL} must have a
+<i>518</i>&nbsp;     * CRL number extension whose value is less than or equal to the
+<i>519</i>&nbsp;     * specified value. If {@code null}, no maxCRLNumber check will be
+<i>520</i>&nbsp;     * done.
+<i>521</i>&nbsp;     *
+<i>522</i>&nbsp;     * @return the maximum CRL number accepted (or {@code null})
+<i>523</i>&nbsp;     */
+<i>524</i>&nbsp;    public BigInteger getMaxCRL() {
+<b class="nc"><i>525</i>&nbsp;        return maxCRL;</b>
+<i>526</i>&nbsp;    }
+<i>527</i>&nbsp;
+<i>528</i>&nbsp;    /**
+<i>529</i>&nbsp;     * Returns the dateAndTime criterion. The specified date must be
+<i>530</i>&nbsp;     * equal to or later than the value of the thisUpdate component
+<i>531</i>&nbsp;     * of the {@code X509CRL} and earlier than the value of the
+<i>532</i>&nbsp;     * nextUpdate component. There is no match if the
+<i>533</i>&nbsp;     * {@code X509CRL} does not contain a nextUpdate component.
+<i>534</i>&nbsp;     * If {@code null}, no dateAndTime check will be done.
+<i>535</i>&nbsp;     * &lt;p&gt;
+<i>536</i>&nbsp;     * Note that the {@code Date} returned is cloned to protect against
+<i>537</i>&nbsp;     * subsequent modifications.
+<i>538</i>&nbsp;     *
+<i>539</i>&nbsp;     * @return the {@code Date} to match against (or {@code null})
+<i>540</i>&nbsp;     * @see #setDateAndTime
+<i>541</i>&nbsp;     */
+<i>542</i>&nbsp;    public Date getDateAndTime() {
+<b class="nc"><i>543</i>&nbsp;        if (dateAndTime == null)</b>
+<b class="nc"><i>544</i>&nbsp;            return null;</b>
+<b class="nc"><i>545</i>&nbsp;        return (Date) dateAndTime.clone();</b>
+<i>546</i>&nbsp;    }
+<i>547</i>&nbsp;
+<i>548</i>&nbsp;    /**
+<i>549</i>&nbsp;     * Returns the certificate being checked. This is not a criterion. Rather,
+<i>550</i>&nbsp;     * it is optional information that may help a {@code CertStore}
+<i>551</i>&nbsp;     * find CRLs that would be relevant when checking revocation for the
+<i>552</i>&nbsp;     * specified certificate. If the value returned is {@code null}, then
+<i>553</i>&nbsp;     * no such optional information is provided.
+<i>554</i>&nbsp;     *
+<i>555</i>&nbsp;     * @return the certificate being checked (or {@code null})
+<i>556</i>&nbsp;     * @see #setCertificateChecking
+<i>557</i>&nbsp;     */
+<i>558</i>&nbsp;    public X509Certificate getCertificateChecking() {
+<b class="nc"><i>559</i>&nbsp;        return certChecking;</b>
+<i>560</i>&nbsp;    }
+<i>561</i>&nbsp;
+<i>562</i>&nbsp;    /**
+<i>563</i>&nbsp;     * Returns a printable representation of the {@code X509CRLSelector}.
+<i>564</i>&nbsp;     *
+<i>565</i>&nbsp;     * @return a {@code String} describing the contents of the
+<i>566</i>&nbsp;     *         {@code X509CRLSelector}.
+<i>567</i>&nbsp;     */
+<i>568</i>&nbsp;    public String toString() {
+<b class="nc"><i>569</i>&nbsp;        StringBuilder sb = new StringBuilder();</b>
+<b class="nc"><i>570</i>&nbsp;        sb.append(&quot;X509CRLSelector: [\n&quot;);</b>
+<b class="nc"><i>571</i>&nbsp;        if (issuerNames != null) {</b>
+<b class="nc"><i>572</i>&nbsp;            sb.append(&quot;  IssuerNames:\n&quot;);</b>
+<b class="nc"><i>573</i>&nbsp;            Iterator&lt;Object&gt; i = issuerNames.iterator();</b>
+<b class="nc"><i>574</i>&nbsp;            while (i.hasNext())</b>
+<b class="nc"><i>575</i>&nbsp;                sb.append(&quot;    &quot; + i.next() + &quot;\n&quot;);</b>
+<i>576</i>&nbsp;        }
+<b class="nc"><i>577</i>&nbsp;        if (minCRL != null)</b>
+<b class="nc"><i>578</i>&nbsp;            sb.append(&quot;  minCRLNumber: &quot; + minCRL + &quot;\n&quot;);</b>
+<b class="nc"><i>579</i>&nbsp;        if (maxCRL != null)</b>
+<b class="nc"><i>580</i>&nbsp;            sb.append(&quot;  maxCRLNumber: &quot; + maxCRL + &quot;\n&quot;);</b>
+<b class="nc"><i>581</i>&nbsp;        if (dateAndTime != null)</b>
+<b class="nc"><i>582</i>&nbsp;            sb.append(&quot;  dateAndTime: &quot; + dateAndTime + &quot;\n&quot;);</b>
+<b class="nc"><i>583</i>&nbsp;        if (certChecking != null)</b>
+<b class="nc"><i>584</i>&nbsp;            sb.append(&quot;  Certificate being checked: &quot; + certChecking + &quot;\n&quot;);</b>
+<b class="nc"><i>585</i>&nbsp;        sb.append(&quot;]&quot;);</b>
+<b class="nc"><i>586</i>&nbsp;        return sb.toString();</b>
+<i>587</i>&nbsp;    }
+<i>588</i>&nbsp;
+<i>589</i>&nbsp;    /**
+<i>590</i>&nbsp;     * Decides whether a {@code CRL} should be selected.
+<i>591</i>&nbsp;     *
+<i>592</i>&nbsp;     * @param crl the {@code CRL} to be checked
+<i>593</i>&nbsp;     * @return {@code true} if the {@code CRL} should be selected,
+<i>594</i>&nbsp;     *         {@code false} otherwise
+<i>595</i>&nbsp;     */
+<i>596</i>&nbsp;    public boolean match(CRL crl) {
+<b class="nc"><i>597</i>&nbsp;        if (!(crl instanceof X509CRL)) {</b>
+<b class="nc"><i>598</i>&nbsp;            return false;</b>
+<i>599</i>&nbsp;        }
+<b class="nc"><i>600</i>&nbsp;        X509CRL xcrl = (X509CRL)crl;</b>
+<i>601</i>&nbsp;
+<i>602</i>&nbsp;        /* match on issuer name */
+<b class="nc"><i>603</i>&nbsp;        if (issuerNames != null) {</b>
+<b class="nc"><i>604</i>&nbsp;            X500Principal issuer = xcrl.getIssuerX500Principal();</b>
+<b class="nc"><i>605</i>&nbsp;            Iterator&lt;X500Principal&gt; i = issuerX500Principals.iterator();</b>
+<b class="nc"><i>606</i>&nbsp;            boolean found = false;</b>
+<b class="nc"><i>607</i>&nbsp;            while (!found &amp;&amp; i.hasNext()) {</b>
+<b class="nc"><i>608</i>&nbsp;                if (i.next().equals(issuer)) {</b>
+<b class="nc"><i>609</i>&nbsp;                    found = true;</b>
+<i>610</i>&nbsp;                }
+<i>611</i>&nbsp;            }
+<b class="nc"><i>612</i>&nbsp;            if (!found) {</b>
+<b class="nc"><i>613</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>614</i>&nbsp;                    debug.println(&quot;X509CRLSelector.match: issuer DNs &quot;</b>
+<i>615</i>&nbsp;                        + &quot;don&#39;t match&quot;);
+<i>616</i>&nbsp;                }
+<b class="nc"><i>617</i>&nbsp;                return false;</b>
+<i>618</i>&nbsp;            }
+<i>619</i>&nbsp;        }
+<i>620</i>&nbsp;
+<b class="nc"><i>621</i>&nbsp;        if ((minCRL != null) || (maxCRL != null)) {</b>
+<i>622</i>&nbsp;            /* Get CRL number extension from CRL */
+<b class="nc"><i>623</i>&nbsp;            byte[] crlNumExtVal = xcrl.getExtensionValue(&quot;2.5.29.20&quot;);</b>
+<b class="nc"><i>624</i>&nbsp;            if (crlNumExtVal == null) {</b>
+<b class="nc"><i>625</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>626</i>&nbsp;                    debug.println(&quot;X509CRLSelector.match: no CRLNumber&quot;);</b>
+<i>627</i>&nbsp;                }
+<i>628</i>&nbsp;            }
+<i>629</i>&nbsp;            BigInteger crlNum;
+<i>630</i>&nbsp;            try {
+<b class="nc"><i>631</i>&nbsp;                DerInputStream in = new DerInputStream(crlNumExtVal);</b>
+<b class="nc"><i>632</i>&nbsp;                byte[] encoded = in.getOctetString();</b>
+<b class="nc"><i>633</i>&nbsp;                CRLNumberExtension crlNumExt =</b>
+<i>634</i>&nbsp;                    new CRLNumberExtension(Boolean.FALSE, encoded);
+<b class="nc"><i>635</i>&nbsp;                crlNum = crlNumExt.get(CRLNumberExtension.NUMBER);</b>
+<b class="nc"><i>636</i>&nbsp;            } catch (IOException ex) {</b>
+<b class="nc"><i>637</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>638</i>&nbsp;                    debug.println(&quot;X509CRLSelector.match: exception in &quot;</b>
+<i>639</i>&nbsp;                        + &quot;decoding CRL number&quot;);
+<i>640</i>&nbsp;                }
+<b class="nc"><i>641</i>&nbsp;                return false;</b>
+<b class="nc"><i>642</i>&nbsp;            }</b>
+<i>643</i>&nbsp;
+<i>644</i>&nbsp;            /* match on minCRLNumber */
+<b class="nc"><i>645</i>&nbsp;            if (minCRL != null) {</b>
+<b class="nc"><i>646</i>&nbsp;                if (crlNum.compareTo(minCRL) &lt; 0) {</b>
+<b class="nc"><i>647</i>&nbsp;                    if (debug != null) {</b>
+<b class="nc"><i>648</i>&nbsp;                        debug.println(&quot;X509CRLSelector.match: CRLNumber too small&quot;);</b>
+<i>649</i>&nbsp;                    }
+<b class="nc"><i>650</i>&nbsp;                    return false;</b>
+<i>651</i>&nbsp;                }
+<i>652</i>&nbsp;            }
+<i>653</i>&nbsp;
+<i>654</i>&nbsp;            /* match on maxCRLNumber */
+<b class="nc"><i>655</i>&nbsp;            if (maxCRL != null) {</b>
+<b class="nc"><i>656</i>&nbsp;                if (crlNum.compareTo(maxCRL) &gt; 0) {</b>
+<b class="nc"><i>657</i>&nbsp;                    if (debug != null) {</b>
+<b class="nc"><i>658</i>&nbsp;                        debug.println(&quot;X509CRLSelector.match: CRLNumber too large&quot;);</b>
+<i>659</i>&nbsp;                    }
+<b class="nc"><i>660</i>&nbsp;                    return false;</b>
+<i>661</i>&nbsp;                }
+<i>662</i>&nbsp;            }
+<i>663</i>&nbsp;        }
+<i>664</i>&nbsp;
+<i>665</i>&nbsp;
+<i>666</i>&nbsp;        /* match on dateAndTime */
+<b class="nc"><i>667</i>&nbsp;        if (dateAndTime != null) {</b>
+<b class="nc"><i>668</i>&nbsp;            Date crlThisUpdate = xcrl.getThisUpdate();</b>
+<b class="nc"><i>669</i>&nbsp;            Date nextUpdate = xcrl.getNextUpdate();</b>
+<b class="nc"><i>670</i>&nbsp;            if (nextUpdate == null) {</b>
+<b class="nc"><i>671</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>672</i>&nbsp;                    debug.println(&quot;X509CRLSelector.match: nextUpdate null&quot;);</b>
+<i>673</i>&nbsp;                }
+<b class="nc"><i>674</i>&nbsp;                return false;</b>
+<i>675</i>&nbsp;            }
+<b class="nc"><i>676</i>&nbsp;            Date nowPlusSkew = dateAndTime;</b>
+<b class="nc"><i>677</i>&nbsp;            Date nowMinusSkew = dateAndTime;</b>
+<b class="nc"><i>678</i>&nbsp;            if (skew &gt; 0) {</b>
+<b class="nc"><i>679</i>&nbsp;                nowPlusSkew = new Date(dateAndTime.getTime() + skew);</b>
+<b class="nc"><i>680</i>&nbsp;                nowMinusSkew = new Date(dateAndTime.getTime() - skew);</b>
+<i>681</i>&nbsp;            }
+<i>682</i>&nbsp;
+<i>683</i>&nbsp;            // Check that the test date is within the validity interval:
+<i>684</i>&nbsp;            //   [ thisUpdate - MAX_CLOCK_SKEW,
+<i>685</i>&nbsp;            //     nextUpdate + MAX_CLOCK_SKEW ]
+<b class="nc"><i>686</i>&nbsp;            if (nowMinusSkew.after(nextUpdate)</b>
+<b class="nc"><i>687</i>&nbsp;                || nowPlusSkew.before(crlThisUpdate)) {</b>
+<b class="nc"><i>688</i>&nbsp;                if (debug != null) {</b>
+<b class="nc"><i>689</i>&nbsp;                    debug.println(&quot;X509CRLSelector.match: update out-of-range&quot;);</b>
+<i>690</i>&nbsp;                }
+<b class="nc"><i>691</i>&nbsp;                return false;</b>
+<i>692</i>&nbsp;            }
+<i>693</i>&nbsp;        }
+<i>694</i>&nbsp;
+<b class="nc"><i>695</i>&nbsp;        return true;</b>
+<i>696</i>&nbsp;    }
+<i>697</i>&nbsp;
+<i>698</i>&nbsp;    /**
+<i>699</i>&nbsp;     * Returns a copy of this object.
+<i>700</i>&nbsp;     *
+<i>701</i>&nbsp;     * @return the copy
+<i>702</i>&nbsp;     */
+<i>703</i>&nbsp;    public Object clone() {
+<i>704</i>&nbsp;        try {
+<b class="nc"><i>705</i>&nbsp;            X509CRLSelector copy = (X509CRLSelector)super.clone();</b>
+<b class="nc"><i>706</i>&nbsp;            if (issuerNames != null) {</b>
+<b class="nc"><i>707</i>&nbsp;                copy.issuerNames =</b>
+<i>708</i>&nbsp;                        new HashSet&lt;&gt;(issuerNames);
+<b class="nc"><i>709</i>&nbsp;                copy.issuerX500Principals =</b>
+<i>710</i>&nbsp;                        new HashSet&lt;&gt;(issuerX500Principals);
+<i>711</i>&nbsp;            }
+<b class="nc"><i>712</i>&nbsp;            return copy;</b>
+<b class="nc"><i>713</i>&nbsp;        } catch (CloneNotSupportedException e) {</b>
+<i>714</i>&nbsp;            /* Cannot happen */
+<b class="nc"><i>715</i>&nbsp;            throw new InternalError(e.toString(), e);</b>
+<i>716</i>&nbsp;        }
+<i>717</i>&nbsp;    }
+<i>718</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

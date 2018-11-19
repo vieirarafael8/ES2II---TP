@@ -1,0 +1,280 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ExtensionValuesStore</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">org.junit.jupiter.engine.execution</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ExtensionValuesStore (org.junit.jupiter.engine.execution)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ExtensionValuesStore</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    18,2%
+  </span>
+  <span class="absValue">
+    (2/ 11)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    17%
+  </span>
+  <span class="absValue">
+    (8/ 47)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright 2015-2018 the original author or authors.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; * All rights reserved. This program and the accompanying materials are
+<i>5</i>&nbsp; * made available under the terms of the Eclipse Public License v2.0 which
+<i>6</i>&nbsp; * accompanies this distribution and is available at
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; * http://www.eclipse.org/legal/epl-v20.html
+<i>9</i>&nbsp; */
+<i>10</i>&nbsp;
+<i>11</i>&nbsp;package org.junit.jupiter.engine.execution;
+<i>12</i>&nbsp;
+<i>13</i>&nbsp;import static org.apiguardian.api.API.Status.INTERNAL;
+<i>14</i>&nbsp;import static org.junit.platform.commons.util.ReflectionUtils.getWrapperType;
+<i>15</i>&nbsp;import static org.junit.platform.commons.util.ReflectionUtils.isAssignableTo;
+<i>16</i>&nbsp;
+<i>17</i>&nbsp;import java.util.Objects;
+<i>18</i>&nbsp;import java.util.concurrent.ConcurrentHashMap;
+<i>19</i>&nbsp;import java.util.concurrent.ConcurrentMap;
+<i>20</i>&nbsp;import java.util.concurrent.locks.Lock;
+<i>21</i>&nbsp;import java.util.concurrent.locks.ReentrantLock;
+<i>22</i>&nbsp;import java.util.function.Function;
+<i>23</i>&nbsp;import java.util.function.Supplier;
+<i>24</i>&nbsp;
+<i>25</i>&nbsp;import org.apiguardian.api.API;
+<i>26</i>&nbsp;import org.junit.jupiter.api.extension.ExtensionContext;
+<i>27</i>&nbsp;import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
+<i>28</i>&nbsp;import org.junit.jupiter.api.extension.ExtensionContextException;
+<i>29</i>&nbsp;import org.junit.platform.engine.support.hierarchical.OpenTest4JAwareThrowableCollector;
+<i>30</i>&nbsp;import org.junit.platform.engine.support.hierarchical.ThrowableCollector;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;/**
+<i>33</i>&nbsp; * {@code ExtensionValuesStore} is used inside implementations of
+<i>34</i>&nbsp; * {@link ExtensionContext} to store and retrieve values.
+<i>35</i>&nbsp; *
+<i>36</i>&nbsp; * @since 5.0
+<i>37</i>&nbsp; */
+<i>38</i>&nbsp;@API(status = INTERNAL, since = &quot;5.0&quot;)
+<i>39</i>&nbsp;public class ExtensionValuesStore {
+<i>40</i>&nbsp;
+<i>41</i>&nbsp;	private final ExtensionValuesStore parentStore;
+<b class="fc"><i>42</i>&nbsp;	private final ConcurrentMap&lt;CompositeKey, Supplier&lt;Object&gt;&gt; storedValues = new ConcurrentHashMap&lt;&gt;(4);</b>
+<i>43</i>&nbsp;
+<b class="fc"><i>44</i>&nbsp;	public ExtensionValuesStore(ExtensionValuesStore parentStore) {</b>
+<b class="fc"><i>45</i>&nbsp;		this.parentStore = parentStore;</b>
+<b class="fc"><i>46</i>&nbsp;	}</b>
+<i>47</i>&nbsp;
+<i>48</i>&nbsp;	/**
+<i>49</i>&nbsp;	 * Close all values that implement {@link ExtensionContext.Store.CloseableResource}.
+<i>50</i>&nbsp;	 *
+<i>51</i>&nbsp;	 * @implNote Only close values stored in this instance. This implementation
+<i>52</i>&nbsp;	 * does not close values in parent stores.
+<i>53</i>&nbsp;	 */
+<i>54</i>&nbsp;	public void closeAllStoredCloseableValues() {
+<b class="fc"><i>55</i>&nbsp;		ThrowableCollector throwableCollector = new OpenTest4JAwareThrowableCollector();</b>
+<b class="fc"><i>56</i>&nbsp;		for (Supplier&lt;Object&gt; supplier : storedValues.values()) {</b>
+<b class="nc"><i>57</i>&nbsp;			Object value = supplier.get();</b>
+<b class="nc"><i>58</i>&nbsp;			if (value instanceof ExtensionContext.Store.CloseableResource) {</b>
+<b class="nc"><i>59</i>&nbsp;				ExtensionContext.Store.CloseableResource resource = (ExtensionContext.Store.CloseableResource) value;</b>
+<b class="nc"><i>60</i>&nbsp;				throwableCollector.execute(resource::close);</b>
+<i>61</i>&nbsp;			}
+<b class="nc"><i>62</i>&nbsp;		}</b>
+<b class="fc"><i>63</i>&nbsp;		throwableCollector.assertEmpty();</b>
+<b class="fc"><i>64</i>&nbsp;	}</b>
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;	Object get(Namespace namespace, Object key) {
+<b class="nc"><i>67</i>&nbsp;		Supplier&lt;Object&gt; storedValue = getStoredValue(new CompositeKey(namespace, key));</b>
+<b class="nc"><i>68</i>&nbsp;		return (storedValue != null ? storedValue.get() : null);</b>
+<i>69</i>&nbsp;	}
+<i>70</i>&nbsp;
+<i>71</i>&nbsp;	&lt;T&gt; T get(Namespace namespace, Object key, Class&lt;T&gt; requiredType) {
+<b class="nc"><i>72</i>&nbsp;		Object value = get(namespace, key);</b>
+<b class="nc"><i>73</i>&nbsp;		return castToRequiredType(key, value, requiredType);</b>
+<i>74</i>&nbsp;	}
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;	&lt;K, V&gt; Object getOrComputeIfAbsent(Namespace namespace, K key, Function&lt;K, V&gt; defaultCreator) {
+<b class="nc"><i>77</i>&nbsp;		CompositeKey compositeKey = new CompositeKey(namespace, key);</b>
+<b class="nc"><i>78</i>&nbsp;		Supplier&lt;Object&gt; storedValue = getStoredValue(compositeKey);</b>
+<b class="nc"><i>79</i>&nbsp;		if (storedValue == null) {</b>
+<b class="nc"><i>80</i>&nbsp;			storedValue = new MemoizingSupplier(() -&gt; defaultCreator.apply(key));</b>
+<b class="nc"><i>81</i>&nbsp;			Supplier&lt;Object&gt; previousValue = storedValues.putIfAbsent(compositeKey, storedValue);</b>
+<b class="nc"><i>82</i>&nbsp;			if (previousValue != null) {</b>
+<i>83</i>&nbsp;				// There was a race condition, and we lost.
+<b class="nc"><i>84</i>&nbsp;				storedValue = previousValue;</b>
+<i>85</i>&nbsp;			}
+<i>86</i>&nbsp;		}
+<b class="nc"><i>87</i>&nbsp;		return storedValue.get();</b>
+<i>88</i>&nbsp;	}
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;	&lt;K, V&gt; V getOrComputeIfAbsent(Namespace namespace, K key, Function&lt;K, V&gt; defaultCreator, Class&lt;V&gt; requiredType) {
+<b class="nc"><i>91</i>&nbsp;		Object value = getOrComputeIfAbsent(namespace, key, defaultCreator);</b>
+<b class="nc"><i>92</i>&nbsp;		return castToRequiredType(key, value, requiredType);</b>
+<i>93</i>&nbsp;	}
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;	void put(Namespace namespace, Object key, Object value) {
+<b class="nc"><i>96</i>&nbsp;		storedValues.put(new CompositeKey(namespace, key), () -&gt; value);</b>
+<b class="nc"><i>97</i>&nbsp;	}</b>
+<i>98</i>&nbsp;
+<i>99</i>&nbsp;	Object remove(Namespace namespace, Object key) {
+<b class="nc"><i>100</i>&nbsp;		Supplier&lt;Object&gt; previous = storedValues.remove(new CompositeKey(namespace, key));</b>
+<b class="nc"><i>101</i>&nbsp;		return (previous != null ? previous.get() : null);</b>
+<i>102</i>&nbsp;	}
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;	&lt;T&gt; T remove(Namespace namespace, Object key, Class&lt;T&gt; requiredType) {
+<b class="nc"><i>105</i>&nbsp;		Object value = remove(namespace, key);</b>
+<b class="nc"><i>106</i>&nbsp;		return castToRequiredType(key, value, requiredType);</b>
+<i>107</i>&nbsp;	}
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;	private Supplier&lt;Object&gt; getStoredValue(CompositeKey compositeKey) {
+<b class="nc"><i>110</i>&nbsp;		Supplier&lt;Object&gt; storedValue = storedValues.get(compositeKey);</b>
+<b class="nc"><i>111</i>&nbsp;		if (storedValue != null) {</b>
+<b class="nc"><i>112</i>&nbsp;			return storedValue;</b>
+<i>113</i>&nbsp;		}
+<b class="nc"><i>114</i>&nbsp;		else if (parentStore != null) {</b>
+<b class="nc"><i>115</i>&nbsp;			return parentStore.getStoredValue(compositeKey);</b>
+<i>116</i>&nbsp;		}
+<i>117</i>&nbsp;		else {
+<b class="nc"><i>118</i>&nbsp;			return null;</b>
+<i>119</i>&nbsp;		}
+<i>120</i>&nbsp;	}
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;	@SuppressWarnings(&quot;unchecked&quot;)
+<i>123</i>&nbsp;	private &lt;T&gt; T castToRequiredType(Object key, Object value, Class&lt;T&gt; requiredType) {
+<b class="nc"><i>124</i>&nbsp;		if (value == null) {</b>
+<b class="nc"><i>125</i>&nbsp;			return null;</b>
+<i>126</i>&nbsp;		}
+<b class="nc"><i>127</i>&nbsp;		if (isAssignableTo(value, requiredType)) {</b>
+<b class="nc"><i>128</i>&nbsp;			if (requiredType.isPrimitive()) {</b>
+<b class="nc"><i>129</i>&nbsp;				return (T) getWrapperType(requiredType).cast(value);</b>
+<i>130</i>&nbsp;			}
+<b class="nc"><i>131</i>&nbsp;			return requiredType.cast(value);</b>
+<i>132</i>&nbsp;		}
+<i>133</i>&nbsp;		// else
+<b class="nc"><i>134</i>&nbsp;		throw new ExtensionContextException(</b>
+<b class="nc"><i>135</i>&nbsp;			String.format(&quot;Object stored under key [%s] is not of required type [%s]&quot;, key, requiredType.getName()));</b>
+<i>136</i>&nbsp;	}
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;	private static class CompositeKey {
+<i>139</i>&nbsp;
+<i>140</i>&nbsp;		private final Namespace namespace;
+<i>141</i>&nbsp;		private final Object key;
+<i>142</i>&nbsp;
+<i>143</i>&nbsp;		private CompositeKey(Namespace namespace, Object key) {
+<i>144</i>&nbsp;			this.namespace = namespace;
+<i>145</i>&nbsp;			this.key = key;
+<i>146</i>&nbsp;		}
+<i>147</i>&nbsp;
+<i>148</i>&nbsp;		@Override
+<i>149</i>&nbsp;		public boolean equals(Object o) {
+<i>150</i>&nbsp;			if (this == o) {
+<i>151</i>&nbsp;				return true;
+<i>152</i>&nbsp;			}
+<i>153</i>&nbsp;			if (o == null || getClass() != o.getClass()) {
+<i>154</i>&nbsp;				return false;
+<i>155</i>&nbsp;			}
+<i>156</i>&nbsp;			CompositeKey that = (CompositeKey) o;
+<i>157</i>&nbsp;			return this.namespace.equals(that.namespace) &amp;&amp; this.key.equals(that.key);
+<i>158</i>&nbsp;		}
+<i>159</i>&nbsp;
+<i>160</i>&nbsp;		@Override
+<i>161</i>&nbsp;		public int hashCode() {
+<i>162</i>&nbsp;			return Objects.hash(namespace, key);
+<i>163</i>&nbsp;		}
+<i>164</i>&nbsp;
+<i>165</i>&nbsp;	}
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;	private static class MemoizingSupplier implements Supplier&lt;Object&gt; {
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;		private static final Object NO_VALUE_SET = new Object();
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;		private final Lock lock = new ReentrantLock();
+<i>172</i>&nbsp;		private final Supplier&lt;Object&gt; delegate;
+<i>173</i>&nbsp;		private volatile Object value = NO_VALUE_SET;
+<i>174</i>&nbsp;
+<i>175</i>&nbsp;		private MemoizingSupplier(Supplier&lt;Object&gt; delegate) {
+<i>176</i>&nbsp;			this.delegate = delegate;
+<i>177</i>&nbsp;		}
+<i>178</i>&nbsp;
+<i>179</i>&nbsp;		@Override
+<i>180</i>&nbsp;		public Object get() {
+<i>181</i>&nbsp;			if (value == NO_VALUE_SET) {
+<i>182</i>&nbsp;				lock.lock();
+<i>183</i>&nbsp;				try {
+<i>184</i>&nbsp;					if (value == NO_VALUE_SET) {
+<i>185</i>&nbsp;						value = delegate.get();
+<i>186</i>&nbsp;					}
+<i>187</i>&nbsp;				}
+<i>188</i>&nbsp;				finally {
+<i>189</i>&nbsp;					lock.unlock();
+<i>190</i>&nbsp;				}
+<i>191</i>&nbsp;			}
+<i>192</i>&nbsp;			return value;
+<i>193</i>&nbsp;		}
+<i>194</i>&nbsp;
+<i>195</i>&nbsp;	}
+<i>196</i>&nbsp;
+<i>197</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

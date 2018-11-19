@@ -1,0 +1,420 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: JavaElementsResolver</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">org.junit.jupiter.engine.discovery</a> ]
+</div>
+
+<h1>Coverage Summary for Class: JavaElementsResolver (org.junit.jupiter.engine.discovery)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">JavaElementsResolver</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    51,9%
+  </span>
+  <span class="absValue">
+    (14/ 27)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    38,2%
+  </span>
+  <span class="absValue">
+    (55/ 144)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright 2015-2018 the original author or authors.
+<i>3</i>&nbsp; *
+<i>4</i>&nbsp; * All rights reserved. This program and the accompanying materials are
+<i>5</i>&nbsp; * made available under the terms of the Eclipse Public License v2.0 which
+<i>6</i>&nbsp; * accompanies this distribution and is available at
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; * http://www.eclipse.org/legal/epl-v20.html
+<i>9</i>&nbsp; */
+<i>10</i>&nbsp;
+<i>11</i>&nbsp;package org.junit.jupiter.engine.discovery;
+<i>12</i>&nbsp;
+<i>13</i>&nbsp;import static java.lang.String.format;
+<i>14</i>&nbsp;import static java.util.stream.Collectors.toList;
+<i>15</i>&nbsp;import static java.util.stream.Collectors.toSet;
+<i>16</i>&nbsp;import static org.junit.platform.commons.util.BlacklistedExceptions.rethrowIfBlacklisted;
+<i>17</i>&nbsp;import static org.junit.platform.commons.util.ClassUtils.nullSafeToString;
+<i>18</i>&nbsp;import static org.junit.platform.commons.util.ReflectionUtils.findAllClassesInClasspathRoot;
+<i>19</i>&nbsp;import static org.junit.platform.commons.util.ReflectionUtils.findAllClassesInModule;
+<i>20</i>&nbsp;import static org.junit.platform.commons.util.ReflectionUtils.findAllClassesInPackage;
+<i>21</i>&nbsp;import static org.junit.platform.commons.util.ReflectionUtils.findMethods;
+<i>22</i>&nbsp;import static org.junit.platform.commons.util.ReflectionUtils.findNestedClasses;
+<i>23</i>&nbsp;
+<i>24</i>&nbsp;import java.lang.reflect.AnnotatedElement;
+<i>25</i>&nbsp;import java.lang.reflect.Method;
+<i>26</i>&nbsp;import java.util.Collection;
+<i>27</i>&nbsp;import java.util.Collections;
+<i>28</i>&nbsp;import java.util.Deque;
+<i>29</i>&nbsp;import java.util.HashSet;
+<i>30</i>&nbsp;import java.util.LinkedHashSet;
+<i>31</i>&nbsp;import java.util.LinkedList;
+<i>32</i>&nbsp;import java.util.List;
+<i>33</i>&nbsp;import java.util.Optional;
+<i>34</i>&nbsp;import java.util.Set;
+<i>35</i>&nbsp;
+<i>36</i>&nbsp;import org.junit.jupiter.engine.JupiterTestEngine;
+<i>37</i>&nbsp;import org.junit.jupiter.engine.descriptor.ClassTestDescriptor;
+<i>38</i>&nbsp;import org.junit.jupiter.engine.descriptor.Filterable;
+<i>39</i>&nbsp;import org.junit.jupiter.engine.discovery.predicates.IsInnerClass;
+<i>40</i>&nbsp;import org.junit.platform.commons.logging.Logger;
+<i>41</i>&nbsp;import org.junit.platform.commons.logging.LoggerFactory;
+<i>42</i>&nbsp;import org.junit.platform.commons.util.ClassFilter;
+<i>43</i>&nbsp;import org.junit.platform.commons.util.ReflectionUtils;
+<i>44</i>&nbsp;import org.junit.platform.engine.TestDescriptor;
+<i>45</i>&nbsp;import org.junit.platform.engine.UniqueId;
+<i>46</i>&nbsp;import org.junit.platform.engine.UniqueId.Segment;
+<i>47</i>&nbsp;import org.junit.platform.engine.discovery.ClassSelector;
+<i>48</i>&nbsp;import org.junit.platform.engine.discovery.ClasspathRootSelector;
+<i>49</i>&nbsp;import org.junit.platform.engine.discovery.MethodSelector;
+<i>50</i>&nbsp;import org.junit.platform.engine.discovery.ModuleSelector;
+<i>51</i>&nbsp;import org.junit.platform.engine.discovery.PackageSelector;
+<i>52</i>&nbsp;import org.junit.platform.engine.discovery.UniqueIdSelector;
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;/**
+<i>55</i>&nbsp; * &lt;h3&gt;NOTES TO DEVELOPERS&lt;/h3&gt;
+<i>56</i>&nbsp; *
+<i>57</i>&nbsp; * &lt;p&gt;Any non-private method in this class is forbidden to throw any type of
+<i>58</i>&nbsp; * exception other than a &quot;blacklisted exception&quot;. All other exceptions must
+<i>59</i>&nbsp; * be caught, logged, and swallowed in order to ensure the robustness of our
+<i>60</i>&nbsp; * discovery mechanism.
+<i>61</i>&nbsp; *
+<i>62</i>&nbsp; * &lt;p&gt;Discovery errors related to Unique IDs that are particular to the Jupiter
+<i>63</i>&nbsp; * test engine should be logged at WARNING level; whereas, all other discovery
+<i>64</i>&nbsp; * errors should be logged at DEBUG level, since the Jupiter engine has no way
+<i>65</i>&nbsp; * of knowing that it is supposed to actually handle those things (e.g.,
+<i>66</i>&nbsp; * classpath roots, packages, etc. selected by a registered discovery selector).
+<i>67</i>&nbsp; *
+<i>68</i>&nbsp; * @since 5.0
+<i>69</i>&nbsp; */
+<i>70</i>&nbsp;class JavaElementsResolver {
+<i>71</i>&nbsp;
+<b class="fc"><i>72</i>&nbsp;	private static final Logger logger = LoggerFactory.getLogger(JavaElementsResolver.class);</b>
+<i>73</i>&nbsp;
+<b class="fc"><i>74</i>&nbsp;	private static final IsInnerClass isInnerClass = new IsInnerClass();</b>
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;	private final TestDescriptor engineDescriptor;
+<i>77</i>&nbsp;	private final ClassFilter classFilter;
+<i>78</i>&nbsp;	private final Set&lt;ElementResolver&gt; resolvers;
+<i>79</i>&nbsp;
+<b class="fc"><i>80</i>&nbsp;	JavaElementsResolver(TestDescriptor engineDescriptor, ClassFilter classFilter, Set&lt;ElementResolver&gt; resolvers) {</b>
+<b class="fc"><i>81</i>&nbsp;		this.engineDescriptor = engineDescriptor;</b>
+<b class="fc"><i>82</i>&nbsp;		this.classFilter = classFilter;</b>
+<b class="fc"><i>83</i>&nbsp;		this.resolvers = resolvers;</b>
+<b class="fc"><i>84</i>&nbsp;	}</b>
+<i>85</i>&nbsp;
+<i>86</i>&nbsp;	void resolveClasspathRoot(ClasspathRootSelector selector) {
+<i>87</i>&nbsp;		try {
+<b class="nc"><i>88</i>&nbsp;			findAllClassesInClasspathRoot(selector.getClasspathRoot(), this.classFilter).forEach(this::resolveClass);</b>
+<i>89</i>&nbsp;		}
+<b class="nc"><i>90</i>&nbsp;		catch (Throwable t) {</b>
+<b class="nc"><i>91</i>&nbsp;			rethrowIfBlacklisted(t);</b>
+<b class="nc"><i>92</i>&nbsp;			logger.debug(t,</b>
+<b class="nc"><i>93</i>&nbsp;				() -&gt; format(&quot;Failed to resolve classes in classpath root &#39;%s&#39;.&quot;, selector.getClasspathRoot()));</b>
+<b class="nc"><i>94</i>&nbsp;		}</b>
+<b class="nc"><i>95</i>&nbsp;	}</b>
+<i>96</i>&nbsp;
+<i>97</i>&nbsp;	void resolveModule(ModuleSelector selector) {
+<i>98</i>&nbsp;		try {
+<b class="nc"><i>99</i>&nbsp;			findAllClassesInModule(selector.getModuleName(), this.classFilter).forEach(this::resolveClass);</b>
+<i>100</i>&nbsp;		}
+<b class="nc"><i>101</i>&nbsp;		catch (Throwable t) {</b>
+<b class="nc"><i>102</i>&nbsp;			rethrowIfBlacklisted(t);</b>
+<b class="nc"><i>103</i>&nbsp;			logger.debug(t, () -&gt; format(&quot;Failed to resolve classes in module &#39;%s&#39;.&quot;, selector.getModuleName()));</b>
+<b class="nc"><i>104</i>&nbsp;		}</b>
+<b class="nc"><i>105</i>&nbsp;	}</b>
+<i>106</i>&nbsp;
+<i>107</i>&nbsp;	void resolvePackage(PackageSelector selector) {
+<i>108</i>&nbsp;		try {
+<b class="nc"><i>109</i>&nbsp;			findAllClassesInPackage(selector.getPackageName(), this.classFilter).forEach(this::resolveClass);</b>
+<i>110</i>&nbsp;		}
+<b class="nc"><i>111</i>&nbsp;		catch (Throwable t) {</b>
+<b class="nc"><i>112</i>&nbsp;			rethrowIfBlacklisted(t);</b>
+<b class="nc"><i>113</i>&nbsp;			logger.debug(t, () -&gt; format(&quot;Failed to resolve classes in package &#39;%s&#39;.&quot;, selector.getPackageName()));</b>
+<b class="nc"><i>114</i>&nbsp;		}</b>
+<b class="nc"><i>115</i>&nbsp;	}</b>
+<i>116</i>&nbsp;
+<i>117</i>&nbsp;	void resolveClass(ClassSelector selector) {
+<i>118</i>&nbsp;		// Even though resolveClass(Class&lt;?&gt;) has its own similar try-catch block, the
+<i>119</i>&nbsp;		// try-catch block is necessary here as well since ClassSelector#getJavaClass()
+<i>120</i>&nbsp;		// may throw an exception.
+<i>121</i>&nbsp;		try {
+<b class="fc"><i>122</i>&nbsp;			resolveClass(selector.getJavaClass());</b>
+<i>123</i>&nbsp;		}
+<b class="nc"><i>124</i>&nbsp;		catch (Throwable t) {</b>
+<b class="nc"><i>125</i>&nbsp;			rethrowIfBlacklisted(t);</b>
+<b class="nc"><i>126</i>&nbsp;			logger.debug(t, () -&gt; format(&quot;Class &#39;%s&#39; could not be resolved.&quot;, selector.getClassName()));</b>
+<b class="fc"><i>127</i>&nbsp;		}</b>
+<b class="fc"><i>128</i>&nbsp;	}</b>
+<i>129</i>&nbsp;
+<i>130</i>&nbsp;	private void resolveClass(Class&lt;?&gt; testClass) {
+<i>131</i>&nbsp;		try {
+<b class="fc"><i>132</i>&nbsp;			Set&lt;TestDescriptor&gt; resolvedDescriptors = resolveContainerWithParents(testClass);</b>
+<b class="fc"><i>133</i>&nbsp;			resolvedDescriptors.forEach(this::resolveChildren);</b>
+<i>134</i>&nbsp;
+<b class="fc"><i>135</i>&nbsp;			if (resolvedDescriptors.isEmpty()) {</b>
+<b class="nc"><i>136</i>&nbsp;				logger.debug(() -&gt; format(&quot;Class &#39;%s&#39; could not be resolved.&quot;, nullSafeToString(testClass)));</b>
+<i>137</i>&nbsp;			}
+<i>138</i>&nbsp;		}
+<b class="nc"><i>139</i>&nbsp;		catch (Throwable t) {</b>
+<b class="nc"><i>140</i>&nbsp;			rethrowIfBlacklisted(t);</b>
+<b class="nc"><i>141</i>&nbsp;			logger.debug(t, () -&gt; format(&quot;Class &#39;%s&#39; could not be resolved.&quot;, nullSafeToString(testClass)));</b>
+<b class="fc"><i>142</i>&nbsp;		}</b>
+<b class="fc"><i>143</i>&nbsp;	}</b>
+<i>144</i>&nbsp;
+<i>145</i>&nbsp;	void resolveMethod(MethodSelector selector) {
+<i>146</i>&nbsp;		try {
+<b class="nc"><i>147</i>&nbsp;			Class&lt;?&gt; testClass = selector.getJavaClass();</b>
+<b class="nc"><i>148</i>&nbsp;			Method testMethod = selector.getJavaMethod();</b>
+<i>149</i>&nbsp;
+<b class="nc"><i>150</i>&nbsp;			Set&lt;TestDescriptor&gt; potentialParents = resolveContainerWithParents(testClass);</b>
+<b class="nc"><i>151</i>&nbsp;			Set&lt;TestDescriptor&gt; resolvedDescriptors = resolveForAllParents(testMethod, potentialParents);</b>
+<i>152</i>&nbsp;
+<b class="nc"><i>153</i>&nbsp;			if (resolvedDescriptors.isEmpty()) {</b>
+<b class="nc"><i>154</i>&nbsp;				logger.debug(() -&gt; format(&quot;Method &#39;%s&#39; could not be resolved.&quot;, testMethod.toGenericString()));</b>
+<i>155</i>&nbsp;			}
+<i>156</i>&nbsp;
+<b class="nc"><i>157</i>&nbsp;			logMultipleTestDescriptorsForSingleElement(testMethod, resolvedDescriptors);</b>
+<i>158</i>&nbsp;		}
+<b class="nc"><i>159</i>&nbsp;		catch (Throwable t) {</b>
+<b class="nc"><i>160</i>&nbsp;			rethrowIfBlacklisted(t);</b>
+<b class="nc"><i>161</i>&nbsp;			logger.debug(t, () -&gt; format(&quot;Method &#39;%s&#39; in class &#39;%s&#39; could not be resolved.&quot;, selector.getMethodName(),</b>
+<b class="nc"><i>162</i>&nbsp;				selector.getClassName()));</b>
+<b class="nc"><i>163</i>&nbsp;		}</b>
+<b class="nc"><i>164</i>&nbsp;	}</b>
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;	void resolveUniqueId(UniqueIdSelector selector) {
+<b class="nc"><i>167</i>&nbsp;		UniqueId uniqueId = selector.getUniqueId();</b>
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;		// Ignore Unique IDs from other test engines.
+<b class="nc"><i>170</i>&nbsp;		if (JupiterTestEngine.ENGINE_ID.equals(uniqueId.getEngineId().orElse(null))) {</b>
+<i>171</i>&nbsp;			try {
+<b class="nc"><i>172</i>&nbsp;				Deque&lt;TestDescriptor&gt; resolvedDescriptors = resolveAllSegments(uniqueId);</b>
+<b class="nc"><i>173</i>&nbsp;				handleResolvedDescriptorsForUniqueId(uniqueId, resolvedDescriptors);</b>
+<i>174</i>&nbsp;			}
+<b class="nc"><i>175</i>&nbsp;			catch (Throwable t) {</b>
+<b class="nc"><i>176</i>&nbsp;				rethrowIfBlacklisted(t);</b>
+<b class="nc"><i>177</i>&nbsp;				logger.warn(t, () -&gt; format(&quot;Unique ID &#39;%s&#39; could not be resolved.&quot;, selector.getUniqueId()));</b>
+<b class="nc"><i>178</i>&nbsp;			}</b>
+<i>179</i>&nbsp;		}
+<b class="nc"><i>180</i>&nbsp;	}</b>
+<i>181</i>&nbsp;
+<i>182</i>&nbsp;	private Set&lt;TestDescriptor&gt; resolveContainerWithParents(Class&lt;?&gt; testClass) {
+<b class="fc"><i>183</i>&nbsp;		if (isInnerClass.test(testClass)) {</b>
+<b class="nc"><i>184</i>&nbsp;			Set&lt;TestDescriptor&gt; potentialParents = resolveContainerWithParents(testClass.getDeclaringClass());</b>
+<b class="nc"><i>185</i>&nbsp;			return resolveForAllParents(testClass, potentialParents);</b>
+<i>186</i>&nbsp;		}
+<i>187</i>&nbsp;		else {
+<b class="fc"><i>188</i>&nbsp;			return resolveForAllParents(testClass, Collections.singleton(this.engineDescriptor));</b>
+<i>189</i>&nbsp;		}
+<i>190</i>&nbsp;	}
+<i>191</i>&nbsp;
+<i>192</i>&nbsp;	/**
+<i>193</i>&nbsp;	 * Attempt to resolve all segments for the supplied unique ID.
+<i>194</i>&nbsp;	 */
+<i>195</i>&nbsp;	private Deque&lt;TestDescriptor&gt; resolveAllSegments(UniqueId uniqueId) {
+<b class="nc"><i>196</i>&nbsp;		List&lt;Segment&gt; segments = uniqueId.getSegments();</b>
+<b class="nc"><i>197</i>&nbsp;		Deque&lt;TestDescriptor&gt; resolvedDescriptors = new LinkedList&lt;&gt;();</b>
+<b class="nc"><i>198</i>&nbsp;		resolvedDescriptors.addFirst(this.engineDescriptor);</b>
+<i>199</i>&nbsp;
+<b class="nc"><i>200</i>&nbsp;		for (int index = 1; index &lt; segments.size() &amp;&amp; resolvedDescriptors.size() == index; index++) {</b>
+<b class="nc"><i>201</i>&nbsp;			Segment segment = segments.get(index);</b>
+<b class="nc"><i>202</i>&nbsp;			TestDescriptor parent = resolvedDescriptors.getLast();</b>
+<b class="nc"><i>203</i>&nbsp;			UniqueId partialUniqueId = parent.getUniqueId().append(segment);</b>
+<i>204</i>&nbsp;
+<b class="nc"><i>205</i>&nbsp;			Optional&lt;TestDescriptor&gt; resolvedDescriptor = findTestDescriptorByUniqueId(partialUniqueId);</b>
+<b class="nc"><i>206</i>&nbsp;			if (!resolvedDescriptor.isPresent()) {</b>
+<i>207</i>&nbsp;				// @formatter:off
+<b class="nc"><i>208</i>&nbsp;				resolvedDescriptor = this.resolvers.stream()</b>
+<b class="nc"><i>209</i>&nbsp;						.map(resolver -&gt; resolver.resolveUniqueId(segment, parent))</b>
+<b class="nc"><i>210</i>&nbsp;						.filter(Optional::isPresent)</b>
+<b class="nc"><i>211</i>&nbsp;						.map(Optional::get)</b>
+<b class="nc"><i>212</i>&nbsp;						.findFirst();</b>
+<i>213</i>&nbsp;				// @formatter:on
+<b class="nc"><i>214</i>&nbsp;				resolvedDescriptor.ifPresent(parent::addChild);</b>
+<i>215</i>&nbsp;			}
+<b class="nc"><i>216</i>&nbsp;			resolvedDescriptor.ifPresent(resolvedDescriptors::addLast);</b>
+<i>217</i>&nbsp;		}
+<b class="nc"><i>218</i>&nbsp;		return resolvedDescriptors;</b>
+<i>219</i>&nbsp;	}
+<i>220</i>&nbsp;
+<i>221</i>&nbsp;	private void handleResolvedDescriptorsForUniqueId(UniqueId uniqueId, Deque&lt;TestDescriptor&gt; resolvedDescriptors) {
+<b class="nc"><i>222</i>&nbsp;		List&lt;Segment&gt; segments = uniqueId.getSegments();</b>
+<b class="nc"><i>223</i>&nbsp;		int numSegmentsToResolve = segments.size() - 1;</b>
+<b class="nc"><i>224</i>&nbsp;		int numSegmentsResolved = resolvedDescriptors.size() - 1;</b>
+<i>225</i>&nbsp;
+<b class="nc"><i>226</i>&nbsp;		if (numSegmentsResolved == 0) {</b>
+<b class="nc"><i>227</i>&nbsp;			logger.warn(() -&gt; format(&quot;Unique ID &#39;%s&#39; could not be resolved.&quot;, uniqueId));</b>
+<i>228</i>&nbsp;		}
+<b class="nc"><i>229</i>&nbsp;		else if (numSegmentsResolved != numSegmentsToResolve) {</b>
+<b class="nc"><i>230</i>&nbsp;			if (resolvedDescriptors.getLast() instanceof Filterable) {</b>
+<b class="nc"><i>231</i>&nbsp;				((Filterable) resolvedDescriptors.getLast()).getDynamicDescendantFilter().allow(uniqueId);</b>
+<i>232</i>&nbsp;			}
+<i>233</i>&nbsp;			else {
+<b class="nc"><i>234</i>&nbsp;				logger.warn(() -&gt; {</b>
+<b class="nc"><i>235</i>&nbsp;					List&lt;Segment&gt; unresolved = segments.subList(1, segments.size()); // Remove engine ID</b>
+<b class="nc"><i>236</i>&nbsp;					unresolved = unresolved.subList(numSegmentsResolved, unresolved.size()); // Remove resolved segments</b>
+<b class="nc"><i>237</i>&nbsp;					return format(&quot;Unique ID &#39;%s&#39; could only be partially resolved. &quot;</b>
+<i>238</i>&nbsp;							+ &quot;All resolved segments will be executed; however, the &quot;
+<i>239</i>&nbsp;							+ &quot;following segments could not be resolved: %s&quot;,
+<i>240</i>&nbsp;						uniqueId, unresolved);
+<i>241</i>&nbsp;				});
+<i>242</i>&nbsp;			}
+<i>243</i>&nbsp;		}
+<i>244</i>&nbsp;		else {
+<b class="nc"><i>245</i>&nbsp;			resolveChildren(resolvedDescriptors.getLast());</b>
+<i>246</i>&nbsp;		}
+<b class="nc"><i>247</i>&nbsp;	}</b>
+<i>248</i>&nbsp;
+<i>249</i>&nbsp;	private Set&lt;TestDescriptor&gt; resolveContainerWithChildren(Class&lt;?&gt; containerClass,
+<i>250</i>&nbsp;			Set&lt;TestDescriptor&gt; potentialParents) {
+<i>251</i>&nbsp;
+<b class="nc"><i>252</i>&nbsp;		Set&lt;TestDescriptor&gt; resolvedDescriptors = resolveForAllParents(containerClass, potentialParents);</b>
+<b class="nc"><i>253</i>&nbsp;		resolvedDescriptors.forEach(this::resolveChildren);</b>
+<b class="nc"><i>254</i>&nbsp;		return resolvedDescriptors;</b>
+<i>255</i>&nbsp;	}
+<i>256</i>&nbsp;
+<i>257</i>&nbsp;	private Set&lt;TestDescriptor&gt; resolveForAllParents(AnnotatedElement element, Set&lt;TestDescriptor&gt; potentialParents) {
+<b class="fc"><i>258</i>&nbsp;		Set&lt;TestDescriptor&gt; resolvedDescriptors = new HashSet&lt;&gt;();</b>
+<b class="fc"><i>259</i>&nbsp;		potentialParents.forEach(parent -&gt; resolvedDescriptors.addAll(resolve(element, parent)));</b>
+<i>260</i>&nbsp;		// @formatter:off
+<b class="fc"><i>261</i>&nbsp;		resolvedDescriptors.stream()</b>
+<b class="fc"><i>262</i>&nbsp;				.filter(Filterable.class::isInstance)</b>
+<b class="fc"><i>263</i>&nbsp;				.map(Filterable.class::cast)</b>
+<b class="fc"><i>264</i>&nbsp;				.forEach(testDescriptor -&gt; testDescriptor.getDynamicDescendantFilter().allowAll());</b>
+<i>265</i>&nbsp;		// @formatter:on
+<b class="fc"><i>266</i>&nbsp;		return resolvedDescriptors;</b>
+<i>267</i>&nbsp;	}
+<i>268</i>&nbsp;
+<i>269</i>&nbsp;	private void resolveChildren(TestDescriptor descriptor) {
+<b class="fc"><i>270</i>&nbsp;		if (descriptor instanceof ClassTestDescriptor) {</b>
+<b class="fc"><i>271</i>&nbsp;			Class&lt;?&gt; testClass = ((ClassTestDescriptor) descriptor).getTestClass();</b>
+<b class="fc"><i>272</i>&nbsp;			resolveContainedMethods(descriptor, testClass);</b>
+<b class="fc"><i>273</i>&nbsp;			resolveContainedNestedClasses(descriptor, testClass);</b>
+<i>274</i>&nbsp;		}
+<b class="fc"><i>275</i>&nbsp;	}</b>
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;	private void resolveContainedNestedClasses(TestDescriptor containerDescriptor, Class&lt;?&gt; clazz) {
+<b class="fc"><i>278</i>&nbsp;		List&lt;Class&lt;?&gt;&gt; nestedClassesCandidates = findNestedClasses(clazz, isInnerClass);</b>
+<b class="fc"><i>279</i>&nbsp;		nestedClassesCandidates.forEach(</b>
+<b class="nc"><i>280</i>&nbsp;			nestedClass -&gt; resolveContainerWithChildren(nestedClass, Collections.singleton(containerDescriptor)));</b>
+<b class="fc"><i>281</i>&nbsp;	}</b>
+<i>282</i>&nbsp;
+<i>283</i>&nbsp;	private void resolveContainedMethods(TestDescriptor containerDescriptor, Class&lt;?&gt; testClass) {
+<b class="fc"><i>284</i>&nbsp;		List&lt;Method&gt; testMethodCandidates = findMethods(testClass, ReflectionUtils::isNotPrivate);</b>
+<b class="fc"><i>285</i>&nbsp;		testMethodCandidates.forEach(method -&gt; resolve(method, containerDescriptor));</b>
+<b class="fc"><i>286</i>&nbsp;	}</b>
+<i>287</i>&nbsp;
+<i>288</i>&nbsp;	private Set&lt;TestDescriptor&gt; resolve(AnnotatedElement element, TestDescriptor parent) {
+<b class="fc"><i>289</i>&nbsp;		Set&lt;TestDescriptor&gt; descriptors = this.resolvers.stream() //</b>
+<b class="fc"><i>290</i>&nbsp;				.map(resolver -&gt; tryToResolveWithResolver(element, parent, resolver)) //</b>
+<b class="fc"><i>291</i>&nbsp;				.filter(testDescriptors -&gt; !testDescriptors.isEmpty()) //</b>
+<b class="fc"><i>292</i>&nbsp;				.flatMap(Collection::stream) //</b>
+<b class="fc"><i>293</i>&nbsp;				.collect(toSet());</b>
+<i>294</i>&nbsp;
+<b class="fc"><i>295</i>&nbsp;		logMultipleTestDescriptorsForSingleElement(element, descriptors);</b>
+<i>296</i>&nbsp;
+<b class="fc"><i>297</i>&nbsp;		return descriptors;</b>
+<i>298</i>&nbsp;	}
+<i>299</i>&nbsp;
+<i>300</i>&nbsp;	private Set&lt;TestDescriptor&gt; tryToResolveWithResolver(AnnotatedElement element, TestDescriptor parent,
+<i>301</i>&nbsp;			ElementResolver resolver) {
+<i>302</i>&nbsp;
+<b class="fc"><i>303</i>&nbsp;		Set&lt;TestDescriptor&gt; resolvedDescriptors = resolver.resolveElement(element, parent);</b>
+<b class="fc"><i>304</i>&nbsp;		Set&lt;TestDescriptor&gt; result = new LinkedHashSet&lt;&gt;();</b>
+<i>305</i>&nbsp;
+<b class="fc"><i>306</i>&nbsp;		resolvedDescriptors.forEach(testDescriptor -&gt; {</b>
+<b class="fc"><i>307</i>&nbsp;			Optional&lt;TestDescriptor&gt; existingTestDescriptor = findTestDescriptorByUniqueId(</b>
+<b class="fc"><i>308</i>&nbsp;				testDescriptor.getUniqueId());</b>
+<b class="fc"><i>309</i>&nbsp;			if (existingTestDescriptor.isPresent()) {</b>
+<b class="nc"><i>310</i>&nbsp;				result.add(existingTestDescriptor.get());</b>
+<i>311</i>&nbsp;			}
+<i>312</i>&nbsp;			else {
+<b class="fc"><i>313</i>&nbsp;				parent.addChild(testDescriptor);</b>
+<b class="fc"><i>314</i>&nbsp;				result.add(testDescriptor);</b>
+<i>315</i>&nbsp;			}
+<b class="fc"><i>316</i>&nbsp;		});</b>
+<i>317</i>&nbsp;
+<b class="fc"><i>318</i>&nbsp;		return result;</b>
+<i>319</i>&nbsp;	}
+<i>320</i>&nbsp;
+<i>321</i>&nbsp;	@SuppressWarnings(&quot;unchecked&quot;)
+<i>322</i>&nbsp;	private Optional&lt;TestDescriptor&gt; findTestDescriptorByUniqueId(UniqueId uniqueId) {
+<b class="fc"><i>323</i>&nbsp;		return (Optional&lt;TestDescriptor&gt;) this.engineDescriptor.findByUniqueId(uniqueId);</b>
+<i>324</i>&nbsp;	}
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;	private void logMultipleTestDescriptorsForSingleElement(AnnotatedElement element, Set&lt;TestDescriptor&gt; descriptors) {
+<b class="fc"><i>327</i>&nbsp;		if (descriptors.size() &gt; 1 &amp;&amp; element instanceof Method) {</b>
+<b class="nc"><i>328</i>&nbsp;			Method method = (Method) element;</b>
+<b class="nc"><i>329</i>&nbsp;			logger.warn(() -&gt; String.format(</b>
+<i>330</i>&nbsp;				&quot;Possible configuration error: method [%s] resulted in multiple TestDescriptors %s. &quot;
+<i>331</i>&nbsp;						+ &quot;This is typically the result of annotating a method with multiple competing annotations &quot;
+<i>332</i>&nbsp;						+ &quot;such as @Test, @RepeatedTest, @ParameterizedTest, @TestFactory, etc.&quot;,
+<b class="nc"><i>333</i>&nbsp;				method.toGenericString(), descriptors.stream().map(d -&gt; d.getClass().getName()).collect(toList())));</b>
+<i>334</i>&nbsp;		}
+<b class="fc"><i>335</i>&nbsp;	}</b>
+<i>336</i>&nbsp;
+<i>337</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

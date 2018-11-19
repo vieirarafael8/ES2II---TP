@@ -1,0 +1,391 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ConstraintsChecker</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.provider.certpath</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ConstraintsChecker (sun.security.provider.certpath)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ConstraintsChecker</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 88)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.provider.certpath;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.security.cert.Certificate;
+<i>30</i>&nbsp;import java.security.cert.CertificateException;
+<i>31</i>&nbsp;import java.security.cert.CertPathValidatorException;
+<i>32</i>&nbsp;import java.security.cert.PKIXCertPathChecker;
+<i>33</i>&nbsp;import java.security.cert.PKIXReason;
+<i>34</i>&nbsp;import java.security.cert.X509Certificate;
+<i>35</i>&nbsp;import java.util.Collection;
+<i>36</i>&nbsp;import java.util.Collections;
+<i>37</i>&nbsp;import java.util.HashSet;
+<i>38</i>&nbsp;import java.util.Set;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;import sun.security.util.Debug;
+<i>41</i>&nbsp;import static sun.security.x509.PKIXExtensions.*;
+<i>42</i>&nbsp;import sun.security.x509.NameConstraintsExtension;
+<i>43</i>&nbsp;import sun.security.x509.X509CertImpl;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;/**
+<i>46</i>&nbsp; * ConstraintsChecker is a &lt;code&gt;PKIXCertPathChecker&lt;/code&gt; that checks
+<i>47</i>&nbsp; * constraints information on a PKIX certificate, namely basic constraints
+<i>48</i>&nbsp; * and name constraints.
+<i>49</i>&nbsp; *
+<i>50</i>&nbsp; * @since       1.4
+<i>51</i>&nbsp; * @author      Yassir Elley
+<i>52</i>&nbsp; */
+<i>53</i>&nbsp;class ConstraintsChecker extends PKIXCertPathChecker {
+<i>54</i>&nbsp;
+<b class="nc"><i>55</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;certpath&quot;);</b>
+<i>56</i>&nbsp;    /* length of cert path */
+<i>57</i>&nbsp;    private final int certPathLength;
+<i>58</i>&nbsp;    /* current maximum path length (as defined in PKIX) */
+<i>59</i>&nbsp;    private int maxPathLength;
+<i>60</i>&nbsp;    /* current index of cert */
+<i>61</i>&nbsp;    private int i;
+<i>62</i>&nbsp;    private NameConstraintsExtension prevNC;
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    private Set&lt;String&gt; supportedExts;
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    /**
+<i>67</i>&nbsp;     * Creates a ConstraintsChecker.
+<i>68</i>&nbsp;     *
+<i>69</i>&nbsp;     * @param certPathLength the length of the certification path
+<i>70</i>&nbsp;     */
+<b class="nc"><i>71</i>&nbsp;    ConstraintsChecker(int certPathLength) {</b>
+<b class="nc"><i>72</i>&nbsp;        this.certPathLength = certPathLength;</b>
+<i>73</i>&nbsp;    }
+<i>74</i>&nbsp;
+<i>75</i>&nbsp;    @Override
+<i>76</i>&nbsp;    public void init(boolean forward) throws CertPathValidatorException {
+<b class="nc"><i>77</i>&nbsp;        if (!forward) {</b>
+<b class="nc"><i>78</i>&nbsp;            i = 0;</b>
+<b class="nc"><i>79</i>&nbsp;            maxPathLength = certPathLength;</b>
+<b class="nc"><i>80</i>&nbsp;            prevNC = null;</b>
+<i>81</i>&nbsp;        } else {
+<b class="nc"><i>82</i>&nbsp;            throw new CertPathValidatorException</b>
+<i>83</i>&nbsp;                (&quot;forward checking not supported&quot;);
+<i>84</i>&nbsp;        }
+<i>85</i>&nbsp;    }
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    @Override
+<i>88</i>&nbsp;    public boolean isForwardCheckingSupported() {
+<b class="nc"><i>89</i>&nbsp;        return false;</b>
+<i>90</i>&nbsp;    }
+<i>91</i>&nbsp;
+<i>92</i>&nbsp;    @Override
+<i>93</i>&nbsp;    public Set&lt;String&gt; getSupportedExtensions() {
+<b class="nc"><i>94</i>&nbsp;        if (supportedExts == null) {</b>
+<b class="nc"><i>95</i>&nbsp;            supportedExts = new HashSet&lt;String&gt;(2);</b>
+<b class="nc"><i>96</i>&nbsp;            supportedExts.add(BasicConstraints_Id.toString());</b>
+<b class="nc"><i>97</i>&nbsp;            supportedExts.add(NameConstraints_Id.toString());</b>
+<b class="nc"><i>98</i>&nbsp;            supportedExts = Collections.unmodifiableSet(supportedExts);</b>
+<i>99</i>&nbsp;        }
+<b class="nc"><i>100</i>&nbsp;        return supportedExts;</b>
+<i>101</i>&nbsp;    }
+<i>102</i>&nbsp;
+<i>103</i>&nbsp;    /**
+<i>104</i>&nbsp;     * Performs the basic constraints and name constraints
+<i>105</i>&nbsp;     * checks on the certificate using its internal state.
+<i>106</i>&nbsp;     *
+<i>107</i>&nbsp;     * @param cert the &lt;code&gt;Certificate&lt;/code&gt; to be checked
+<i>108</i>&nbsp;     * @param unresCritExts a &lt;code&gt;Collection&lt;/code&gt; of OID strings
+<i>109</i>&nbsp;     *        representing the current set of unresolved critical extensions
+<i>110</i>&nbsp;     * @throws CertPathValidatorException if the specified certificate
+<i>111</i>&nbsp;     *         does not pass the check
+<i>112</i>&nbsp;     */
+<i>113</i>&nbsp;    @Override
+<i>114</i>&nbsp;    public void check(Certificate cert, Collection&lt;String&gt; unresCritExts)
+<i>115</i>&nbsp;        throws CertPathValidatorException
+<i>116</i>&nbsp;    {
+<b class="nc"><i>117</i>&nbsp;        X509Certificate currCert = (X509Certificate)cert;</b>
+<i>118</i>&nbsp;
+<b class="nc"><i>119</i>&nbsp;        i++;</b>
+<i>120</i>&nbsp;        // MUST run NC check second, since it depends on BC check to
+<i>121</i>&nbsp;        // update remainingCerts
+<b class="nc"><i>122</i>&nbsp;        checkBasicConstraints(currCert);</b>
+<b class="nc"><i>123</i>&nbsp;        verifyNameConstraints(currCert);</b>
+<i>124</i>&nbsp;
+<b class="nc"><i>125</i>&nbsp;        if (unresCritExts != null &amp;&amp; !unresCritExts.isEmpty()) {</b>
+<b class="nc"><i>126</i>&nbsp;            unresCritExts.remove(BasicConstraints_Id.toString());</b>
+<b class="nc"><i>127</i>&nbsp;            unresCritExts.remove(NameConstraints_Id.toString());</b>
+<i>128</i>&nbsp;        }
+<i>129</i>&nbsp;    }
+<i>130</i>&nbsp;
+<i>131</i>&nbsp;    /**
+<i>132</i>&nbsp;     * Internal method to check the name constraints against a cert
+<i>133</i>&nbsp;     */
+<i>134</i>&nbsp;    private void verifyNameConstraints(X509Certificate currCert)
+<i>135</i>&nbsp;        throws CertPathValidatorException
+<i>136</i>&nbsp;    {
+<b class="nc"><i>137</i>&nbsp;        String msg = &quot;name constraints&quot;;</b>
+<b class="nc"><i>138</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>139</i>&nbsp;            debug.println(&quot;---checking &quot; + msg + &quot;...&quot;);</b>
+<i>140</i>&nbsp;        }
+<i>141</i>&nbsp;
+<i>142</i>&nbsp;        // check name constraints only if there is a previous name constraint
+<i>143</i>&nbsp;        // and either the currCert is the final cert or the currCert is not
+<i>144</i>&nbsp;        // self-issued
+<b class="nc"><i>145</i>&nbsp;        if (prevNC != null &amp;&amp; ((i == certPathLength) ||</b>
+<b class="nc"><i>146</i>&nbsp;                !X509CertImpl.isSelfIssued(currCert))) {</b>
+<b class="nc"><i>147</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>148</i>&nbsp;                debug.println(&quot;prevNC = &quot; + prevNC +</b>
+<b class="nc"><i>149</i>&nbsp;                    &quot;, currDN = &quot; + currCert.getSubjectX500Principal());</b>
+<i>150</i>&nbsp;            }
+<i>151</i>&nbsp;
+<i>152</i>&nbsp;            try {
+<b class="nc"><i>153</i>&nbsp;                if (!prevNC.verify(currCert)) {</b>
+<b class="nc"><i>154</i>&nbsp;                    throw new CertPathValidatorException(msg + &quot; check failed&quot;,</b>
+<i>155</i>&nbsp;                        null, null, -1, PKIXReason.INVALID_NAME);
+<i>156</i>&nbsp;                }
+<b class="nc"><i>157</i>&nbsp;            } catch (IOException ioe) {</b>
+<b class="nc"><i>158</i>&nbsp;                throw new CertPathValidatorException(ioe);</b>
+<b class="nc"><i>159</i>&nbsp;            }</b>
+<i>160</i>&nbsp;        }
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;        // merge name constraints regardless of whether cert is self-issued
+<b class="nc"><i>163</i>&nbsp;        prevNC = mergeNameConstraints(currCert, prevNC);</b>
+<i>164</i>&nbsp;
+<b class="nc"><i>165</i>&nbsp;        if (debug != null)</b>
+<b class="nc"><i>166</i>&nbsp;            debug.println(msg + &quot; verified.&quot;);</b>
+<i>167</i>&nbsp;    }
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;    /**
+<i>170</i>&nbsp;     * Helper to fold sets of name constraints together
+<i>171</i>&nbsp;     */
+<i>172</i>&nbsp;    static NameConstraintsExtension mergeNameConstraints(
+<i>173</i>&nbsp;        X509Certificate currCert, NameConstraintsExtension prevNC)
+<i>174</i>&nbsp;        throws CertPathValidatorException
+<i>175</i>&nbsp;    {
+<i>176</i>&nbsp;        X509CertImpl currCertImpl;
+<i>177</i>&nbsp;        try {
+<b class="nc"><i>178</i>&nbsp;            currCertImpl = X509CertImpl.toImpl(currCert);</b>
+<b class="nc"><i>179</i>&nbsp;        } catch (CertificateException ce) {</b>
+<b class="nc"><i>180</i>&nbsp;            throw new CertPathValidatorException(ce);</b>
+<b class="nc"><i>181</i>&nbsp;        }</b>
+<i>182</i>&nbsp;
+<b class="nc"><i>183</i>&nbsp;        NameConstraintsExtension newConstraints =</b>
+<b class="nc"><i>184</i>&nbsp;            currCertImpl.getNameConstraintsExtension();</b>
+<i>185</i>&nbsp;
+<b class="nc"><i>186</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>187</i>&nbsp;            debug.println(&quot;prevNC = &quot; + prevNC +</b>
+<b class="nc"><i>188</i>&nbsp;                        &quot;, newNC = &quot; + String.valueOf(newConstraints));</b>
+<i>189</i>&nbsp;        }
+<i>190</i>&nbsp;
+<i>191</i>&nbsp;        // if there are no previous name constraints, we just return the
+<i>192</i>&nbsp;        // new name constraints.
+<b class="nc"><i>193</i>&nbsp;        if (prevNC == null) {</b>
+<b class="nc"><i>194</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>195</i>&nbsp;                debug.println(&quot;mergedNC = &quot; + String.valueOf(newConstraints));</b>
+<i>196</i>&nbsp;            }
+<b class="nc"><i>197</i>&nbsp;            if (newConstraints == null) {</b>
+<b class="nc"><i>198</i>&nbsp;                return newConstraints;</b>
+<i>199</i>&nbsp;            } else {
+<i>200</i>&nbsp;                // Make sure we do a clone here, because we&#39;re probably
+<i>201</i>&nbsp;                // going to modify this object later and we don&#39;t want to
+<i>202</i>&nbsp;                // be sharing it with a Certificate object!
+<b class="nc"><i>203</i>&nbsp;                return (NameConstraintsExtension)newConstraints.clone();</b>
+<i>204</i>&nbsp;            }
+<i>205</i>&nbsp;        } else {
+<i>206</i>&nbsp;            try {
+<i>207</i>&nbsp;                // after merge, prevNC should contain the merged constraints
+<b class="nc"><i>208</i>&nbsp;                prevNC.merge(newConstraints);</b>
+<b class="nc"><i>209</i>&nbsp;            } catch (IOException ioe) {</b>
+<b class="nc"><i>210</i>&nbsp;                throw new CertPathValidatorException(ioe);</b>
+<b class="nc"><i>211</i>&nbsp;            }</b>
+<b class="nc"><i>212</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>213</i>&nbsp;                debug.println(&quot;mergedNC = &quot; + prevNC);</b>
+<i>214</i>&nbsp;            }
+<b class="nc"><i>215</i>&nbsp;            return prevNC;</b>
+<i>216</i>&nbsp;        }
+<i>217</i>&nbsp;    }
+<i>218</i>&nbsp;
+<i>219</i>&nbsp;    /**
+<i>220</i>&nbsp;     * Internal method to check that a given cert meets basic constraints.
+<i>221</i>&nbsp;     */
+<i>222</i>&nbsp;    private void checkBasicConstraints(X509Certificate currCert)
+<i>223</i>&nbsp;        throws CertPathValidatorException
+<i>224</i>&nbsp;    {
+<b class="nc"><i>225</i>&nbsp;        String msg = &quot;basic constraints&quot;;</b>
+<b class="nc"><i>226</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>227</i>&nbsp;            debug.println(&quot;---checking &quot; + msg + &quot;...&quot;);</b>
+<b class="nc"><i>228</i>&nbsp;            debug.println(&quot;i = &quot; + i +</b>
+<i>229</i>&nbsp;                        &quot;, maxPathLength = &quot; + maxPathLength);
+<i>230</i>&nbsp;        }
+<i>231</i>&nbsp;
+<i>232</i>&nbsp;        /* check if intermediate cert */
+<b class="nc"><i>233</i>&nbsp;        if (i &lt; certPathLength) {</b>
+<i>234</i>&nbsp;            // RFC5280: If certificate i is a version 3 certificate, verify
+<i>235</i>&nbsp;            // that the basicConstraints extension is present and that cA is
+<i>236</i>&nbsp;            // set to TRUE.  (If certificate i is a version 1 or version 2
+<i>237</i>&nbsp;            // certificate, then the application MUST either verify that
+<i>238</i>&nbsp;            // certificate i is a CA certificate through out-of-band means
+<i>239</i>&nbsp;            // or reject the certificate.  Conforming implementations may
+<i>240</i>&nbsp;            // choose to reject all version 1 and version 2 intermediate
+<i>241</i>&nbsp;            // certificates.)
+<i>242</i>&nbsp;            //
+<i>243</i>&nbsp;            // We choose to reject all version 1 and version 2 intermediate
+<i>244</i>&nbsp;            // certificates except that it is self issued by the trust
+<i>245</i>&nbsp;            // anchor in order to support key rollover or changes in
+<i>246</i>&nbsp;            // certificate policies.
+<b class="nc"><i>247</i>&nbsp;            int pathLenConstraint = -1;</b>
+<b class="nc"><i>248</i>&nbsp;            if (currCert.getVersion() &lt; 3) {    // version 1 or version 2</b>
+<b class="nc"><i>249</i>&nbsp;                if (i == 1) {                   // issued by a trust anchor</b>
+<b class="nc"><i>250</i>&nbsp;                    if (X509CertImpl.isSelfIssued(currCert)) {</b>
+<b class="nc"><i>251</i>&nbsp;                        pathLenConstraint = Integer.MAX_VALUE;</b>
+<i>252</i>&nbsp;                    }
+<i>253</i>&nbsp;                }
+<i>254</i>&nbsp;            } else {
+<b class="nc"><i>255</i>&nbsp;                pathLenConstraint = currCert.getBasicConstraints();</b>
+<i>256</i>&nbsp;            }
+<i>257</i>&nbsp;
+<b class="nc"><i>258</i>&nbsp;            if (pathLenConstraint == -1) {</b>
+<b class="nc"><i>259</i>&nbsp;                throw new CertPathValidatorException</b>
+<i>260</i>&nbsp;                    (msg + &quot; check failed: this is not a CA certificate&quot;,
+<i>261</i>&nbsp;                     null, null, -1, PKIXReason.NOT_CA_CERT);
+<i>262</i>&nbsp;            }
+<i>263</i>&nbsp;
+<b class="nc"><i>264</i>&nbsp;            if (!X509CertImpl.isSelfIssued(currCert)) {</b>
+<b class="nc"><i>265</i>&nbsp;                if (maxPathLength &lt;= 0) {</b>
+<b class="nc"><i>266</i>&nbsp;                   throw new CertPathValidatorException</b>
+<i>267</i>&nbsp;                        (msg + &quot; check failed: pathLenConstraint violated - &quot;
+<i>268</i>&nbsp;                         + &quot;this cert must be the last cert in the &quot;
+<i>269</i>&nbsp;                         + &quot;certification path&quot;, null, null, -1,
+<i>270</i>&nbsp;                         PKIXReason.PATH_TOO_LONG);
+<i>271</i>&nbsp;                }
+<b class="nc"><i>272</i>&nbsp;                maxPathLength--;</b>
+<i>273</i>&nbsp;            }
+<b class="nc"><i>274</i>&nbsp;            if (pathLenConstraint &lt; maxPathLength)</b>
+<b class="nc"><i>275</i>&nbsp;                maxPathLength = pathLenConstraint;</b>
+<i>276</i>&nbsp;        }
+<i>277</i>&nbsp;
+<b class="nc"><i>278</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>279</i>&nbsp;            debug.println(&quot;after processing, maxPathLength = &quot; + maxPathLength);</b>
+<b class="nc"><i>280</i>&nbsp;            debug.println(msg + &quot; verified.&quot;);</b>
+<i>281</i>&nbsp;        }
+<i>282</i>&nbsp;    }
+<i>283</i>&nbsp;
+<i>284</i>&nbsp;    /**
+<i>285</i>&nbsp;     * Merges the specified maxPathLength with the pathLenConstraint
+<i>286</i>&nbsp;     * obtained from the certificate.
+<i>287</i>&nbsp;     *
+<i>288</i>&nbsp;     * @param cert the &lt;code&gt;X509Certificate&lt;/code&gt;
+<i>289</i>&nbsp;     * @param maxPathLength the previous maximum path length
+<i>290</i>&nbsp;     * @return the new maximum path length constraint (-1 means no more
+<i>291</i>&nbsp;     * certificates can follow, Integer.MAX_VALUE means path length is
+<i>292</i>&nbsp;     * unconstrained)
+<i>293</i>&nbsp;     */
+<i>294</i>&nbsp;    static int mergeBasicConstraints(X509Certificate cert, int maxPathLength) {
+<i>295</i>&nbsp;
+<b class="nc"><i>296</i>&nbsp;        int pathLenConstraint = cert.getBasicConstraints();</b>
+<i>297</i>&nbsp;
+<b class="nc"><i>298</i>&nbsp;        if (!X509CertImpl.isSelfIssued(cert)) {</b>
+<b class="nc"><i>299</i>&nbsp;            maxPathLength--;</b>
+<i>300</i>&nbsp;        }
+<i>301</i>&nbsp;
+<b class="nc"><i>302</i>&nbsp;        if (pathLenConstraint &lt; maxPathLength) {</b>
+<b class="nc"><i>303</i>&nbsp;            maxPathLength = pathLenConstraint;</b>
+<i>304</i>&nbsp;        }
+<i>305</i>&nbsp;
+<b class="nc"><i>306</i>&nbsp;        return maxPathLength;</b>
+<i>307</i>&nbsp;    }
+<i>308</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

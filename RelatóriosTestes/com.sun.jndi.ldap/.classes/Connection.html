@@ -1,0 +1,1118 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Connection</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.jndi.ldap</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Connection (com.sun.jndi.ldap)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Connection</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 22)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 305)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1999, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.jndi.ldap;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.BufferedInputStream;
+<i>29</i>&nbsp;import java.io.BufferedOutputStream;
+<i>30</i>&nbsp;import java.io.InterruptedIOException;
+<i>31</i>&nbsp;import java.io.IOException;
+<i>32</i>&nbsp;import java.io.OutputStream;
+<i>33</i>&nbsp;import java.io.InputStream;
+<i>34</i>&nbsp;import java.net.InetSocketAddress;
+<i>35</i>&nbsp;import java.net.Socket;
+<i>36</i>&nbsp;import javax.net.ssl.SSLSocket;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;import javax.naming.CommunicationException;
+<i>39</i>&nbsp;import javax.naming.ServiceUnavailableException;
+<i>40</i>&nbsp;import javax.naming.NamingException;
+<i>41</i>&nbsp;import javax.naming.InterruptedNamingException;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;import javax.naming.ldap.Control;
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;import java.lang.reflect.Method;
+<i>46</i>&nbsp;import java.lang.reflect.InvocationTargetException;
+<i>47</i>&nbsp;import java.security.AccessController;
+<i>48</i>&nbsp;import java.security.PrivilegedAction;
+<i>49</i>&nbsp;import java.util.Arrays;
+<i>50</i>&nbsp;import javax.net.SocketFactory;
+<i>51</i>&nbsp;import javax.net.ssl.SSLParameters;
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;/**
+<i>54</i>&nbsp;  * A thread that creates a connection to an LDAP server.
+<i>55</i>&nbsp;  * After the connection, the thread reads from the connection.
+<i>56</i>&nbsp;  * A caller can invoke methods on the instance to read LDAP responses
+<i>57</i>&nbsp;  * and to send LDAP requests.
+<i>58</i>&nbsp;  * &lt;p&gt;
+<i>59</i>&nbsp;  * There is a one-to-one correspondence between an LdapClient and
+<i>60</i>&nbsp;  * a Connection. Access to Connection and its methods is only via
+<i>61</i>&nbsp;  * LdapClient with two exceptions: SASL authentication and StartTLS.
+<i>62</i>&nbsp;  * SASL needs to access Connection&#39;s socket IO streams (in order to do encryption
+<i>63</i>&nbsp;  * of the security layer). StartTLS needs to do replace IO streams
+<i>64</i>&nbsp;  * and close the IO  streams on nonfatal close. The code for SASL
+<i>65</i>&nbsp;  * authentication can be treated as being the same as from LdapClient
+<i>66</i>&nbsp;  * because the SASL code is only ever called from LdapClient, from
+<i>67</i>&nbsp;  * inside LdapClient&#39;s synchronized authenticate() method. StartTLS is called
+<i>68</i>&nbsp;  * directly by the application but should only occur when the underlying
+<i>69</i>&nbsp;  * connection is quiet.
+<i>70</i>&nbsp;  * &lt;p&gt;
+<i>71</i>&nbsp;  * In terms of synchronization, worry about data structures
+<i>72</i>&nbsp;  * used by the Connection thread because that usage might contend
+<i>73</i>&nbsp;  * with calls by the main threads (i.e., those that call LdapClient).
+<i>74</i>&nbsp;  * Main threads need to worry about contention with each other.
+<i>75</i>&nbsp;  * Fields that Connection thread uses:
+<i>76</i>&nbsp;  *     inStream - synced access and update; initialized in constructor;
+<i>77</i>&nbsp;  *           referenced outside class unsync&#39;ed (by LdapSasl) only
+<i>78</i>&nbsp;  *           when connection is quiet
+<i>79</i>&nbsp;  *     traceFile, traceTagIn, traceTagOut - no sync; debugging only
+<i>80</i>&nbsp;  *     parent - no sync; initialized in constructor; no updates
+<i>81</i>&nbsp;  *     pendingRequests - sync
+<i>82</i>&nbsp;  *     pauseLock - per-instance lock;
+<i>83</i>&nbsp;  *     paused - sync via pauseLock (pauseReader())
+<i>84</i>&nbsp;  * Members used by main threads (LdapClient):
+<i>85</i>&nbsp;  *     host, port - unsync; read-only access for StartTLS and debug messages
+<i>86</i>&nbsp;  *     setBound(), setV3() - no sync; called only by LdapClient.authenticate(),
+<i>87</i>&nbsp;  *             which is a sync method called only when connection is &quot;quiet&quot;
+<i>88</i>&nbsp;  *     getMsgId() - sync
+<i>89</i>&nbsp;  *     writeRequest(), removeRequest(),findRequest(), abandonOutstandingReqs() -
+<i>90</i>&nbsp;  *             access to shared pendingRequests is sync
+<i>91</i>&nbsp;  *     writeRequest(),  abandonRequest(), ldapUnbind() - access to outStream sync
+<i>92</i>&nbsp;  *     cleanup() - sync
+<i>93</i>&nbsp;  *     readReply() - access to sock sync
+<i>94</i>&nbsp;  *     unpauseReader() - (indirectly via writeRequest) sync on pauseLock
+<i>95</i>&nbsp;  * Members used by SASL auth (main thread):
+<i>96</i>&nbsp;  *     inStream, outStream - no sync; used to construct new stream; accessed
+<i>97</i>&nbsp;  *             only when conn is &quot;quiet&quot; and not shared
+<i>98</i>&nbsp;  *     replaceStreams() - sync method
+<i>99</i>&nbsp;  * Members used by StartTLS:
+<i>100</i>&nbsp;  *     inStream, outStream - no sync; used to record the existing streams;
+<i>101</i>&nbsp;  *             accessed only when conn is &quot;quiet&quot; and not shared
+<i>102</i>&nbsp;  *     replaceStreams() - sync method
+<i>103</i>&nbsp;  * &lt;p&gt;
+<i>104</i>&nbsp;  * Handles anonymous, simple, and SASL bind for v3; anonymous and simple
+<i>105</i>&nbsp;  * for v2.
+<i>106</i>&nbsp;  * %%% made public for access by LdapSasl %%%
+<i>107</i>&nbsp;  *
+<i>108</i>&nbsp;  * @author Vincent Ryan
+<i>109</i>&nbsp;  * @author Rosanna Lee
+<i>110</i>&nbsp;  * @author Jagane Sundar
+<i>111</i>&nbsp;  */
+<i>112</i>&nbsp;public final class Connection implements Runnable {
+<i>113</i>&nbsp;
+<i>114</i>&nbsp;    private static final boolean debug = false;
+<i>115</i>&nbsp;    private static final int dump = 0; // &gt; 0 r, &gt; 1 rw
+<i>116</i>&nbsp;
+<i>117</i>&nbsp;
+<b class="nc"><i>118</i>&nbsp;    final private Thread worker;    // Initialized in constructor</b>
+<i>119</i>&nbsp;
+<i>120</i>&nbsp;    private boolean v3 = true;       // Set in setV3()
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;    final public String host;  // used by LdapClient for generating exception messages
+<i>123</i>&nbsp;                         // used by StartTlsResponse when creating an SSL socket
+<i>124</i>&nbsp;    final public int port;     // used by LdapClient for generating exception messages
+<b class="nc"><i>125</i>&nbsp;                         // used by StartTlsResponse when creating an SSL socket</b>
+<i>126</i>&nbsp;
+<i>127</i>&nbsp;    private boolean bound = false;   // Set in setBound()
+<b class="nc"><i>128</i>&nbsp;</b>
+<b class="nc"><i>129</i>&nbsp;    // All three are initialized in constructor and read-only afterwards</b>
+<b class="nc"><i>130</i>&nbsp;    private OutputStream traceFile = null;</b>
+<i>131</i>&nbsp;    private String traceTagIn = null;
+<i>132</i>&nbsp;    private String traceTagOut = null;
+<i>133</i>&nbsp;
+<i>134</i>&nbsp;    // Initialized in constructor; read and used externally (LdapSasl);
+<i>135</i>&nbsp;    // Updated in replaceStreams() during &quot;quiet&quot;, unshared, period
+<i>136</i>&nbsp;    public InputStream inStream;   // must be public; used by LdapSasl
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    // Initialized in constructor; read and used externally (LdapSasl);
+<i>139</i>&nbsp;    // Updated in replaceOutputStream() during &quot;quiet&quot;, unshared, period
+<i>140</i>&nbsp;    public OutputStream outStream; // must be public; used by LdapSasl
+<i>141</i>&nbsp;
+<i>142</i>&nbsp;    // Initialized in constructor; read and used externally (TLS) to
+<i>143</i>&nbsp;    // get new IO streams; closed during cleanup
+<i>144</i>&nbsp;    public Socket sock;            // for TLS
+<i>145</i>&nbsp;
+<i>146</i>&nbsp;    // For processing &quot;disconnect&quot; unsolicited notification
+<i>147</i>&nbsp;    // Initialized in constructor
+<i>148</i>&nbsp;    final private LdapClient parent;
+<b class="nc"><i>149</i>&nbsp;</b>
+<i>150</i>&nbsp;    // Incremented and returned in sync getMsgId()
+<i>151</i>&nbsp;    private int outMsgId = 0;
+<i>152</i>&nbsp;
+<i>153</i>&nbsp;    //
+<i>154</i>&nbsp;    // The list of ldapRequests pending on this binding
+<b class="nc"><i>155</i>&nbsp;    //</b>
+<i>156</i>&nbsp;    // Accessed only within sync methods
+<b class="nc"><i>157</i>&nbsp;    private LdapRequest pendingRequests = null;</b>
+<b class="nc"><i>158</i>&nbsp;</b>
+<i>159</i>&nbsp;    volatile IOException closureReason = null;
+<i>160</i>&nbsp;    volatile boolean useable = true;  // is Connection still useable
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;    int readTimeout;
+<i>163</i>&nbsp;    int connectTimeout;
+<i>164</i>&nbsp;    private static final boolean IS_HOSTNAME_VERIFICATION_DISABLED
+<i>165</i>&nbsp;            = hostnameVerificationDisabledValue();
+<i>166</i>&nbsp;
+<b class="nc"><i>167</i>&nbsp;    private static boolean hostnameVerificationDisabledValue() {</b>
+<i>168</i>&nbsp;        PrivilegedAction&lt;String&gt; act = () -&gt; System.getProperty(
+<i>169</i>&nbsp;                &quot;com.sun.jndi.ldap.object.disableEndpointIdentification&quot;);
+<i>170</i>&nbsp;        String prop = AccessController.doPrivileged(act);
+<i>171</i>&nbsp;        if (prop == null) {
+<i>172</i>&nbsp;            return false;
+<i>173</i>&nbsp;        }
+<i>174</i>&nbsp;        return prop.isEmpty() ? true : Boolean.parseBoolean(prop);
+<b class="nc"><i>175</i>&nbsp;    }</b>
+<i>176</i>&nbsp;    // true means v3; false means v2
+<i>177</i>&nbsp;    // Called in LdapClient.authenticate() (which is synchronized)
+<i>178</i>&nbsp;    // when connection is &quot;quiet&quot; and not shared; no need to synchronize
+<i>179</i>&nbsp;    void setV3(boolean v) {
+<i>180</i>&nbsp;        v3 = v;
+<i>181</i>&nbsp;    }
+<i>182</i>&nbsp;
+<i>183</i>&nbsp;    // A BIND request has been successfully made on this connection
+<i>184</i>&nbsp;    // When cleaning up, remember to do an UNBIND
+<b class="nc"><i>185</i>&nbsp;    // Called in LdapClient.authenticate() (which is synchronized)</b>
+<i>186</i>&nbsp;    // when connection is &quot;quiet&quot; and not shared; no need to synchronize
+<b class="nc"><i>187</i>&nbsp;    void setBound() {</b>
+<b class="nc"><i>188</i>&nbsp;        bound = true;</b>
+<b class="nc"><i>189</i>&nbsp;    }</b>
+<b class="nc"><i>190</i>&nbsp;</b>
+<b class="nc"><i>191</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////</b>
+<i>192</i>&nbsp;    //
+<b class="nc"><i>193</i>&nbsp;    // Create an LDAP Binding object and bind to a particular server</b>
+<b class="nc"><i>194</i>&nbsp;    //</b>
+<b class="nc"><i>195</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////</b>
+<b class="nc"><i>196</i>&nbsp;</b>
+<i>197</i>&nbsp;    Connection(LdapClient parent, String host, int port, String socketFactory,
+<i>198</i>&nbsp;        int connectTimeout, int readTimeout, OutputStream trace) throws NamingException {
+<i>199</i>&nbsp;
+<i>200</i>&nbsp;        this.host = host;
+<i>201</i>&nbsp;        this.port = port;
+<i>202</i>&nbsp;        this.parent = parent;
+<b class="nc"><i>203</i>&nbsp;        this.readTimeout = readTimeout;</b>
+<i>204</i>&nbsp;        this.connectTimeout = connectTimeout;
+<i>205</i>&nbsp;
+<i>206</i>&nbsp;        if (trace != null) {
+<i>207</i>&nbsp;            traceFile = trace;
+<i>208</i>&nbsp;            traceTagIn = &quot;&lt;- &quot; + host + &quot;:&quot; + port + &quot;\n\n&quot;;
+<b class="nc"><i>209</i>&nbsp;            traceTagOut = &quot;-&gt; &quot; + host + &quot;:&quot; + port + &quot;\n\n&quot;;</b>
+<b class="nc"><i>210</i>&nbsp;        }</b>
+<i>211</i>&nbsp;
+<b class="nc"><i>212</i>&nbsp;        //</b>
+<b class="nc"><i>213</i>&nbsp;        // Connect to server</b>
+<i>214</i>&nbsp;        //
+<i>215</i>&nbsp;        try {
+<b class="nc"><i>216</i>&nbsp;            sock = createSocket(host, port, socketFactory, connectTimeout);</b>
+<i>217</i>&nbsp;
+<b class="nc"><i>218</i>&nbsp;            if (debug) {</b>
+<b class="nc"><i>219</i>&nbsp;                System.err.println(&quot;Connection: opening socket: &quot; + host + &quot;,&quot; + port);</b>
+<b class="nc"><i>220</i>&nbsp;            }</b>
+<i>221</i>&nbsp;
+<i>222</i>&nbsp;            inStream = new BufferedInputStream(sock.getInputStream());
+<i>223</i>&nbsp;            outStream = new BufferedOutputStream(sock.getOutputStream());
+<i>224</i>&nbsp;
+<i>225</i>&nbsp;        } catch (InvocationTargetException e) {
+<b class="nc"><i>226</i>&nbsp;            Throwable realException = e.getTargetException();</b>
+<i>227</i>&nbsp;            // realException.printStackTrace();
+<b class="nc"><i>228</i>&nbsp;</b>
+<b class="nc"><i>229</i>&nbsp;            CommunicationException ce =</b>
+<b class="nc"><i>230</i>&nbsp;                new CommunicationException(host + &quot;:&quot; + port);</b>
+<i>231</i>&nbsp;            ce.setRootCause(realException);
+<b class="nc"><i>232</i>&nbsp;            throw ce;</b>
+<b class="nc"><i>233</i>&nbsp;        } catch (Exception e) {</b>
+<b class="nc"><i>234</i>&nbsp;            // We need to have a catch all here and</b>
+<i>235</i>&nbsp;            // ignore generic exceptions.
+<i>236</i>&nbsp;            // Also catches all IO errors generated by socket creation.
+<i>237</i>&nbsp;            CommunicationException ce =
+<i>238</i>&nbsp;                new CommunicationException(host + &quot;:&quot; + port);
+<i>239</i>&nbsp;            ce.setRootCause(e);
+<i>240</i>&nbsp;            throw ce;
+<i>241</i>&nbsp;        }
+<i>242</i>&nbsp;
+<i>243</i>&nbsp;        worker = Obj.helper.createThread(this);
+<b class="nc"><i>244</i>&nbsp;        worker.setDaemon(true);</b>
+<b class="nc"><i>245</i>&nbsp;        worker.start();</b>
+<i>246</i>&nbsp;    }
+<b class="nc"><i>247</i>&nbsp;</b>
+<b class="nc"><i>248</i>&nbsp;    /*</b>
+<i>249</i>&nbsp;     * Create an InetSocketAddress using the specified hostname and port number.
+<i>250</i>&nbsp;     */
+<b class="nc"><i>251</i>&nbsp;    private InetSocketAddress createInetSocketAddress(String host, int port) {</b>
+<i>252</i>&nbsp;            return new InetSocketAddress(host, port);
+<i>253</i>&nbsp;    }
+<b class="nc"><i>254</i>&nbsp;</b>
+<i>255</i>&nbsp;    /*
+<i>256</i>&nbsp;     * Create a Socket object using the specified socket factory and time limit.
+<i>257</i>&nbsp;     *
+<b class="nc"><i>258</i>&nbsp;     * If a timeout is supplied and unconnected sockets are supported then</b>
+<i>259</i>&nbsp;     * an unconnected socket is created and the timeout is applied when
+<i>260</i>&nbsp;     * connecting the socket. If a timeout is supplied but unconnected sockets
+<i>261</i>&nbsp;     * are not supported then the timeout is ignored and a connected socket
+<i>262</i>&nbsp;     * is created.
+<i>263</i>&nbsp;     */
+<i>264</i>&nbsp;    private Socket createSocket(String host, int port, String socketFactory,
+<i>265</i>&nbsp;            int connectTimeout) throws Exception {
+<i>266</i>&nbsp;
+<i>267</i>&nbsp;        Socket socket = null;
+<i>268</i>&nbsp;
+<i>269</i>&nbsp;        if (socketFactory != null) {
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;            // create the factory
+<i>272</i>&nbsp;
+<i>273</i>&nbsp;            @SuppressWarnings(&quot;unchecked&quot;)
+<i>274</i>&nbsp;            Class&lt;? extends SocketFactory&gt; socketFactoryClass =
+<b class="nc"><i>275</i>&nbsp;                (Class&lt;? extends SocketFactory&gt;)Obj.helper.loadClass(socketFactory);</b>
+<i>276</i>&nbsp;            Method getDefault =
+<b class="nc"><i>277</i>&nbsp;                socketFactoryClass.getMethod(&quot;getDefault&quot;, new Class&lt;?&gt;[]{});</b>
+<i>278</i>&nbsp;            SocketFactory factory = (SocketFactory) getDefault.invoke(null, new Object[]{});
+<i>279</i>&nbsp;
+<i>280</i>&nbsp;            // create the socket
+<b class="nc"><i>281</i>&nbsp;</b>
+<b class="nc"><i>282</i>&nbsp;            if (connectTimeout &gt; 0) {</b>
+<b class="nc"><i>283</i>&nbsp;</b>
+<b class="nc"><i>284</i>&nbsp;                InetSocketAddress endpoint =</b>
+<i>285</i>&nbsp;                        createInetSocketAddress(host, port);
+<i>286</i>&nbsp;
+<i>287</i>&nbsp;                // unconnected socket
+<b class="nc"><i>288</i>&nbsp;                socket = factory.createSocket();</b>
+<i>289</i>&nbsp;
+<b class="nc"><i>290</i>&nbsp;                if (debug) {</b>
+<i>291</i>&nbsp;                    System.err.println(&quot;Connection: creating socket with &quot; +
+<i>292</i>&nbsp;                            &quot;a timeout using supplied socket factory&quot;);
+<b class="nc"><i>293</i>&nbsp;                }</b>
+<i>294</i>&nbsp;
+<i>295</i>&nbsp;                // connected socket
+<b class="nc"><i>296</i>&nbsp;                socket.connect(endpoint, connectTimeout);</b>
+<b class="nc"><i>297</i>&nbsp;            }</b>
+<i>298</i>&nbsp;
+<b class="nc"><i>299</i>&nbsp;            // continue (but ignore connectTimeout)</b>
+<i>300</i>&nbsp;            if (socket == null) {
+<i>301</i>&nbsp;                if (debug) {
+<b class="nc"><i>302</i>&nbsp;                    System.err.println(&quot;Connection: creating socket using &quot; +</b>
+<b class="nc"><i>303</i>&nbsp;                        &quot;supplied socket factory&quot;);</b>
+<i>304</i>&nbsp;                }
+<i>305</i>&nbsp;                // connected socket
+<i>306</i>&nbsp;                socket = factory.createSocket(host, port);
+<i>307</i>&nbsp;            }
+<i>308</i>&nbsp;        } else {
+<i>309</i>&nbsp;
+<i>310</i>&nbsp;            if (connectTimeout &gt; 0) {
+<b class="nc"><i>311</i>&nbsp;</b>
+<i>312</i>&nbsp;                    InetSocketAddress endpoint = createInetSocketAddress(host, port);
+<i>313</i>&nbsp;
+<b class="nc"><i>314</i>&nbsp;                    socket = new Socket();</b>
+<i>315</i>&nbsp;
+<b class="nc"><i>316</i>&nbsp;                    if (debug) {</b>
+<i>317</i>&nbsp;                        System.err.println(&quot;Connection: creating socket with &quot; +
+<i>318</i>&nbsp;                            &quot;a timeout&quot;);
+<b class="nc"><i>319</i>&nbsp;                    }</b>
+<b class="nc"><i>320</i>&nbsp;                    socket.connect(endpoint, connectTimeout);</b>
+<i>321</i>&nbsp;            }
+<i>322</i>&nbsp;
+<i>323</i>&nbsp;            // continue (but ignore connectTimeout)
+<i>324</i>&nbsp;
+<i>325</i>&nbsp;            if (socket == null) {
+<i>326</i>&nbsp;                if (debug) {
+<i>327</i>&nbsp;                    System.err.println(&quot;Connection: creating socket&quot;);
+<b class="nc"><i>328</i>&nbsp;                }</b>
+<i>329</i>&nbsp;                // connected socket
+<i>330</i>&nbsp;                socket = new Socket(host, port);
+<b class="nc"><i>331</i>&nbsp;            }</b>
+<i>332</i>&nbsp;        }
+<b class="nc"><i>333</i>&nbsp;</b>
+<i>334</i>&nbsp;        // For LDAP connect timeouts on LDAP over SSL connections must treat
+<i>335</i>&nbsp;        // the SSL handshake following socket connection as part of the timeout.
+<b class="nc"><i>336</i>&nbsp;        // So explicitly set a socket read timeout, trigger the SSL handshake,</b>
+<b class="nc"><i>337</i>&nbsp;        // then reset the timeout.</b>
+<i>338</i>&nbsp;        if (socket instanceof SSLSocket) {
+<b class="nc"><i>339</i>&nbsp;            SSLSocket sslSocket = (SSLSocket) socket;</b>
+<b class="nc"><i>340</i>&nbsp;            if (!IS_HOSTNAME_VERIFICATION_DISABLED) {</b>
+<i>341</i>&nbsp;                SSLParameters param = sslSocket.getSSLParameters();
+<b class="nc"><i>342</i>&nbsp;                param.setEndpointIdentificationAlgorithm(&quot;LDAPS&quot;);</b>
+<i>343</i>&nbsp;                sslSocket.setSSLParameters(param);
+<b class="nc"><i>344</i>&nbsp;            }</b>
+<i>345</i>&nbsp;            if (connectTimeout &gt; 0) {
+<i>346</i>&nbsp;                int socketTimeout = sslSocket.getSoTimeout();
+<i>347</i>&nbsp;                sslSocket.setSoTimeout(connectTimeout); // reuse full timeout value
+<i>348</i>&nbsp;                sslSocket.startHandshake();
+<i>349</i>&nbsp;                sslSocket.setSoTimeout(socketTimeout);
+<b class="nc"><i>350</i>&nbsp;            }</b>
+<i>351</i>&nbsp;        }
+<i>352</i>&nbsp;        return socket;
+<b class="nc"><i>353</i>&nbsp;    }</b>
+<i>354</i>&nbsp;
+<b class="nc"><i>355</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////</b>
+<i>356</i>&nbsp;    //
+<i>357</i>&nbsp;    // Methods to IO to the LDAP server
+<b class="nc"><i>358</i>&nbsp;    //</b>
+<i>359</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>360</i>&nbsp;
+<i>361</i>&nbsp;    synchronized int getMsgId() {
+<i>362</i>&nbsp;        return ++outMsgId;
+<b class="nc"><i>363</i>&nbsp;    }</b>
+<i>364</i>&nbsp;
+<i>365</i>&nbsp;    LdapRequest writeRequest(BerEncoder ber, int msgId) throws IOException {
+<i>366</i>&nbsp;        return writeRequest(ber, msgId, false /* pauseAfterReceipt */, -1);
+<i>367</i>&nbsp;    }
+<i>368</i>&nbsp;
+<i>369</i>&nbsp;    LdapRequest writeRequest(BerEncoder ber, int msgId,
+<i>370</i>&nbsp;        boolean pauseAfterReceipt) throws IOException {
+<b class="nc"><i>371</i>&nbsp;        return writeRequest(ber, msgId, pauseAfterReceipt, -1);</b>
+<b class="nc"><i>372</i>&nbsp;    }</b>
+<b class="nc"><i>373</i>&nbsp;</b>
+<i>374</i>&nbsp;    LdapRequest writeRequest(BerEncoder ber, int msgId,
+<b class="nc"><i>375</i>&nbsp;        boolean pauseAfterReceipt, int replyQueueCapacity) throws IOException {</b>
+<b class="nc"><i>376</i>&nbsp;</b>
+<b class="nc"><i>377</i>&nbsp;        LdapRequest req =</b>
+<i>378</i>&nbsp;            new LdapRequest(msgId, pauseAfterReceipt, replyQueueCapacity);
+<i>379</i>&nbsp;        addRequest(req);
+<b class="nc"><i>380</i>&nbsp;</b>
+<i>381</i>&nbsp;        if (traceFile != null) {
+<i>382</i>&nbsp;            Ber.dumpBER(traceFile, traceTagOut, ber.getBuf(), 0, ber.getDataLen());
+<i>383</i>&nbsp;        }
+<i>384</i>&nbsp;
+<i>385</i>&nbsp;
+<i>386</i>&nbsp;        // unpause reader so that it can get response
+<i>387</i>&nbsp;        // NOTE: Must do this before writing request, otherwise might
+<i>388</i>&nbsp;        // create a race condition where the writer unblocks its own response
+<i>389</i>&nbsp;        unpauseReader();
+<b class="nc"><i>390</i>&nbsp;</b>
+<i>391</i>&nbsp;        if (debug) {
+<i>392</i>&nbsp;            System.err.println(&quot;Writing request to: &quot; + outStream);
+<i>393</i>&nbsp;        }
+<b class="nc"><i>394</i>&nbsp;</b>
+<i>395</i>&nbsp;        try {
+<i>396</i>&nbsp;            synchronized (this) {
+<i>397</i>&nbsp;                outStream.write(ber.getBuf(), 0, ber.getDataLen());
+<i>398</i>&nbsp;                outStream.flush();
+<b class="nc"><i>399</i>&nbsp;            }</b>
+<i>400</i>&nbsp;        } catch (IOException e) {
+<i>401</i>&nbsp;            cleanup(null, true);
+<i>402</i>&nbsp;            throw (closureReason = e); // rethrow
+<i>403</i>&nbsp;        }
+<i>404</i>&nbsp;
+<b class="nc"><i>405</i>&nbsp;        return req;</b>
+<i>406</i>&nbsp;    }
+<b class="nc"><i>407</i>&nbsp;</b>
+<i>408</i>&nbsp;    /**
+<b class="nc"><i>409</i>&nbsp;     * Reads a reply; waits until one is ready.</b>
+<b class="nc"><i>410</i>&nbsp;     */</b>
+<i>411</i>&nbsp;    BerDecoder readReply(LdapRequest ldr)
+<i>412</i>&nbsp;            throws IOException, NamingException {
+<i>413</i>&nbsp;        BerDecoder rber;
+<i>414</i>&nbsp;
+<i>415</i>&nbsp;        // Track down elapsed time to workaround spurious wakeups
+<i>416</i>&nbsp;        long elapsedMilli = 0;
+<b class="nc"><i>417</i>&nbsp;        long elapsedNano = 0;</b>
+<i>418</i>&nbsp;
+<i>419</i>&nbsp;        while (((rber = ldr.getReplyBer()) == null) &amp;&amp;
+<i>420</i>&nbsp;                (readTimeout &lt;= 0 || elapsedMilli &lt; readTimeout))
+<i>421</i>&nbsp;        {
+<i>422</i>&nbsp;            try {
+<i>423</i>&nbsp;                // If socket closed, don&#39;t even try
+<b class="nc"><i>424</i>&nbsp;                synchronized (this) {</b>
+<b class="nc"><i>425</i>&nbsp;                    if (sock == null) {</b>
+<b class="nc"><i>426</i>&nbsp;                        throw new ServiceUnavailableException(host + &quot;:&quot; + port +</b>
+<b class="nc"><i>427</i>&nbsp;                            &quot;; socket closed&quot;);</b>
+<b class="nc"><i>428</i>&nbsp;                    }</b>
+<b class="nc"><i>429</i>&nbsp;                }</b>
+<b class="nc"><i>430</i>&nbsp;                synchronized (ldr) {</b>
+<b class="nc"><i>431</i>&nbsp;                    // check if condition has changed since our last check</b>
+<i>432</i>&nbsp;                    rber = ldr.getReplyBer();
+<b class="nc"><i>433</i>&nbsp;                    if (rber == null) {</b>
+<i>434</i>&nbsp;                        if (readTimeout &gt; 0) {  // Socket read timeout is specified
+<i>435</i>&nbsp;                            long beginNano = System.nanoTime();
+<i>436</i>&nbsp;
+<i>437</i>&nbsp;                            // will be woken up before readTimeout if reply is
+<i>438</i>&nbsp;                            // available
+<i>439</i>&nbsp;                            ldr.wait(readTimeout - elapsedMilli);
+<i>440</i>&nbsp;                            elapsedNano += (System.nanoTime() - beginNano);
+<i>441</i>&nbsp;                            elapsedMilli += elapsedNano / 1000_000;
+<i>442</i>&nbsp;                            elapsedNano %= 1000_000;
+<i>443</i>&nbsp;
+<b class="nc"><i>444</i>&nbsp;                        } else {</b>
+<b class="nc"><i>445</i>&nbsp;                            // no timeout is set so we wait infinitely until</b>
+<i>446</i>&nbsp;                            // a response is received
+<b class="nc"><i>447</i>&nbsp;                            // http://docs.oracle.com/javase/8/docs/technotes/guides/jndi/jndi-ldap.html#PROP</b>
+<i>448</i>&nbsp;                            ldr.wait();
+<i>449</i>&nbsp;                        }
+<i>450</i>&nbsp;                    } else {
+<i>451</i>&nbsp;                        break;
+<b class="nc"><i>452</i>&nbsp;                    }</b>
+<b class="nc"><i>453</i>&nbsp;                }</b>
+<b class="nc"><i>454</i>&nbsp;            } catch (InterruptedException ex) {</b>
+<i>455</i>&nbsp;                throw new InterruptedNamingException(
+<i>456</i>&nbsp;                    &quot;Interrupted during LDAP operation&quot;);
+<b class="nc"><i>457</i>&nbsp;            }</b>
+<b class="nc"><i>458</i>&nbsp;        }</b>
+<i>459</i>&nbsp;
+<b class="nc"><i>460</i>&nbsp;        if ((rber == null) &amp;&amp; (elapsedMilli &gt;= readTimeout)) {</b>
+<b class="nc"><i>461</i>&nbsp;            abandonRequest(ldr, null);</b>
+<b class="nc"><i>462</i>&nbsp;            throw new NamingException(&quot;LDAP response read timed out, timeout used:&quot;</b>
+<b class="nc"><i>463</i>&nbsp;                            + readTimeout + &quot;ms.&quot; );</b>
+<i>464</i>&nbsp;
+<i>465</i>&nbsp;        }
+<i>466</i>&nbsp;        return rber;
+<b class="nc"><i>467</i>&nbsp;    }</b>
+<b class="nc"><i>468</i>&nbsp;</b>
+<b class="nc"><i>469</i>&nbsp;</b>
+<b class="nc"><i>470</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////</b>
+<i>471</i>&nbsp;    //
+<b class="nc"><i>472</i>&nbsp;    // Methods to add, find, delete, and abandon requests made to server</b>
+<i>473</i>&nbsp;    //
+<i>474</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>475</i>&nbsp;
+<b class="nc"><i>476</i>&nbsp;    private synchronized void addRequest(LdapRequest ldapRequest) {</b>
+<i>477</i>&nbsp;
+<i>478</i>&nbsp;        LdapRequest ldr = pendingRequests;
+<b class="nc"><i>479</i>&nbsp;        if (ldr == null) {</b>
+<i>480</i>&nbsp;            pendingRequests = ldapRequest;
+<b class="nc"><i>481</i>&nbsp;            ldapRequest.next = null;</b>
+<b class="nc"><i>482</i>&nbsp;        } else {</b>
+<b class="nc"><i>483</i>&nbsp;            ldapRequest.next = pendingRequests;</b>
+<i>484</i>&nbsp;            pendingRequests = ldapRequest;
+<b class="nc"><i>485</i>&nbsp;        }</b>
+<i>486</i>&nbsp;    }
+<i>487</i>&nbsp;
+<b class="nc"><i>488</i>&nbsp;    synchronized LdapRequest findRequest(int msgId) {</b>
+<b class="nc"><i>489</i>&nbsp;</b>
+<b class="nc"><i>490</i>&nbsp;        LdapRequest ldr = pendingRequests;</b>
+<i>491</i>&nbsp;        while (ldr != null) {
+<i>492</i>&nbsp;            if (ldr.msgId == msgId) {
+<i>493</i>&nbsp;                return ldr;
+<b class="nc"><i>494</i>&nbsp;            }</b>
+<i>495</i>&nbsp;            ldr = ldr.next;
+<i>496</i>&nbsp;        }
+<i>497</i>&nbsp;        return null;
+<i>498</i>&nbsp;
+<i>499</i>&nbsp;    }
+<i>500</i>&nbsp;
+<i>501</i>&nbsp;    synchronized void removeRequest(LdapRequest req) {
+<i>502</i>&nbsp;        LdapRequest ldr = pendingRequests;
+<i>503</i>&nbsp;        LdapRequest ldrprev = null;
+<i>504</i>&nbsp;
+<i>505</i>&nbsp;        while (ldr != null) {
+<b class="nc"><i>506</i>&nbsp;            if (ldr == req) {</b>
+<b class="nc"><i>507</i>&nbsp;                ldr.cancel();</b>
+<b class="nc"><i>508</i>&nbsp;</b>
+<b class="nc"><i>509</i>&nbsp;                if (ldrprev != null) {</b>
+<i>510</i>&nbsp;                    ldrprev.next = ldr.next;
+<b class="nc"><i>511</i>&nbsp;                } else {</b>
+<b class="nc"><i>512</i>&nbsp;                    pendingRequests = ldr.next;</b>
+<i>513</i>&nbsp;                }
+<i>514</i>&nbsp;                ldr.next = null;
+<i>515</i>&nbsp;            }
+<i>516</i>&nbsp;            ldrprev = ldr;
+<i>517</i>&nbsp;            ldr = ldr.next;
+<b class="nc"><i>518</i>&nbsp;        }</b>
+<b class="nc"><i>519</i>&nbsp;    }</b>
+<b class="nc"><i>520</i>&nbsp;</b>
+<b class="nc"><i>521</i>&nbsp;    void abandonRequest(LdapRequest ldr, Control[] reqCtls) {</b>
+<i>522</i>&nbsp;        // Remove from queue
+<b class="nc"><i>523</i>&nbsp;        removeRequest(ldr);</b>
+<i>524</i>&nbsp;
+<b class="nc"><i>525</i>&nbsp;        BerEncoder ber = new BerEncoder(256);</b>
+<i>526</i>&nbsp;        int abandonMsgId = getMsgId();
+<i>527</i>&nbsp;
+<i>528</i>&nbsp;        //
+<i>529</i>&nbsp;        // build the abandon request.
+<b class="nc"><i>530</i>&nbsp;        //</b>
+<b class="nc"><i>531</i>&nbsp;        try {</b>
+<i>532</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);
+<b class="nc"><i>533</i>&nbsp;                ber.encodeInt(abandonMsgId);</b>
+<b class="nc"><i>534</i>&nbsp;                ber.encodeInt(ldr.msgId, LdapClient.LDAP_REQ_ABANDON);</b>
+<b class="nc"><i>535</i>&nbsp;</b>
+<i>536</i>&nbsp;                if (v3) {
+<b class="nc"><i>537</i>&nbsp;                    LdapClient.encodeControls(ber, reqCtls);</b>
+<b class="nc"><i>538</i>&nbsp;                }</b>
+<i>539</i>&nbsp;            ber.endSeq();
+<b class="nc"><i>540</i>&nbsp;</b>
+<i>541</i>&nbsp;            if (traceFile != null) {
+<b class="nc"><i>542</i>&nbsp;                Ber.dumpBER(traceFile, traceTagOut, ber.getBuf(), 0,</b>
+<i>543</i>&nbsp;                    ber.getDataLen());
+<b class="nc"><i>544</i>&nbsp;            }</b>
+<b class="nc"><i>545</i>&nbsp;</b>
+<i>546</i>&nbsp;            synchronized (this) {
+<i>547</i>&nbsp;                outStream.write(ber.getBuf(), 0, ber.getDataLen());
+<i>548</i>&nbsp;                outStream.flush();
+<i>549</i>&nbsp;            }
+<i>550</i>&nbsp;
+<b class="nc"><i>551</i>&nbsp;        } catch (IOException ex) {</b>
+<i>552</i>&nbsp;            //System.err.println(&quot;ldap.abandon: &quot; + ex);
+<b class="nc"><i>553</i>&nbsp;        }</b>
+<b class="nc"><i>554</i>&nbsp;</b>
+<i>555</i>&nbsp;        // Don&#39;t expect any response for the abandon request.
+<i>556</i>&nbsp;    }
+<i>557</i>&nbsp;
+<i>558</i>&nbsp;    synchronized void abandonOutstandingReqs(Control[] reqCtls) {
+<i>559</i>&nbsp;        LdapRequest ldr = pendingRequests;
+<b class="nc"><i>560</i>&nbsp;</b>
+<b class="nc"><i>561</i>&nbsp;        while (ldr != null) {</b>
+<b class="nc"><i>562</i>&nbsp;            abandonRequest(ldr, reqCtls);</b>
+<i>563</i>&nbsp;            pendingRequests = ldr = ldr.next;
+<b class="nc"><i>564</i>&nbsp;        }</b>
+<b class="nc"><i>565</i>&nbsp;    }</b>
+<i>566</i>&nbsp;
+<b class="nc"><i>567</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////</b>
+<i>568</i>&nbsp;    //
+<b class="nc"><i>569</i>&nbsp;    // Methods to unbind from server and clear up resources when object is</b>
+<b class="nc"><i>570</i>&nbsp;    // destroyed.</b>
+<b class="nc"><i>571</i>&nbsp;    //</b>
+<i>572</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>573</i>&nbsp;
+<b class="nc"><i>574</i>&nbsp;    private void ldapUnbind(Control[] reqCtls) {</b>
+<b class="nc"><i>575</i>&nbsp;</b>
+<b class="nc"><i>576</i>&nbsp;        BerEncoder ber = new BerEncoder(256);</b>
+<b class="nc"><i>577</i>&nbsp;        int unbindMsgId = getMsgId();</b>
+<i>578</i>&nbsp;
+<b class="nc"><i>579</i>&nbsp;        //</b>
+<i>580</i>&nbsp;        // build the unbind request.
+<b class="nc"><i>581</i>&nbsp;        //</b>
+<i>582</i>&nbsp;
+<i>583</i>&nbsp;        try {
+<i>584</i>&nbsp;
+<i>585</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);
+<i>586</i>&nbsp;                ber.encodeInt(unbindMsgId);
+<b class="nc"><i>587</i>&nbsp;                // IMPLICIT TAGS</b>
+<i>588</i>&nbsp;                ber.encodeByte(LdapClient.LDAP_REQ_UNBIND);
+<b class="nc"><i>589</i>&nbsp;                ber.encodeByte(0);</b>
+<b class="nc"><i>590</i>&nbsp;</b>
+<b class="nc"><i>591</i>&nbsp;                if (v3) {</b>
+<i>592</i>&nbsp;                    LdapClient.encodeControls(ber, reqCtls);
+<i>593</i>&nbsp;                }
+<i>594</i>&nbsp;            ber.endSeq();
+<i>595</i>&nbsp;
+<i>596</i>&nbsp;            if (traceFile != null) {
+<i>597</i>&nbsp;                Ber.dumpBER(traceFile, traceTagOut, ber.getBuf(),
+<i>598</i>&nbsp;                    0, ber.getDataLen());
+<i>599</i>&nbsp;            }
+<i>600</i>&nbsp;
+<i>601</i>&nbsp;            synchronized (this) {
+<i>602</i>&nbsp;                outStream.write(ber.getBuf(), 0, ber.getDataLen());
+<i>603</i>&nbsp;                outStream.flush();
+<b class="nc"><i>604</i>&nbsp;            }</b>
+<b class="nc"><i>605</i>&nbsp;</b>
+<i>606</i>&nbsp;        } catch (IOException ex) {
+<i>607</i>&nbsp;            //System.err.println(&quot;ldap.unbind: &quot; + ex);
+<i>608</i>&nbsp;        }
+<i>609</i>&nbsp;
+<i>610</i>&nbsp;        // Don&#39;t expect any response for the unbind request.
+<i>611</i>&nbsp;    }
+<i>612</i>&nbsp;
+<b class="nc"><i>613</i>&nbsp;    /**</b>
+<b class="nc"><i>614</i>&nbsp;     * @param reqCtls Possibly null request controls that accompanies the</b>
+<i>615</i>&nbsp;     *    abandon and unbind LDAP request.
+<b class="nc"><i>616</i>&nbsp;     * @param notifyParent true means to call parent LdapClient back, notifying</b>
+<b class="nc"><i>617</i>&nbsp;     *    it that the connection has been closed; false means not to notify</b>
+<i>618</i>&nbsp;     *    parent. If LdapClient invokes cleanup(), notifyParent should be set to
+<b class="nc"><i>619</i>&nbsp;     *    false because LdapClient already knows that it is closing</b>
+<b class="nc"><i>620</i>&nbsp;     *    the connection. If Connection invokes cleanup(), notifyParent should be</b>
+<i>621</i>&nbsp;     *    set to true because LdapClient needs to know about the closure.
+<b class="nc"><i>622</i>&nbsp;     */</b>
+<i>623</i>&nbsp;    void cleanup(Control[] reqCtls, boolean notifyParent) {
+<b class="nc"><i>624</i>&nbsp;        boolean nparent = false;</b>
+<b class="nc"><i>625</i>&nbsp;</b>
+<b class="nc"><i>626</i>&nbsp;        synchronized (this) {</b>
+<i>627</i>&nbsp;            useable = false;
+<i>628</i>&nbsp;
+<b class="nc"><i>629</i>&nbsp;            if (sock != null) {</b>
+<b class="nc"><i>630</i>&nbsp;                if (debug) {</b>
+<b class="nc"><i>631</i>&nbsp;                    System.err.println(&quot;Connection: closing socket: &quot; + host + &quot;,&quot; + port);</b>
+<b class="nc"><i>632</i>&nbsp;                }</b>
+<i>633</i>&nbsp;                try {
+<b class="nc"><i>634</i>&nbsp;                    if (!notifyParent) {</b>
+<i>635</i>&nbsp;                        abandonOutstandingReqs(reqCtls);
+<b class="nc"><i>636</i>&nbsp;                    }</b>
+<i>637</i>&nbsp;                    if (bound) {
+<i>638</i>&nbsp;                        ldapUnbind(reqCtls);
+<i>639</i>&nbsp;                    }
+<i>640</i>&nbsp;                } finally {
+<i>641</i>&nbsp;                    try {
+<i>642</i>&nbsp;                        outStream.flush();
+<i>643</i>&nbsp;                        sock.close();
+<i>644</i>&nbsp;                        unpauseReader();
+<i>645</i>&nbsp;                    } catch (IOException ie) {
+<i>646</i>&nbsp;                        if (debug)
+<i>647</i>&nbsp;                            System.err.println(&quot;Connection: problem closing socket: &quot; + ie);
+<i>648</i>&nbsp;                    }
+<i>649</i>&nbsp;                    if (!notifyParent) {
+<i>650</i>&nbsp;                        LdapRequest ldr = pendingRequests;
+<i>651</i>&nbsp;                        while (ldr != null) {
+<b class="nc"><i>652</i>&nbsp;                            ldr.cancel();</b>
+<i>653</i>&nbsp;                            ldr = ldr.next;
+<b class="nc"><i>654</i>&nbsp;                        }</b>
+<b class="nc"><i>655</i>&nbsp;                    }</b>
+<i>656</i>&nbsp;                    sock = null;
+<b class="nc"><i>657</i>&nbsp;                }</b>
+<i>658</i>&nbsp;                nparent = notifyParent;
+<i>659</i>&nbsp;            }
+<i>660</i>&nbsp;            if (nparent) {
+<i>661</i>&nbsp;                LdapRequest ldr = pendingRequests;
+<b class="nc"><i>662</i>&nbsp;                while (ldr != null) {</b>
+<b class="nc"><i>663</i>&nbsp;</b>
+<i>664</i>&nbsp;                    synchronized (ldr) {
+<b class="nc"><i>665</i>&nbsp;                        ldr.notify();</b>
+<b class="nc"><i>666</i>&nbsp;                        ldr = ldr.next;</b>
+<i>667</i>&nbsp;                    }
+<i>668</i>&nbsp;                }
+<b class="nc"><i>669</i>&nbsp;            }</b>
+<b class="nc"><i>670</i>&nbsp;        }</b>
+<b class="nc"><i>671</i>&nbsp;        if (nparent) {</b>
+<b class="nc"><i>672</i>&nbsp;            parent.processConnectionClosure();</b>
+<b class="nc"><i>673</i>&nbsp;        }</b>
+<i>674</i>&nbsp;    }
+<i>675</i>&nbsp;
+<b class="nc"><i>676</i>&nbsp;</b>
+<b class="nc"><i>677</i>&nbsp;    // Assume everything is &quot;quiet&quot;</b>
+<b class="nc"><i>678</i>&nbsp;    // &quot;synchronize&quot; might lead to deadlock so don&#39;t synchronize method</b>
+<b class="nc"><i>679</i>&nbsp;    // Use streamLock instead for synchronizing update to stream</b>
+<b class="nc"><i>680</i>&nbsp;</b>
+<b class="nc"><i>681</i>&nbsp;    synchronized public void replaceStreams(InputStream newIn, OutputStream newOut) {</b>
+<i>682</i>&nbsp;        if (debug) {
+<i>683</i>&nbsp;            System.err.println(&quot;Replacing &quot; + inStream + &quot; with: &quot; + newIn);
+<b class="nc"><i>684</i>&nbsp;            System.err.println(&quot;Replacing &quot; + outStream + &quot; with: &quot; + newOut);</b>
+<b class="nc"><i>685</i>&nbsp;        }</b>
+<b class="nc"><i>686</i>&nbsp;</b>
+<i>687</i>&nbsp;        inStream = newIn;
+<b class="nc"><i>688</i>&nbsp;</b>
+<b class="nc"><i>689</i>&nbsp;        // Cleanup old stream</b>
+<b class="nc"><i>690</i>&nbsp;        try {</b>
+<i>691</i>&nbsp;            outStream.flush();
+<b class="nc"><i>692</i>&nbsp;        } catch (IOException ie) {</b>
+<b class="nc"><i>693</i>&nbsp;            if (debug)</b>
+<b class="nc"><i>694</i>&nbsp;                System.err.println(&quot;Connection: cannot flush outstream: &quot; + ie);</b>
+<b class="nc"><i>695</i>&nbsp;        }</b>
+<i>696</i>&nbsp;
+<i>697</i>&nbsp;        // Replace stream
+<b class="nc"><i>698</i>&nbsp;        outStream = newOut;</b>
+<b class="nc"><i>699</i>&nbsp;    }</b>
+<b class="nc"><i>700</i>&nbsp;</b>
+<i>701</i>&nbsp;    /**
+<i>702</i>&nbsp;     * Used by Connection thread to read inStream into a local variable.
+<i>703</i>&nbsp;     * This ensures that there is no contention between the main thread
+<i>704</i>&nbsp;     * and the Connection thread when the main thread updates inStream.
+<i>705</i>&nbsp;     */
+<i>706</i>&nbsp;    synchronized private InputStream getInputStream() {
+<i>707</i>&nbsp;        return inStream;
+<i>708</i>&nbsp;    }
+<i>709</i>&nbsp;
+<i>710</i>&nbsp;
+<i>711</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>712</i>&nbsp;    //
+<i>713</i>&nbsp;    // Code for pausing/unpausing the reader thread (&#39;worker&#39;)
+<i>714</i>&nbsp;    //
+<b class="nc"><i>715</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////</b>
+<i>716</i>&nbsp;
+<i>717</i>&nbsp;    /*
+<i>718</i>&nbsp;     * The main idea is to mark requests that need the reader thread to
+<b class="nc"><i>719</i>&nbsp;     * pause after getting the response. When the reader thread gets the response,</b>
+<b class="nc"><i>720</i>&nbsp;     * it waits on a lock instead of returning to the read(). The next time a</b>
+<i>721</i>&nbsp;     * request is sent, the reader is automatically unblocked if necessary.
+<i>722</i>&nbsp;     * Note that the reader must be unblocked BEFORE the request is sent.
+<b class="nc"><i>723</i>&nbsp;     * Otherwise, there is a race condition where the request is sent and</b>
+<i>724</i>&nbsp;     * the reader thread might read the response and be unblocked
+<i>725</i>&nbsp;     * by writeRequest().
+<b class="nc"><i>726</i>&nbsp;     *</b>
+<i>727</i>&nbsp;     * This pause gives the main thread (StartTLS or SASL) an opportunity to
+<i>728</i>&nbsp;     * update the reader&#39;s state (e.g., its streams) if necessary.
+<i>729</i>&nbsp;     * The assumption is that the connection will remain quiet during this pause
+<i>730</i>&nbsp;     * (i.e., no intervening requests being sent).
+<i>731</i>&nbsp;     *&lt;p&gt;
+<i>732</i>&nbsp;     * For dealing with StartTLS close,
+<i>733</i>&nbsp;     * when the read() exits either due to EOF or an exception,
+<i>734</i>&nbsp;     * the reader thread checks whether there is a new stream to read from.
+<b class="nc"><i>735</i>&nbsp;     * If so, then it reattempts the read. Otherwise, the EOF or exception</b>
+<i>736</i>&nbsp;     * is processed and the reader thread terminates.
+<i>737</i>&nbsp;     * In a StartTLS close, the client first replaces the SSL IO streams with
+<i>738</i>&nbsp;     * plain ones and then closes the SSL socket.
+<i>739</i>&nbsp;     * If the reader thread attempts to read, or was reading, from
+<i>740</i>&nbsp;     * the SSL socket (that is, it got to the read BEFORE replaceStreams()),
+<i>741</i>&nbsp;     * the SSL socket close will cause the reader thread to
+<i>742</i>&nbsp;     * get an EOF/exception and reexamine the input stream.
+<i>743</i>&nbsp;     * If the reader thread sees a new stream, it reattempts the read.
+<i>744</i>&nbsp;     * If the underlying socket is still alive, then the new read will succeed.
+<i>745</i>&nbsp;     * If the underlying socket has been closed also, then the new read will
+<i>746</i>&nbsp;     * fail and the reader thread exits.
+<i>747</i>&nbsp;     * If the reader thread attempts to read, or was reading, from the plain
+<i>748</i>&nbsp;     * socket (that is, it got to the read AFTER replaceStreams()), the
+<i>749</i>&nbsp;     * SSL socket close will have no effect on the reader thread.
+<i>750</i>&nbsp;     *
+<i>751</i>&nbsp;     * The check for new stream is made only
+<i>752</i>&nbsp;     * in the first attempt at reading a BER buffer; the reader should
+<i>753</i>&nbsp;     * never be in midst of reading a buffer when a nonfatal close occurs.
+<i>754</i>&nbsp;     * If this occurs, then the connection is in an inconsistent state and
+<i>755</i>&nbsp;     * the safest thing to do is to shut it down.
+<i>756</i>&nbsp;     */
+<i>757</i>&nbsp;
+<i>758</i>&nbsp;    private Object pauseLock = new Object();  // lock for reader to wait on while paused
+<i>759</i>&nbsp;    private boolean paused = false;           // paused state of reader
+<i>760</i>&nbsp;
+<i>761</i>&nbsp;    /*
+<i>762</i>&nbsp;     * Unpauses reader thread if it was paused
+<i>763</i>&nbsp;     */
+<i>764</i>&nbsp;    private void unpauseReader() throws IOException {
+<i>765</i>&nbsp;        synchronized (pauseLock) {
+<i>766</i>&nbsp;            if (paused) {
+<i>767</i>&nbsp;                if (debug) {
+<i>768</i>&nbsp;                    System.err.println(&quot;Unpausing reader; read from: &quot; +
+<i>769</i>&nbsp;                                        inStream);
+<i>770</i>&nbsp;                }
+<i>771</i>&nbsp;                paused = false;
+<i>772</i>&nbsp;                pauseLock.notify();
+<i>773</i>&nbsp;            }
+<i>774</i>&nbsp;        }
+<i>775</i>&nbsp;    }
+<i>776</i>&nbsp;
+<i>777</i>&nbsp;     /*
+<i>778</i>&nbsp;     * Pauses reader so that it stops reading from the input stream.
+<i>779</i>&nbsp;     * Reader blocks on pauseLock instead of read().
+<i>780</i>&nbsp;     * MUST be called from within synchronized (pauseLock) clause.
+<i>781</i>&nbsp;     */
+<i>782</i>&nbsp;    private void pauseReader() throws IOException {
+<i>783</i>&nbsp;        if (debug) {
+<i>784</i>&nbsp;            System.err.println(&quot;Pausing reader;  was reading from: &quot; +
+<i>785</i>&nbsp;                                inStream);
+<b class="nc"><i>786</i>&nbsp;        }</b>
+<b class="nc"><i>787</i>&nbsp;        paused = true;</b>
+<i>788</i>&nbsp;        try {
+<i>789</i>&nbsp;            while (paused) {
+<i>790</i>&nbsp;                pauseLock.wait(); // notified by unpauseReader
+<i>791</i>&nbsp;            }
+<i>792</i>&nbsp;        } catch (InterruptedException e) {
+<b class="nc"><i>793</i>&nbsp;            throw new InterruptedIOException(</b>
+<b class="nc"><i>794</i>&nbsp;                    &quot;Pause/unpause reader has problems.&quot;);</b>
+<i>795</i>&nbsp;        }
+<i>796</i>&nbsp;    }
+<i>797</i>&nbsp;
+<i>798</i>&nbsp;
+<b class="nc"><i>799</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////</b>
+<b class="nc"><i>800</i>&nbsp;    //</b>
+<i>801</i>&nbsp;    // The LDAP Binding thread. It does the mux/demux of multiple requests
+<b class="nc"><i>802</i>&nbsp;    // on the same TCP connection.</b>
+<i>803</i>&nbsp;    //
+<i>804</i>&nbsp;    ////////////////////////////////////////////////////////////////////////////
+<i>805</i>&nbsp;
+<i>806</i>&nbsp;
+<i>807</i>&nbsp;    public void run() {
+<i>808</i>&nbsp;        byte inbuf[];   // Buffer for reading incoming bytes
+<i>809</i>&nbsp;        int inMsgId;    // Message id of incoming response
+<i>810</i>&nbsp;        int bytesread;  // Number of bytes in inbuf
+<i>811</i>&nbsp;        int br;         // Temp; number of bytes read from stream
+<i>812</i>&nbsp;        int offset;     // Offset of where to store bytes in inbuf
+<i>813</i>&nbsp;        int seqlen;     // Length of ASN sequence
+<i>814</i>&nbsp;        int seqlenlen;  // Number of sequence length bytes
+<b class="nc"><i>815</i>&nbsp;        boolean eos;    // End of stream</b>
+<i>816</i>&nbsp;        BerDecoder retBer;    // Decoder for ASN.1 BER data from inbuf
+<b class="nc"><i>817</i>&nbsp;        InputStream in = null;</b>
+<b class="nc"><i>818</i>&nbsp;</b>
+<i>819</i>&nbsp;        try {
+<b class="nc"><i>820</i>&nbsp;            while (true) {</b>
+<b class="nc"><i>821</i>&nbsp;                try {</b>
+<i>822</i>&nbsp;                    // type and length (at most 128 octets for long form)
+<b class="nc"><i>823</i>&nbsp;                    inbuf = new byte[129];</b>
+<i>824</i>&nbsp;
+<i>825</i>&nbsp;                    offset = 0;
+<i>826</i>&nbsp;                    seqlen = 0;
+<i>827</i>&nbsp;                    seqlenlen = 0;
+<i>828</i>&nbsp;
+<i>829</i>&nbsp;                    in = getInputStream();
+<i>830</i>&nbsp;
+<i>831</i>&nbsp;                    // check that it is the beginning of a sequence
+<i>832</i>&nbsp;                    bytesread = in.read(inbuf, offset, 1);
+<i>833</i>&nbsp;                    if (bytesread &lt; 0) {
+<i>834</i>&nbsp;                        if (in != getInputStream()) {
+<i>835</i>&nbsp;                            continue;   // a new stream to try
+<i>836</i>&nbsp;                        } else {
+<i>837</i>&nbsp;                            break; // EOF
+<i>838</i>&nbsp;                        }
+<i>839</i>&nbsp;                    }
+<i>840</i>&nbsp;
+<i>841</i>&nbsp;                    if (inbuf[offset++] != (Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR))
+<i>842</i>&nbsp;                        continue;
+<i>843</i>&nbsp;
+<i>844</i>&nbsp;                    // get length of sequence
+<b class="nc"><i>845</i>&nbsp;                    bytesread = in.read(inbuf, offset, 1);</b>
+<i>846</i>&nbsp;                    if (bytesread &lt; 0)
+<i>847</i>&nbsp;                        break; // EOF
+<i>848</i>&nbsp;                    seqlen = inbuf[offset++];
+<i>849</i>&nbsp;
+<i>850</i>&nbsp;                    // if high bit is on, length is encoded in the
+<b class="nc"><i>851</i>&nbsp;                    // subsequent length bytes and the number of length bytes</b>
+<i>852</i>&nbsp;                    // is equal to &amp; 0x80 (i.e. length byte with high bit off).
+<b class="nc"><i>853</i>&nbsp;                    if ((seqlen &amp; 0x80) == 0x80) {</b>
+<b class="nc"><i>854</i>&nbsp;                        seqlenlen = seqlen &amp; 0x7f;  // number of length bytes</b>
+<b class="nc"><i>855</i>&nbsp;</b>
+<i>856</i>&nbsp;                        bytesread = 0;
+<b class="nc"><i>857</i>&nbsp;                        eos = false;</b>
+<i>858</i>&nbsp;
+<i>859</i>&nbsp;                        // Read all length bytes
+<b class="nc"><i>860</i>&nbsp;                        while (bytesread &lt; seqlenlen) {</b>
+<b class="nc"><i>861</i>&nbsp;                            br = in.read(inbuf, offset+bytesread,</b>
+<b class="nc"><i>862</i>&nbsp;                                seqlenlen-bytesread);</b>
+<b class="nc"><i>863</i>&nbsp;                            if (br &lt; 0) {</b>
+<i>864</i>&nbsp;                                eos = true;
+<b class="nc"><i>865</i>&nbsp;                                break; // EOF</b>
+<i>866</i>&nbsp;                            }
+<i>867</i>&nbsp;                            bytesread += br;
+<i>868</i>&nbsp;                        }
+<b class="nc"><i>869</i>&nbsp;</b>
+<b class="nc"><i>870</i>&nbsp;                        // end-of-stream reached before length bytes are read</b>
+<i>871</i>&nbsp;                        if (eos)
+<i>872</i>&nbsp;                            break;  // EOF
+<b class="nc"><i>873</i>&nbsp;</b>
+<b class="nc"><i>874</i>&nbsp;                        // Add contents of length bytes to determine length</b>
+<b class="nc"><i>875</i>&nbsp;                        seqlen = 0;</b>
+<b class="nc"><i>876</i>&nbsp;                        for( int i = 0; i &lt; seqlenlen; i++) {</b>
+<i>877</i>&nbsp;                            seqlen = (seqlen &lt;&lt; 8) + (inbuf[offset+i] &amp; 0xff);
+<i>878</i>&nbsp;                        }
+<i>879</i>&nbsp;                        offset += bytesread;
+<i>880</i>&nbsp;                    }
+<b class="nc"><i>881</i>&nbsp;</b>
+<b class="nc"><i>882</i>&nbsp;                    // read in seqlen bytes</b>
+<i>883</i>&nbsp;                    byte[] left = readFully(in, seqlen);
+<b class="nc"><i>884</i>&nbsp;                    inbuf = Arrays.copyOf(inbuf, offset + left.length);</b>
+<b class="nc"><i>885</i>&nbsp;                    System.arraycopy(left, 0, inbuf, offset, left.length);</b>
+<i>886</i>&nbsp;                    offset += left.length;
+<i>887</i>&nbsp;/*
+<b class="nc"><i>888</i>&nbsp;if (dump &gt; 0) {</b>
+<b class="nc"><i>889</i>&nbsp;System.err.println(&quot;seqlen: &quot; + seqlen);</b>
+<i>890</i>&nbsp;System.err.println(&quot;bufsize: &quot; + offset);
+<b class="nc"><i>891</i>&nbsp;System.err.println(&quot;bytesleft: &quot; + bytesleft);</b>
+<b class="nc"><i>892</i>&nbsp;System.err.println(&quot;bytesread: &quot; + bytesread);</b>
+<b class="nc"><i>893</i>&nbsp;}</b>
+<i>894</i>&nbsp;*/
+<b class="nc"><i>895</i>&nbsp;</b>
+<i>896</i>&nbsp;
+<i>897</i>&nbsp;                    try {
+<i>898</i>&nbsp;                        retBer = new BerDecoder(inbuf, 0, offset);
+<b class="nc"><i>899</i>&nbsp;</b>
+<b class="nc"><i>900</i>&nbsp;                        if (traceFile != null) {</b>
+<i>901</i>&nbsp;                            Ber.dumpBER(traceFile, traceTagIn, inbuf, 0, offset);
+<i>902</i>&nbsp;                        }
+<b class="nc"><i>903</i>&nbsp;</b>
+<b class="nc"><i>904</i>&nbsp;                        retBer.parseSeq(null);</b>
+<b class="nc"><i>905</i>&nbsp;                        inMsgId = retBer.parseInt();</b>
+<i>906</i>&nbsp;                        retBer.reset(); // reset offset
+<b class="nc"><i>907</i>&nbsp;</b>
+<i>908</i>&nbsp;                        boolean needPause = false;
+<i>909</i>&nbsp;
+<i>910</i>&nbsp;                        if (inMsgId == 0) {
+<b class="nc"><i>911</i>&nbsp;                            // Unsolicited Notification</b>
+<b class="nc"><i>912</i>&nbsp;                            parent.processUnsolicited(retBer);</b>
+<b class="nc"><i>913</i>&nbsp;                        } else {</b>
+<b class="nc"><i>914</i>&nbsp;                            LdapRequest ldr = findRequest(inMsgId);</b>
+<i>915</i>&nbsp;
+<i>916</i>&nbsp;                            if (ldr != null) {
+<i>917</i>&nbsp;
+<i>918</i>&nbsp;                                /**
+<i>919</i>&nbsp;                                 * Grab pauseLock before making reply available
+<i>920</i>&nbsp;                                 * to ensure that reader goes into paused state
+<i>921</i>&nbsp;                                 * before writer can attempt to unpause reader
+<i>922</i>&nbsp;                                 */
+<i>923</i>&nbsp;                                synchronized (pauseLock) {
+<i>924</i>&nbsp;                                    needPause = ldr.addReplyBer(retBer);
+<i>925</i>&nbsp;                                    if (needPause) {
+<b class="nc"><i>926</i>&nbsp;                                        /*</b>
+<i>927</i>&nbsp;                                         * Go into paused state; release
+<b class="nc"><i>928</i>&nbsp;                                         * pauseLock</b>
+<b class="nc"><i>929</i>&nbsp;                                         */</b>
+<i>930</i>&nbsp;                                        pauseReader();
+<i>931</i>&nbsp;                                    }
+<b class="nc"><i>932</i>&nbsp;</b>
+<b class="nc"><i>933</i>&nbsp;                                    // else release pauseLock</b>
+<b class="nc"><i>934</i>&nbsp;                                }</b>
+<i>935</i>&nbsp;                            } else {
+<b class="nc"><i>936</i>&nbsp;                                // System.err.println(&quot;Cannot find&quot; +</b>
+<i>937</i>&nbsp;                                //              &quot;LdapRequest for &quot; + inMsgId);
+<b class="nc"><i>938</i>&nbsp;                            }</b>
+<i>939</i>&nbsp;                        }
+<b class="nc"><i>940</i>&nbsp;                    } catch (Ber.DecodeException e) {</b>
+<i>941</i>&nbsp;                        //System.err.println(&quot;Cannot parse Ber&quot;);
+<b class="nc"><i>942</i>&nbsp;                    }</b>
+<i>943</i>&nbsp;                } catch (IOException ie) {
+<b class="nc"><i>944</i>&nbsp;                    if (debug) {</b>
+<i>945</i>&nbsp;                        System.err.println(&quot;Connection: Inside Caught &quot; + ie);
+<i>946</i>&nbsp;                        ie.printStackTrace();
+<i>947</i>&nbsp;                    }
+<i>948</i>&nbsp;
+<i>949</i>&nbsp;                    if (in != getInputStream()) {
+<i>950</i>&nbsp;                        // A new stream to try
+<b class="nc"><i>951</i>&nbsp;                        // Go to top of loop and continue</b>
+<b class="nc"><i>952</i>&nbsp;                    } else {</b>
+<b class="nc"><i>953</i>&nbsp;                        if (debug) {</b>
+<i>954</i>&nbsp;                            System.err.println(&quot;Connection: rethrowing &quot; + ie);
+<i>955</i>&nbsp;                        }
+<i>956</i>&nbsp;                        throw ie;  // rethrow exception
+<i>957</i>&nbsp;                    }
+<b class="nc"><i>958</i>&nbsp;                }</b>
+<i>959</i>&nbsp;            }
+<i>960</i>&nbsp;
+<i>961</i>&nbsp;            if (debug) {
+<b class="nc"><i>962</i>&nbsp;                System.err.println(&quot;Connection: end-of-stream detected: &quot;</b>
+<i>963</i>&nbsp;                    + in);
+<i>964</i>&nbsp;            }
+<i>965</i>&nbsp;        } catch (IOException ex) {
+<i>966</i>&nbsp;            if (debug) {
+<i>967</i>&nbsp;                System.err.println(&quot;Connection: Caught &quot; + ex);
+<b class="nc"><i>968</i>&nbsp;            }</b>
+<i>969</i>&nbsp;            closureReason = ex;
+<b class="nc"><i>970</i>&nbsp;        } finally {</b>
+<b class="nc"><i>971</i>&nbsp;            cleanup(null, true); // cleanup</b>
+<i>972</i>&nbsp;        }
+<i>973</i>&nbsp;        if (debug) {
+<i>974</i>&nbsp;            System.err.println(&quot;Connection: Thread Exiting&quot;);
+<i>975</i>&nbsp;        }
+<i>976</i>&nbsp;    }
+<b class="nc"><i>977</i>&nbsp;</b>
+<i>978</i>&nbsp;    private static byte[] readFully(InputStream is, int length)
+<i>979</i>&nbsp;        throws IOException
+<i>980</i>&nbsp;    {
+<i>981</i>&nbsp;        byte[] buf = new byte[Math.min(length, 8192)];
+<i>982</i>&nbsp;        int nread = 0;
+<i>983</i>&nbsp;        while (nread &lt; length) {
+<b class="nc"><i>984</i>&nbsp;            int bytesToRead;</b>
+<i>985</i>&nbsp;            if (nread &gt;= buf.length) {  // need to allocate a larger buffer
+<b class="nc"><i>986</i>&nbsp;                bytesToRead = Math.min(length - nread, buf.length + 8192);</b>
+<i>987</i>&nbsp;                if (buf.length &lt; nread + bytesToRead) {
+<i>988</i>&nbsp;                    buf = Arrays.copyOf(buf, nread + bytesToRead);
+<i>989</i>&nbsp;                }
+<i>990</i>&nbsp;            } else {
+<i>991</i>&nbsp;                bytesToRead = buf.length - nread;
+<i>992</i>&nbsp;            }
+<b class="nc"><i>993</i>&nbsp;            int count = is.read(buf, nread, bytesToRead);</b>
+<i>994</i>&nbsp;            if (count &lt; 0) {
+<i>995</i>&nbsp;                if (buf.length != nread)
+<i>996</i>&nbsp;                    buf = Arrays.copyOf(buf, nread);
+<b class="nc"><i>997</i>&nbsp;                break;</b>
+<i>998</i>&nbsp;            }
+<b class="nc"><i>999</i>&nbsp;            nread += count;</b>
+<b class="nc"><i>1000</i>&nbsp;        }</b>
+<i>1001</i>&nbsp;        return buf;
+<i>1002</i>&nbsp;    }
+<i>1003</i>&nbsp;
+<i>1004</i>&nbsp;    // This code must be uncommented to run the LdapAbandonTest.
+<i>1005</i>&nbsp;    /*public void sendSearchReqs(String dn, int numReqs) {
+<i>1006</i>&nbsp;        int i;
+<i>1007</i>&nbsp;        String attrs[] = null;
+<i>1008</i>&nbsp;        for(i = 1; i &lt;= numReqs; i++) {
+<i>1009</i>&nbsp;            BerEncoder ber = new BerEncoder(2048);
+<i>1010</i>&nbsp;
+<i>1011</i>&nbsp;            try {
+<i>1012</i>&nbsp;            ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);
+<i>1013</i>&nbsp;                ber.encodeInt(i);
+<i>1014</i>&nbsp;                ber.beginSeq(LdapClient.LDAP_REQ_SEARCH);
+<i>1015</i>&nbsp;                    ber.encodeString(dn == null ? &quot;&quot; : dn);
+<i>1016</i>&nbsp;                    ber.encodeInt(0, LdapClient.LBER_ENUMERATED);
+<i>1017</i>&nbsp;                    ber.encodeInt(3, LdapClient.LBER_ENUMERATED);
+<i>1018</i>&nbsp;                    ber.encodeInt(0);
+<i>1019</i>&nbsp;                    ber.encodeInt(0);
+<i>1020</i>&nbsp;                    ber.encodeBoolean(true);
+<i>1021</i>&nbsp;                    LdapClient.encodeFilter(ber, &quot;&quot;);
+<i>1022</i>&nbsp;                    ber.beginSeq(Ber.ASN_SEQUENCE | Ber.ASN_CONSTRUCTOR);
+<i>1023</i>&nbsp;                        ber.encodeStringArray(attrs);
+<i>1024</i>&nbsp;                    ber.endSeq();
+<i>1025</i>&nbsp;                ber.endSeq();
+<i>1026</i>&nbsp;            ber.endSeq();
+<i>1027</i>&nbsp;            writeRequest(ber, i);
+<i>1028</i>&nbsp;            //System.err.println(&quot;wrote request &quot; + i);
+<i>1029</i>&nbsp;            } catch (Exception ex) {
+<i>1030</i>&nbsp;            //System.err.println(&quot;ldap.search: Caught &quot; + ex + &quot; building req&quot;);
+<i>1031</i>&nbsp;            }
+<i>1032</i>&nbsp;
+<i>1033</i>&nbsp;        }
+<i>1034</i>&nbsp;    } */
+<i>1035</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:14</div>
+</div>
+</body>
+</html>

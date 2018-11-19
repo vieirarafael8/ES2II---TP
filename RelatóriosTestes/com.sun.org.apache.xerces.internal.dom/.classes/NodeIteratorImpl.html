@@ -1,0 +1,458 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: NodeIteratorImpl</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.org.apache.xerces.internal.dom</a> ]
+</div>
+
+<h1>Coverage Summary for Class: NodeIteratorImpl (com.sun.org.apache.xerces.internal.dom)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">NodeIteratorImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 97)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; */
+<i>5</i>&nbsp;/*
+<i>6</i>&nbsp; * Licensed to the Apache Software Foundation (ASF) under one or more
+<i>7</i>&nbsp; * contributor license agreements.  See the NOTICE file distributed with
+<i>8</i>&nbsp; * this work for additional information regarding copyright ownership.
+<i>9</i>&nbsp; * The ASF licenses this file to You under the Apache License, Version 2.0
+<i>10</i>&nbsp; * (the &quot;License&quot;); you may not use this file except in compliance with
+<i>11</i>&nbsp; * the License.  You may obtain a copy of the License at
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *      http://www.apache.org/licenses/LICENSE-2.0
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; * Unless required by applicable law or agreed to in writing, software
+<i>16</i>&nbsp; * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+<i>17</i>&nbsp; * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+<i>18</i>&nbsp; * See the License for the specific language governing permissions and
+<i>19</i>&nbsp; * limitations under the License.
+<i>20</i>&nbsp; */
+<i>21</i>&nbsp;
+<i>22</i>&nbsp;package com.sun.org.apache.xerces.internal.dom;
+<i>23</i>&nbsp;
+<i>24</i>&nbsp;import org.w3c.dom.DOMException;
+<i>25</i>&nbsp;import org.w3c.dom.Node;
+<i>26</i>&nbsp;import org.w3c.dom.traversal.NodeFilter;
+<i>27</i>&nbsp;import org.w3c.dom.traversal.NodeIterator;
+<i>28</i>&nbsp;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;/** DefaultNodeIterator implements a NodeIterator, which iterates a
+<i>31</i>&nbsp; *  DOM tree in the expected depth first way.
+<i>32</i>&nbsp; *
+<i>33</i>&nbsp; *  &lt;p&gt;The whatToShow and filter functionality is implemented as expected.
+<i>34</i>&nbsp; *
+<i>35</i>&nbsp; *  &lt;p&gt;This class also has method removeNode to enable iterator &quot;fix-up&quot;
+<i>36</i>&nbsp; *  on DOM remove. It is expected that the DOM implementation call removeNode
+<i>37</i>&nbsp; *  right before the actual DOM transformation. If not called by the DOM,
+<i>38</i>&nbsp; *  the client could call it before doing the removal.
+<i>39</i>&nbsp; *
+<i>40</i>&nbsp; * @xerces.internal
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; */
+<i>43</i>&nbsp;public class NodeIteratorImpl implements NodeIterator {
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;    //
+<i>46</i>&nbsp;    // Data
+<i>47</i>&nbsp;    //
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;    /** The DocumentImpl which created this iterator, so it can be detached. */
+<i>50</i>&nbsp;    private DocumentImpl fDocument;
+<i>51</i>&nbsp;    /** The root. */
+<i>52</i>&nbsp;    private Node fRoot;
+<b class="nc"><i>53</i>&nbsp;    /** The whatToShow mask. */</b>
+<i>54</i>&nbsp;    private int fWhatToShow = NodeFilter.SHOW_ALL;
+<i>55</i>&nbsp;    /** The NodeFilter reference. */
+<i>56</i>&nbsp;    private NodeFilter fNodeFilter;
+<b class="nc"><i>57</i>&nbsp;    /** If detach is called, the fDetach flag is true, otherwise flase. */</b>
+<i>58</i>&nbsp;    private boolean fDetach = false;
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    //
+<i>61</i>&nbsp;    // Iterator state - current node and direction.
+<i>62</i>&nbsp;    //
+<i>63</i>&nbsp;    // Note: The current node and direction are sufficient to implement
+<i>64</i>&nbsp;    // the desired behaviour of the current pointer being _between_
+<i>65</i>&nbsp;    // two nodes. The fCurrentNode is actually the last node returned,
+<i>66</i>&nbsp;    // and the
+<i>67</i>&nbsp;    // direction is whether the pointer is in front or behind this node.
+<i>68</i>&nbsp;    // (usually akin to whether the node was returned via nextNode())
+<i>69</i>&nbsp;    // (eg fForward = true) or previousNode() (eg fForward = false).
+<i>70</i>&nbsp;    // Note also, if removing a Node, the fCurrentNode
+<i>71</i>&nbsp;    // can be placed on a Node which would not pass filters.
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;    /** The last Node returned. */
+<i>74</i>&nbsp;    private Node fCurrentNode;
+<i>75</i>&nbsp;
+<i>76</i>&nbsp;    /** The direction of the iterator on the fCurrentNode.
+<i>77</i>&nbsp;     *  &lt;pre&gt;
+<i>78</i>&nbsp;     *  nextNode()  ==      fForward = true;
+<i>79</i>&nbsp;     *  previousNode() ==   fForward = false;
+<i>80</i>&nbsp;     *  &lt;/pre&gt;
+<b class="nc"><i>81</i>&nbsp;     */</b>
+<i>82</i>&nbsp;    private boolean fForward = true;
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;    /** When TRUE, the children of entites references are returned in the iterator. */
+<i>85</i>&nbsp;    private boolean fEntityReferenceExpansion;
+<i>86</i>&nbsp;
+<i>87</i>&nbsp;    //
+<i>88</i>&nbsp;    // Constructor
+<i>89</i>&nbsp;    //
+<i>90</i>&nbsp;
+<i>91</i>&nbsp;    /** Public constructor */
+<i>92</i>&nbsp;    public NodeIteratorImpl( DocumentImpl document,
+<i>93</i>&nbsp;                             Node root,
+<i>94</i>&nbsp;                             int whatToShow,
+<b class="nc"><i>95</i>&nbsp;                             NodeFilter nodeFilter,</b>
+<b class="nc"><i>96</i>&nbsp;                             boolean entityReferenceExpansion) {</b>
+<b class="nc"><i>97</i>&nbsp;        fDocument = document;</b>
+<b class="nc"><i>98</i>&nbsp;        fRoot = root;</b>
+<b class="nc"><i>99</i>&nbsp;        fCurrentNode = null;</b>
+<b class="nc"><i>100</i>&nbsp;        fWhatToShow = whatToShow;</b>
+<b class="nc"><i>101</i>&nbsp;        fNodeFilter = nodeFilter;</b>
+<i>102</i>&nbsp;        fEntityReferenceExpansion = entityReferenceExpansion;
+<i>103</i>&nbsp;    }
+<i>104</i>&nbsp;
+<b class="nc"><i>105</i>&nbsp;    public Node getRoot() {</b>
+<i>106</i>&nbsp;        return fRoot;
+<i>107</i>&nbsp;    }
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    // Implementation Note: Note that the iterator looks at whatToShow
+<i>110</i>&nbsp;    // and filter values at each call, and therefore one _could_ add
+<i>111</i>&nbsp;    // setters for these values and alter them while iterating!
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;    /** Return the whatToShow value */
+<b class="nc"><i>114</i>&nbsp;    public int                getWhatToShow() {</b>
+<i>115</i>&nbsp;        return fWhatToShow;
+<i>116</i>&nbsp;    }
+<i>117</i>&nbsp;
+<i>118</i>&nbsp;    /** Return the filter */
+<b class="nc"><i>119</i>&nbsp;    public NodeFilter         getFilter() {</b>
+<i>120</i>&nbsp;        return fNodeFilter;
+<i>121</i>&nbsp;    }
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;    /** Return whether children entity references are included in the iterator. */
+<b class="nc"><i>124</i>&nbsp;    public boolean            getExpandEntityReferences() {</b>
+<i>125</i>&nbsp;        return fEntityReferenceExpansion;
+<i>126</i>&nbsp;    }
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;    /** Return the next Node in the Iterator. The node is the next node in
+<i>129</i>&nbsp;     *  depth-first order which also passes the filter, and whatToShow.
+<i>130</i>&nbsp;     *  If there is no next node which passes these criteria, then return null.
+<i>131</i>&nbsp;     */
+<i>132</i>&nbsp;    public Node               nextNode() {
+<b class="nc"><i>133</i>&nbsp;</b>
+<b class="nc"><i>134</i>&nbsp;        if( fDetach) {</b>
+<i>135</i>&nbsp;                throw new DOMException(
+<b class="nc"><i>136</i>&nbsp;                DOMException.INVALID_STATE_ERR,</b>
+<i>137</i>&nbsp;                DOMMessageFormatter.formatMessage(DOMMessageFormatter.DOM_DOMAIN, &quot;INVALID_STATE_ERR&quot;, null));
+<i>138</i>&nbsp;        }
+<i>139</i>&nbsp;
+<b class="nc"><i>140</i>&nbsp;        // if root is null there is no next node.</b>
+<i>141</i>&nbsp;        if (fRoot == null) return null;
+<b class="nc"><i>142</i>&nbsp;</b>
+<b class="nc"><i>143</i>&nbsp;        Node nextNode = fCurrentNode;</b>
+<i>144</i>&nbsp;        boolean accepted = false; // the next node has not been accepted.
+<i>145</i>&nbsp;
+<b class="nc"><i>146</i>&nbsp;        accepted_loop:</b>
+<i>147</i>&nbsp;        while (!accepted) {
+<i>148</i>&nbsp;
+<b class="nc"><i>149</i>&nbsp;            // if last direction is not forward, repeat node.</b>
+<i>150</i>&nbsp;            if (!fForward &amp;&amp; nextNode!=null) {
+<b class="nc"><i>151</i>&nbsp;                //System.out.println(&quot;nextNode():!fForward:&quot;+fCurrentNode.getNodeName());</b>
+<i>152</i>&nbsp;                nextNode = fCurrentNode;
+<i>153</i>&nbsp;            } else {
+<b class="nc"><i>154</i>&nbsp;            // else get the next node via depth-first</b>
+<i>155</i>&nbsp;                if (!fEntityReferenceExpansion
+<b class="nc"><i>156</i>&nbsp;                    &amp;&amp; nextNode != null</b>
+<b class="nc"><i>157</i>&nbsp;                    &amp;&amp; nextNode.getNodeType() == Node.ENTITY_REFERENCE_NODE) {</b>
+<i>158</i>&nbsp;                    nextNode = nextNode(nextNode, false);
+<b class="nc"><i>159</i>&nbsp;                } else {</b>
+<i>160</i>&nbsp;                    nextNode = nextNode(nextNode, true);
+<i>161</i>&nbsp;                }
+<i>162</i>&nbsp;            }
+<b class="nc"><i>163</i>&nbsp;</b>
+<i>164</i>&nbsp;            fForward = true; //REVIST: should direction be set forward before null check?
+<i>165</i>&nbsp;
+<b class="nc"><i>166</i>&nbsp;            // nothing in the list. return null.</b>
+<i>167</i>&nbsp;            if (nextNode == null) return null;
+<i>168</i>&nbsp;
+<b class="nc"><i>169</i>&nbsp;            // does node pass the filters and whatToShow?</b>
+<b class="nc"><i>170</i>&nbsp;            accepted = acceptNode(nextNode);</b>
+<i>171</i>&nbsp;            if (accepted) {
+<b class="nc"><i>172</i>&nbsp;                // if so, then the node is the current node.</b>
+<b class="nc"><i>173</i>&nbsp;                fCurrentNode = nextNode;</b>
+<i>174</i>&nbsp;                return fCurrentNode;
+<i>175</i>&nbsp;            } else
+<i>176</i>&nbsp;                continue accepted_loop;
+<i>177</i>&nbsp;
+<i>178</i>&nbsp;        } // while (!accepted) {
+<i>179</i>&nbsp;
+<b class="nc"><i>180</i>&nbsp;        // no nodes, or no accepted nodes.</b>
+<i>181</i>&nbsp;        return null;
+<i>182</i>&nbsp;
+<i>183</i>&nbsp;    }
+<i>184</i>&nbsp;
+<i>185</i>&nbsp;    /** Return the previous Node in the Iterator. The node is the next node in
+<i>186</i>&nbsp;     *  _backwards_ depth-first order which also passes the filter, and whatToShow.
+<i>187</i>&nbsp;     */
+<i>188</i>&nbsp;    public Node               previousNode() {
+<b class="nc"><i>189</i>&nbsp;</b>
+<b class="nc"><i>190</i>&nbsp;        if( fDetach) {</b>
+<i>191</i>&nbsp;                throw new DOMException(
+<b class="nc"><i>192</i>&nbsp;                DOMException.INVALID_STATE_ERR,</b>
+<i>193</i>&nbsp;                DOMMessageFormatter.formatMessage(DOMMessageFormatter.DOM_DOMAIN, &quot;INVALID_STATE_ERR&quot;, null));
+<i>194</i>&nbsp;        }
+<i>195</i>&nbsp;
+<b class="nc"><i>196</i>&nbsp;        // if the root is null, or the current node is null, return null.</b>
+<i>197</i>&nbsp;        if (fRoot == null || fCurrentNode == null) return null;
+<b class="nc"><i>198</i>&nbsp;</b>
+<b class="nc"><i>199</i>&nbsp;        Node previousNode = fCurrentNode;</b>
+<i>200</i>&nbsp;        boolean accepted = false;
+<i>201</i>&nbsp;
+<b class="nc"><i>202</i>&nbsp;        accepted_loop:</b>
+<i>203</i>&nbsp;        while (!accepted) {
+<b class="nc"><i>204</i>&nbsp;</b>
+<i>205</i>&nbsp;            if (fForward &amp;&amp; previousNode != null) {
+<b class="nc"><i>206</i>&nbsp;                //repeat last node.</b>
+<i>207</i>&nbsp;                previousNode = fCurrentNode;
+<i>208</i>&nbsp;            } else {
+<b class="nc"><i>209</i>&nbsp;                // get previous node in backwards depth first order.</b>
+<i>210</i>&nbsp;                previousNode = previousNode(previousNode);
+<i>211</i>&nbsp;            }
+<i>212</i>&nbsp;
+<b class="nc"><i>213</i>&nbsp;            // we are going backwards</b>
+<i>214</i>&nbsp;            fForward = false;
+<i>215</i>&nbsp;
+<i>216</i>&nbsp;            // if the new previous node is null, we&#39;re at head or past the root,
+<b class="nc"><i>217</i>&nbsp;            // so return null.</b>
+<i>218</i>&nbsp;            if (previousNode == null) return null;
+<i>219</i>&nbsp;
+<b class="nc"><i>220</i>&nbsp;            // check if node passes filters and whatToShow.</b>
+<b class="nc"><i>221</i>&nbsp;            accepted = acceptNode(previousNode);</b>
+<i>222</i>&nbsp;            if (accepted) {
+<b class="nc"><i>223</i>&nbsp;                // if accepted, update the current node, and return it.</b>
+<b class="nc"><i>224</i>&nbsp;                fCurrentNode = previousNode;</b>
+<i>225</i>&nbsp;                return fCurrentNode;
+<i>226</i>&nbsp;            } else
+<i>227</i>&nbsp;                continue accepted_loop;
+<i>228</i>&nbsp;        }
+<b class="nc"><i>229</i>&nbsp;        // there are no nodes?</b>
+<i>230</i>&nbsp;        return null;
+<i>231</i>&nbsp;    }
+<i>232</i>&nbsp;
+<i>233</i>&nbsp;    /** The node is accepted if it passes the whatToShow and the filter. */
+<i>234</i>&nbsp;    boolean acceptNode(Node node) {
+<b class="nc"><i>235</i>&nbsp;</b>
+<b class="nc"><i>236</i>&nbsp;        if (fNodeFilter == null) {</b>
+<i>237</i>&nbsp;            return ( fWhatToShow &amp; (1 &lt;&lt; node.getNodeType()-1)) != 0 ;
+<b class="nc"><i>238</i>&nbsp;        } else {</b>
+<b class="nc"><i>239</i>&nbsp;            return ((fWhatToShow &amp; (1 &lt;&lt; node.getNodeType()-1)) != 0 )</b>
+<i>240</i>&nbsp;                &amp;&amp; fNodeFilter.acceptNode(node) == NodeFilter.FILTER_ACCEPT;
+<i>241</i>&nbsp;        }
+<i>242</i>&nbsp;    }
+<i>243</i>&nbsp;
+<i>244</i>&nbsp;    /** Return node, if matches or any parent if matches. */
+<i>245</i>&nbsp;    Node matchNodeOrParent(Node node) {
+<i>246</i>&nbsp;        // Additions and removals in the underlying data structure may occur
+<b class="nc"><i>247</i>&nbsp;        // before any iterations, and in this case the reference_node is null.</b>
+<i>248</i>&nbsp;        if (fCurrentNode == null) return null;
+<i>249</i>&nbsp;
+<i>250</i>&nbsp;        // check if the removed node is an _ancestor_ of the
+<b class="nc"><i>251</i>&nbsp;        // reference node</b>
+<b class="nc"><i>252</i>&nbsp;        for (Node n = fCurrentNode; n != fRoot; n = n.getParentNode()) {</b>
+<i>253</i>&nbsp;            if (node == n) return n;
+<b class="nc"><i>254</i>&nbsp;        }</b>
+<i>255</i>&nbsp;        return null;
+<i>256</i>&nbsp;    }
+<i>257</i>&nbsp;
+<i>258</i>&nbsp;    /** The method nextNode(Node, boolean) returns the next node
+<i>259</i>&nbsp;     *  from the actual DOM tree.
+<i>260</i>&nbsp;     *
+<i>261</i>&nbsp;     *  The boolean visitChildren determines whether to visit the children.
+<i>262</i>&nbsp;     *  The result is the nextNode.
+<i>263</i>&nbsp;     */
+<i>264</i>&nbsp;    Node nextNode(Node node, boolean visitChildren) {
+<b class="nc"><i>265</i>&nbsp;</b>
+<i>266</i>&nbsp;        if (node == null) return fRoot;
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;        Node result;
+<b class="nc"><i>269</i>&nbsp;        // only check children if we visit children.</b>
+<i>270</i>&nbsp;        if (visitChildren) {
+<b class="nc"><i>271</i>&nbsp;            //if hasChildren, return 1st child.</b>
+<b class="nc"><i>272</i>&nbsp;            if (node.hasChildNodes()) {</b>
+<b class="nc"><i>273</i>&nbsp;                result = node.getFirstChild();</b>
+<i>274</i>&nbsp;                return result;
+<i>275</i>&nbsp;            }
+<i>276</i>&nbsp;        }
+<b class="nc"><i>277</i>&nbsp;</b>
+<b class="nc"><i>278</i>&nbsp;        if (node == fRoot) { //if Root has no kids</b>
+<i>279</i>&nbsp;            return null;
+<i>280</i>&nbsp;        }
+<i>281</i>&nbsp;
+<b class="nc"><i>282</i>&nbsp;        // if hasSibling, return sibling</b>
+<b class="nc"><i>283</i>&nbsp;        result = node.getNextSibling();</b>
+<i>284</i>&nbsp;        if (result != null) return result;
+<i>285</i>&nbsp;
+<i>286</i>&nbsp;
+<b class="nc"><i>287</i>&nbsp;        // return parent&#39;s 1st sibling.</b>
+<b class="nc"><i>288</i>&nbsp;        Node parent = node.getParentNode();</b>
+<b class="nc"><i>289</i>&nbsp;        while (parent != null &amp;&amp; parent != fRoot) {</b>
+<b class="nc"><i>290</i>&nbsp;            result = parent.getNextSibling();</b>
+<b class="nc"><i>291</i>&nbsp;            if (result != null) {</b>
+<i>292</i>&nbsp;                return result;
+<b class="nc"><i>293</i>&nbsp;            } else {</b>
+<i>294</i>&nbsp;                parent = parent.getParentNode();
+<i>295</i>&nbsp;            }
+<i>296</i>&nbsp;
+<i>297</i>&nbsp;        } // while (parent != null &amp;&amp; parent != fRoot) {
+<i>298</i>&nbsp;
+<b class="nc"><i>299</i>&nbsp;        // end of list, return null</b>
+<i>300</i>&nbsp;        return null;
+<i>301</i>&nbsp;    }
+<i>302</i>&nbsp;
+<i>303</i>&nbsp;    /** The method previousNode(Node) returns the previous node
+<i>304</i>&nbsp;     *  from the actual DOM tree.
+<i>305</i>&nbsp;     */
+<i>306</i>&nbsp;    Node previousNode(Node node) {
+<i>307</i>&nbsp;
+<i>308</i>&nbsp;        Node result;
+<i>309</i>&nbsp;
+<b class="nc"><i>310</i>&nbsp;        // if we&#39;re at the root, return null.</b>
+<i>311</i>&nbsp;        if (node == fRoot) return null;
+<i>312</i>&nbsp;
+<b class="nc"><i>313</i>&nbsp;        // get sibling</b>
+<b class="nc"><i>314</i>&nbsp;        result = node.getPreviousSibling();</b>
+<i>315</i>&nbsp;        if (result == null) {
+<b class="nc"><i>316</i>&nbsp;            //if 1st sibling, return parent</b>
+<b class="nc"><i>317</i>&nbsp;            result = node.getParentNode();</b>
+<i>318</i>&nbsp;            return result;
+<i>319</i>&nbsp;        }
+<i>320</i>&nbsp;
+<b class="nc"><i>321</i>&nbsp;        // if sibling has children, keep getting last child of child.</b>
+<i>322</i>&nbsp;        if (result.hasChildNodes()
+<i>323</i>&nbsp;            &amp;&amp; !(!fEntityReferenceExpansion
+<b class="nc"><i>324</i>&nbsp;                &amp;&amp; result != null</b>
+<i>325</i>&nbsp;                &amp;&amp; result.getNodeType() == Node.ENTITY_REFERENCE_NODE))
+<i>326</i>&nbsp;
+<b class="nc"><i>327</i>&nbsp;        {</b>
+<b class="nc"><i>328</i>&nbsp;            while (result.hasChildNodes()) {</b>
+<i>329</i>&nbsp;                result = result.getLastChild();
+<i>330</i>&nbsp;            }
+<i>331</i>&nbsp;        }
+<b class="nc"><i>332</i>&nbsp;</b>
+<i>333</i>&nbsp;        return result;
+<i>334</i>&nbsp;    }
+<i>335</i>&nbsp;
+<i>336</i>&nbsp;    /** Fix-up the iterator on a remove. Called by DOM or otherwise,
+<i>337</i>&nbsp;     *  before an actual DOM remove.
+<i>338</i>&nbsp;     */
+<i>339</i>&nbsp;    public void removeNode(Node node) {
+<i>340</i>&nbsp;
+<i>341</i>&nbsp;        // Implementation note: Fix-up means setting the current node properly
+<i>342</i>&nbsp;        // after a remove.
+<b class="nc"><i>343</i>&nbsp;</b>
+<i>344</i>&nbsp;        if (node == null) return;
+<b class="nc"><i>345</i>&nbsp;</b>
+<i>346</i>&nbsp;        Node deleted = matchNodeOrParent(node);
+<b class="nc"><i>347</i>&nbsp;</b>
+<i>348</i>&nbsp;        if (deleted == null) return;
+<b class="nc"><i>349</i>&nbsp;</b>
+<b class="nc"><i>350</i>&nbsp;        if (fForward) {</b>
+<i>351</i>&nbsp;            fCurrentNode = previousNode(deleted);
+<i>352</i>&nbsp;        } else
+<i>353</i>&nbsp;        // if (!fForward)
+<b class="nc"><i>354</i>&nbsp;        {</b>
+<b class="nc"><i>355</i>&nbsp;            Node next = nextNode(deleted, false);</b>
+<i>356</i>&nbsp;            if (next!=null) {
+<b class="nc"><i>357</i>&nbsp;                // normal case: there _are_ nodes following this in the iterator.</b>
+<i>358</i>&nbsp;                fCurrentNode = next;
+<i>359</i>&nbsp;            } else {
+<i>360</i>&nbsp;                // the last node in the iterator is to be removed,
+<b class="nc"><i>361</i>&nbsp;                // so we set the current node to be the previous one.</b>
+<b class="nc"><i>362</i>&nbsp;                fCurrentNode = previousNode(deleted);</b>
+<i>363</i>&nbsp;                fForward = true;
+<i>364</i>&nbsp;            }
+<i>365</i>&nbsp;
+<i>366</i>&nbsp;        }
+<i>367</i>&nbsp;
+<i>368</i>&nbsp;    }
+<i>369</i>&nbsp;
+<b class="nc"><i>370</i>&nbsp;    public void               detach() {</b>
+<b class="nc"><i>371</i>&nbsp;        fDetach = true;</b>
+<i>372</i>&nbsp;        fDocument.removeNodeIterator(this);
+<i>373</i>&nbsp;    }
+<i>374</i>&nbsp;
+<i>375</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

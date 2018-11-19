@@ -1,0 +1,2213 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Parser</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.java</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Parser (sun.tools.java)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Parser</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 48)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 899)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1994, 2004, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.java;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import sun.tools.tree.*;
+<i>29</i>&nbsp;import java.io.IOException;
+<i>30</i>&nbsp;import java.io.InputStream;
+<i>31</i>&nbsp;import java.util.Enumeration;
+<i>32</i>&nbsp;import java.util.Vector;
+<i>33</i>&nbsp;
+<i>34</i>&nbsp;/**
+<i>35</i>&nbsp; * This class is used to parse Java statements and expressions.
+<i>36</i>&nbsp; * The result is a parse tree.&lt;p&gt;
+<i>37</i>&nbsp; *
+<i>38</i>&nbsp; * This class implements an operator precedence parser. Errors are
+<i>39</i>&nbsp; * reported to the Environment object, if the error can&#39;t be
+<i>40</i>&nbsp; * resolved immediately, a SyntaxError exception is thrown.&lt;p&gt;
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * Error recovery is implemented by catching SyntaxError exceptions
+<i>43</i>&nbsp; * and discarding input tokens until an input token is reached that
+<i>44</i>&nbsp; * is possibly a legal continuation.&lt;p&gt;
+<i>45</i>&nbsp; *
+<i>46</i>&nbsp; * The parse tree that is constructed represents the input
+<i>47</i>&nbsp; * exactly (no rewrites to simpler forms). This is important
+<i>48</i>&nbsp; * if the resulting tree is to be used for code formatting in
+<i>49</i>&nbsp; * a programming environment. Currently only documentation comments
+<i>50</i>&nbsp; * are retained.&lt;p&gt;
+<i>51</i>&nbsp; *
+<i>52</i>&nbsp; * The parsing algorithm does NOT use any type information. Changes
+<i>53</i>&nbsp; * in the type system do not affect the structure of the parse tree.
+<i>54</i>&nbsp; * This restriction does introduce an ambiguity an expression of the
+<i>55</i>&nbsp; * form: (e1) e2 is assumed to be a cast if e2 does not start with
+<i>56</i>&nbsp; * an operator. That means that (a) - b is interpreted as subtract
+<i>57</i>&nbsp; * b from a and not cast negative b to type a. However, if a is a
+<i>58</i>&nbsp; * simple type (byte, int, ...) then it is assumed to be a cast.&lt;p&gt;
+<i>59</i>&nbsp; *
+<i>60</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>61</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>62</i>&nbsp; * they are subject to change or removal without notice.
+<i>63</i>&nbsp; *
+<i>64</i>&nbsp; * @author      Arthur van Hoff
+<i>65</i>&nbsp; */
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;public
+<i>68</i>&nbsp;class Parser extends Scanner implements ParserActions, Constants {
+<i>69</i>&nbsp;    /**
+<i>70</i>&nbsp;     * Create a parser
+<i>71</i>&nbsp;     */
+<i>72</i>&nbsp;    protected Parser(Environment env, InputStream in) throws IOException {
+<b class="nc"><i>73</i>&nbsp;        super(env, in);</b>
+<b class="nc"><i>74</i>&nbsp;        this.scanner = this;</b>
+<b class="nc"><i>75</i>&nbsp;        this.actions = this;</b>
+<i>76</i>&nbsp;    }
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    /**
+<i>79</i>&nbsp;     * Create a parser, given a scanner.
+<i>80</i>&nbsp;     */
+<i>81</i>&nbsp;    protected Parser(Scanner scanner) throws IOException {
+<b class="nc"><i>82</i>&nbsp;        super(scanner.env);</b>
+<b class="nc"><i>83</i>&nbsp;        this.scanner = scanner;</b>
+<b class="nc"><i>84</i>&nbsp;        ((Scanner)this).env = scanner.env;</b>
+<b class="nc"><i>85</i>&nbsp;        ((Scanner)this).token = scanner.token;</b>
+<b class="nc"><i>86</i>&nbsp;        ((Scanner)this).pos = scanner.pos;</b>
+<b class="nc"><i>87</i>&nbsp;        this.actions = this;</b>
+<i>88</i>&nbsp;    }
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    /**
+<i>91</i>&nbsp;     * Create a parser, given a scanner and the semantic callback.
+<i>92</i>&nbsp;     */
+<i>93</i>&nbsp;    public Parser(Scanner scanner, ParserActions actions) throws IOException {
+<b class="nc"><i>94</i>&nbsp;        this(scanner);</b>
+<b class="nc"><i>95</i>&nbsp;        this.actions = actions;</b>
+<i>96</i>&nbsp;    }
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    /**
+<i>99</i>&nbsp;     * Usually &lt;code&gt;this.actions == (ParserActions)this&lt;/code&gt;.
+<i>100</i>&nbsp;     * However, a delegate scanner can produce tokens for this parser,
+<i>101</i>&nbsp;     * in which case &lt;code&gt;(Scanner)this&lt;/code&gt; is unused,
+<i>102</i>&nbsp;     * except for &lt;code&gt;this.token&lt;/code&gt; and &lt;code&gt;this.pos&lt;/code&gt;
+<i>103</i>&nbsp;     * instance variables which are filled from the real scanner
+<i>104</i>&nbsp;     * by &lt;code&gt;this.scan()&lt;/code&gt; and the constructor.
+<i>105</i>&nbsp;     */
+<i>106</i>&nbsp;    ParserActions actions;
+<i>107</i>&nbsp;
+<i>108</i>&nbsp;    // Note:  The duplication of methods allows pre-1.1 classes to
+<i>109</i>&nbsp;    // be binary compatible with the new version of the parser,
+<i>110</i>&nbsp;    // which now passes IdentifierTokens to the semantics phase,
+<i>111</i>&nbsp;    // rather than just Identifiers.  This change is necessary,
+<i>112</i>&nbsp;    // since the parser is no longer responsible for managing the
+<i>113</i>&nbsp;    // resolution of type names.  (That caused the &quot;Vector&quot; bug.)
+<i>114</i>&nbsp;    //
+<i>115</i>&nbsp;    // In a future release, the old &quot;plain-Identifier&quot; methods will
+<i>116</i>&nbsp;    // go away, and the corresponding &quot;IdentifierToken&quot; methods
+<i>117</i>&nbsp;    // may become abstract.
+<i>118</i>&nbsp;
+<i>119</i>&nbsp;    /**
+<i>120</i>&nbsp;     * package declaration
+<i>121</i>&nbsp;     * @deprecated
+<i>122</i>&nbsp;     */
+<i>123</i>&nbsp;    @Deprecated
+<i>124</i>&nbsp;    public void packageDeclaration(long off, IdentifierToken nm) {
+<i>125</i>&nbsp;        // By default, call the deprecated version.
+<i>126</i>&nbsp;        // Any application must override one of the packageDeclaration methods.
+<b class="nc"><i>127</i>&nbsp;        packageDeclaration(off, nm.id);</b>
+<i>128</i>&nbsp;    }
+<i>129</i>&nbsp;    /**
+<i>130</i>&nbsp;     * @deprecated
+<i>131</i>&nbsp;     */
+<i>132</i>&nbsp;    @Deprecated
+<i>133</i>&nbsp;    protected void packageDeclaration(long off, Identifier nm) {
+<b class="nc"><i>134</i>&nbsp;        throw new RuntimeException(&quot;beginClass method is abstract&quot;);</b>
+<i>135</i>&nbsp;    }
+<i>136</i>&nbsp;
+<i>137</i>&nbsp;    /**
+<i>138</i>&nbsp;     * import class
+<i>139</i>&nbsp;     * @deprecated
+<i>140</i>&nbsp;     */
+<i>141</i>&nbsp;    @Deprecated
+<i>142</i>&nbsp;    public void importClass(long off, IdentifierToken nm) {
+<i>143</i>&nbsp;        // By default, call the deprecated version.
+<i>144</i>&nbsp;        // Any application must override one of the packageDeclaration methods.
+<b class="nc"><i>145</i>&nbsp;        importClass(off, nm.id);</b>
+<i>146</i>&nbsp;    }
+<i>147</i>&nbsp;    /**
+<i>148</i>&nbsp;     * @deprecated Use the version with the IdentifierToken arguments.
+<i>149</i>&nbsp;     */
+<i>150</i>&nbsp;    @Deprecated
+<i>151</i>&nbsp;    protected void importClass(long off, Identifier nm) {
+<b class="nc"><i>152</i>&nbsp;        throw new RuntimeException(&quot;importClass method is abstract&quot;);</b>
+<i>153</i>&nbsp;    }
+<i>154</i>&nbsp;
+<i>155</i>&nbsp;    /**
+<i>156</i>&nbsp;     * import package
+<i>157</i>&nbsp;     * @deprecated
+<i>158</i>&nbsp;     */
+<i>159</i>&nbsp;    @Deprecated
+<i>160</i>&nbsp;    public void importPackage(long off, IdentifierToken nm) {
+<i>161</i>&nbsp;        // By default, call the deprecated version.
+<i>162</i>&nbsp;        // Any application must override one of the importPackage methods.
+<b class="nc"><i>163</i>&nbsp;        importPackage(off, nm.id);</b>
+<i>164</i>&nbsp;    }
+<i>165</i>&nbsp;    /**
+<i>166</i>&nbsp;     * @deprecated Use the version with the IdentifierToken arguments.
+<i>167</i>&nbsp;     */
+<i>168</i>&nbsp;    @Deprecated
+<i>169</i>&nbsp;    protected void importPackage(long off, Identifier nm) {
+<b class="nc"><i>170</i>&nbsp;        throw new RuntimeException(&quot;importPackage method is abstract&quot;);</b>
+<i>171</i>&nbsp;    }
+<i>172</i>&nbsp;
+<i>173</i>&nbsp;    /**
+<i>174</i>&nbsp;     * Define class
+<i>175</i>&nbsp;     * @deprecated
+<i>176</i>&nbsp;     */
+<i>177</i>&nbsp;    @Deprecated
+<i>178</i>&nbsp;    public ClassDefinition beginClass(long off, String doc,
+<i>179</i>&nbsp;                                      int mod, IdentifierToken nm,
+<i>180</i>&nbsp;                                      IdentifierToken sup,
+<i>181</i>&nbsp;                                      IdentifierToken impl[]) {
+<i>182</i>&nbsp;        // By default, call the deprecated version.
+<i>183</i>&nbsp;        // Any application must override one of the beginClass methods.
+<b class="nc"><i>184</i>&nbsp;        Identifier supId = (sup == null) ? null : sup.id;</b>
+<b class="nc"><i>185</i>&nbsp;        Identifier implIds[] = null;</b>
+<b class="nc"><i>186</i>&nbsp;        if (impl != null) {</b>
+<b class="nc"><i>187</i>&nbsp;            implIds = new Identifier[impl.length];</b>
+<b class="nc"><i>188</i>&nbsp;            for (int i = 0; i &lt; impl.length; i++) {</b>
+<b class="nc"><i>189</i>&nbsp;                implIds[i] = impl[i].id;</b>
+<i>190</i>&nbsp;            }
+<i>191</i>&nbsp;        }
+<b class="nc"><i>192</i>&nbsp;        beginClass(off, doc, mod, nm.id, supId, implIds);</b>
+<b class="nc"><i>193</i>&nbsp;        return getCurrentClass();</b>
+<i>194</i>&nbsp;    }
+<i>195</i>&nbsp;    /**
+<i>196</i>&nbsp;     * @deprecated Use the version with the IdentifierToken arguments.
+<i>197</i>&nbsp;     */
+<i>198</i>&nbsp;    @Deprecated
+<i>199</i>&nbsp;    protected void beginClass(long off, String doc, int mod, Identifier nm,
+<i>200</i>&nbsp;                              Identifier sup, Identifier impl[]) {
+<b class="nc"><i>201</i>&nbsp;        throw new RuntimeException(&quot;beginClass method is abstract&quot;);</b>
+<i>202</i>&nbsp;    }
+<i>203</i>&nbsp;
+<i>204</i>&nbsp;    /**
+<i>205</i>&nbsp;     * Report the current class under construction.
+<i>206</i>&nbsp;     * By default, it&#39;s a no-op which returns null.
+<i>207</i>&nbsp;     * It may only be called before the corresponding endClass().
+<i>208</i>&nbsp;     */
+<i>209</i>&nbsp;    protected ClassDefinition getCurrentClass() {
+<b class="nc"><i>210</i>&nbsp;        return null;</b>
+<i>211</i>&nbsp;    }
+<i>212</i>&nbsp;
+<i>213</i>&nbsp;    /**
+<i>214</i>&nbsp;     * End class
+<i>215</i>&nbsp;     * @deprecated
+<i>216</i>&nbsp;     */
+<i>217</i>&nbsp;    @Deprecated
+<i>218</i>&nbsp;    public void endClass(long off, ClassDefinition c) {
+<i>219</i>&nbsp;        // By default, call the deprecated version.
+<i>220</i>&nbsp;        // Any application must override one of the beginClass methods.
+<b class="nc"><i>221</i>&nbsp;        endClass(off, c.getName().getFlatName().getName());</b>
+<i>222</i>&nbsp;    }
+<i>223</i>&nbsp;    /**
+<i>224</i>&nbsp;     * @deprecated Use the version with the IdentifierToken arguments.
+<i>225</i>&nbsp;     */
+<i>226</i>&nbsp;    @Deprecated
+<i>227</i>&nbsp;    protected void endClass(long off, Identifier nm) {
+<b class="nc"><i>228</i>&nbsp;        throw new RuntimeException(&quot;endClass method is abstract&quot;);</b>
+<i>229</i>&nbsp;    }
+<i>230</i>&nbsp;
+<i>231</i>&nbsp;    /**
+<i>232</i>&nbsp;     * Define a field
+<i>233</i>&nbsp;     * @deprecated
+<i>234</i>&nbsp;     */
+<i>235</i>&nbsp;    @Deprecated
+<i>236</i>&nbsp;    public void defineField(long where, ClassDefinition c,
+<i>237</i>&nbsp;                            String doc, int mod, Type t,
+<i>238</i>&nbsp;                            IdentifierToken nm, IdentifierToken args[],
+<i>239</i>&nbsp;                            IdentifierToken exp[], Node val) {
+<i>240</i>&nbsp;        // By default, call the deprecated version.
+<i>241</i>&nbsp;        // Any application must override one of the defineField methods.
+<b class="nc"><i>242</i>&nbsp;        Identifier argIds[] = null;</b>
+<b class="nc"><i>243</i>&nbsp;        Identifier expIds[] = null;</b>
+<b class="nc"><i>244</i>&nbsp;        if (args != null) {</b>
+<b class="nc"><i>245</i>&nbsp;            argIds = new Identifier[args.length];</b>
+<b class="nc"><i>246</i>&nbsp;            for (int i = 0; i &lt; args.length; i++) {</b>
+<b class="nc"><i>247</i>&nbsp;                argIds[i] = args[i].id;</b>
+<i>248</i>&nbsp;            }
+<i>249</i>&nbsp;        }
+<b class="nc"><i>250</i>&nbsp;        if (exp != null) {</b>
+<b class="nc"><i>251</i>&nbsp;            expIds = new Identifier[exp.length];</b>
+<b class="nc"><i>252</i>&nbsp;            for (int i = 0; i &lt; exp.length; i++) {</b>
+<b class="nc"><i>253</i>&nbsp;                expIds[i] = exp[i].id;</b>
+<i>254</i>&nbsp;            }
+<i>255</i>&nbsp;        }
+<b class="nc"><i>256</i>&nbsp;        defineField(where, doc, mod, t, nm.id, argIds, expIds, val);</b>
+<i>257</i>&nbsp;    }
+<i>258</i>&nbsp;
+<i>259</i>&nbsp;    /**
+<i>260</i>&nbsp;     * @deprecated Use the version with the IdentifierToken arguments.
+<i>261</i>&nbsp;     */
+<i>262</i>&nbsp;    @Deprecated
+<i>263</i>&nbsp;    protected void defineField(long where, String doc, int mod, Type t,
+<i>264</i>&nbsp;                               Identifier nm, Identifier args[],
+<i>265</i>&nbsp;                               Identifier exp[], Node val) {
+<b class="nc"><i>266</i>&nbsp;        throw new RuntimeException(&quot;defineField method is abstract&quot;);</b>
+<i>267</i>&nbsp;    }
+<i>268</i>&nbsp;
+<i>269</i>&nbsp;    /*
+<i>270</i>&nbsp;     * A growable array of nodes. It is used as a growable
+<i>271</i>&nbsp;     * buffer to hold argument lists and expression lists.
+<i>272</i>&nbsp;     * I&#39;m not using Vector to make it more efficient.
+<i>273</i>&nbsp;     */
+<b class="nc"><i>274</i>&nbsp;    private Node args[] = new Node[32];</b>
+<b class="nc"><i>275</i>&nbsp;    protected int argIndex = 0;</b>
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;    protected final void addArgument(Node n) {
+<b class="nc"><i>278</i>&nbsp;        if (argIndex == args.length) {</b>
+<b class="nc"><i>279</i>&nbsp;            Node newArgs[] = new Node[args.length * 2];</b>
+<b class="nc"><i>280</i>&nbsp;            System.arraycopy(args, 0, newArgs, 0, args.length);</b>
+<b class="nc"><i>281</i>&nbsp;            args = newArgs;</b>
+<i>282</i>&nbsp;        }
+<b class="nc"><i>283</i>&nbsp;        args[argIndex++] = n;</b>
+<i>284</i>&nbsp;    }
+<i>285</i>&nbsp;    protected final Expression exprArgs(int index)[] {
+<b class="nc"><i>286</i>&nbsp;        Expression e[] = new Expression[argIndex - index];</b>
+<b class="nc"><i>287</i>&nbsp;        System.arraycopy(args, index, e, 0, argIndex - index);</b>
+<b class="nc"><i>288</i>&nbsp;        argIndex = index;</b>
+<b class="nc"><i>289</i>&nbsp;        return e;</b>
+<i>290</i>&nbsp;    }
+<i>291</i>&nbsp;    protected final Statement statArgs(int index)[] {
+<b class="nc"><i>292</i>&nbsp;        Statement s[] = new Statement[argIndex - index];</b>
+<b class="nc"><i>293</i>&nbsp;        System.arraycopy(args, index, s, 0, argIndex - index);</b>
+<b class="nc"><i>294</i>&nbsp;        argIndex = index;</b>
+<b class="nc"><i>295</i>&nbsp;        return s;</b>
+<i>296</i>&nbsp;    }
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;    /**
+<i>299</i>&nbsp;     * Expect a token, return its value, scan the next token or
+<i>300</i>&nbsp;     * throw an exception.
+<i>301</i>&nbsp;     */
+<i>302</i>&nbsp;    protected void expect(int t) throws SyntaxError, IOException {
+<b class="nc"><i>303</i>&nbsp;        if (token != t) {</b>
+<b class="nc"><i>304</i>&nbsp;            switch (t) {</b>
+<i>305</i>&nbsp;              case IDENT:
+<b class="nc"><i>306</i>&nbsp;                env.error(scanner.prevPos, &quot;identifier.expected&quot;);</b>
+<b class="nc"><i>307</i>&nbsp;                break;</b>
+<i>308</i>&nbsp;              default:
+<b class="nc"><i>309</i>&nbsp;                env.error(scanner.prevPos, &quot;token.expected&quot;, opNames[t]);</b>
+<i>310</i>&nbsp;                break;
+<i>311</i>&nbsp;            }
+<b class="nc"><i>312</i>&nbsp;                throw new SyntaxError();</b>
+<i>313</i>&nbsp;        }
+<b class="nc"><i>314</i>&nbsp;        scan();</b>
+<i>315</i>&nbsp;    }
+<i>316</i>&nbsp;
+<i>317</i>&nbsp;    /**
+<i>318</i>&nbsp;     * Parse a type expression. Does not parse the []&#39;s.
+<i>319</i>&nbsp;     */
+<i>320</i>&nbsp;    protected Expression parseTypeExpression() throws SyntaxError, IOException {
+<b class="nc"><i>321</i>&nbsp;        switch (token) {</b>
+<i>322</i>&nbsp;          case VOID:
+<b class="nc"><i>323</i>&nbsp;            return new TypeExpression(scan(), Type.tVoid);</b>
+<i>324</i>&nbsp;          case BOOLEAN:
+<b class="nc"><i>325</i>&nbsp;            return new TypeExpression(scan(), Type.tBoolean);</b>
+<i>326</i>&nbsp;          case BYTE:
+<b class="nc"><i>327</i>&nbsp;            return new TypeExpression(scan(), Type.tByte);</b>
+<i>328</i>&nbsp;          case CHAR:
+<b class="nc"><i>329</i>&nbsp;            return new TypeExpression(scan(), Type.tChar);</b>
+<i>330</i>&nbsp;          case SHORT:
+<b class="nc"><i>331</i>&nbsp;            return new TypeExpression(scan(), Type.tShort);</b>
+<i>332</i>&nbsp;          case INT:
+<b class="nc"><i>333</i>&nbsp;            return new TypeExpression(scan(), Type.tInt);</b>
+<i>334</i>&nbsp;          case LONG:
+<b class="nc"><i>335</i>&nbsp;            return new TypeExpression(scan(), Type.tLong);</b>
+<i>336</i>&nbsp;          case FLOAT:
+<b class="nc"><i>337</i>&nbsp;            return new TypeExpression(scan(), Type.tFloat);</b>
+<i>338</i>&nbsp;          case DOUBLE:
+<b class="nc"><i>339</i>&nbsp;            return new TypeExpression(scan(), Type.tDouble);</b>
+<i>340</i>&nbsp;          case IDENT:
+<b class="nc"><i>341</i>&nbsp;            Expression e = new IdentifierExpression(pos, scanner.idValue);</b>
+<b class="nc"><i>342</i>&nbsp;            scan();</b>
+<b class="nc"><i>343</i>&nbsp;            while (token == FIELD) {</b>
+<b class="nc"><i>344</i>&nbsp;                e = new FieldExpression(scan(), e, scanner.idValue);</b>
+<b class="nc"><i>345</i>&nbsp;                expect(IDENT);</b>
+<i>346</i>&nbsp;            }
+<b class="nc"><i>347</i>&nbsp;            return e;</b>
+<i>348</i>&nbsp;        }
+<i>349</i>&nbsp;
+<b class="nc"><i>350</i>&nbsp;        env.error(pos, &quot;type.expected&quot;);</b>
+<b class="nc"><i>351</i>&nbsp;        throw new SyntaxError();</b>
+<i>352</i>&nbsp;    }
+<i>353</i>&nbsp;
+<i>354</i>&nbsp;    /**
+<i>355</i>&nbsp;     * Parse a method invocation. Should be called when the current
+<i>356</i>&nbsp;     * then is the &#39;(&#39; of the argument list.
+<i>357</i>&nbsp;     */
+<i>358</i>&nbsp;    protected Expression parseMethodExpression(Expression e, Identifier id) throws SyntaxError, IOException {
+<b class="nc"><i>359</i>&nbsp;       long p = scan();</b>
+<b class="nc"><i>360</i>&nbsp;       int i = argIndex;</b>
+<b class="nc"><i>361</i>&nbsp;       if (token != RPAREN) {</b>
+<b class="nc"><i>362</i>&nbsp;           addArgument(parseExpression());</b>
+<b class="nc"><i>363</i>&nbsp;           while (token == COMMA) {</b>
+<b class="nc"><i>364</i>&nbsp;               scan();</b>
+<b class="nc"><i>365</i>&nbsp;               addArgument(parseExpression());</b>
+<i>366</i>&nbsp;           }
+<i>367</i>&nbsp;       }
+<b class="nc"><i>368</i>&nbsp;       expect(RPAREN);</b>
+<b class="nc"><i>369</i>&nbsp;       return new MethodExpression(p, e, id, exprArgs(i));</b>
+<i>370</i>&nbsp;    }
+<i>371</i>&nbsp;
+<i>372</i>&nbsp;    /**
+<i>373</i>&nbsp;     * Parse a new instance expression.  Should be called when the current
+<i>374</i>&nbsp;     * token is the &#39;(&#39; of the argument list.
+<i>375</i>&nbsp;     */
+<i>376</i>&nbsp;    protected Expression parseNewInstanceExpression(long p, Expression outerArg, Expression type) throws SyntaxError, IOException {
+<b class="nc"><i>377</i>&nbsp;        int i = argIndex;</b>
+<b class="nc"><i>378</i>&nbsp;        expect(LPAREN);</b>
+<b class="nc"><i>379</i>&nbsp;        if (token != RPAREN) {</b>
+<b class="nc"><i>380</i>&nbsp;            addArgument(parseExpression());</b>
+<b class="nc"><i>381</i>&nbsp;            while (token == COMMA) {</b>
+<b class="nc"><i>382</i>&nbsp;                scan();</b>
+<b class="nc"><i>383</i>&nbsp;                addArgument(parseExpression());</b>
+<i>384</i>&nbsp;            }
+<i>385</i>&nbsp;        }
+<b class="nc"><i>386</i>&nbsp;        expect(RPAREN);</b>
+<b class="nc"><i>387</i>&nbsp;        ClassDefinition body = null;</b>
+<b class="nc"><i>388</i>&nbsp;        if (token == LBRACE &amp;&amp; !(type instanceof TypeExpression)) {</b>
+<b class="nc"><i>389</i>&nbsp;            long tp = pos;</b>
+<i>390</i>&nbsp;            // x = new Type(arg) { subclass body ... }
+<b class="nc"><i>391</i>&nbsp;            Identifier superName = FieldExpression.toIdentifier(type);</b>
+<b class="nc"><i>392</i>&nbsp;            if (superName == null) {</b>
+<b class="nc"><i>393</i>&nbsp;                env.error(type.getWhere(), &quot;type.expected&quot;);</b>
+<i>394</i>&nbsp;            }
+<b class="nc"><i>395</i>&nbsp;            Vector&lt;IdentifierToken&gt; ext = new Vector&lt;&gt;(1);</b>
+<b class="nc"><i>396</i>&nbsp;            Vector&lt;IdentifierToken&gt; impl = new Vector&lt;&gt;(0);</b>
+<b class="nc"><i>397</i>&nbsp;            ext.addElement(new IdentifierToken(idNull));</b>
+<b class="nc"><i>398</i>&nbsp;            if (token == IMPLEMENTS || token == EXTENDS) {</b>
+<b class="nc"><i>399</i>&nbsp;                env.error(pos, &quot;anonymous.extends&quot;);</b>
+<b class="nc"><i>400</i>&nbsp;                parseInheritance(ext, impl); // error recovery</b>
+<i>401</i>&nbsp;            }
+<b class="nc"><i>402</i>&nbsp;            body = parseClassBody(new IdentifierToken(tp, idNull),</b>
+<i>403</i>&nbsp;                                  M_ANONYMOUS | M_LOCAL, EXPR, null,
+<b class="nc"><i>404</i>&nbsp;                                  ext, impl, type.getWhere());</b>
+<i>405</i>&nbsp;        }
+<b class="nc"><i>406</i>&nbsp;        if (outerArg == null &amp;&amp; body == null) {</b>
+<b class="nc"><i>407</i>&nbsp;            return new NewInstanceExpression(p, type, exprArgs(i));</b>
+<i>408</i>&nbsp;        }
+<b class="nc"><i>409</i>&nbsp;        return new NewInstanceExpression(p, type, exprArgs(i), outerArg, body);</b>
+<i>410</i>&nbsp;    }
+<i>411</i>&nbsp;
+<i>412</i>&nbsp;    /**
+<i>413</i>&nbsp;     * Parse a primary expression.
+<i>414</i>&nbsp;     */
+<i>415</i>&nbsp;    protected Expression parseTerm() throws SyntaxError, IOException {
+<b class="nc"><i>416</i>&nbsp;        switch (token) {</b>
+<i>417</i>&nbsp;          case CHARVAL: {
+<b class="nc"><i>418</i>&nbsp;            char v = scanner.charValue;</b>
+<b class="nc"><i>419</i>&nbsp;            return new CharExpression(scan(), v);</b>
+<i>420</i>&nbsp;          }
+<i>421</i>&nbsp;          case INTVAL: {
+<b class="nc"><i>422</i>&nbsp;            int v = scanner.intValue;</b>
+<b class="nc"><i>423</i>&nbsp;            long q = scan();</b>
+<b class="nc"><i>424</i>&nbsp;            if (v &lt; 0 &amp;&amp; radix == 10) env.error(q, &quot;overflow.int.dec&quot;);</b>
+<b class="nc"><i>425</i>&nbsp;            return new IntExpression(q, v);</b>
+<i>426</i>&nbsp;          }
+<i>427</i>&nbsp;          case LONGVAL: {
+<b class="nc"><i>428</i>&nbsp;            long v = scanner.longValue;</b>
+<b class="nc"><i>429</i>&nbsp;            long q = scan();</b>
+<b class="nc"><i>430</i>&nbsp;            if (v &lt; 0 &amp;&amp; radix == 10) env.error(q, &quot;overflow.long.dec&quot;);</b>
+<b class="nc"><i>431</i>&nbsp;            return new LongExpression(q, v);</b>
+<i>432</i>&nbsp;          }
+<i>433</i>&nbsp;          case FLOATVAL: {
+<b class="nc"><i>434</i>&nbsp;            float v = scanner.floatValue;</b>
+<b class="nc"><i>435</i>&nbsp;            return new FloatExpression(scan(), v);</b>
+<i>436</i>&nbsp;          }
+<i>437</i>&nbsp;          case DOUBLEVAL: {
+<b class="nc"><i>438</i>&nbsp;            double v = scanner.doubleValue;</b>
+<b class="nc"><i>439</i>&nbsp;            return new DoubleExpression(scan(), v);</b>
+<i>440</i>&nbsp;          }
+<i>441</i>&nbsp;          case STRINGVAL: {
+<b class="nc"><i>442</i>&nbsp;            String v = scanner.stringValue;</b>
+<b class="nc"><i>443</i>&nbsp;            return new StringExpression(scan(), v);</b>
+<i>444</i>&nbsp;          }
+<i>445</i>&nbsp;          case IDENT: {
+<b class="nc"><i>446</i>&nbsp;            Identifier v = scanner.idValue;</b>
+<b class="nc"><i>447</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>448</i>&nbsp;            return (token == LPAREN) ?</b>
+<b class="nc"><i>449</i>&nbsp;                        parseMethodExpression(null, v) : new IdentifierExpression(p, v);</b>
+<i>450</i>&nbsp;          }
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;          case TRUE:
+<b class="nc"><i>453</i>&nbsp;            return new BooleanExpression(scan(), true);</b>
+<i>454</i>&nbsp;          case FALSE:
+<b class="nc"><i>455</i>&nbsp;            return new BooleanExpression(scan(), false);</b>
+<i>456</i>&nbsp;          case NULL:
+<b class="nc"><i>457</i>&nbsp;            return new NullExpression(scan());</b>
+<i>458</i>&nbsp;
+<i>459</i>&nbsp;          case THIS: {
+<b class="nc"><i>460</i>&nbsp;            Expression e = new ThisExpression(scan());</b>
+<b class="nc"><i>461</i>&nbsp;            return (token == LPAREN) ? parseMethodExpression(e, idInit) : e;</b>
+<i>462</i>&nbsp;          }
+<i>463</i>&nbsp;          case SUPER: {
+<b class="nc"><i>464</i>&nbsp;            Expression e = new SuperExpression(scan());</b>
+<b class="nc"><i>465</i>&nbsp;            return (token == LPAREN) ? parseMethodExpression(e, idInit) : e;</b>
+<i>466</i>&nbsp;          }
+<i>467</i>&nbsp;
+<i>468</i>&nbsp;          case VOID:
+<i>469</i>&nbsp;          case BOOLEAN:
+<i>470</i>&nbsp;          case BYTE:
+<i>471</i>&nbsp;          case CHAR:
+<i>472</i>&nbsp;          case SHORT:
+<i>473</i>&nbsp;          case INT:
+<i>474</i>&nbsp;          case LONG:
+<i>475</i>&nbsp;          case FLOAT:
+<i>476</i>&nbsp;          case DOUBLE:
+<b class="nc"><i>477</i>&nbsp;            return parseTypeExpression();</b>
+<i>478</i>&nbsp;
+<i>479</i>&nbsp;          case ADD: {
+<b class="nc"><i>480</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>481</i>&nbsp;            switch (token) {</b>
+<i>482</i>&nbsp;              case INTVAL: {
+<b class="nc"><i>483</i>&nbsp;                int v = scanner.intValue;</b>
+<b class="nc"><i>484</i>&nbsp;                long q = scan();</b>
+<b class="nc"><i>485</i>&nbsp;                if (v &lt; 0 &amp;&amp; radix == 10) env.error(q, &quot;overflow.int.dec&quot;);</b>
+<b class="nc"><i>486</i>&nbsp;                return new IntExpression(q, v);</b>
+<i>487</i>&nbsp;              }
+<i>488</i>&nbsp;              case LONGVAL: {
+<b class="nc"><i>489</i>&nbsp;                long v = scanner.longValue;</b>
+<b class="nc"><i>490</i>&nbsp;                long q = scan();</b>
+<b class="nc"><i>491</i>&nbsp;                if (v &lt; 0 &amp;&amp; radix == 10) env.error(q, &quot;overflow.long.dec&quot;);</b>
+<b class="nc"><i>492</i>&nbsp;                return new LongExpression(q, v);</b>
+<i>493</i>&nbsp;              }
+<i>494</i>&nbsp;              case FLOATVAL: {
+<b class="nc"><i>495</i>&nbsp;                float v = scanner.floatValue;</b>
+<b class="nc"><i>496</i>&nbsp;                return new FloatExpression(scan(), v);</b>
+<i>497</i>&nbsp;              }
+<i>498</i>&nbsp;              case DOUBLEVAL: {
+<b class="nc"><i>499</i>&nbsp;                double v = scanner.doubleValue;</b>
+<b class="nc"><i>500</i>&nbsp;                return new DoubleExpression(scan(), v);</b>
+<i>501</i>&nbsp;              }
+<i>502</i>&nbsp;            }
+<b class="nc"><i>503</i>&nbsp;            return new PositiveExpression(p, parseTerm());</b>
+<i>504</i>&nbsp;          }
+<i>505</i>&nbsp;          case SUB: {
+<b class="nc"><i>506</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>507</i>&nbsp;            switch (token) {</b>
+<i>508</i>&nbsp;              case INTVAL: {
+<b class="nc"><i>509</i>&nbsp;                int v = -scanner.intValue;</b>
+<b class="nc"><i>510</i>&nbsp;                return new IntExpression(scan(), v);</b>
+<i>511</i>&nbsp;              }
+<i>512</i>&nbsp;              case LONGVAL: {
+<b class="nc"><i>513</i>&nbsp;                long v = -scanner.longValue;</b>
+<b class="nc"><i>514</i>&nbsp;                return new LongExpression(scan(), v);</b>
+<i>515</i>&nbsp;              }
+<i>516</i>&nbsp;              case FLOATVAL: {
+<b class="nc"><i>517</i>&nbsp;                float v = -scanner.floatValue;</b>
+<b class="nc"><i>518</i>&nbsp;                return new FloatExpression(scan(), v);</b>
+<i>519</i>&nbsp;              }
+<i>520</i>&nbsp;              case DOUBLEVAL: {
+<b class="nc"><i>521</i>&nbsp;                double v = -scanner.doubleValue;</b>
+<b class="nc"><i>522</i>&nbsp;                return new DoubleExpression(scan(), v);</b>
+<i>523</i>&nbsp;              }
+<i>524</i>&nbsp;            }
+<b class="nc"><i>525</i>&nbsp;            return new NegativeExpression(p, parseTerm());</b>
+<i>526</i>&nbsp;          }
+<i>527</i>&nbsp;          case NOT:
+<b class="nc"><i>528</i>&nbsp;            return new NotExpression(scan(), parseTerm());</b>
+<i>529</i>&nbsp;          case BITNOT:
+<b class="nc"><i>530</i>&nbsp;            return new BitNotExpression(scan(), parseTerm());</b>
+<i>531</i>&nbsp;          case INC:
+<b class="nc"><i>532</i>&nbsp;            return new PreIncExpression(scan(), parseTerm());</b>
+<i>533</i>&nbsp;          case DEC:
+<b class="nc"><i>534</i>&nbsp;            return new PreDecExpression(scan(), parseTerm());</b>
+<i>535</i>&nbsp;
+<i>536</i>&nbsp;          case LPAREN: {
+<i>537</i>&nbsp;            // bracketed-expr: (expr)
+<b class="nc"><i>538</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>539</i>&nbsp;            Expression e = parseExpression();</b>
+<b class="nc"><i>540</i>&nbsp;            expect(RPAREN);</b>
+<i>541</i>&nbsp;
+<b class="nc"><i>542</i>&nbsp;            if (e.getOp() == TYPE) {</b>
+<i>543</i>&nbsp;                // cast-expr: (simple-type) expr
+<b class="nc"><i>544</i>&nbsp;                return new CastExpression(p, e, parseTerm());</b>
+<i>545</i>&nbsp;            }
+<i>546</i>&nbsp;
+<b class="nc"><i>547</i>&nbsp;            switch (token) {</b>
+<i>548</i>&nbsp;
+<i>549</i>&nbsp;                // We handle INC and DEC specially.
+<i>550</i>&nbsp;                // See the discussion in JLS section 15.14.1.
+<i>551</i>&nbsp;                // (Part of fix for 4044502.)
+<i>552</i>&nbsp;
+<i>553</i>&nbsp;              case INC:
+<i>554</i>&nbsp;                  // We know this must be a postfix increment.
+<b class="nc"><i>555</i>&nbsp;                  return new PostIncExpression(scan(), e);</b>
+<i>556</i>&nbsp;
+<i>557</i>&nbsp;              case DEC:
+<i>558</i>&nbsp;                  // We know this must be a postfix decrement.
+<b class="nc"><i>559</i>&nbsp;                  return new PostDecExpression(scan(), e);</b>
+<i>560</i>&nbsp;
+<i>561</i>&nbsp;              case LPAREN:
+<i>562</i>&nbsp;              case CHARVAL:
+<i>563</i>&nbsp;              case INTVAL:
+<i>564</i>&nbsp;              case LONGVAL:
+<i>565</i>&nbsp;              case FLOATVAL:
+<i>566</i>&nbsp;              case DOUBLEVAL:
+<i>567</i>&nbsp;              case STRINGVAL:
+<i>568</i>&nbsp;              case IDENT:
+<i>569</i>&nbsp;              case TRUE:
+<i>570</i>&nbsp;              case FALSE:
+<i>571</i>&nbsp;              case NOT:
+<i>572</i>&nbsp;              case BITNOT:
+<i>573</i>&nbsp;              case THIS:
+<i>574</i>&nbsp;              case SUPER:
+<i>575</i>&nbsp;              case NULL:
+<i>576</i>&nbsp;              case NEW:
+<i>577</i>&nbsp;                // cast-expr: (expr) expr
+<b class="nc"><i>578</i>&nbsp;                return new CastExpression(p, e, parseTerm());</b>
+<i>579</i>&nbsp;            }
+<b class="nc"><i>580</i>&nbsp;            return new ExprExpression(p, e);</b>
+<i>581</i>&nbsp;          }
+<i>582</i>&nbsp;
+<i>583</i>&nbsp;          case LBRACE: {
+<i>584</i>&nbsp;            // array initializer: {expr1, expr2, ... exprn}
+<b class="nc"><i>585</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>586</i>&nbsp;            int i = argIndex;</b>
+<b class="nc"><i>587</i>&nbsp;            if (token != RBRACE) {</b>
+<b class="nc"><i>588</i>&nbsp;                addArgument(parseExpression());</b>
+<b class="nc"><i>589</i>&nbsp;                while (token == COMMA) {</b>
+<b class="nc"><i>590</i>&nbsp;                    scan();</b>
+<b class="nc"><i>591</i>&nbsp;                    if (token == RBRACE) {</b>
+<b class="nc"><i>592</i>&nbsp;                        break;</b>
+<i>593</i>&nbsp;                    }
+<b class="nc"><i>594</i>&nbsp;                    addArgument(parseExpression());</b>
+<i>595</i>&nbsp;                }
+<i>596</i>&nbsp;            }
+<b class="nc"><i>597</i>&nbsp;            expect(RBRACE);</b>
+<b class="nc"><i>598</i>&nbsp;            return new ArrayExpression(p, exprArgs(i));</b>
+<i>599</i>&nbsp;          }
+<i>600</i>&nbsp;
+<i>601</i>&nbsp;          case NEW: {
+<b class="nc"><i>602</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>603</i>&nbsp;            int i = argIndex;</b>
+<i>604</i>&nbsp;
+<b class="nc"><i>605</i>&nbsp;            if (token == LPAREN) {</b>
+<b class="nc"><i>606</i>&nbsp;                scan();</b>
+<b class="nc"><i>607</i>&nbsp;                Expression e = parseExpression();</b>
+<b class="nc"><i>608</i>&nbsp;                expect(RPAREN);</b>
+<b class="nc"><i>609</i>&nbsp;                env.error(p, &quot;not.supported&quot;, &quot;new(...)&quot;);</b>
+<b class="nc"><i>610</i>&nbsp;                return new NullExpression(p);</b>
+<i>611</i>&nbsp;            }
+<i>612</i>&nbsp;
+<b class="nc"><i>613</i>&nbsp;            Expression e = parseTypeExpression();</b>
+<i>614</i>&nbsp;
+<b class="nc"><i>615</i>&nbsp;            if (token == LSQBRACKET) {</b>
+<b class="nc"><i>616</i>&nbsp;                while (token == LSQBRACKET) {</b>
+<b class="nc"><i>617</i>&nbsp;                    scan();</b>
+<b class="nc"><i>618</i>&nbsp;                    addArgument((token != RSQBRACKET) ? parseExpression() : null);</b>
+<b class="nc"><i>619</i>&nbsp;                    expect(RSQBRACKET);</b>
+<i>620</i>&nbsp;                }
+<b class="nc"><i>621</i>&nbsp;                Expression[] dims = exprArgs(i);</b>
+<b class="nc"><i>622</i>&nbsp;                if (token == LBRACE) {</b>
+<b class="nc"><i>623</i>&nbsp;                    return new NewArrayExpression(p, e, dims, parseTerm());</b>
+<i>624</i>&nbsp;                }
+<b class="nc"><i>625</i>&nbsp;                return new NewArrayExpression(p, e, dims);</b>
+<i>626</i>&nbsp;            } else {
+<b class="nc"><i>627</i>&nbsp;                return parseNewInstanceExpression(p, null, e);</b>
+<i>628</i>&nbsp;            }
+<i>629</i>&nbsp;          }
+<i>630</i>&nbsp;        }
+<i>631</i>&nbsp;
+<i>632</i>&nbsp;        // System.err.println(&quot;NEAR: &quot; + opNames[token]);
+<b class="nc"><i>633</i>&nbsp;        env.error(scanner.prevPos, &quot;missing.term&quot;);</b>
+<b class="nc"><i>634</i>&nbsp;        return new IntExpression(pos, 0);</b>
+<i>635</i>&nbsp;    }
+<i>636</i>&nbsp;
+<i>637</i>&nbsp;    /**
+<i>638</i>&nbsp;     * Parse an expression.
+<i>639</i>&nbsp;     */
+<i>640</i>&nbsp;    protected Expression parseExpression() throws SyntaxError, IOException {
+<b class="nc"><i>641</i>&nbsp;        for (Expression e = parseTerm() ; e != null ; e = e.order()) {</b>
+<b class="nc"><i>642</i>&nbsp;            Expression more = parseBinaryExpression(e);</b>
+<b class="nc"><i>643</i>&nbsp;            if (more == null)</b>
+<b class="nc"><i>644</i>&nbsp;                return e;</b>
+<b class="nc"><i>645</i>&nbsp;            e = more;</b>
+<i>646</i>&nbsp;        }
+<i>647</i>&nbsp;        // this return is bogus
+<b class="nc"><i>648</i>&nbsp;        return null;</b>
+<i>649</i>&nbsp;    }
+<i>650</i>&nbsp;
+<i>651</i>&nbsp;    /**
+<i>652</i>&nbsp;     * Given a left-hand term, parse an operator and right-hand term.
+<i>653</i>&nbsp;     */
+<i>654</i>&nbsp;    protected Expression parseBinaryExpression(Expression e) throws SyntaxError, IOException {
+<b class="nc"><i>655</i>&nbsp;        if (e != null) {</b>
+<b class="nc"><i>656</i>&nbsp;            switch (token) {</b>
+<i>657</i>&nbsp;              case LSQBRACKET: {
+<i>658</i>&nbsp;                // index: expr1[expr2]
+<b class="nc"><i>659</i>&nbsp;                long p = scan();</b>
+<b class="nc"><i>660</i>&nbsp;                Expression index = (token != RSQBRACKET) ? parseExpression() : null;</b>
+<b class="nc"><i>661</i>&nbsp;                expect(RSQBRACKET);</b>
+<b class="nc"><i>662</i>&nbsp;                e = new ArrayAccessExpression(p, e, index);</b>
+<b class="nc"><i>663</i>&nbsp;                break;</b>
+<i>664</i>&nbsp;              }
+<i>665</i>&nbsp;
+<i>666</i>&nbsp;              case INC:
+<b class="nc"><i>667</i>&nbsp;                e = new PostIncExpression(scan(), e);</b>
+<b class="nc"><i>668</i>&nbsp;                break;</b>
+<i>669</i>&nbsp;              case DEC:
+<b class="nc"><i>670</i>&nbsp;                e = new PostDecExpression(scan(), e);</b>
+<b class="nc"><i>671</i>&nbsp;                break;</b>
+<i>672</i>&nbsp;              case FIELD: {
+<b class="nc"><i>673</i>&nbsp;                long p = scan();</b>
+<b class="nc"><i>674</i>&nbsp;                if (token == THIS) {</b>
+<i>675</i>&nbsp;                    // class C { class N { ... C.this ... } }
+<i>676</i>&nbsp;                    // class C { class N { N(C c){ ... c.this() ... } } }
+<b class="nc"><i>677</i>&nbsp;                    long q = scan();</b>
+<b class="nc"><i>678</i>&nbsp;                    if (token == LPAREN) {</b>
+<b class="nc"><i>679</i>&nbsp;                        e = new ThisExpression(q, e);</b>
+<b class="nc"><i>680</i>&nbsp;                        e = parseMethodExpression(e, idInit);</b>
+<i>681</i>&nbsp;                    } else {
+<b class="nc"><i>682</i>&nbsp;                        e = new FieldExpression(p, e, idThis);</b>
+<i>683</i>&nbsp;                    }
+<b class="nc"><i>684</i>&nbsp;                    break;</b>
+<i>685</i>&nbsp;                }
+<b class="nc"><i>686</i>&nbsp;                if (token == SUPER) {</b>
+<i>687</i>&nbsp;                    // class D extends C.N { D(C.N n) { n.super(); } }
+<i>688</i>&nbsp;                    // Also, &#39;C.super&#39;, as in:
+<i>689</i>&nbsp;                    // class C extends CS { class N { ... C.super.foo ... } }
+<i>690</i>&nbsp;                    // class C extends CS { class N { ... C.super.foo() ... } }
+<b class="nc"><i>691</i>&nbsp;                    long q = scan();</b>
+<b class="nc"><i>692</i>&nbsp;                    if (token == LPAREN) {</b>
+<b class="nc"><i>693</i>&nbsp;                        e = new SuperExpression(q, e);</b>
+<b class="nc"><i>694</i>&nbsp;                        e = parseMethodExpression(e, idInit);</b>
+<i>695</i>&nbsp;                    } else {
+<i>696</i>&nbsp;                        // We must check elsewhere that this expression
+<i>697</i>&nbsp;                        // does not stand alone, but qualifies a member name.
+<b class="nc"><i>698</i>&nbsp;                        e = new FieldExpression(p, e, idSuper);</b>
+<i>699</i>&nbsp;                    }
+<b class="nc"><i>700</i>&nbsp;                    break;</b>
+<i>701</i>&nbsp;                }
+<b class="nc"><i>702</i>&nbsp;                if (token == NEW) {</b>
+<i>703</i>&nbsp;                    // new C().new N()
+<b class="nc"><i>704</i>&nbsp;                    scan();</b>
+<b class="nc"><i>705</i>&nbsp;                    if (token != IDENT)</b>
+<b class="nc"><i>706</i>&nbsp;                        expect(IDENT);</b>
+<b class="nc"><i>707</i>&nbsp;                    e = parseNewInstanceExpression(p, e, parseTypeExpression());</b>
+<b class="nc"><i>708</i>&nbsp;                    break;</b>
+<i>709</i>&nbsp;                }
+<b class="nc"><i>710</i>&nbsp;                if (token == CLASS) {</b>
+<i>711</i>&nbsp;                    // just class literals, really
+<i>712</i>&nbsp;                    // Class c = C.class;
+<b class="nc"><i>713</i>&nbsp;                    scan();</b>
+<b class="nc"><i>714</i>&nbsp;                    e = new FieldExpression(p, e, idClass);</b>
+<b class="nc"><i>715</i>&nbsp;                    break;</b>
+<i>716</i>&nbsp;                }
+<b class="nc"><i>717</i>&nbsp;                Identifier id = scanner.idValue;</b>
+<b class="nc"><i>718</i>&nbsp;                expect(IDENT);</b>
+<b class="nc"><i>719</i>&nbsp;                if (token == LPAREN) {</b>
+<b class="nc"><i>720</i>&nbsp;                    e = parseMethodExpression(e, id);</b>
+<i>721</i>&nbsp;                } else {
+<b class="nc"><i>722</i>&nbsp;                    e = new FieldExpression(p, e, id);</b>
+<i>723</i>&nbsp;                }
+<b class="nc"><i>724</i>&nbsp;                break;</b>
+<i>725</i>&nbsp;              }
+<i>726</i>&nbsp;              case INSTANCEOF:
+<b class="nc"><i>727</i>&nbsp;                e = new InstanceOfExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>728</i>&nbsp;                break;</b>
+<i>729</i>&nbsp;              case ADD:
+<b class="nc"><i>730</i>&nbsp;                e = new AddExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>731</i>&nbsp;                break;</b>
+<i>732</i>&nbsp;              case SUB:
+<b class="nc"><i>733</i>&nbsp;                e = new SubtractExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>734</i>&nbsp;                break;</b>
+<i>735</i>&nbsp;              case MUL:
+<b class="nc"><i>736</i>&nbsp;                e = new MultiplyExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>737</i>&nbsp;                break;</b>
+<i>738</i>&nbsp;              case DIV:
+<b class="nc"><i>739</i>&nbsp;                e = new DivideExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>740</i>&nbsp;                break;</b>
+<i>741</i>&nbsp;              case REM:
+<b class="nc"><i>742</i>&nbsp;                e = new RemainderExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>743</i>&nbsp;                break;</b>
+<i>744</i>&nbsp;              case LSHIFT:
+<b class="nc"><i>745</i>&nbsp;                e = new ShiftLeftExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>746</i>&nbsp;                break;</b>
+<i>747</i>&nbsp;              case RSHIFT:
+<b class="nc"><i>748</i>&nbsp;                e = new ShiftRightExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>749</i>&nbsp;                break;</b>
+<i>750</i>&nbsp;              case URSHIFT:
+<b class="nc"><i>751</i>&nbsp;                e = new UnsignedShiftRightExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>752</i>&nbsp;                break;</b>
+<i>753</i>&nbsp;              case LT:
+<b class="nc"><i>754</i>&nbsp;                e = new LessExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>755</i>&nbsp;                break;</b>
+<i>756</i>&nbsp;              case LE:
+<b class="nc"><i>757</i>&nbsp;                e = new LessOrEqualExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>758</i>&nbsp;                break;</b>
+<i>759</i>&nbsp;              case GT:
+<b class="nc"><i>760</i>&nbsp;                e = new GreaterExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>761</i>&nbsp;                break;</b>
+<i>762</i>&nbsp;              case GE:
+<b class="nc"><i>763</i>&nbsp;                e = new GreaterOrEqualExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>764</i>&nbsp;                break;</b>
+<i>765</i>&nbsp;              case EQ:
+<b class="nc"><i>766</i>&nbsp;                e = new EqualExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>767</i>&nbsp;                break;</b>
+<i>768</i>&nbsp;              case NE:
+<b class="nc"><i>769</i>&nbsp;                e = new NotEqualExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>770</i>&nbsp;                break;</b>
+<i>771</i>&nbsp;              case BITAND:
+<b class="nc"><i>772</i>&nbsp;                e = new BitAndExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>773</i>&nbsp;                break;</b>
+<i>774</i>&nbsp;              case BITXOR:
+<b class="nc"><i>775</i>&nbsp;                e = new BitXorExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>776</i>&nbsp;                break;</b>
+<i>777</i>&nbsp;              case BITOR:
+<b class="nc"><i>778</i>&nbsp;                e = new BitOrExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>779</i>&nbsp;                break;</b>
+<i>780</i>&nbsp;              case AND:
+<b class="nc"><i>781</i>&nbsp;                e = new AndExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>782</i>&nbsp;                break;</b>
+<i>783</i>&nbsp;              case OR:
+<b class="nc"><i>784</i>&nbsp;                e = new OrExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>785</i>&nbsp;                break;</b>
+<i>786</i>&nbsp;              case ASSIGN:
+<b class="nc"><i>787</i>&nbsp;                e = new AssignExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>788</i>&nbsp;                break;</b>
+<i>789</i>&nbsp;              case ASGMUL:
+<b class="nc"><i>790</i>&nbsp;                e = new AssignMultiplyExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>791</i>&nbsp;                break;</b>
+<i>792</i>&nbsp;              case ASGDIV:
+<b class="nc"><i>793</i>&nbsp;                e = new AssignDivideExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>794</i>&nbsp;                break;</b>
+<i>795</i>&nbsp;              case ASGREM:
+<b class="nc"><i>796</i>&nbsp;                e = new AssignRemainderExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>797</i>&nbsp;                break;</b>
+<i>798</i>&nbsp;              case ASGADD:
+<b class="nc"><i>799</i>&nbsp;                e = new AssignAddExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>800</i>&nbsp;                break;</b>
+<i>801</i>&nbsp;              case ASGSUB:
+<b class="nc"><i>802</i>&nbsp;                e = new AssignSubtractExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>803</i>&nbsp;                break;</b>
+<i>804</i>&nbsp;              case ASGLSHIFT:
+<b class="nc"><i>805</i>&nbsp;                e = new AssignShiftLeftExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>806</i>&nbsp;                break;</b>
+<i>807</i>&nbsp;              case ASGRSHIFT:
+<b class="nc"><i>808</i>&nbsp;                e = new AssignShiftRightExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>809</i>&nbsp;                break;</b>
+<i>810</i>&nbsp;              case ASGURSHIFT:
+<b class="nc"><i>811</i>&nbsp;                e = new AssignUnsignedShiftRightExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>812</i>&nbsp;                break;</b>
+<i>813</i>&nbsp;              case ASGBITAND:
+<b class="nc"><i>814</i>&nbsp;                e = new AssignBitAndExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>815</i>&nbsp;                break;</b>
+<i>816</i>&nbsp;              case ASGBITOR:
+<b class="nc"><i>817</i>&nbsp;                e = new AssignBitOrExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>818</i>&nbsp;                break;</b>
+<i>819</i>&nbsp;              case ASGBITXOR:
+<b class="nc"><i>820</i>&nbsp;                e = new AssignBitXorExpression(scan(), e, parseTerm());</b>
+<b class="nc"><i>821</i>&nbsp;                break;</b>
+<i>822</i>&nbsp;              case QUESTIONMARK: {
+<b class="nc"><i>823</i>&nbsp;                long p = scan();</b>
+<b class="nc"><i>824</i>&nbsp;                Expression second = parseExpression();</b>
+<b class="nc"><i>825</i>&nbsp;                expect(COLON);</b>
+<b class="nc"><i>826</i>&nbsp;                Expression third = parseExpression();</b>
+<i>827</i>&nbsp;
+<i>828</i>&nbsp;                // The grammar in the JLS does not allow assignment
+<i>829</i>&nbsp;                // expressions as the third part of a ?: expression.
+<i>830</i>&nbsp;                // Even though javac has no trouble parsing this,
+<i>831</i>&nbsp;                // check for this case and signal an error.
+<i>832</i>&nbsp;                // (fix for bug 4092958)
+<b class="nc"><i>833</i>&nbsp;                if (third instanceof AssignExpression</b>
+<i>834</i>&nbsp;                    || third instanceof AssignOpExpression) {
+<b class="nc"><i>835</i>&nbsp;                    env.error(third.getWhere(), &quot;assign.in.conditionalexpr&quot;);</b>
+<i>836</i>&nbsp;                }
+<i>837</i>&nbsp;
+<b class="nc"><i>838</i>&nbsp;                e = new ConditionalExpression(p, e, second, third);</b>
+<b class="nc"><i>839</i>&nbsp;                break;</b>
+<i>840</i>&nbsp;              }
+<i>841</i>&nbsp;
+<i>842</i>&nbsp;              default:
+<b class="nc"><i>843</i>&nbsp;                return null; // mark end of binary expressions</b>
+<i>844</i>&nbsp;            }
+<i>845</i>&nbsp;        }
+<b class="nc"><i>846</i>&nbsp;        return e;           // return more binary expression stuff</b>
+<i>847</i>&nbsp;    }
+<i>848</i>&nbsp;
+<i>849</i>&nbsp;    /**
+<i>850</i>&nbsp;     * Recover after a syntax error in a statement. This involves
+<i>851</i>&nbsp;     * discarding tokens until EOF or a possible continuation is
+<i>852</i>&nbsp;     * encountered.
+<i>853</i>&nbsp;     */
+<i>854</i>&nbsp;    protected boolean recoverStatement() throws SyntaxError, IOException {
+<i>855</i>&nbsp;        while (true) {
+<b class="nc"><i>856</i>&nbsp;            switch (token) {</b>
+<i>857</i>&nbsp;              case EOF:
+<i>858</i>&nbsp;              case RBRACE:
+<i>859</i>&nbsp;              case LBRACE:
+<i>860</i>&nbsp;              case IF:
+<i>861</i>&nbsp;              case FOR:
+<i>862</i>&nbsp;              case WHILE:
+<i>863</i>&nbsp;              case DO:
+<i>864</i>&nbsp;              case TRY:
+<i>865</i>&nbsp;              case CATCH:
+<i>866</i>&nbsp;              case FINALLY:
+<i>867</i>&nbsp;              case BREAK:
+<i>868</i>&nbsp;              case CONTINUE:
+<i>869</i>&nbsp;              case RETURN:
+<i>870</i>&nbsp;                // begin of a statement, return
+<b class="nc"><i>871</i>&nbsp;                return true;</b>
+<i>872</i>&nbsp;
+<i>873</i>&nbsp;              case VOID:
+<i>874</i>&nbsp;              case STATIC:
+<i>875</i>&nbsp;              case PUBLIC:
+<i>876</i>&nbsp;              case PRIVATE:
+<i>877</i>&nbsp;              case SYNCHRONIZED:
+<i>878</i>&nbsp;              case INTERFACE:
+<i>879</i>&nbsp;              case CLASS:
+<i>880</i>&nbsp;              case TRANSIENT:
+<i>881</i>&nbsp;                // begin of something outside a statement, panic some more
+<b class="nc"><i>882</i>&nbsp;                expect(RBRACE);</b>
+<b class="nc"><i>883</i>&nbsp;                return false;</b>
+<i>884</i>&nbsp;
+<i>885</i>&nbsp;              case LPAREN:
+<b class="nc"><i>886</i>&nbsp;                match(LPAREN, RPAREN);</b>
+<b class="nc"><i>887</i>&nbsp;                scan();</b>
+<b class="nc"><i>888</i>&nbsp;                break;</b>
+<i>889</i>&nbsp;
+<i>890</i>&nbsp;              case LSQBRACKET:
+<b class="nc"><i>891</i>&nbsp;                match(LSQBRACKET, RSQBRACKET);</b>
+<b class="nc"><i>892</i>&nbsp;                scan();</b>
+<b class="nc"><i>893</i>&nbsp;                break;</b>
+<i>894</i>&nbsp;
+<i>895</i>&nbsp;              default:
+<i>896</i>&nbsp;                // don&#39;t know what to do, skip
+<b class="nc"><i>897</i>&nbsp;                scan();</b>
+<b class="nc"><i>898</i>&nbsp;                break;</b>
+<i>899</i>&nbsp;            }
+<i>900</i>&nbsp;        }
+<i>901</i>&nbsp;    }
+<i>902</i>&nbsp;
+<i>903</i>&nbsp;    /**
+<i>904</i>&nbsp;     * Parse declaration, called after the type expression
+<i>905</i>&nbsp;     * has been parsed and the current token is IDENT.
+<i>906</i>&nbsp;     */
+<i>907</i>&nbsp;    protected Statement parseDeclaration(long p, int mod, Expression type) throws SyntaxError, IOException {
+<b class="nc"><i>908</i>&nbsp;        int i = argIndex;</b>
+<b class="nc"><i>909</i>&nbsp;        if (token == IDENT) {</b>
+<b class="nc"><i>910</i>&nbsp;            addArgument(new VarDeclarationStatement(pos, parseExpression()));</b>
+<b class="nc"><i>911</i>&nbsp;            while (token == COMMA) {</b>
+<b class="nc"><i>912</i>&nbsp;                scan();</b>
+<b class="nc"><i>913</i>&nbsp;                addArgument(new VarDeclarationStatement(pos, parseExpression()));</b>
+<i>914</i>&nbsp;            }
+<i>915</i>&nbsp;        }
+<b class="nc"><i>916</i>&nbsp;        return new DeclarationStatement(p, mod, type, statArgs(i));</b>
+<i>917</i>&nbsp;    }
+<i>918</i>&nbsp;
+<i>919</i>&nbsp;    /**
+<i>920</i>&nbsp;     * Check if an expression is a legal toplevel expression.
+<i>921</i>&nbsp;     * Only method, inc, dec, and new expression are allowed.
+<i>922</i>&nbsp;     */
+<i>923</i>&nbsp;    protected void topLevelExpression(Expression e) {
+<b class="nc"><i>924</i>&nbsp;        switch (e.getOp()) {</b>
+<i>925</i>&nbsp;          case ASSIGN:
+<i>926</i>&nbsp;          case ASGMUL:
+<i>927</i>&nbsp;          case ASGDIV:
+<i>928</i>&nbsp;          case ASGREM:
+<i>929</i>&nbsp;          case ASGADD:
+<i>930</i>&nbsp;          case ASGSUB:
+<i>931</i>&nbsp;          case ASGLSHIFT:
+<i>932</i>&nbsp;          case ASGRSHIFT:
+<i>933</i>&nbsp;          case ASGURSHIFT:
+<i>934</i>&nbsp;          case ASGBITAND:
+<i>935</i>&nbsp;          case ASGBITOR:
+<i>936</i>&nbsp;          case ASGBITXOR:
+<i>937</i>&nbsp;          case PREINC:
+<i>938</i>&nbsp;          case PREDEC:
+<i>939</i>&nbsp;          case POSTINC:
+<i>940</i>&nbsp;          case POSTDEC:
+<i>941</i>&nbsp;          case METHOD:
+<i>942</i>&nbsp;          case NEWINSTANCE:
+<i>943</i>&nbsp;            return;
+<i>944</i>&nbsp;        }
+<b class="nc"><i>945</i>&nbsp;        env.error(e.getWhere(), &quot;invalid.expr&quot;);</b>
+<i>946</i>&nbsp;    }
+<i>947</i>&nbsp;
+<i>948</i>&nbsp;    /**
+<i>949</i>&nbsp;     * Parse a statement.
+<i>950</i>&nbsp;     */
+<i>951</i>&nbsp;    protected Statement parseStatement() throws SyntaxError, IOException {
+<b class="nc"><i>952</i>&nbsp;        switch (token) {</b>
+<i>953</i>&nbsp;          case SEMICOLON:
+<b class="nc"><i>954</i>&nbsp;            return new CompoundStatement(scan(), new Statement[0]);</b>
+<i>955</i>&nbsp;
+<i>956</i>&nbsp;          case LBRACE:
+<b class="nc"><i>957</i>&nbsp;              return parseBlockStatement();</b>
+<i>958</i>&nbsp;
+<i>959</i>&nbsp;          case IF: {
+<i>960</i>&nbsp;            // if-statement: if (expr) stat
+<i>961</i>&nbsp;            // if-statement: if (expr) stat else stat
+<b class="nc"><i>962</i>&nbsp;            long p = scan();</b>
+<i>963</i>&nbsp;
+<b class="nc"><i>964</i>&nbsp;            expect(LPAREN);</b>
+<b class="nc"><i>965</i>&nbsp;            Expression c = parseExpression();</b>
+<b class="nc"><i>966</i>&nbsp;            expect(RPAREN);</b>
+<b class="nc"><i>967</i>&nbsp;            Statement t = parseStatement();</b>
+<b class="nc"><i>968</i>&nbsp;            if (token == ELSE) {</b>
+<b class="nc"><i>969</i>&nbsp;                scan();</b>
+<b class="nc"><i>970</i>&nbsp;                return new IfStatement(p, c, t, parseStatement());</b>
+<i>971</i>&nbsp;            } else {
+<b class="nc"><i>972</i>&nbsp;                return new IfStatement(p, c, t, null);</b>
+<i>973</i>&nbsp;            }
+<i>974</i>&nbsp;          }
+<i>975</i>&nbsp;
+<i>976</i>&nbsp;          case ELSE: {
+<i>977</i>&nbsp;            // else-statement: else stat
+<b class="nc"><i>978</i>&nbsp;            env.error(scan(), &quot;else.without.if&quot;);</b>
+<b class="nc"><i>979</i>&nbsp;            return parseStatement();</b>
+<i>980</i>&nbsp;          }
+<i>981</i>&nbsp;
+<i>982</i>&nbsp;          case FOR: {
+<i>983</i>&nbsp;            // for-statement: for (decl-expr? ; expr? ; expr?) stat
+<b class="nc"><i>984</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>985</i>&nbsp;            Statement init = null;</b>
+<b class="nc"><i>986</i>&nbsp;            Expression cond = null, inc = null;</b>
+<i>987</i>&nbsp;
+<b class="nc"><i>988</i>&nbsp;            expect(LPAREN);</b>
+<b class="nc"><i>989</i>&nbsp;            if (token != SEMICOLON) {</b>
+<b class="nc"><i>990</i>&nbsp;                long p2 = pos;</b>
+<b class="nc"><i>991</i>&nbsp;                int mod = parseModifiers(M_FINAL);</b>
+<b class="nc"><i>992</i>&nbsp;                Expression e = parseExpression();</b>
+<i>993</i>&nbsp;
+<b class="nc"><i>994</i>&nbsp;                if (token == IDENT) {</b>
+<b class="nc"><i>995</i>&nbsp;                    init = parseDeclaration(p2, mod, e);</b>
+<i>996</i>&nbsp;                } else {
+<b class="nc"><i>997</i>&nbsp;                    if (mod != 0) {</b>
+<b class="nc"><i>998</i>&nbsp;                        expect(IDENT); // should have been a declaration</b>
+<i>999</i>&nbsp;                    }
+<b class="nc"><i>1000</i>&nbsp;                    topLevelExpression(e);</b>
+<b class="nc"><i>1001</i>&nbsp;                    while (token == COMMA) {</b>
+<b class="nc"><i>1002</i>&nbsp;                        long p3 = scan();</b>
+<b class="nc"><i>1003</i>&nbsp;                        Expression e2 = parseExpression();</b>
+<b class="nc"><i>1004</i>&nbsp;                        topLevelExpression(e2);</b>
+<b class="nc"><i>1005</i>&nbsp;                        e = new CommaExpression(p3, e, e2);</b>
+<b class="nc"><i>1006</i>&nbsp;                    }</b>
+<b class="nc"><i>1007</i>&nbsp;                    init = new ExpressionStatement(p2, e);</b>
+<i>1008</i>&nbsp;                }
+<i>1009</i>&nbsp;            }
+<b class="nc"><i>1010</i>&nbsp;            expect(SEMICOLON);</b>
+<b class="nc"><i>1011</i>&nbsp;            if (token != SEMICOLON) {</b>
+<b class="nc"><i>1012</i>&nbsp;                cond = parseExpression();</b>
+<i>1013</i>&nbsp;            }
+<b class="nc"><i>1014</i>&nbsp;            expect(SEMICOLON);</b>
+<b class="nc"><i>1015</i>&nbsp;            if (token != RPAREN) {</b>
+<b class="nc"><i>1016</i>&nbsp;                inc = parseExpression();</b>
+<b class="nc"><i>1017</i>&nbsp;                topLevelExpression(inc);</b>
+<b class="nc"><i>1018</i>&nbsp;                while (token == COMMA) {</b>
+<b class="nc"><i>1019</i>&nbsp;                    long p2 = scan();</b>
+<b class="nc"><i>1020</i>&nbsp;                    Expression e2 = parseExpression();</b>
+<b class="nc"><i>1021</i>&nbsp;                    topLevelExpression(e2);</b>
+<b class="nc"><i>1022</i>&nbsp;                    inc = new CommaExpression(p2, inc, e2);</b>
+<b class="nc"><i>1023</i>&nbsp;                }</b>
+<i>1024</i>&nbsp;            }
+<b class="nc"><i>1025</i>&nbsp;            expect(RPAREN);</b>
+<b class="nc"><i>1026</i>&nbsp;            return new ForStatement(p, init, cond, inc, parseStatement());</b>
+<i>1027</i>&nbsp;          }
+<i>1028</i>&nbsp;
+<i>1029</i>&nbsp;          case WHILE: {
+<i>1030</i>&nbsp;            // while-statement: while (expr) stat
+<b class="nc"><i>1031</i>&nbsp;            long p = scan();</b>
+<i>1032</i>&nbsp;
+<b class="nc"><i>1033</i>&nbsp;            expect(LPAREN);</b>
+<b class="nc"><i>1034</i>&nbsp;            Expression cond = parseExpression();</b>
+<b class="nc"><i>1035</i>&nbsp;            expect(RPAREN);</b>
+<b class="nc"><i>1036</i>&nbsp;            return new WhileStatement(p, cond, parseStatement());</b>
+<i>1037</i>&nbsp;          }
+<i>1038</i>&nbsp;
+<i>1039</i>&nbsp;          case DO: {
+<i>1040</i>&nbsp;            // do-statement: do stat while (expr)
+<b class="nc"><i>1041</i>&nbsp;            long p = scan();</b>
+<i>1042</i>&nbsp;
+<b class="nc"><i>1043</i>&nbsp;            Statement body = parseStatement();</b>
+<b class="nc"><i>1044</i>&nbsp;            expect(WHILE);</b>
+<b class="nc"><i>1045</i>&nbsp;            expect(LPAREN);</b>
+<b class="nc"><i>1046</i>&nbsp;            Expression cond = parseExpression();</b>
+<b class="nc"><i>1047</i>&nbsp;            expect(RPAREN);</b>
+<b class="nc"><i>1048</i>&nbsp;            expect(SEMICOLON);</b>
+<b class="nc"><i>1049</i>&nbsp;            return new DoStatement(p, body, cond);</b>
+<i>1050</i>&nbsp;          }
+<i>1051</i>&nbsp;
+<i>1052</i>&nbsp;          case BREAK: {
+<i>1053</i>&nbsp;            // break-statement: break ;
+<b class="nc"><i>1054</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>1055</i>&nbsp;            Identifier label = null;</b>
+<i>1056</i>&nbsp;
+<b class="nc"><i>1057</i>&nbsp;            if (token == IDENT) {</b>
+<b class="nc"><i>1058</i>&nbsp;                label = scanner.idValue;</b>
+<b class="nc"><i>1059</i>&nbsp;                scan();</b>
+<i>1060</i>&nbsp;            }
+<b class="nc"><i>1061</i>&nbsp;            expect(SEMICOLON);</b>
+<b class="nc"><i>1062</i>&nbsp;            return new BreakStatement(p, label);</b>
+<i>1063</i>&nbsp;          }
+<i>1064</i>&nbsp;
+<i>1065</i>&nbsp;          case CONTINUE: {
+<i>1066</i>&nbsp;            // continue-statement: continue ;
+<b class="nc"><i>1067</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>1068</i>&nbsp;            Identifier label = null;</b>
+<i>1069</i>&nbsp;
+<b class="nc"><i>1070</i>&nbsp;            if (token == IDENT) {</b>
+<b class="nc"><i>1071</i>&nbsp;                label = scanner.idValue;</b>
+<b class="nc"><i>1072</i>&nbsp;                scan();</b>
+<i>1073</i>&nbsp;            }
+<b class="nc"><i>1074</i>&nbsp;            expect(SEMICOLON);</b>
+<b class="nc"><i>1075</i>&nbsp;            return new ContinueStatement(p, label);</b>
+<i>1076</i>&nbsp;          }
+<i>1077</i>&nbsp;
+<i>1078</i>&nbsp;          case RETURN: {
+<i>1079</i>&nbsp;            // return-statement: return ;
+<i>1080</i>&nbsp;            // return-statement: return expr ;
+<b class="nc"><i>1081</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>1082</i>&nbsp;            Expression e = null;</b>
+<i>1083</i>&nbsp;
+<b class="nc"><i>1084</i>&nbsp;            if (token != SEMICOLON) {</b>
+<b class="nc"><i>1085</i>&nbsp;                e = parseExpression();</b>
+<i>1086</i>&nbsp;            }
+<b class="nc"><i>1087</i>&nbsp;            expect(SEMICOLON);</b>
+<b class="nc"><i>1088</i>&nbsp;            return new ReturnStatement(p, e);</b>
+<i>1089</i>&nbsp;          }
+<i>1090</i>&nbsp;
+<i>1091</i>&nbsp;          case SWITCH: {
+<i>1092</i>&nbsp;            // switch statement: switch ( expr ) stat
+<b class="nc"><i>1093</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>1094</i>&nbsp;            int i = argIndex;</b>
+<i>1095</i>&nbsp;
+<b class="nc"><i>1096</i>&nbsp;            expect(LPAREN);</b>
+<b class="nc"><i>1097</i>&nbsp;            Expression e = parseExpression();</b>
+<b class="nc"><i>1098</i>&nbsp;            expect(RPAREN);</b>
+<b class="nc"><i>1099</i>&nbsp;            expect(LBRACE);</b>
+<i>1100</i>&nbsp;
+<b class="nc"><i>1101</i>&nbsp;            while ((token != EOF) &amp;&amp; (token != RBRACE)) {</b>
+<b class="nc"><i>1102</i>&nbsp;                int j = argIndex;</b>
+<i>1103</i>&nbsp;                try {
+<b class="nc"><i>1104</i>&nbsp;                    switch (token) {</b>
+<i>1105</i>&nbsp;                      case CASE:
+<i>1106</i>&nbsp;                        // case-statement: case expr:
+<b class="nc"><i>1107</i>&nbsp;                        addArgument(new CaseStatement(scan(), parseExpression()));</b>
+<b class="nc"><i>1108</i>&nbsp;                        expect(COLON);</b>
+<b class="nc"><i>1109</i>&nbsp;                        break;</b>
+<i>1110</i>&nbsp;
+<i>1111</i>&nbsp;                      case DEFAULT:
+<i>1112</i>&nbsp;                        // default-statement: default:
+<b class="nc"><i>1113</i>&nbsp;                        addArgument(new CaseStatement(scan(), null));</b>
+<b class="nc"><i>1114</i>&nbsp;                        expect(COLON);</b>
+<b class="nc"><i>1115</i>&nbsp;                        break;</b>
+<i>1116</i>&nbsp;
+<i>1117</i>&nbsp;                      default:
+<b class="nc"><i>1118</i>&nbsp;                        addArgument(parseStatement());</b>
+<i>1119</i>&nbsp;                        break;
+<i>1120</i>&nbsp;                    }
+<b class="nc"><i>1121</i>&nbsp;                } catch (SyntaxError ee) {</b>
+<b class="nc"><i>1122</i>&nbsp;                    argIndex = j;</b>
+<b class="nc"><i>1123</i>&nbsp;                    if (!recoverStatement()) {</b>
+<b class="nc"><i>1124</i>&nbsp;                        throw ee;</b>
+<i>1125</i>&nbsp;                    }
+<b class="nc"><i>1126</i>&nbsp;                }</b>
+<b class="nc"><i>1127</i>&nbsp;            }</b>
+<b class="nc"><i>1128</i>&nbsp;            expect(RBRACE);</b>
+<b class="nc"><i>1129</i>&nbsp;            return new SwitchStatement(p, e, statArgs(i));</b>
+<i>1130</i>&nbsp;          }
+<i>1131</i>&nbsp;
+<i>1132</i>&nbsp;          case CASE: {
+<i>1133</i>&nbsp;            // case-statement: case expr : stat
+<b class="nc"><i>1134</i>&nbsp;            env.error(pos, &quot;case.without.switch&quot;);</b>
+<b class="nc"><i>1135</i>&nbsp;            while (token == CASE) {</b>
+<b class="nc"><i>1136</i>&nbsp;                scan();</b>
+<b class="nc"><i>1137</i>&nbsp;                parseExpression();</b>
+<b class="nc"><i>1138</i>&nbsp;                expect(COLON);</b>
+<i>1139</i>&nbsp;            }
+<b class="nc"><i>1140</i>&nbsp;            return parseStatement();</b>
+<i>1141</i>&nbsp;          }
+<i>1142</i>&nbsp;
+<i>1143</i>&nbsp;          case DEFAULT: {
+<i>1144</i>&nbsp;            // default-statement: default : stat
+<b class="nc"><i>1145</i>&nbsp;            env.error(pos, &quot;default.without.switch&quot;);</b>
+<b class="nc"><i>1146</i>&nbsp;            scan();</b>
+<b class="nc"><i>1147</i>&nbsp;            expect(COLON);</b>
+<b class="nc"><i>1148</i>&nbsp;            return parseStatement();</b>
+<i>1149</i>&nbsp;          }
+<i>1150</i>&nbsp;
+<i>1151</i>&nbsp;          case TRY: {
+<i>1152</i>&nbsp;            // try-statement: try stat catch (type-expr ident) stat finally stat
+<b class="nc"><i>1153</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>1154</i>&nbsp;            Statement init = null;              // try-object specification</b>
+<b class="nc"><i>1155</i>&nbsp;            int i = argIndex;</b>
+<b class="nc"><i>1156</i>&nbsp;            boolean catches = false;</b>
+<i>1157</i>&nbsp;
+<i>1158</i>&nbsp;            if (false &amp;&amp; token == LPAREN) {
+<i>1159</i>&nbsp;                expect(LPAREN);
+<i>1160</i>&nbsp;                long p2 = pos;
+<i>1161</i>&nbsp;                int mod = parseModifiers(M_FINAL);
+<i>1162</i>&nbsp;                Expression e = parseExpression();
+<i>1163</i>&nbsp;
+<i>1164</i>&nbsp;                if (token == IDENT) {
+<i>1165</i>&nbsp;                    init = parseDeclaration(p2, mod, e);
+<i>1166</i>&nbsp;                    // leave check for try (T x, y) for semantic phase
+<i>1167</i>&nbsp;                } else {
+<i>1168</i>&nbsp;                    if (mod != 0) {
+<i>1169</i>&nbsp;                        expect(IDENT); // should have been a declaration
+<i>1170</i>&nbsp;                    }
+<i>1171</i>&nbsp;                    init = new ExpressionStatement(p2, e);
+<i>1172</i>&nbsp;                }
+<i>1173</i>&nbsp;                expect(RPAREN);
+<i>1174</i>&nbsp;            }
+<i>1175</i>&nbsp;
+<b class="nc"><i>1176</i>&nbsp;            Statement s = parseBlockStatement();</b>
+<i>1177</i>&nbsp;
+<b class="nc"><i>1178</i>&nbsp;            if (init != null) {</b>
+<i>1179</i>&nbsp;                // s = new FinallyStatement(p, init, s, 0);
+<i>1180</i>&nbsp;            }
+<i>1181</i>&nbsp;
+<b class="nc"><i>1182</i>&nbsp;            while (token == CATCH) {</b>
+<b class="nc"><i>1183</i>&nbsp;                long pp = pos;</b>
+<b class="nc"><i>1184</i>&nbsp;                expect(CATCH);</b>
+<b class="nc"><i>1185</i>&nbsp;                expect(LPAREN);</b>
+<b class="nc"><i>1186</i>&nbsp;                int mod = parseModifiers(M_FINAL);</b>
+<b class="nc"><i>1187</i>&nbsp;                Expression t = parseExpression();</b>
+<b class="nc"><i>1188</i>&nbsp;                IdentifierToken id = scanner.getIdToken();</b>
+<b class="nc"><i>1189</i>&nbsp;                expect(IDENT);</b>
+<b class="nc"><i>1190</i>&nbsp;                id.modifiers = mod;</b>
+<i>1191</i>&nbsp;                // We only catch Throwable&#39;s, so this is no longer required
+<i>1192</i>&nbsp;                // while (token == LSQBRACKET) {
+<i>1193</i>&nbsp;                //    t = new ArrayAccessExpression(scan(), t, null);
+<i>1194</i>&nbsp;                //    expect(RSQBRACKET);
+<i>1195</i>&nbsp;                // }
+<b class="nc"><i>1196</i>&nbsp;                expect(RPAREN);</b>
+<b class="nc"><i>1197</i>&nbsp;                addArgument(new CatchStatement(pp, t, id, parseBlockStatement()));</b>
+<b class="nc"><i>1198</i>&nbsp;                catches = true;</b>
+<b class="nc"><i>1199</i>&nbsp;            }</b>
+<i>1200</i>&nbsp;
+<b class="nc"><i>1201</i>&nbsp;            if (catches)</b>
+<b class="nc"><i>1202</i>&nbsp;                s = new TryStatement(p, s, statArgs(i));</b>
+<i>1203</i>&nbsp;
+<b class="nc"><i>1204</i>&nbsp;            if (token == FINALLY) {</b>
+<b class="nc"><i>1205</i>&nbsp;                scan();</b>
+<b class="nc"><i>1206</i>&nbsp;                return new FinallyStatement(p, s, parseBlockStatement());</b>
+<b class="nc"><i>1207</i>&nbsp;            } else if (catches || init != null) {</b>
+<b class="nc"><i>1208</i>&nbsp;                return s;</b>
+<i>1209</i>&nbsp;            } else {
+<b class="nc"><i>1210</i>&nbsp;                env.error(pos, &quot;try.without.catch.finally&quot;);</b>
+<b class="nc"><i>1211</i>&nbsp;                return new TryStatement(p, s, null);</b>
+<i>1212</i>&nbsp;            }
+<i>1213</i>&nbsp;          }
+<i>1214</i>&nbsp;
+<i>1215</i>&nbsp;          case CATCH: {
+<i>1216</i>&nbsp;            // catch-statement: catch (expr ident) stat finally stat
+<b class="nc"><i>1217</i>&nbsp;            env.error(pos, &quot;catch.without.try&quot;);</b>
+<i>1218</i>&nbsp;
+<i>1219</i>&nbsp;            Statement s;
+<i>1220</i>&nbsp;            do {
+<b class="nc"><i>1221</i>&nbsp;                scan();</b>
+<b class="nc"><i>1222</i>&nbsp;                expect(LPAREN);</b>
+<b class="nc"><i>1223</i>&nbsp;                parseModifiers(M_FINAL);</b>
+<b class="nc"><i>1224</i>&nbsp;                parseExpression();</b>
+<b class="nc"><i>1225</i>&nbsp;                expect(IDENT);</b>
+<b class="nc"><i>1226</i>&nbsp;                expect(RPAREN);</b>
+<b class="nc"><i>1227</i>&nbsp;                s = parseBlockStatement();</b>
+<b class="nc"><i>1228</i>&nbsp;            } while (token == CATCH);</b>
+<i>1229</i>&nbsp;
+<b class="nc"><i>1230</i>&nbsp;            if (token == FINALLY) {</b>
+<b class="nc"><i>1231</i>&nbsp;                scan();</b>
+<b class="nc"><i>1232</i>&nbsp;                s = parseBlockStatement();</b>
+<i>1233</i>&nbsp;            }
+<b class="nc"><i>1234</i>&nbsp;            return s;</b>
+<i>1235</i>&nbsp;          }
+<i>1236</i>&nbsp;
+<i>1237</i>&nbsp;          case FINALLY: {
+<i>1238</i>&nbsp;            // finally-statement: finally stat
+<b class="nc"><i>1239</i>&nbsp;            env.error(pos, &quot;finally.without.try&quot;);</b>
+<b class="nc"><i>1240</i>&nbsp;            scan();</b>
+<b class="nc"><i>1241</i>&nbsp;            return parseBlockStatement();</b>
+<i>1242</i>&nbsp;          }
+<i>1243</i>&nbsp;
+<i>1244</i>&nbsp;          case THROW: {
+<i>1245</i>&nbsp;            // throw-statement: throw expr;
+<b class="nc"><i>1246</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>1247</i>&nbsp;            Expression e = parseExpression();</b>
+<b class="nc"><i>1248</i>&nbsp;            expect(SEMICOLON);</b>
+<b class="nc"><i>1249</i>&nbsp;            return new ThrowStatement(p, e);</b>
+<i>1250</i>&nbsp;          }
+<i>1251</i>&nbsp;
+<i>1252</i>&nbsp;          case GOTO: {
+<b class="nc"><i>1253</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>1254</i>&nbsp;            expect(IDENT);</b>
+<b class="nc"><i>1255</i>&nbsp;            expect(SEMICOLON);</b>
+<b class="nc"><i>1256</i>&nbsp;            env.error(p, &quot;not.supported&quot;, &quot;goto&quot;);</b>
+<b class="nc"><i>1257</i>&nbsp;            return new CompoundStatement(p, new Statement[0]);</b>
+<i>1258</i>&nbsp;          }
+<i>1259</i>&nbsp;
+<i>1260</i>&nbsp;          case SYNCHRONIZED: {
+<i>1261</i>&nbsp;            // synchronized-statement: synchronized (expr) stat
+<b class="nc"><i>1262</i>&nbsp;            long p = scan();</b>
+<b class="nc"><i>1263</i>&nbsp;            expect(LPAREN);</b>
+<b class="nc"><i>1264</i>&nbsp;            Expression e = parseExpression();</b>
+<b class="nc"><i>1265</i>&nbsp;            expect(RPAREN);</b>
+<b class="nc"><i>1266</i>&nbsp;            return new SynchronizedStatement(p, e, parseBlockStatement());</b>
+<i>1267</i>&nbsp;          }
+<i>1268</i>&nbsp;
+<i>1269</i>&nbsp;          case INTERFACE:
+<i>1270</i>&nbsp;          case CLASS:
+<i>1271</i>&nbsp;            // Inner class.
+<b class="nc"><i>1272</i>&nbsp;            return parseLocalClass(0);</b>
+<i>1273</i>&nbsp;
+<i>1274</i>&nbsp;          case CONST:
+<i>1275</i>&nbsp;          case ABSTRACT:
+<i>1276</i>&nbsp;          case FINAL:
+<i>1277</i>&nbsp;          case STRICTFP: {
+<i>1278</i>&nbsp;            // a declaration of some sort
+<b class="nc"><i>1279</i>&nbsp;            long p = pos;</b>
+<i>1280</i>&nbsp;
+<i>1281</i>&nbsp;            // A class which is local to a block is not a member, and so
+<i>1282</i>&nbsp;            // cannot be public, private, protected, or static. It is in
+<i>1283</i>&nbsp;            // effect private to the block, since it cannot be used outside
+<i>1284</i>&nbsp;            // its scope.
+<i>1285</i>&nbsp;            //
+<i>1286</i>&nbsp;            // However, any class (if it has a name) can be declared final,
+<i>1287</i>&nbsp;            // abstract, or strictfp.
+<b class="nc"><i>1288</i>&nbsp;            int mod = parseModifiers(M_FINAL | M_ABSTRACT</b>
+<i>1289</i>&nbsp;                                             | M_STRICTFP );
+<i>1290</i>&nbsp;
+<b class="nc"><i>1291</i>&nbsp;            switch (token) {</b>
+<i>1292</i>&nbsp;              case INTERFACE:
+<i>1293</i>&nbsp;              case CLASS:
+<b class="nc"><i>1294</i>&nbsp;                return parseLocalClass(mod);</b>
+<i>1295</i>&nbsp;
+<i>1296</i>&nbsp;              case BOOLEAN:
+<i>1297</i>&nbsp;              case BYTE:
+<i>1298</i>&nbsp;              case CHAR:
+<i>1299</i>&nbsp;              case SHORT:
+<i>1300</i>&nbsp;              case INT:
+<i>1301</i>&nbsp;              case LONG:
+<i>1302</i>&nbsp;              case FLOAT:
+<i>1303</i>&nbsp;              case DOUBLE:
+<i>1304</i>&nbsp;              case IDENT: {
+<b class="nc"><i>1305</i>&nbsp;                if ((mod &amp; (M_ABSTRACT | M_STRICTFP )) != 0) {</b>
+<b class="nc"><i>1306</i>&nbsp;                    mod &amp;= ~ (M_ABSTRACT | M_STRICTFP );</b>
+<b class="nc"><i>1307</i>&nbsp;                    expect(CLASS);</b>
+<i>1308</i>&nbsp;                }
+<b class="nc"><i>1309</i>&nbsp;                Expression e = parseExpression();</b>
+<b class="nc"><i>1310</i>&nbsp;                if (token != IDENT) {</b>
+<b class="nc"><i>1311</i>&nbsp;                    expect(IDENT);</b>
+<i>1312</i>&nbsp;                }
+<i>1313</i>&nbsp;                // declaration: final expr expr
+<b class="nc"><i>1314</i>&nbsp;                Statement s = parseDeclaration(p, mod, e);</b>
+<b class="nc"><i>1315</i>&nbsp;                expect(SEMICOLON);</b>
+<b class="nc"><i>1316</i>&nbsp;                return s;</b>
+<i>1317</i>&nbsp;              }
+<i>1318</i>&nbsp;
+<i>1319</i>&nbsp;              default:
+<b class="nc"><i>1320</i>&nbsp;                env.error(pos, &quot;type.expected&quot;);</b>
+<b class="nc"><i>1321</i>&nbsp;                throw new SyntaxError();</b>
+<i>1322</i>&nbsp;            }
+<i>1323</i>&nbsp;          }
+<i>1324</i>&nbsp;
+<i>1325</i>&nbsp;          case VOID:
+<i>1326</i>&nbsp;          case STATIC:
+<i>1327</i>&nbsp;          case PUBLIC:
+<i>1328</i>&nbsp;          case PRIVATE:
+<i>1329</i>&nbsp;          case TRANSIENT:
+<i>1330</i>&nbsp;            // This is the start of something outside a statement
+<b class="nc"><i>1331</i>&nbsp;            env.error(pos, &quot;statement.expected&quot;);</b>
+<b class="nc"><i>1332</i>&nbsp;            throw new SyntaxError();</b>
+<i>1333</i>&nbsp;        }
+<i>1334</i>&nbsp;
+<b class="nc"><i>1335</i>&nbsp;        long p = pos;</b>
+<b class="nc"><i>1336</i>&nbsp;        Expression e = parseExpression();</b>
+<i>1337</i>&nbsp;
+<b class="nc"><i>1338</i>&nbsp;        if (token == IDENT) {</b>
+<i>1339</i>&nbsp;            // declaration: expr expr
+<b class="nc"><i>1340</i>&nbsp;            Statement s = parseDeclaration(p, 0, e);</b>
+<b class="nc"><i>1341</i>&nbsp;            expect(SEMICOLON);</b>
+<b class="nc"><i>1342</i>&nbsp;            return s;</b>
+<i>1343</i>&nbsp;        }
+<b class="nc"><i>1344</i>&nbsp;        if (token == COLON) {</b>
+<i>1345</i>&nbsp;            // label: id: stat
+<b class="nc"><i>1346</i>&nbsp;            scan();</b>
+<b class="nc"><i>1347</i>&nbsp;            Statement s = parseStatement();</b>
+<b class="nc"><i>1348</i>&nbsp;            s.setLabel(env, e);</b>
+<b class="nc"><i>1349</i>&nbsp;            return s;</b>
+<i>1350</i>&nbsp;        }
+<i>1351</i>&nbsp;
+<i>1352</i>&nbsp;        // it was just an expression...
+<b class="nc"><i>1353</i>&nbsp;        topLevelExpression(e);</b>
+<b class="nc"><i>1354</i>&nbsp;        expect(SEMICOLON);</b>
+<b class="nc"><i>1355</i>&nbsp;        return new ExpressionStatement(p, e);</b>
+<i>1356</i>&nbsp;    }
+<i>1357</i>&nbsp;
+<i>1358</i>&nbsp;    protected Statement parseBlockStatement() throws SyntaxError, IOException {
+<i>1359</i>&nbsp;        // compound statement: { stat1 stat2 ... statn }
+<b class="nc"><i>1360</i>&nbsp;        if (token != LBRACE) {</b>
+<i>1361</i>&nbsp;            // We&#39;re expecting a block statement.  But we&#39;ll probably do the
+<i>1362</i>&nbsp;            // least damage if we try to parse a normal statement instead.
+<b class="nc"><i>1363</i>&nbsp;            env.error(scanner.prevPos, &quot;token.expected&quot;, opNames[LBRACE]);</b>
+<b class="nc"><i>1364</i>&nbsp;            return parseStatement();</b>
+<i>1365</i>&nbsp;        }
+<b class="nc"><i>1366</i>&nbsp;        long p = scan();</b>
+<b class="nc"><i>1367</i>&nbsp;        int i = argIndex;</b>
+<b class="nc"><i>1368</i>&nbsp;        while ((token != EOF) &amp;&amp; (token != RBRACE)) {</b>
+<b class="nc"><i>1369</i>&nbsp;            int j = argIndex;</b>
+<i>1370</i>&nbsp;            try {
+<b class="nc"><i>1371</i>&nbsp;                addArgument(parseStatement());</b>
+<b class="nc"><i>1372</i>&nbsp;            } catch (SyntaxError e) {</b>
+<b class="nc"><i>1373</i>&nbsp;                argIndex = j;</b>
+<b class="nc"><i>1374</i>&nbsp;                if (!recoverStatement()) {</b>
+<b class="nc"><i>1375</i>&nbsp;                    throw e;</b>
+<i>1376</i>&nbsp;                }
+<b class="nc"><i>1377</i>&nbsp;            }</b>
+<b class="nc"><i>1378</i>&nbsp;        }</b>
+<i>1379</i>&nbsp;
+<b class="nc"><i>1380</i>&nbsp;        expect(RBRACE);</b>
+<b class="nc"><i>1381</i>&nbsp;        return new CompoundStatement(p, statArgs(i));</b>
+<i>1382</i>&nbsp;    }
+<i>1383</i>&nbsp;
+<i>1384</i>&nbsp;
+<i>1385</i>&nbsp;    /**
+<i>1386</i>&nbsp;     * Parse an identifier. ie: a.b.c returns &quot;a.b.c&quot;
+<i>1387</i>&nbsp;     * If star is true then &quot;a.b.*&quot; is allowed.
+<i>1388</i>&nbsp;     * The return value encodes both the identifier and its location.
+<i>1389</i>&nbsp;     */
+<i>1390</i>&nbsp;    protected IdentifierToken parseName(boolean star) throws SyntaxError, IOException {
+<b class="nc"><i>1391</i>&nbsp;        IdentifierToken res = scanner.getIdToken();</b>
+<b class="nc"><i>1392</i>&nbsp;        expect(IDENT);</b>
+<i>1393</i>&nbsp;
+<b class="nc"><i>1394</i>&nbsp;        if (token != FIELD) {</b>
+<b class="nc"><i>1395</i>&nbsp;            return res;</b>
+<i>1396</i>&nbsp;        }
+<i>1397</i>&nbsp;
+<b class="nc"><i>1398</i>&nbsp;        StringBuilder sb = new StringBuilder(res.id.toString());</b>
+<i>1399</i>&nbsp;
+<b class="nc"><i>1400</i>&nbsp;        while (token == FIELD) {</b>
+<b class="nc"><i>1401</i>&nbsp;            scan();</b>
+<b class="nc"><i>1402</i>&nbsp;            if ((token == MUL) &amp;&amp; star) {</b>
+<b class="nc"><i>1403</i>&nbsp;                scan();</b>
+<b class="nc"><i>1404</i>&nbsp;                sb.append(&quot;.*&quot;);</b>
+<b class="nc"><i>1405</i>&nbsp;                break;</b>
+<i>1406</i>&nbsp;            }
+<i>1407</i>&nbsp;
+<b class="nc"><i>1408</i>&nbsp;            sb.append(&#39;.&#39;);</b>
+<b class="nc"><i>1409</i>&nbsp;            if (token == IDENT) {</b>
+<b class="nc"><i>1410</i>&nbsp;                sb.append(scanner.idValue);</b>
+<i>1411</i>&nbsp;            }
+<b class="nc"><i>1412</i>&nbsp;            expect(IDENT);</b>
+<i>1413</i>&nbsp;        }
+<i>1414</i>&nbsp;
+<b class="nc"><i>1415</i>&nbsp;        res.id = Identifier.lookup(sb.toString());</b>
+<b class="nc"><i>1416</i>&nbsp;        return res;</b>
+<i>1417</i>&nbsp;    }
+<i>1418</i>&nbsp;    /**
+<i>1419</i>&nbsp;     * @deprecated
+<i>1420</i>&nbsp;     * @see #parseName
+<i>1421</i>&nbsp;     */
+<i>1422</i>&nbsp;    @Deprecated
+<i>1423</i>&nbsp;    protected Identifier parseIdentifier(boolean star) throws SyntaxError, IOException {
+<b class="nc"><i>1424</i>&nbsp;        return parseName(star).id;</b>
+<i>1425</i>&nbsp;    }
+<i>1426</i>&nbsp;
+<i>1427</i>&nbsp;    /**
+<i>1428</i>&nbsp;     * Parse a type expression, this results in a Type.
+<i>1429</i>&nbsp;     * The parse includes trailing array brackets.
+<i>1430</i>&nbsp;     */
+<i>1431</i>&nbsp;    protected Type parseType() throws SyntaxError, IOException {
+<i>1432</i>&nbsp;        Type t;
+<i>1433</i>&nbsp;
+<b class="nc"><i>1434</i>&nbsp;        switch (token) {</b>
+<i>1435</i>&nbsp;          case IDENT:
+<b class="nc"><i>1436</i>&nbsp;            t = Type.tClass(parseName(false).id);</b>
+<b class="nc"><i>1437</i>&nbsp;            break;</b>
+<i>1438</i>&nbsp;          case VOID:
+<b class="nc"><i>1439</i>&nbsp;            scan();</b>
+<b class="nc"><i>1440</i>&nbsp;            t = Type.tVoid;</b>
+<b class="nc"><i>1441</i>&nbsp;            break;</b>
+<i>1442</i>&nbsp;          case BOOLEAN:
+<b class="nc"><i>1443</i>&nbsp;            scan();</b>
+<b class="nc"><i>1444</i>&nbsp;            t = Type.tBoolean;</b>
+<b class="nc"><i>1445</i>&nbsp;            break;</b>
+<i>1446</i>&nbsp;          case BYTE:
+<b class="nc"><i>1447</i>&nbsp;            scan();</b>
+<b class="nc"><i>1448</i>&nbsp;            t = Type.tByte;</b>
+<b class="nc"><i>1449</i>&nbsp;            break;</b>
+<i>1450</i>&nbsp;          case CHAR:
+<b class="nc"><i>1451</i>&nbsp;            scan();</b>
+<b class="nc"><i>1452</i>&nbsp;            t = Type.tChar;</b>
+<b class="nc"><i>1453</i>&nbsp;            break;</b>
+<i>1454</i>&nbsp;          case SHORT:
+<b class="nc"><i>1455</i>&nbsp;            scan();</b>
+<b class="nc"><i>1456</i>&nbsp;            t = Type.tShort;</b>
+<b class="nc"><i>1457</i>&nbsp;            break;</b>
+<i>1458</i>&nbsp;          case INT:
+<b class="nc"><i>1459</i>&nbsp;            scan();</b>
+<b class="nc"><i>1460</i>&nbsp;            t = Type.tInt;</b>
+<b class="nc"><i>1461</i>&nbsp;            break;</b>
+<i>1462</i>&nbsp;          case FLOAT:
+<b class="nc"><i>1463</i>&nbsp;            scan();</b>
+<b class="nc"><i>1464</i>&nbsp;            t = Type.tFloat;</b>
+<b class="nc"><i>1465</i>&nbsp;            break;</b>
+<i>1466</i>&nbsp;          case LONG:
+<b class="nc"><i>1467</i>&nbsp;            scan();</b>
+<b class="nc"><i>1468</i>&nbsp;            t = Type.tLong;</b>
+<b class="nc"><i>1469</i>&nbsp;            break;</b>
+<i>1470</i>&nbsp;          case DOUBLE:
+<b class="nc"><i>1471</i>&nbsp;            scan();</b>
+<b class="nc"><i>1472</i>&nbsp;            t = Type.tDouble;</b>
+<b class="nc"><i>1473</i>&nbsp;            break;</b>
+<i>1474</i>&nbsp;          default:
+<b class="nc"><i>1475</i>&nbsp;            env.error(pos, &quot;type.expected&quot;);</b>
+<b class="nc"><i>1476</i>&nbsp;            throw new SyntaxError();</b>
+<i>1477</i>&nbsp;        }
+<b class="nc"><i>1478</i>&nbsp;        return parseArrayBrackets(t);</b>
+<i>1479</i>&nbsp;    }
+<i>1480</i>&nbsp;
+<i>1481</i>&nbsp;    /**
+<i>1482</i>&nbsp;     * Parse the tail of a type expression, which might be array brackets.
+<i>1483</i>&nbsp;     * Return the given type, as possibly modified by the suffix.
+<i>1484</i>&nbsp;     */
+<i>1485</i>&nbsp;    protected Type parseArrayBrackets(Type t) throws SyntaxError, IOException {
+<i>1486</i>&nbsp;
+<i>1487</i>&nbsp;        // Parse []&#39;s
+<b class="nc"><i>1488</i>&nbsp;        while (token == LSQBRACKET) {</b>
+<b class="nc"><i>1489</i>&nbsp;            scan();</b>
+<b class="nc"><i>1490</i>&nbsp;            if (token != RSQBRACKET) {</b>
+<b class="nc"><i>1491</i>&nbsp;                env.error(pos, &quot;array.dim.in.decl&quot;);</b>
+<b class="nc"><i>1492</i>&nbsp;                parseExpression();</b>
+<i>1493</i>&nbsp;            }
+<b class="nc"><i>1494</i>&nbsp;            expect(RSQBRACKET);</b>
+<b class="nc"><i>1495</i>&nbsp;            t = Type.tArray(t);</b>
+<i>1496</i>&nbsp;        }
+<b class="nc"><i>1497</i>&nbsp;        return t;</b>
+<i>1498</i>&nbsp;    }
+<i>1499</i>&nbsp;
+<i>1500</i>&nbsp;    /*
+<i>1501</i>&nbsp;     * Dealing with argument lists, I&#39;m not using
+<i>1502</i>&nbsp;     * Vector for efficiency.
+<i>1503</i>&nbsp;     */
+<i>1504</i>&nbsp;
+<b class="nc"><i>1505</i>&nbsp;    private int aCount = 0;</b>
+<b class="nc"><i>1506</i>&nbsp;    private Type aTypes[] = new Type[8];</b>
+<b class="nc"><i>1507</i>&nbsp;    private IdentifierToken aNames[] = new IdentifierToken[aTypes.length];</b>
+<i>1508</i>&nbsp;
+<i>1509</i>&nbsp;    private void addArgument(int mod, Type t, IdentifierToken nm) {
+<b class="nc"><i>1510</i>&nbsp;        nm.modifiers = mod;</b>
+<b class="nc"><i>1511</i>&nbsp;        if (aCount &gt;= aTypes.length) {</b>
+<b class="nc"><i>1512</i>&nbsp;            Type newATypes[] = new Type[aCount * 2];</b>
+<b class="nc"><i>1513</i>&nbsp;            System.arraycopy(aTypes, 0, newATypes, 0, aCount);</b>
+<b class="nc"><i>1514</i>&nbsp;            aTypes = newATypes;</b>
+<b class="nc"><i>1515</i>&nbsp;            IdentifierToken newANames[] = new IdentifierToken[aCount * 2];</b>
+<b class="nc"><i>1516</i>&nbsp;            System.arraycopy(aNames, 0, newANames, 0, aCount);</b>
+<b class="nc"><i>1517</i>&nbsp;            aNames = newANames;</b>
+<i>1518</i>&nbsp;        }
+<b class="nc"><i>1519</i>&nbsp;        aTypes[aCount] = t;</b>
+<b class="nc"><i>1520</i>&nbsp;        aNames[aCount++] = nm;</b>
+<i>1521</i>&nbsp;    }
+<i>1522</i>&nbsp;
+<i>1523</i>&nbsp;    /**
+<i>1524</i>&nbsp;     * Parse a possibly-empty sequence of modifier keywords.
+<i>1525</i>&nbsp;     * Return the resulting bitmask.
+<i>1526</i>&nbsp;     * Diagnose repeated modifiers, but make no other checks.
+<i>1527</i>&nbsp;     * Only modifiers mentioned in the given bitmask are scanned;
+<i>1528</i>&nbsp;     * an unmatched modifier must be handled by the caller.
+<i>1529</i>&nbsp;     */
+<i>1530</i>&nbsp;    protected int parseModifiers(int mask) throws IOException {
+<b class="nc"><i>1531</i>&nbsp;        int mod = 0;</b>
+<i>1532</i>&nbsp;        while (true) {
+<b class="nc"><i>1533</i>&nbsp;            if (token==CONST) {</b>
+<i>1534</i>&nbsp;                // const isn&#39;t in java, but handle a common C++ usage gently
+<b class="nc"><i>1535</i>&nbsp;                env.error(pos, &quot;not.supported&quot;, &quot;const&quot;);</b>
+<b class="nc"><i>1536</i>&nbsp;                scan();</b>
+<i>1537</i>&nbsp;            }
+<b class="nc"><i>1538</i>&nbsp;            int nextmod = 0;</b>
+<b class="nc"><i>1539</i>&nbsp;            switch (token) {</b>
+<b class="nc"><i>1540</i>&nbsp;               case PRIVATE:            nextmod = M_PRIVATE;      break;</b>
+<b class="nc"><i>1541</i>&nbsp;               case PUBLIC:             nextmod = M_PUBLIC;       break;</b>
+<b class="nc"><i>1542</i>&nbsp;               case PROTECTED:          nextmod = M_PROTECTED;    break;</b>
+<b class="nc"><i>1543</i>&nbsp;               case STATIC:             nextmod = M_STATIC;       break;</b>
+<b class="nc"><i>1544</i>&nbsp;               case TRANSIENT:          nextmod = M_TRANSIENT;    break;</b>
+<b class="nc"><i>1545</i>&nbsp;               case FINAL:              nextmod = M_FINAL;        break;</b>
+<b class="nc"><i>1546</i>&nbsp;               case ABSTRACT:           nextmod = M_ABSTRACT;     break;</b>
+<b class="nc"><i>1547</i>&nbsp;               case NATIVE:             nextmod = M_NATIVE;       break;</b>
+<b class="nc"><i>1548</i>&nbsp;               case VOLATILE:           nextmod = M_VOLATILE;     break;</b>
+<b class="nc"><i>1549</i>&nbsp;               case SYNCHRONIZED:       nextmod = M_SYNCHRONIZED; break;</b>
+<b class="nc"><i>1550</i>&nbsp;               case STRICTFP:           nextmod = M_STRICTFP;     break;</b>
+<i>1551</i>&nbsp;            }
+<b class="nc"><i>1552</i>&nbsp;            if ((nextmod &amp; mask) == 0) {</b>
+<b class="nc"><i>1553</i>&nbsp;                break;</b>
+<i>1554</i>&nbsp;            }
+<b class="nc"><i>1555</i>&nbsp;            if ((nextmod &amp; mod) != 0) {</b>
+<b class="nc"><i>1556</i>&nbsp;                env.error(pos, &quot;repeated.modifier&quot;);</b>
+<i>1557</i>&nbsp;            }
+<b class="nc"><i>1558</i>&nbsp;            mod |= nextmod;</b>
+<b class="nc"><i>1559</i>&nbsp;            scan();</b>
+<b class="nc"><i>1560</i>&nbsp;        }</b>
+<b class="nc"><i>1561</i>&nbsp;        return mod;</b>
+<i>1562</i>&nbsp;    }
+<i>1563</i>&nbsp;
+<i>1564</i>&nbsp;    private ClassDefinition curClass;
+<i>1565</i>&nbsp;
+<i>1566</i>&nbsp;    /**
+<i>1567</i>&nbsp;     * Parse a field.
+<i>1568</i>&nbsp;     */
+<i>1569</i>&nbsp;    protected void parseField() throws SyntaxError, IOException {
+<i>1570</i>&nbsp;
+<i>1571</i>&nbsp;        // Empty fields are not allowed by the JLS but are accepted by
+<i>1572</i>&nbsp;        // the compiler, and much code has come to rely on this.  It has
+<i>1573</i>&nbsp;        // been decided that the language will be extended to legitimize them.
+<b class="nc"><i>1574</i>&nbsp;        if (token == SEMICOLON) {</b>
+<i>1575</i>&nbsp;            // empty field
+<b class="nc"><i>1576</i>&nbsp;            scan();</b>
+<i>1577</i>&nbsp;            return;
+<i>1578</i>&nbsp;        }
+<i>1579</i>&nbsp;
+<i>1580</i>&nbsp;        // Optional doc comment
+<b class="nc"><i>1581</i>&nbsp;        String doc = scanner.docComment;</b>
+<i>1582</i>&nbsp;
+<i>1583</i>&nbsp;        // The start of the field
+<b class="nc"><i>1584</i>&nbsp;        long p = pos;</b>
+<i>1585</i>&nbsp;
+<i>1586</i>&nbsp;        // Parse the modifiers
+<b class="nc"><i>1587</i>&nbsp;        int mod = parseModifiers(MM_FIELD | MM_METHOD);</b>
+<i>1588</i>&nbsp;
+<i>1589</i>&nbsp;        // Check for static initializer
+<i>1590</i>&nbsp;        // ie: static { ... }
+<i>1591</i>&nbsp;        // or an instance initializer (w/o the static).
+<b class="nc"><i>1592</i>&nbsp;        if ((mod == (mod &amp; M_STATIC)) &amp;&amp; (token == LBRACE)) {</b>
+<i>1593</i>&nbsp;            // static initializer
+<b class="nc"><i>1594</i>&nbsp;            actions.defineField(p, curClass, doc, mod,</b>
+<b class="nc"><i>1595</i>&nbsp;                                Type.tMethod(Type.tVoid),</b>
+<i>1596</i>&nbsp;                                new IdentifierToken(idClassInit), null, null,
+<b class="nc"><i>1597</i>&nbsp;                                parseStatement());</b>
+<i>1598</i>&nbsp;            return;
+<i>1599</i>&nbsp;        }
+<i>1600</i>&nbsp;
+<i>1601</i>&nbsp;        // Check for inner class
+<b class="nc"><i>1602</i>&nbsp;        if (token == CLASS || token == INTERFACE) {</b>
+<b class="nc"><i>1603</i>&nbsp;            parseNamedClass(mod, CLASS, doc);</b>
+<i>1604</i>&nbsp;            return;
+<i>1605</i>&nbsp;        }
+<i>1606</i>&nbsp;
+<i>1607</i>&nbsp;        // Parse the type
+<b class="nc"><i>1608</i>&nbsp;        p = pos;</b>
+<b class="nc"><i>1609</i>&nbsp;        Type t = parseType();</b>
+<b class="nc"><i>1610</i>&nbsp;        IdentifierToken id = null;</b>
+<i>1611</i>&nbsp;
+<i>1612</i>&nbsp;        // Check that the type is followed by an Identifier
+<i>1613</i>&nbsp;        // (the name of the method or the first variable),
+<i>1614</i>&nbsp;        // otherwise it is a constructor.
+<b class="nc"><i>1615</i>&nbsp;        switch (token) {</b>
+<i>1616</i>&nbsp;          case IDENT:
+<b class="nc"><i>1617</i>&nbsp;            id = scanner.getIdToken();</b>
+<b class="nc"><i>1618</i>&nbsp;            p = scan();</b>
+<b class="nc"><i>1619</i>&nbsp;            break;</b>
+<i>1620</i>&nbsp;
+<i>1621</i>&nbsp;          case LPAREN:
+<i>1622</i>&nbsp;            // It is a constructor
+<b class="nc"><i>1623</i>&nbsp;            id = new IdentifierToken(idInit);</b>
+<b class="nc"><i>1624</i>&nbsp;            if ((mod &amp; M_STRICTFP) != 0)</b>
+<b class="nc"><i>1625</i>&nbsp;                env.error(pos, &quot;bad.constructor.modifier&quot;);</b>
+<i>1626</i>&nbsp;            break;
+<i>1627</i>&nbsp;
+<i>1628</i>&nbsp;          default:
+<b class="nc"><i>1629</i>&nbsp;            expect(IDENT);</b>
+<i>1630</i>&nbsp;        }
+<i>1631</i>&nbsp;
+<i>1632</i>&nbsp;        // If the next token is a left-bracket then we
+<i>1633</i>&nbsp;        // are dealing with a method or constructor, otherwise it is
+<i>1634</i>&nbsp;        // a list of variables
+<b class="nc"><i>1635</i>&nbsp;        if (token == LPAREN) {</b>
+<i>1636</i>&nbsp;            // It is a method or constructor declaration
+<b class="nc"><i>1637</i>&nbsp;            scan();</b>
+<b class="nc"><i>1638</i>&nbsp;            aCount = 0;</b>
+<i>1639</i>&nbsp;
+<b class="nc"><i>1640</i>&nbsp;            if (token != RPAREN) {</b>
+<i>1641</i>&nbsp;                // Parse argument type and identifier
+<i>1642</i>&nbsp;                // (arguments (like locals) are allowed to be final)
+<b class="nc"><i>1643</i>&nbsp;                int am = parseModifiers(M_FINAL);</b>
+<b class="nc"><i>1644</i>&nbsp;                Type at = parseType();</b>
+<b class="nc"><i>1645</i>&nbsp;                IdentifierToken an = scanner.getIdToken();</b>
+<b class="nc"><i>1646</i>&nbsp;                expect(IDENT);</b>
+<i>1647</i>&nbsp;
+<i>1648</i>&nbsp;                // Parse optional array specifier, ie: a[][]
+<b class="nc"><i>1649</i>&nbsp;                at = parseArrayBrackets(at);</b>
+<b class="nc"><i>1650</i>&nbsp;                addArgument(am, at, an);</b>
+<i>1651</i>&nbsp;
+<i>1652</i>&nbsp;                // If the next token is a comma then there are
+<i>1653</i>&nbsp;                // more arguments
+<b class="nc"><i>1654</i>&nbsp;                while (token == COMMA) {</b>
+<i>1655</i>&nbsp;                    // Parse argument type and identifier
+<b class="nc"><i>1656</i>&nbsp;                    scan();</b>
+<b class="nc"><i>1657</i>&nbsp;                    am = parseModifiers(M_FINAL);</b>
+<b class="nc"><i>1658</i>&nbsp;                    at = parseType();</b>
+<b class="nc"><i>1659</i>&nbsp;                    an = scanner.getIdToken();</b>
+<b class="nc"><i>1660</i>&nbsp;                    expect(IDENT);</b>
+<i>1661</i>&nbsp;
+<i>1662</i>&nbsp;                    // Parse optional array specifier, ie: a[][]
+<b class="nc"><i>1663</i>&nbsp;                    at = parseArrayBrackets(at);</b>
+<b class="nc"><i>1664</i>&nbsp;                    addArgument(am, at, an);</b>
+<i>1665</i>&nbsp;                }
+<i>1666</i>&nbsp;            }
+<b class="nc"><i>1667</i>&nbsp;            expect(RPAREN);</b>
+<i>1668</i>&nbsp;
+<i>1669</i>&nbsp;            // Parse optional array sepecifier, ie: foo()[][]
+<b class="nc"><i>1670</i>&nbsp;            t = parseArrayBrackets(t);</b>
+<i>1671</i>&nbsp;
+<i>1672</i>&nbsp;            // copy arguments
+<b class="nc"><i>1673</i>&nbsp;            Type atypes[] = new Type[aCount];</b>
+<b class="nc"><i>1674</i>&nbsp;            System.arraycopy(aTypes, 0, atypes, 0, aCount);</b>
+<i>1675</i>&nbsp;
+<b class="nc"><i>1676</i>&nbsp;            IdentifierToken anames[] = new IdentifierToken[aCount];</b>
+<b class="nc"><i>1677</i>&nbsp;            System.arraycopy(aNames, 0, anames, 0, aCount);</b>
+<i>1678</i>&nbsp;
+<i>1679</i>&nbsp;            // Construct the type signature
+<b class="nc"><i>1680</i>&nbsp;            t = Type.tMethod(t, atypes);</b>
+<i>1681</i>&nbsp;
+<i>1682</i>&nbsp;            // Parse and ignore throws clause
+<b class="nc"><i>1683</i>&nbsp;            IdentifierToken exp[] = null;</b>
+<b class="nc"><i>1684</i>&nbsp;            if (token == THROWS) {</b>
+<b class="nc"><i>1685</i>&nbsp;                Vector&lt;IdentifierToken&gt; v = new Vector&lt;&gt;();</b>
+<b class="nc"><i>1686</i>&nbsp;                scan();</b>
+<b class="nc"><i>1687</i>&nbsp;                v.addElement(parseName(false));</b>
+<b class="nc"><i>1688</i>&nbsp;                while (token == COMMA) {</b>
+<b class="nc"><i>1689</i>&nbsp;                    scan();</b>
+<b class="nc"><i>1690</i>&nbsp;                    v.addElement(parseName(false));</b>
+<i>1691</i>&nbsp;                }
+<i>1692</i>&nbsp;
+<b class="nc"><i>1693</i>&nbsp;                exp = new IdentifierToken[v.size()];</b>
+<b class="nc"><i>1694</i>&nbsp;                v.copyInto(exp);</b>
+<i>1695</i>&nbsp;            }
+<i>1696</i>&nbsp;
+<i>1697</i>&nbsp;            // Check if it is a method definition or a method declaration
+<i>1698</i>&nbsp;            // ie: foo() {...} or foo();
+<b class="nc"><i>1699</i>&nbsp;            switch (token) {</b>
+<i>1700</i>&nbsp;              case LBRACE:      // It&#39;s a method definition
+<i>1701</i>&nbsp;
+<i>1702</i>&nbsp;                // Set the state of FP strictness for the body of the method
+<b class="nc"><i>1703</i>&nbsp;                int oldFPstate = FPstate;</b>
+<b class="nc"><i>1704</i>&nbsp;                if ((mod &amp; M_STRICTFP)!=0) {</b>
+<b class="nc"><i>1705</i>&nbsp;                    FPstate = M_STRICTFP;</b>
+<i>1706</i>&nbsp;                } else {
+<b class="nc"><i>1707</i>&nbsp;                    mod |= FPstate &amp; M_STRICTFP;</b>
+<i>1708</i>&nbsp;                }
+<i>1709</i>&nbsp;
+<b class="nc"><i>1710</i>&nbsp;                actions.defineField(p, curClass, doc, mod, t, id,</b>
+<b class="nc"><i>1711</i>&nbsp;                                    anames, exp, parseStatement());</b>
+<i>1712</i>&nbsp;
+<b class="nc"><i>1713</i>&nbsp;                FPstate = oldFPstate;</b>
+<i>1714</i>&nbsp;
+<b class="nc"><i>1715</i>&nbsp;                break;</b>
+<i>1716</i>&nbsp;
+<i>1717</i>&nbsp;              case SEMICOLON:
+<b class="nc"><i>1718</i>&nbsp;                scan();</b>
+<b class="nc"><i>1719</i>&nbsp;                actions.defineField(p, curClass, doc, mod, t, id,</b>
+<i>1720</i>&nbsp;                                    anames, exp, null);
+<b class="nc"><i>1721</i>&nbsp;                break;</b>
+<i>1722</i>&nbsp;
+<i>1723</i>&nbsp;              default:
+<i>1724</i>&nbsp;                // really expected a statement body here
+<b class="nc"><i>1725</i>&nbsp;                if ((mod &amp; (M_NATIVE | M_ABSTRACT)) == 0) {</b>
+<b class="nc"><i>1726</i>&nbsp;                    expect(LBRACE);</b>
+<i>1727</i>&nbsp;                } else {
+<b class="nc"><i>1728</i>&nbsp;                    expect(SEMICOLON);</b>
+<i>1729</i>&nbsp;                }
+<i>1730</i>&nbsp;            }
+<i>1731</i>&nbsp;            return;
+<i>1732</i>&nbsp;        }
+<i>1733</i>&nbsp;
+<i>1734</i>&nbsp;        // It is a list of instance variables
+<i>1735</i>&nbsp;        while (true) {
+<b class="nc"><i>1736</i>&nbsp;            p = pos;            // get the current position</b>
+<i>1737</i>&nbsp;            // parse the array brackets (if any)
+<i>1738</i>&nbsp;            // ie: var[][][]
+<b class="nc"><i>1739</i>&nbsp;            Type vt = parseArrayBrackets(t);</b>
+<i>1740</i>&nbsp;
+<i>1741</i>&nbsp;            // Parse the optional initializer
+<b class="nc"><i>1742</i>&nbsp;            Node init = null;</b>
+<b class="nc"><i>1743</i>&nbsp;            if (token == ASSIGN) {</b>
+<b class="nc"><i>1744</i>&nbsp;                scan();</b>
+<b class="nc"><i>1745</i>&nbsp;                init = parseExpression();</b>
+<i>1746</i>&nbsp;            }
+<i>1747</i>&nbsp;
+<i>1748</i>&nbsp;            // Define the variable
+<b class="nc"><i>1749</i>&nbsp;            actions.defineField(p, curClass, doc, mod, vt, id,</b>
+<i>1750</i>&nbsp;                                null, null, init);
+<i>1751</i>&nbsp;
+<i>1752</i>&nbsp;            // If the next token is a comma, then there is more
+<b class="nc"><i>1753</i>&nbsp;            if (token != COMMA) {</b>
+<b class="nc"><i>1754</i>&nbsp;                expect(SEMICOLON);</b>
+<i>1755</i>&nbsp;                return;
+<i>1756</i>&nbsp;            }
+<b class="nc"><i>1757</i>&nbsp;            scan();</b>
+<i>1758</i>&nbsp;
+<i>1759</i>&nbsp;            // The next token must be an identifier
+<b class="nc"><i>1760</i>&nbsp;            id = scanner.getIdToken();</b>
+<b class="nc"><i>1761</i>&nbsp;            expect(IDENT);</b>
+<b class="nc"><i>1762</i>&nbsp;        }</b>
+<i>1763</i>&nbsp;    }
+<i>1764</i>&nbsp;
+<i>1765</i>&nbsp;    /**
+<i>1766</i>&nbsp;     * Recover after a syntax error in a field. This involves
+<i>1767</i>&nbsp;     * discarding tokens until an EOF or a possible legal
+<i>1768</i>&nbsp;     * continuation is encountered.
+<i>1769</i>&nbsp;     */
+<i>1770</i>&nbsp;    protected void recoverField(ClassDefinition newClass) throws SyntaxError, IOException {
+<i>1771</i>&nbsp;        while (true) {
+<b class="nc"><i>1772</i>&nbsp;            switch (token) {</b>
+<i>1773</i>&nbsp;              case EOF:
+<i>1774</i>&nbsp;              case STATIC:
+<i>1775</i>&nbsp;              case FINAL:
+<i>1776</i>&nbsp;              case PUBLIC:
+<i>1777</i>&nbsp;              case PRIVATE:
+<i>1778</i>&nbsp;              case SYNCHRONIZED:
+<i>1779</i>&nbsp;              case TRANSIENT:
+<i>1780</i>&nbsp;
+<i>1781</i>&nbsp;              case VOID:
+<i>1782</i>&nbsp;              case BOOLEAN:
+<i>1783</i>&nbsp;              case BYTE:
+<i>1784</i>&nbsp;              case CHAR:
+<i>1785</i>&nbsp;              case SHORT:
+<i>1786</i>&nbsp;              case INT:
+<i>1787</i>&nbsp;              case FLOAT:
+<i>1788</i>&nbsp;              case LONG:
+<i>1789</i>&nbsp;              case DOUBLE:
+<i>1790</i>&nbsp;                // possible begin of a field, continue
+<i>1791</i>&nbsp;                return;
+<i>1792</i>&nbsp;
+<i>1793</i>&nbsp;              case LBRACE:
+<b class="nc"><i>1794</i>&nbsp;                match(LBRACE, RBRACE);</b>
+<b class="nc"><i>1795</i>&nbsp;                scan();</b>
+<b class="nc"><i>1796</i>&nbsp;                break;</b>
+<i>1797</i>&nbsp;
+<i>1798</i>&nbsp;              case LPAREN:
+<b class="nc"><i>1799</i>&nbsp;                match(LPAREN, RPAREN);</b>
+<b class="nc"><i>1800</i>&nbsp;                scan();</b>
+<b class="nc"><i>1801</i>&nbsp;                break;</b>
+<i>1802</i>&nbsp;
+<i>1803</i>&nbsp;              case LSQBRACKET:
+<b class="nc"><i>1804</i>&nbsp;                match(LSQBRACKET, RSQBRACKET);</b>
+<b class="nc"><i>1805</i>&nbsp;                scan();</b>
+<b class="nc"><i>1806</i>&nbsp;                break;</b>
+<i>1807</i>&nbsp;
+<i>1808</i>&nbsp;              case RBRACE:
+<i>1809</i>&nbsp;              case INTERFACE:
+<i>1810</i>&nbsp;              case CLASS:
+<i>1811</i>&nbsp;              case IMPORT:
+<i>1812</i>&nbsp;              case PACKAGE:
+<i>1813</i>&nbsp;                // begin of something outside a class, panic more
+<b class="nc"><i>1814</i>&nbsp;                actions.endClass(pos, newClass);</b>
+<b class="nc"><i>1815</i>&nbsp;                throw new SyntaxError();</b>
+<i>1816</i>&nbsp;
+<i>1817</i>&nbsp;              default:
+<i>1818</i>&nbsp;                // don&#39;t know what to do, skip
+<b class="nc"><i>1819</i>&nbsp;                scan();</b>
+<b class="nc"><i>1820</i>&nbsp;                break;</b>
+<i>1821</i>&nbsp;            }
+<i>1822</i>&nbsp;        }
+<i>1823</i>&nbsp;    }
+<i>1824</i>&nbsp;
+<i>1825</i>&nbsp;    /**
+<i>1826</i>&nbsp;     * Parse a top-level class or interface declaration.
+<i>1827</i>&nbsp;     */
+<i>1828</i>&nbsp;    protected void parseClass() throws SyntaxError, IOException {
+<b class="nc"><i>1829</i>&nbsp;        String doc = scanner.docComment;</b>
+<i>1830</i>&nbsp;
+<i>1831</i>&nbsp;        // Parse the modifiers.
+<b class="nc"><i>1832</i>&nbsp;        int mod = parseModifiers(MM_CLASS | MM_MEMBER);</b>
+<i>1833</i>&nbsp;
+<b class="nc"><i>1834</i>&nbsp;        parseNamedClass(mod, PACKAGE, doc);</b>
+<i>1835</i>&nbsp;    }
+<i>1836</i>&nbsp;
+<i>1837</i>&nbsp;    // Current strict/default state of floating point.  This is
+<i>1838</i>&nbsp;    // set and reset with a stack discipline around methods and named
+<i>1839</i>&nbsp;    // classes.  Only M_STRICTFP may be set in this word.  try...
+<i>1840</i>&nbsp;    // finally is not needed to protect setting and resetting because
+<i>1841</i>&nbsp;    // there are no error messages based on FPstate.
+<b class="nc"><i>1842</i>&nbsp;    private int FPstate = 0;</b>
+<i>1843</i>&nbsp;
+<i>1844</i>&nbsp;    /**
+<i>1845</i>&nbsp;     * Parse a block-local class or interface declaration.
+<i>1846</i>&nbsp;     */
+<i>1847</i>&nbsp;    protected Statement parseLocalClass(int mod) throws SyntaxError, IOException {
+<b class="nc"><i>1848</i>&nbsp;        long p = pos;</b>
+<b class="nc"><i>1849</i>&nbsp;        ClassDefinition body = parseNamedClass(M_LOCAL | mod, STAT, null);</b>
+<b class="nc"><i>1850</i>&nbsp;        Statement ds[] = {</b>
+<i>1851</i>&nbsp;            new VarDeclarationStatement(p, new LocalMember(body), null)
+<i>1852</i>&nbsp;        };
+<b class="nc"><i>1853</i>&nbsp;        Expression type = new TypeExpression(p, body.getType());</b>
+<b class="nc"><i>1854</i>&nbsp;        return new DeclarationStatement(p, 0, type, ds);</b>
+<i>1855</i>&nbsp;    }
+<i>1856</i>&nbsp;
+<i>1857</i>&nbsp;    /**
+<i>1858</i>&nbsp;     * Parse a named class or interface declaration,
+<i>1859</i>&nbsp;     * starting at &quot;class&quot; or &quot;interface&quot;.
+<i>1860</i>&nbsp;     * @arg ctx Syntactic context of the class, one of {PACKAGE CLASS STAT EXPR}.
+<i>1861</i>&nbsp;     */
+<i>1862</i>&nbsp;    protected ClassDefinition parseNamedClass(int mod, int ctx, String doc) throws SyntaxError, IOException {
+<i>1863</i>&nbsp;        // Parse class/interface
+<b class="nc"><i>1864</i>&nbsp;        switch (token) {</b>
+<i>1865</i>&nbsp;          case INTERFACE:
+<b class="nc"><i>1866</i>&nbsp;            scan();</b>
+<b class="nc"><i>1867</i>&nbsp;            mod |= M_INTERFACE;</b>
+<b class="nc"><i>1868</i>&nbsp;            break;</b>
+<i>1869</i>&nbsp;
+<i>1870</i>&nbsp;          case CLASS:
+<b class="nc"><i>1871</i>&nbsp;            scan();</b>
+<b class="nc"><i>1872</i>&nbsp;            break;</b>
+<i>1873</i>&nbsp;
+<i>1874</i>&nbsp;          default:
+<b class="nc"><i>1875</i>&nbsp;            env.error(pos, &quot;class.expected&quot;);</b>
+<i>1876</i>&nbsp;            break;
+<i>1877</i>&nbsp;        }
+<i>1878</i>&nbsp;
+<b class="nc"><i>1879</i>&nbsp;        int oldFPstate = FPstate;</b>
+<b class="nc"><i>1880</i>&nbsp;        if ((mod &amp; M_STRICTFP)!=0) {</b>
+<b class="nc"><i>1881</i>&nbsp;            FPstate = M_STRICTFP;</b>
+<i>1882</i>&nbsp;        } else {
+<i>1883</i>&nbsp;            // The &amp; (...) isn&#39;t really necessary here because we do maintain
+<i>1884</i>&nbsp;            // the invariant that FPstate has no extra bits set.
+<b class="nc"><i>1885</i>&nbsp;            mod |= FPstate &amp; M_STRICTFP;</b>
+<i>1886</i>&nbsp;        }
+<i>1887</i>&nbsp;
+<i>1888</i>&nbsp;        // Parse the class name
+<b class="nc"><i>1889</i>&nbsp;        IdentifierToken nm = scanner.getIdToken();</b>
+<b class="nc"><i>1890</i>&nbsp;        long p = pos;</b>
+<b class="nc"><i>1891</i>&nbsp;        expect(IDENT);</b>
+<i>1892</i>&nbsp;
+<b class="nc"><i>1893</i>&nbsp;        Vector&lt;IdentifierToken&gt; ext = new Vector&lt;&gt;();</b>
+<b class="nc"><i>1894</i>&nbsp;        Vector&lt;IdentifierToken&gt; impl = new Vector&lt;&gt;();</b>
+<b class="nc"><i>1895</i>&nbsp;        parseInheritance(ext, impl);</b>
+<i>1896</i>&nbsp;
+<b class="nc"><i>1897</i>&nbsp;        ClassDefinition tmp = parseClassBody(nm, mod, ctx, doc, ext, impl, p);</b>
+<i>1898</i>&nbsp;
+<b class="nc"><i>1899</i>&nbsp;        FPstate = oldFPstate;</b>
+<i>1900</i>&nbsp;
+<b class="nc"><i>1901</i>&nbsp;        return tmp;</b>
+<i>1902</i>&nbsp;    }
+<i>1903</i>&nbsp;
+<i>1904</i>&nbsp;    protected void parseInheritance(Vector&lt;IdentifierToken&gt; ext, Vector&lt;IdentifierToken&gt; impl) throws SyntaxError, IOException {
+<i>1905</i>&nbsp;        // Parse extends clause
+<b class="nc"><i>1906</i>&nbsp;        if (token == EXTENDS) {</b>
+<b class="nc"><i>1907</i>&nbsp;            scan();</b>
+<b class="nc"><i>1908</i>&nbsp;            ext.addElement(parseName(false));</b>
+<b class="nc"><i>1909</i>&nbsp;            while (token == COMMA) {</b>
+<b class="nc"><i>1910</i>&nbsp;                scan();</b>
+<b class="nc"><i>1911</i>&nbsp;                ext.addElement(parseName(false));</b>
+<i>1912</i>&nbsp;            }
+<i>1913</i>&nbsp;        }
+<i>1914</i>&nbsp;
+<i>1915</i>&nbsp;        // Parse implements clause
+<b class="nc"><i>1916</i>&nbsp;        if (token == IMPLEMENTS) {</b>
+<b class="nc"><i>1917</i>&nbsp;            scan();</b>
+<b class="nc"><i>1918</i>&nbsp;            impl.addElement(parseName(false));</b>
+<b class="nc"><i>1919</i>&nbsp;            while (token == COMMA) {</b>
+<b class="nc"><i>1920</i>&nbsp;                scan();</b>
+<b class="nc"><i>1921</i>&nbsp;                impl.addElement(parseName(false));</b>
+<i>1922</i>&nbsp;            }
+<i>1923</i>&nbsp;        }
+<i>1924</i>&nbsp;    }
+<i>1925</i>&nbsp;
+<i>1926</i>&nbsp;    /**
+<i>1927</i>&nbsp;     * Parse the body of a class or interface declaration,
+<i>1928</i>&nbsp;     * starting at the left brace.
+<i>1929</i>&nbsp;     */
+<i>1930</i>&nbsp;    protected ClassDefinition parseClassBody(IdentifierToken nm, int mod,
+<i>1931</i>&nbsp;                                             int ctx, String doc,
+<i>1932</i>&nbsp;                                             Vector&lt;IdentifierToken&gt; ext, Vector&lt;IdentifierToken&gt; impl, long p
+<i>1933</i>&nbsp;                                             ) throws SyntaxError, IOException {
+<i>1934</i>&nbsp;        // Decide which is the super class
+<b class="nc"><i>1935</i>&nbsp;        IdentifierToken sup = null;</b>
+<b class="nc"><i>1936</i>&nbsp;        if ((mod &amp; M_INTERFACE) != 0) {</b>
+<b class="nc"><i>1937</i>&nbsp;            if (impl.size() &gt; 0) {</b>
+<b class="nc"><i>1938</i>&nbsp;                env.error(impl.elementAt(0).getWhere(),</b>
+<i>1939</i>&nbsp;                          &quot;intf.impl.intf&quot;);
+<i>1940</i>&nbsp;            }
+<b class="nc"><i>1941</i>&nbsp;            impl = ext;</b>
+<i>1942</i>&nbsp;        } else {
+<b class="nc"><i>1943</i>&nbsp;            if (ext.size() &gt; 0) {</b>
+<b class="nc"><i>1944</i>&nbsp;                if (ext.size() &gt; 1) {</b>
+<b class="nc"><i>1945</i>&nbsp;                    env.error(ext.elementAt(1).getWhere(),</b>
+<i>1946</i>&nbsp;                              &quot;multiple.inherit&quot;);
+<i>1947</i>&nbsp;                }
+<b class="nc"><i>1948</i>&nbsp;                sup = ext.elementAt(0);</b>
+<i>1949</i>&nbsp;            }
+<i>1950</i>&nbsp;        }
+<i>1951</i>&nbsp;
+<b class="nc"><i>1952</i>&nbsp;        ClassDefinition oldClass = curClass;</b>
+<i>1953</i>&nbsp;
+<i>1954</i>&nbsp;        // Begin a new class
+<b class="nc"><i>1955</i>&nbsp;        IdentifierToken implids[] = new IdentifierToken[impl.size()];</b>
+<b class="nc"><i>1956</i>&nbsp;        impl.copyInto(implids);</b>
+<b class="nc"><i>1957</i>&nbsp;        ClassDefinition newClass =</b>
+<b class="nc"><i>1958</i>&nbsp;            actions.beginClass(p, doc, mod, nm, sup, implids);</b>
+<i>1959</i>&nbsp;
+<i>1960</i>&nbsp;        // Parse fields
+<b class="nc"><i>1961</i>&nbsp;        expect(LBRACE);</b>
+<b class="nc"><i>1962</i>&nbsp;        while ((token != EOF) &amp;&amp; (token != RBRACE)) {</b>
+<i>1963</i>&nbsp;            try {
+<b class="nc"><i>1964</i>&nbsp;                curClass = newClass;</b>
+<b class="nc"><i>1965</i>&nbsp;                parseField();</b>
+<b class="nc"><i>1966</i>&nbsp;            } catch (SyntaxError e) {</b>
+<b class="nc"><i>1967</i>&nbsp;                recoverField(newClass);</b>
+<i>1968</i>&nbsp;            } finally {
+<b class="nc"><i>1969</i>&nbsp;                curClass = oldClass;</b>
+<b class="nc"><i>1970</i>&nbsp;            }</b>
+<i>1971</i>&nbsp;        }
+<b class="nc"><i>1972</i>&nbsp;        expect(RBRACE);</b>
+<i>1973</i>&nbsp;
+<i>1974</i>&nbsp;        // End the class
+<b class="nc"><i>1975</i>&nbsp;        actions.endClass(scanner.prevPos, newClass);</b>
+<b class="nc"><i>1976</i>&nbsp;        return newClass;</b>
+<i>1977</i>&nbsp;    }
+<i>1978</i>&nbsp;
+<i>1979</i>&nbsp;    /**
+<i>1980</i>&nbsp;     * Recover after a syntax error in the file.
+<i>1981</i>&nbsp;     * This involves discarding tokens until an EOF
+<i>1982</i>&nbsp;     * or a possible legal continuation is encountered.
+<i>1983</i>&nbsp;     */
+<i>1984</i>&nbsp;    protected void recoverFile() throws IOException {
+<i>1985</i>&nbsp;        while (true) {
+<b class="nc"><i>1986</i>&nbsp;            switch (token) {</b>
+<i>1987</i>&nbsp;              case CLASS:
+<i>1988</i>&nbsp;              case INTERFACE:
+<i>1989</i>&nbsp;                // Start of a new source file statement, continue
+<i>1990</i>&nbsp;                return;
+<i>1991</i>&nbsp;
+<i>1992</i>&nbsp;              case LBRACE:
+<b class="nc"><i>1993</i>&nbsp;                match(LBRACE, RBRACE);</b>
+<b class="nc"><i>1994</i>&nbsp;                scan();</b>
+<b class="nc"><i>1995</i>&nbsp;                break;</b>
+<i>1996</i>&nbsp;
+<i>1997</i>&nbsp;              case LPAREN:
+<b class="nc"><i>1998</i>&nbsp;                match(LPAREN, RPAREN);</b>
+<b class="nc"><i>1999</i>&nbsp;                scan();</b>
+<b class="nc"><i>2000</i>&nbsp;                break;</b>
+<i>2001</i>&nbsp;
+<i>2002</i>&nbsp;              case LSQBRACKET:
+<b class="nc"><i>2003</i>&nbsp;                match(LSQBRACKET, RSQBRACKET);</b>
+<b class="nc"><i>2004</i>&nbsp;                scan();</b>
+<b class="nc"><i>2005</i>&nbsp;                break;</b>
+<i>2006</i>&nbsp;
+<i>2007</i>&nbsp;              case EOF:
+<i>2008</i>&nbsp;                return;
+<i>2009</i>&nbsp;
+<i>2010</i>&nbsp;              default:
+<i>2011</i>&nbsp;                // Don&#39;t know what to do, skip
+<b class="nc"><i>2012</i>&nbsp;                scan();</b>
+<b class="nc"><i>2013</i>&nbsp;                break;</b>
+<i>2014</i>&nbsp;            }
+<i>2015</i>&nbsp;        }
+<i>2016</i>&nbsp;    }
+<i>2017</i>&nbsp;
+<i>2018</i>&nbsp;    /**
+<i>2019</i>&nbsp;     * Parse an Java file.
+<i>2020</i>&nbsp;     */
+<i>2021</i>&nbsp;    public void parseFile() {
+<i>2022</i>&nbsp;        try {
+<i>2023</i>&nbsp;            try {
+<b class="nc"><i>2024</i>&nbsp;                if (token == PACKAGE) {</b>
+<i>2025</i>&nbsp;                    // Package statement
+<b class="nc"><i>2026</i>&nbsp;                    long p = scan();</b>
+<b class="nc"><i>2027</i>&nbsp;                    IdentifierToken id = parseName(false);</b>
+<b class="nc"><i>2028</i>&nbsp;                    expect(SEMICOLON);</b>
+<b class="nc"><i>2029</i>&nbsp;                    actions.packageDeclaration(p, id);</b>
+<i>2030</i>&nbsp;                }
+<b class="nc"><i>2031</i>&nbsp;            } catch (SyntaxError e) {</b>
+<b class="nc"><i>2032</i>&nbsp;                recoverFile();</b>
+<b class="nc"><i>2033</i>&nbsp;            }</b>
+<b class="nc"><i>2034</i>&nbsp;            while (token == IMPORT) {</b>
+<i>2035</i>&nbsp;                try{
+<i>2036</i>&nbsp;                    // Import statement
+<b class="nc"><i>2037</i>&nbsp;                    long p = scan();</b>
+<b class="nc"><i>2038</i>&nbsp;                    IdentifierToken id = parseName(true);</b>
+<b class="nc"><i>2039</i>&nbsp;                    expect(SEMICOLON);</b>
+<b class="nc"><i>2040</i>&nbsp;                    if (id.id.getName().equals(idStar)) {</b>
+<b class="nc"><i>2041</i>&nbsp;                        id.id = id.id.getQualifier();</b>
+<b class="nc"><i>2042</i>&nbsp;                        actions.importPackage(p, id);</b>
+<i>2043</i>&nbsp;                    } else {
+<b class="nc"><i>2044</i>&nbsp;                        actions.importClass(p, id);</b>
+<i>2045</i>&nbsp;                    }
+<b class="nc"><i>2046</i>&nbsp;                } catch (SyntaxError e) {</b>
+<b class="nc"><i>2047</i>&nbsp;                    recoverFile();</b>
+<b class="nc"><i>2048</i>&nbsp;                }</b>
+<i>2049</i>&nbsp;            }
+<i>2050</i>&nbsp;
+<b class="nc"><i>2051</i>&nbsp;            while (token != EOF) {</b>
+<i>2052</i>&nbsp;                try {
+<b class="nc"><i>2053</i>&nbsp;                    switch (token) {</b>
+<i>2054</i>&nbsp;                      case FINAL:
+<i>2055</i>&nbsp;                      case PUBLIC:
+<i>2056</i>&nbsp;                      case PRIVATE:
+<i>2057</i>&nbsp;                      case ABSTRACT:
+<i>2058</i>&nbsp;                      case CLASS:
+<i>2059</i>&nbsp;                      case INTERFACE:
+<i>2060</i>&nbsp;                      case STRICTFP:
+<i>2061</i>&nbsp;                        // Start of a class
+<b class="nc"><i>2062</i>&nbsp;                        parseClass();</b>
+<b class="nc"><i>2063</i>&nbsp;                        break;</b>
+<i>2064</i>&nbsp;
+<i>2065</i>&nbsp;                      case SEMICOLON:
+<i>2066</i>&nbsp;                        // Bogus semicolon.
+<i>2067</i>&nbsp;                        // According to the JLS (7.6,19.6), a TypeDeclaration
+<i>2068</i>&nbsp;                        // may consist of a single semicolon, however, this
+<i>2069</i>&nbsp;                        // usage is discouraged (JLS 7.6).  In contrast,
+<i>2070</i>&nbsp;                        // a FieldDeclaration may not be empty, and is flagged
+<i>2071</i>&nbsp;                        // as an error.  See parseField above.
+<b class="nc"><i>2072</i>&nbsp;                        scan();</b>
+<b class="nc"><i>2073</i>&nbsp;                        break;</b>
+<i>2074</i>&nbsp;
+<i>2075</i>&nbsp;                      case EOF:
+<i>2076</i>&nbsp;                        // The end
+<i>2077</i>&nbsp;                        return;
+<i>2078</i>&nbsp;
+<i>2079</i>&nbsp;                      default:
+<i>2080</i>&nbsp;                        // Oops
+<b class="nc"><i>2081</i>&nbsp;                        env.error(pos, &quot;toplevel.expected&quot;);</b>
+<b class="nc"><i>2082</i>&nbsp;                        throw new SyntaxError();</b>
+<i>2083</i>&nbsp;                    }
+<b class="nc"><i>2084</i>&nbsp;                } catch (SyntaxError e) {</b>
+<b class="nc"><i>2085</i>&nbsp;                    recoverFile();</b>
+<b class="nc"><i>2086</i>&nbsp;                }</b>
+<i>2087</i>&nbsp;            }
+<b class="nc"><i>2088</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>2089</i>&nbsp;            env.error(pos, &quot;io.exception&quot;, env.getSource());</b>
+<i>2090</i>&nbsp;            return;
+<b class="nc"><i>2091</i>&nbsp;        }</b>
+<i>2092</i>&nbsp;    }
+<i>2093</i>&nbsp;
+<i>2094</i>&nbsp;    /**
+<i>2095</i>&nbsp;     * Usually &lt;code&gt;this.scanner == (Scanner)this&lt;/code&gt;.
+<i>2096</i>&nbsp;     * However, a delegate scanner can produce tokens for this parser,
+<i>2097</i>&nbsp;     * in which case &lt;code&gt;(Scanner)this&lt;/code&gt; is unused,
+<i>2098</i>&nbsp;     * except for &lt;code&gt;this.token&lt;/code&gt; and &lt;code&gt;this.pos&lt;/code&gt;
+<i>2099</i>&nbsp;     * instance variables which are filled from the real scanner
+<i>2100</i>&nbsp;     * by &lt;code&gt;this.scan()&lt;/code&gt; and the constructor.
+<i>2101</i>&nbsp;     */
+<i>2102</i>&nbsp;    protected Scanner scanner;
+<i>2103</i>&nbsp;
+<i>2104</i>&nbsp;    // Design Note: We ought to disinherit Parser from Scanner.
+<i>2105</i>&nbsp;    // We also should split out the interface ParserActions from
+<i>2106</i>&nbsp;    // Parser, and make BatchParser implement ParserActions,
+<i>2107</i>&nbsp;    // not extend Parser.  This would split scanning, parsing,
+<i>2108</i>&nbsp;    // and class building into distinct responsibility areas.
+<i>2109</i>&nbsp;    // (Perhaps tree building could be virtualized too.)
+<i>2110</i>&nbsp;
+<i>2111</i>&nbsp;    public long scan() throws IOException {
+<b class="nc"><i>2112</i>&nbsp;        if (scanner != this &amp;&amp; scanner != null) {</b>
+<b class="nc"><i>2113</i>&nbsp;            long result = scanner.scan();</b>
+<b class="nc"><i>2114</i>&nbsp;            ((Scanner)this).token = scanner.token;</b>
+<b class="nc"><i>2115</i>&nbsp;            ((Scanner)this).pos = scanner.pos;</b>
+<b class="nc"><i>2116</i>&nbsp;            return result;</b>
+<i>2117</i>&nbsp;        }
+<b class="nc"><i>2118</i>&nbsp;        return super.scan();</b>
+<i>2119</i>&nbsp;    }
+<i>2120</i>&nbsp;
+<i>2121</i>&nbsp;    public void match(int open, int close) throws IOException {
+<b class="nc"><i>2122</i>&nbsp;        if (scanner != this) {</b>
+<b class="nc"><i>2123</i>&nbsp;            scanner.match(open, close);</b>
+<b class="nc"><i>2124</i>&nbsp;            ((Scanner)this).token = scanner.token;</b>
+<b class="nc"><i>2125</i>&nbsp;            ((Scanner)this).pos = scanner.pos;</b>
+<i>2126</i>&nbsp;            return;
+<i>2127</i>&nbsp;        }
+<b class="nc"><i>2128</i>&nbsp;        super.match(open, close);</b>
+<i>2129</i>&nbsp;    }
+<i>2130</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:15</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,825 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: LogRecord</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">java.util.logging</a> ]
+</div>
+
+<h1>Coverage Summary for Class: LogRecord (java.util.logging)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">LogRecord</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 31)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 109)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package java.util.logging;
+<i>27</i>&nbsp;import java.time.Instant;
+<i>28</i>&nbsp;import java.util.*;
+<i>29</i>&nbsp;import java.util.concurrent.atomic.AtomicInteger;
+<i>30</i>&nbsp;import java.util.concurrent.atomic.AtomicLong;
+<i>31</i>&nbsp;import java.io.*;
+<i>32</i>&nbsp;import java.security.AccessController;
+<i>33</i>&nbsp;import java.security.PrivilegedAction;
+<i>34</i>&nbsp;import java.time.Clock;
+<i>35</i>&nbsp;import java.util.function.Predicate;
+<i>36</i>&nbsp;import static jdk.internal.logger.SurrogateLogger.isFilteredFrame;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * LogRecord objects are used to pass logging requests between
+<i>40</i>&nbsp; * the logging framework and individual log Handlers.
+<i>41</i>&nbsp; * &lt;p&gt;
+<i>42</i>&nbsp; * When a LogRecord is passed into the logging framework it
+<i>43</i>&nbsp; * logically belongs to the framework and should no longer be
+<i>44</i>&nbsp; * used or updated by the client application.
+<i>45</i>&nbsp; * &lt;p&gt;
+<i>46</i>&nbsp; * Note that if the client application has not specified an
+<i>47</i>&nbsp; * explicit source method name and source class name, then the
+<i>48</i>&nbsp; * LogRecord class will infer them automatically when they are
+<i>49</i>&nbsp; * first accessed (due to a call on getSourceMethodName or
+<i>50</i>&nbsp; * getSourceClassName) by analyzing the call stack.  Therefore,
+<i>51</i>&nbsp; * if a logging Handler wants to pass off a LogRecord to another
+<i>52</i>&nbsp; * thread, or to transmit it over RMI, and if it wishes to subsequently
+<i>53</i>&nbsp; * obtain method name or class name information it should call
+<i>54</i>&nbsp; * one of getSourceClassName or getSourceMethodName to force
+<i>55</i>&nbsp; * the values to be filled in.
+<i>56</i>&nbsp; * &lt;p&gt;
+<i>57</i>&nbsp; * &lt;b&gt; Serialization notes:&lt;/b&gt;
+<i>58</i>&nbsp; * &lt;ul&gt;
+<i>59</i>&nbsp; * &lt;li&gt;The LogRecord class is serializable.
+<i>60</i>&nbsp; *
+<i>61</i>&nbsp; * &lt;li&gt; Because objects in the parameters array may not be serializable,
+<i>62</i>&nbsp; * during serialization all objects in the parameters array are
+<i>63</i>&nbsp; * written as the corresponding Strings (using Object.toString).
+<i>64</i>&nbsp; *
+<i>65</i>&nbsp; * &lt;li&gt; The ResourceBundle is not transmitted as part of the serialized
+<i>66</i>&nbsp; * form, but the resource bundle name is, and the recipient object&#39;s
+<i>67</i>&nbsp; * readObject method will attempt to locate a suitable resource bundle.
+<i>68</i>&nbsp; *
+<i>69</i>&nbsp; * &lt;/ul&gt;
+<i>70</i>&nbsp; *
+<i>71</i>&nbsp; * @since 1.4
+<b class="nc"><i>72</i>&nbsp; */</b>
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;public class LogRecord implements java.io.Serializable {
+<i>75</i>&nbsp;    private static final AtomicLong globalSequenceNumber
+<i>76</i>&nbsp;        = new AtomicLong(0);
+<i>77</i>&nbsp;
+<i>78</i>&nbsp;    /**
+<i>79</i>&nbsp;     * The default value of threadID will be the current thread&#39;s
+<i>80</i>&nbsp;     * thread id, for ease of correlation, unless it is greater than
+<i>81</i>&nbsp;     * MIN_SEQUENTIAL_THREAD_ID, in which case we try harder to keep
+<i>82</i>&nbsp;     * our promise to keep threadIDs unique by avoiding collisions due
+<i>83</i>&nbsp;     * to 32-bit wraparound.  Unfortunately, LogRecord.getThreadID()
+<i>84</i>&nbsp;     * returns int, while Thread.getId() returns long.
+<b class="nc"><i>85</i>&nbsp;     */</b>
+<i>86</i>&nbsp;    private static final int MIN_SEQUENTIAL_THREAD_ID = Integer.MAX_VALUE / 2;
+<i>87</i>&nbsp;
+<b class="nc"><i>88</i>&nbsp;    private static final AtomicInteger nextThreadId</b>
+<i>89</i>&nbsp;        = new AtomicInteger(MIN_SEQUENTIAL_THREAD_ID);
+<i>90</i>&nbsp;
+<i>91</i>&nbsp;    private static final ThreadLocal&lt;Integer&gt; threadIds = new ThreadLocal&lt;&gt;();
+<i>92</i>&nbsp;
+<i>93</i>&nbsp;    /**
+<i>94</i>&nbsp;     * Logging message level
+<i>95</i>&nbsp;     */
+<i>96</i>&nbsp;    private Level level;
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    /**
+<i>99</i>&nbsp;     * Sequence number
+<i>100</i>&nbsp;     */
+<i>101</i>&nbsp;    private long sequenceNumber;
+<i>102</i>&nbsp;
+<i>103</i>&nbsp;    /**
+<i>104</i>&nbsp;     * Class that issued logging call
+<i>105</i>&nbsp;     */
+<i>106</i>&nbsp;    private String sourceClassName;
+<i>107</i>&nbsp;
+<i>108</i>&nbsp;    /**
+<i>109</i>&nbsp;     * Method that issued logging call
+<i>110</i>&nbsp;     */
+<i>111</i>&nbsp;    private String sourceMethodName;
+<i>112</i>&nbsp;
+<i>113</i>&nbsp;    /**
+<i>114</i>&nbsp;     * Non-localized raw message text
+<i>115</i>&nbsp;     */
+<i>116</i>&nbsp;    private String message;
+<i>117</i>&nbsp;
+<i>118</i>&nbsp;    /**
+<i>119</i>&nbsp;     * Thread ID for thread that issued logging call.
+<i>120</i>&nbsp;     */
+<i>121</i>&nbsp;    private int threadID;
+<i>122</i>&nbsp;
+<i>123</i>&nbsp;    /**
+<i>124</i>&nbsp;     * The Throwable (if any) associated with log message
+<i>125</i>&nbsp;     */
+<i>126</i>&nbsp;    private Throwable thrown;
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;    /**
+<i>129</i>&nbsp;     * Name of the source Logger.
+<i>130</i>&nbsp;     */
+<i>131</i>&nbsp;    private String loggerName;
+<i>132</i>&nbsp;
+<i>133</i>&nbsp;    /**
+<i>134</i>&nbsp;     * Resource bundle name to localized log message.
+<i>135</i>&nbsp;     */
+<i>136</i>&nbsp;    private String resourceBundleName;
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    /**
+<i>139</i>&nbsp;     * Event time.
+<i>140</i>&nbsp;     * @since 9
+<i>141</i>&nbsp;     */
+<i>142</i>&nbsp;    private Instant instant;
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;    /**
+<i>145</i>&nbsp;     * @serialField level Level Logging message level
+<i>146</i>&nbsp;     * @serialField sequenceNumber long Sequence number
+<i>147</i>&nbsp;     * @serialField sourceClassName String Class that issued logging call
+<b class="nc"><i>148</i>&nbsp;     * @serialField sourceMethodName String Method that issued logging call</b>
+<b class="nc"><i>149</i>&nbsp;     * @serialField message String Non-localized raw message text</b>
+<b class="nc"><i>150</i>&nbsp;     * @serialField threadID int Thread ID for thread that issued logging call</b>
+<i>151</i>&nbsp;     * @serialField millis long Truncated event time in milliseconds since 1970
+<b class="nc"><i>152</i>&nbsp;     *              - calculated as getInstant().toEpochMilli().</b>
+<b class="nc"><i>153</i>&nbsp;     *               The event time instant can be reconstructed using</b>
+<b class="nc"><i>154</i>&nbsp;     * &lt;code&gt;Instant.ofEpochSecond(millis/1000, (millis % 1000) * 1000_000 + nanoAdjustment)&lt;/code&gt;</b>
+<b class="nc"><i>155</i>&nbsp;     * @serialField nanoAdjustment int Nanoseconds adjustment to the millisecond of</b>
+<i>156</i>&nbsp;     *              event time - calculated as getInstant().getNano() % 1000_000
+<b class="nc"><i>157</i>&nbsp;     *               The event time instant can be reconstructed using</b>
+<i>158</i>&nbsp;     * &lt;code&gt;Instant.ofEpochSecond(millis/1000, (millis % 1000) * 1000_000 + nanoAdjustment)&lt;/code&gt;
+<i>159</i>&nbsp;     *              &lt;p&gt;
+<i>160</i>&nbsp;     *              Since: 9
+<i>161</i>&nbsp;     * @serialField thrown Throwable The Throwable (if any) associated with log
+<i>162</i>&nbsp;     *              message
+<i>163</i>&nbsp;     * @serialField loggerName String Name of the source Logger
+<i>164</i>&nbsp;     * @serialField resourceBundleName String Resource bundle name to localized
+<i>165</i>&nbsp;     *              log message
+<i>166</i>&nbsp;     */
+<i>167</i>&nbsp;    private static final ObjectStreamField[] serialPersistentFields =
+<i>168</i>&nbsp;        new ObjectStreamField[] {
+<i>169</i>&nbsp;            new ObjectStreamField(&quot;level&quot;, Level.class),
+<i>170</i>&nbsp;            new ObjectStreamField(&quot;sequenceNumber&quot;, long.class),
+<i>171</i>&nbsp;            new ObjectStreamField(&quot;sourceClassName&quot;, String.class),
+<i>172</i>&nbsp;            new ObjectStreamField(&quot;sourceMethodName&quot;, String.class),
+<i>173</i>&nbsp;            new ObjectStreamField(&quot;message&quot;, String.class),
+<i>174</i>&nbsp;            new ObjectStreamField(&quot;threadID&quot;, int.class),
+<i>175</i>&nbsp;            new ObjectStreamField(&quot;millis&quot;, long.class),
+<i>176</i>&nbsp;            new ObjectStreamField(&quot;nanoAdjustment&quot;, int.class),
+<b class="nc"><i>177</i>&nbsp;            new ObjectStreamField(&quot;thrown&quot;, Throwable.class),</b>
+<i>178</i>&nbsp;            new ObjectStreamField(&quot;loggerName&quot;, String.class),
+<b class="nc"><i>179</i>&nbsp;            new ObjectStreamField(&quot;resourceBundleName&quot;, String.class),</b>
+<b class="nc"><i>180</i>&nbsp;        };</b>
+<b class="nc"><i>181</i>&nbsp;</b>
+<i>182</i>&nbsp;    private transient boolean needToInferCaller;
+<b class="nc"><i>183</i>&nbsp;    private transient Object parameters[];</b>
+<b class="nc"><i>184</i>&nbsp;    private transient ResourceBundle resourceBundle;</b>
+<b class="nc"><i>185</i>&nbsp;</b>
+<b class="nc"><i>186</i>&nbsp;    /**</b>
+<i>187</i>&nbsp;     * Returns the default value for a new LogRecord&#39;s threadID.
+<i>188</i>&nbsp;     */
+<i>189</i>&nbsp;    private int defaultThreadID() {
+<i>190</i>&nbsp;        long tid = Thread.currentThread().getId();
+<i>191</i>&nbsp;        if (tid &lt; MIN_SEQUENTIAL_THREAD_ID) {
+<i>192</i>&nbsp;            return (int) tid;
+<i>193</i>&nbsp;        } else {
+<i>194</i>&nbsp;            Integer id = threadIds.get();
+<b class="nc"><i>195</i>&nbsp;            if (id == null) {</b>
+<i>196</i>&nbsp;                id = nextThreadId.getAndIncrement();
+<i>197</i>&nbsp;                threadIds.set(id);
+<i>198</i>&nbsp;            }
+<i>199</i>&nbsp;            return id;
+<i>200</i>&nbsp;        }
+<i>201</i>&nbsp;    }
+<i>202</i>&nbsp;
+<i>203</i>&nbsp;    /**
+<b class="nc"><i>204</i>&nbsp;     * Construct a LogRecord with the given level and message values.</b>
+<i>205</i>&nbsp;     * &lt;p&gt;
+<i>206</i>&nbsp;     * The sequence property will be initialized with a new unique value.
+<i>207</i>&nbsp;     * These sequence values are allocated in increasing order within a VM.
+<i>208</i>&nbsp;     * &lt;p&gt;
+<i>209</i>&nbsp;     * Since JDK 9, the event time is represented by an {@link Instant}.
+<i>210</i>&nbsp;     * The instant property will be initialized to the {@linkplain
+<i>211</i>&nbsp;     * Instant#now() current instant}, using the best available
+<i>212</i>&nbsp;     * {@linkplain Clock#systemUTC() clock} on the system.
+<i>213</i>&nbsp;     * &lt;p&gt;
+<i>214</i>&nbsp;     * The thread ID property will be initialized with a unique ID for
+<i>215</i>&nbsp;     * the current thread.
+<i>216</i>&nbsp;     * &lt;p&gt;
+<b class="nc"><i>217</i>&nbsp;     * All other properties will be initialized to &quot;null&quot;.</b>
+<i>218</i>&nbsp;     *
+<i>219</i>&nbsp;     * @param level  a logging level value
+<i>220</i>&nbsp;     * @param msg  the raw non-localized logging message (may be null)
+<i>221</i>&nbsp;     * @see java.time.Clock#systemUTC()
+<i>222</i>&nbsp;     */
+<i>223</i>&nbsp;    public LogRecord(Level level, String msg) {
+<i>224</i>&nbsp;        this.level = Objects.requireNonNull(level);
+<i>225</i>&nbsp;        message = msg;
+<b class="nc"><i>226</i>&nbsp;        // Assign a thread ID and a unique sequence number.</b>
+<i>227</i>&nbsp;        sequenceNumber = globalSequenceNumber.getAndIncrement();
+<i>228</i>&nbsp;        threadID = defaultThreadID();
+<i>229</i>&nbsp;        instant = Instant.now();
+<i>230</i>&nbsp;        needToInferCaller = true;
+<i>231</i>&nbsp;   }
+<i>232</i>&nbsp;
+<i>233</i>&nbsp;    /**
+<i>234</i>&nbsp;     * Get the source Logger&#39;s name.
+<i>235</i>&nbsp;     *
+<i>236</i>&nbsp;     * @return source logger name (may be null)
+<i>237</i>&nbsp;     */
+<b class="nc"><i>238</i>&nbsp;    public String getLoggerName() {</b>
+<i>239</i>&nbsp;        return loggerName;
+<i>240</i>&nbsp;    }
+<i>241</i>&nbsp;
+<i>242</i>&nbsp;    /**
+<i>243</i>&nbsp;     * Set the source Logger&#39;s name.
+<i>244</i>&nbsp;     *
+<i>245</i>&nbsp;     * @param name   the source logger name (may be null)
+<i>246</i>&nbsp;     */
+<b class="nc"><i>247</i>&nbsp;    public void setLoggerName(String name) {</b>
+<i>248</i>&nbsp;        loggerName = name;
+<i>249</i>&nbsp;    }
+<i>250</i>&nbsp;
+<i>251</i>&nbsp;    /**
+<i>252</i>&nbsp;     * Get the localization resource bundle
+<i>253</i>&nbsp;     * &lt;p&gt;
+<i>254</i>&nbsp;     * This is the ResourceBundle that should be used to localize
+<b class="nc"><i>255</i>&nbsp;     * the message string before formatting it.  The result may</b>
+<i>256</i>&nbsp;     * be null if the message is not localizable, or if no suitable
+<i>257</i>&nbsp;     * ResourceBundle is available.
+<i>258</i>&nbsp;     * @return the localization resource bundle
+<i>259</i>&nbsp;     */
+<i>260</i>&nbsp;    public ResourceBundle getResourceBundle() {
+<i>261</i>&nbsp;        return resourceBundle;
+<i>262</i>&nbsp;    }
+<b class="nc"><i>263</i>&nbsp;</b>
+<b class="nc"><i>264</i>&nbsp;    /**</b>
+<i>265</i>&nbsp;     * Set the localization resource bundle.
+<b class="nc"><i>266</i>&nbsp;     *</b>
+<i>267</i>&nbsp;     * @param bundle  localization bundle (may be null)
+<i>268</i>&nbsp;     */
+<i>269</i>&nbsp;    public void setResourceBundle(ResourceBundle bundle) {
+<i>270</i>&nbsp;        resourceBundle = bundle;
+<i>271</i>&nbsp;    }
+<i>272</i>&nbsp;
+<i>273</i>&nbsp;    /**
+<i>274</i>&nbsp;     * Get the localization resource bundle name
+<i>275</i>&nbsp;     * &lt;p&gt;
+<i>276</i>&nbsp;     * This is the name for the ResourceBundle that should be
+<i>277</i>&nbsp;     * used to localize the message string before formatting it.
+<b class="nc"><i>278</i>&nbsp;     * The result may be null if the message is not localizable.</b>
+<i>279</i>&nbsp;     * @return the localization resource bundle name
+<i>280</i>&nbsp;     */
+<i>281</i>&nbsp;    public String getResourceBundleName() {
+<i>282</i>&nbsp;        return resourceBundleName;
+<i>283</i>&nbsp;    }
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;    /**
+<i>286</i>&nbsp;     * Set the localization resource bundle name.
+<i>287</i>&nbsp;     *
+<i>288</i>&nbsp;     * @param name  localization bundle name (may be null)
+<b class="nc"><i>289</i>&nbsp;     */</b>
+<i>290</i>&nbsp;    public void setResourceBundleName(String name) {
+<i>291</i>&nbsp;        resourceBundleName = name;
+<i>292</i>&nbsp;    }
+<i>293</i>&nbsp;
+<i>294</i>&nbsp;    /**
+<i>295</i>&nbsp;     * Get the logging message level, for example Level.SEVERE.
+<i>296</i>&nbsp;     * @return the logging message level
+<i>297</i>&nbsp;     */
+<i>298</i>&nbsp;    public Level getLevel() {
+<i>299</i>&nbsp;        return level;
+<i>300</i>&nbsp;    }
+<i>301</i>&nbsp;
+<i>302</i>&nbsp;    /**
+<i>303</i>&nbsp;     * Set the logging message level, for example Level.SEVERE.
+<i>304</i>&nbsp;     * @param level the logging message level
+<i>305</i>&nbsp;     */
+<i>306</i>&nbsp;    public void setLevel(Level level) {
+<b class="nc"><i>307</i>&nbsp;        if (level == null) {</b>
+<b class="nc"><i>308</i>&nbsp;            throw new NullPointerException();</b>
+<i>309</i>&nbsp;        }
+<b class="nc"><i>310</i>&nbsp;        this.level = level;</b>
+<i>311</i>&nbsp;    }
+<i>312</i>&nbsp;
+<i>313</i>&nbsp;    /**
+<i>314</i>&nbsp;     * Get the sequence number.
+<i>315</i>&nbsp;     * &lt;p&gt;
+<i>316</i>&nbsp;     * Sequence numbers are normally assigned in the LogRecord
+<i>317</i>&nbsp;     * constructor, which assigns unique sequence numbers to
+<i>318</i>&nbsp;     * each new LogRecord in increasing order.
+<b class="nc"><i>319</i>&nbsp;     * @return the sequence number</b>
+<b class="nc"><i>320</i>&nbsp;     */</b>
+<i>321</i>&nbsp;    public long getSequenceNumber() {
+<i>322</i>&nbsp;        return sequenceNumber;
+<i>323</i>&nbsp;    }
+<i>324</i>&nbsp;
+<i>325</i>&nbsp;    /**
+<i>326</i>&nbsp;     * Set the sequence number.
+<i>327</i>&nbsp;     * &lt;p&gt;
+<i>328</i>&nbsp;     * Sequence numbers are normally assigned in the LogRecord constructor,
+<i>329</i>&nbsp;     * so it should not normally be necessary to use this method.
+<i>330</i>&nbsp;     * @param seq the sequence number
+<i>331</i>&nbsp;     */
+<i>332</i>&nbsp;    public void setSequenceNumber(long seq) {
+<i>333</i>&nbsp;        sequenceNumber = seq;
+<i>334</i>&nbsp;    }
+<i>335</i>&nbsp;
+<i>336</i>&nbsp;    /**
+<i>337</i>&nbsp;     * Get the  name of the class that (allegedly) issued the logging request.
+<b class="nc"><i>338</i>&nbsp;     * &lt;p&gt;</b>
+<b class="nc"><i>339</i>&nbsp;     * Note that this sourceClassName is not verified and may be spoofed.</b>
+<i>340</i>&nbsp;     * This information may either have been provided as part of the
+<b class="nc"><i>341</i>&nbsp;     * logging call, or it may have been inferred automatically by the</b>
+<i>342</i>&nbsp;     * logging framework.  In the latter case, the information may only
+<i>343</i>&nbsp;     * be approximate and may in fact describe an earlier call on the
+<i>344</i>&nbsp;     * stack frame.
+<i>345</i>&nbsp;     * &lt;p&gt;
+<i>346</i>&nbsp;     * May be null if no information could be obtained.
+<i>347</i>&nbsp;     *
+<i>348</i>&nbsp;     * @return the source class name
+<i>349</i>&nbsp;     */
+<b class="nc"><i>350</i>&nbsp;    public String getSourceClassName() {</b>
+<b class="nc"><i>351</i>&nbsp;        if (needToInferCaller) {</b>
+<i>352</i>&nbsp;            inferCaller();
+<i>353</i>&nbsp;        }
+<i>354</i>&nbsp;        return sourceClassName;
+<i>355</i>&nbsp;    }
+<i>356</i>&nbsp;
+<i>357</i>&nbsp;    /**
+<i>358</i>&nbsp;     * Set the name of the class that (allegedly) issued the logging request.
+<i>359</i>&nbsp;     *
+<i>360</i>&nbsp;     * @param sourceClassName the source class name (may be null)
+<i>361</i>&nbsp;     */
+<i>362</i>&nbsp;    public void setSourceClassName(String sourceClassName) {
+<i>363</i>&nbsp;        this.sourceClassName = sourceClassName;
+<i>364</i>&nbsp;        needToInferCaller = false;
+<i>365</i>&nbsp;    }
+<i>366</i>&nbsp;
+<i>367</i>&nbsp;    /**
+<i>368</i>&nbsp;     * Get the  name of the method that (allegedly) issued the logging request.
+<b class="nc"><i>369</i>&nbsp;     * &lt;p&gt;</b>
+<i>370</i>&nbsp;     * Note that this sourceMethodName is not verified and may be spoofed.
+<i>371</i>&nbsp;     * This information may either have been provided as part of the
+<i>372</i>&nbsp;     * logging call, or it may have been inferred automatically by the
+<i>373</i>&nbsp;     * logging framework.  In the latter case, the information may only
+<i>374</i>&nbsp;     * be approximate and may in fact describe an earlier call on the
+<i>375</i>&nbsp;     * stack frame.
+<i>376</i>&nbsp;     * &lt;p&gt;
+<i>377</i>&nbsp;     * May be null if no information could be obtained.
+<b class="nc"><i>378</i>&nbsp;     *</b>
+<i>379</i>&nbsp;     * @return the source method name
+<i>380</i>&nbsp;     */
+<i>381</i>&nbsp;    public String getSourceMethodName() {
+<i>382</i>&nbsp;        if (needToInferCaller) {
+<i>383</i>&nbsp;            inferCaller();
+<i>384</i>&nbsp;        }
+<i>385</i>&nbsp;        return sourceMethodName;
+<i>386</i>&nbsp;    }
+<i>387</i>&nbsp;
+<b class="nc"><i>388</i>&nbsp;    /**</b>
+<i>389</i>&nbsp;     * Set the name of the method that (allegedly) issued the logging request.
+<i>390</i>&nbsp;     *
+<i>391</i>&nbsp;     * @param sourceMethodName the source method name (may be null)
+<i>392</i>&nbsp;     */
+<i>393</i>&nbsp;    public void setSourceMethodName(String sourceMethodName) {
+<i>394</i>&nbsp;        this.sourceMethodName = sourceMethodName;
+<i>395</i>&nbsp;        needToInferCaller = false;
+<i>396</i>&nbsp;    }
+<b class="nc"><i>397</i>&nbsp;</b>
+<i>398</i>&nbsp;    /**
+<i>399</i>&nbsp;     * Get the &quot;raw&quot; log message, before localization or formatting.
+<i>400</i>&nbsp;     * &lt;p&gt;
+<i>401</i>&nbsp;     * May be null, which is equivalent to the empty string &quot;&quot;.
+<i>402</i>&nbsp;     * &lt;p&gt;
+<i>403</i>&nbsp;     * This message may be either the final text or a localization key.
+<i>404</i>&nbsp;     * &lt;p&gt;
+<i>405</i>&nbsp;     * During formatting, if the source logger has a localization
+<i>406</i>&nbsp;     * ResourceBundle and if that ResourceBundle has an entry for
+<i>407</i>&nbsp;     * this message string, then the message string is replaced
+<i>408</i>&nbsp;     * with the localized value.
+<b class="nc"><i>409</i>&nbsp;     *</b>
+<i>410</i>&nbsp;     * @return the raw message string
+<i>411</i>&nbsp;     */
+<i>412</i>&nbsp;    public String getMessage() {
+<i>413</i>&nbsp;        return message;
+<i>414</i>&nbsp;    }
+<i>415</i>&nbsp;
+<i>416</i>&nbsp;    /**
+<b class="nc"><i>417</i>&nbsp;     * Set the &quot;raw&quot; log message, before localization or formatting.</b>
+<i>418</i>&nbsp;     *
+<i>419</i>&nbsp;     * @param message the raw message string (may be null)
+<i>420</i>&nbsp;     */
+<i>421</i>&nbsp;    public void setMessage(String message) {
+<i>422</i>&nbsp;        this.message = message;
+<i>423</i>&nbsp;    }
+<i>424</i>&nbsp;
+<i>425</i>&nbsp;    /**
+<b class="nc"><i>426</i>&nbsp;     * Get the parameters to the log message.</b>
+<i>427</i>&nbsp;     *
+<i>428</i>&nbsp;     * @return the log message parameters.  May be null if
+<i>429</i>&nbsp;     *                  there are no parameters.
+<i>430</i>&nbsp;     */
+<i>431</i>&nbsp;    public Object[] getParameters() {
+<i>432</i>&nbsp;        return parameters;
+<i>433</i>&nbsp;    }
+<i>434</i>&nbsp;
+<b class="nc"><i>435</i>&nbsp;    /**</b>
+<i>436</i>&nbsp;     * Set the parameters to the log message.
+<i>437</i>&nbsp;     *
+<i>438</i>&nbsp;     * @param parameters the log message parameters. (may be null)
+<i>439</i>&nbsp;     */
+<i>440</i>&nbsp;    public void setParameters(Object parameters[]) {
+<i>441</i>&nbsp;        this.parameters = parameters;
+<i>442</i>&nbsp;    }
+<i>443</i>&nbsp;
+<i>444</i>&nbsp;    /**
+<i>445</i>&nbsp;     * Get an identifier for the thread where the message originated.
+<i>446</i>&nbsp;     * &lt;p&gt;
+<b class="nc"><i>447</i>&nbsp;     * This is a thread identifier within the Java VM and may or</b>
+<i>448</i>&nbsp;     * may not map to any operating system ID.
+<i>449</i>&nbsp;     *
+<i>450</i>&nbsp;     * @return thread ID
+<i>451</i>&nbsp;     */
+<i>452</i>&nbsp;    public int getThreadID() {
+<i>453</i>&nbsp;        return threadID;
+<i>454</i>&nbsp;    }
+<i>455</i>&nbsp;
+<b class="nc"><i>456</i>&nbsp;    /**</b>
+<i>457</i>&nbsp;     * Set an identifier for the thread where the message originated.
+<i>458</i>&nbsp;     * @param threadID  the thread ID
+<i>459</i>&nbsp;     */
+<i>460</i>&nbsp;    public void setThreadID(int threadID) {
+<i>461</i>&nbsp;        this.threadID = threadID;
+<i>462</i>&nbsp;    }
+<i>463</i>&nbsp;
+<i>464</i>&nbsp;    /**
+<i>465</i>&nbsp;     * Get truncated event time in milliseconds since 1970.
+<i>466</i>&nbsp;     *
+<i>467</i>&nbsp;     * @return truncated event time in millis since 1970
+<i>468</i>&nbsp;     *
+<i>469</i>&nbsp;     * @implSpec This is equivalent to calling
+<i>470</i>&nbsp;     *      {@link #getInstant() getInstant().toEpochMilli()}.
+<i>471</i>&nbsp;     *
+<i>472</i>&nbsp;     * @apiNote To get the full nanosecond resolution event time,
+<b class="nc"><i>473</i>&nbsp;     *             use {@link #getInstant()}.</b>
+<i>474</i>&nbsp;     *
+<i>475</i>&nbsp;     * @see #getInstant()
+<b class="nc"><i>476</i>&nbsp;     */</b>
+<b class="nc"><i>477</i>&nbsp;    public long getMillis() {</b>
+<b class="nc"><i>478</i>&nbsp;        return instant.toEpochMilli();</b>
+<b class="nc"><i>479</i>&nbsp;    }</b>
+<i>480</i>&nbsp;
+<i>481</i>&nbsp;    /**
+<b class="nc"><i>482</i>&nbsp;     * Set event time.</b>
+<i>483</i>&nbsp;     *
+<b class="nc"><i>484</i>&nbsp;     * @param millis event time in millis since 1970.</b>
+<b class="nc"><i>485</i>&nbsp;     *</b>
+<b class="nc"><i>486</i>&nbsp;     * @implSpec This is equivalent to calling</b>
+<i>487</i>&nbsp;     *      {@link #setInstant(java.time.Instant)
+<b class="nc"><i>488</i>&nbsp;     *      setInstant(Instant.ofEpochMilli(millis))}.</b>
+<i>489</i>&nbsp;     *
+<i>490</i>&nbsp;     * @deprecated LogRecord maintains timestamps with nanosecond resolution,
+<i>491</i>&nbsp;     *             using {@link Instant} values. For this reason,
+<i>492</i>&nbsp;     *             {@link #setInstant(java.time.Instant) setInstant()}
+<i>493</i>&nbsp;     *             should be used in preference to {@code setMillis()}.
+<i>494</i>&nbsp;     *
+<i>495</i>&nbsp;     * @see #setInstant(java.time.Instant)
+<b class="nc"><i>496</i>&nbsp;     */</b>
+<i>497</i>&nbsp;    @Deprecated
+<i>498</i>&nbsp;    public void setMillis(long millis) {
+<b class="nc"><i>499</i>&nbsp;        this.instant = Instant.ofEpochMilli(millis);</b>
+<b class="nc"><i>500</i>&nbsp;    }</b>
+<b class="nc"><i>501</i>&nbsp;</b>
+<b class="nc"><i>502</i>&nbsp;    /**</b>
+<i>503</i>&nbsp;     * Gets the instant that the event occurred.
+<b class="nc"><i>504</i>&nbsp;     *</b>
+<b class="nc"><i>505</i>&nbsp;     * @return the instant that the event occurred.</b>
+<b class="nc"><i>506</i>&nbsp;     *</b>
+<b class="nc"><i>507</i>&nbsp;     * @since 9</b>
+<b class="nc"><i>508</i>&nbsp;     */</b>
+<b class="nc"><i>509</i>&nbsp;    public Instant getInstant() {</b>
+<b class="nc"><i>510</i>&nbsp;        return instant;</b>
+<b class="nc"><i>511</i>&nbsp;    }</b>
+<b class="nc"><i>512</i>&nbsp;</b>
+<i>513</i>&nbsp;    /**
+<i>514</i>&nbsp;     * Sets the instant that the event occurred.
+<b class="nc"><i>515</i>&nbsp;     * &lt;p&gt;</b>
+<b class="nc"><i>516</i>&nbsp;     * If the given {@code instant} represents a point on the time-line too</b>
+<b class="nc"><i>517</i>&nbsp;     * far in the future or past to fit in a {@code long} milliseconds and</b>
+<i>518</i>&nbsp;     * nanoseconds adjustment, then an {@code ArithmeticException} will be
+<b class="nc"><i>519</i>&nbsp;     * thrown.</b>
+<i>520</i>&nbsp;     *
+<i>521</i>&nbsp;     * @param instant the instant that the event occurred.
+<b class="nc"><i>522</i>&nbsp;     *</b>
+<i>523</i>&nbsp;     * @throws NullPointerException if {@code instant} is null.
+<i>524</i>&nbsp;     * @throws ArithmeticException if numeric overflow would occur while
+<i>525</i>&nbsp;     *         calling {@link Instant#toEpochMilli() instant.toEpochMilli()}.
+<b class="nc"><i>526</i>&nbsp;     *</b>
+<b class="nc"><i>527</i>&nbsp;     * @since 9</b>
+<b class="nc"><i>528</i>&nbsp;     */</b>
+<b class="nc"><i>529</i>&nbsp;    public void setInstant(Instant instant) {</b>
+<b class="nc"><i>530</i>&nbsp;        instant.toEpochMilli();</b>
+<b class="nc"><i>531</i>&nbsp;        this.instant = instant;</b>
+<i>532</i>&nbsp;    }
+<i>533</i>&nbsp;
+<b class="nc"><i>534</i>&nbsp;    /**</b>
+<b class="nc"><i>535</i>&nbsp;     * Get any throwable associated with the log record.</b>
+<i>536</i>&nbsp;     * &lt;p&gt;
+<i>537</i>&nbsp;     * If the event involved an exception, this will be the
+<b class="nc"><i>538</i>&nbsp;     * exception object. Otherwise null.</b>
+<i>539</i>&nbsp;     *
+<i>540</i>&nbsp;     * @return a throwable
+<i>541</i>&nbsp;     */
+<i>542</i>&nbsp;    public Throwable getThrown() {
+<b class="nc"><i>543</i>&nbsp;        return thrown;</b>
+<b class="nc"><i>544</i>&nbsp;    }</b>
+<b class="nc"><i>545</i>&nbsp;</b>
+<b class="nc"><i>546</i>&nbsp;    /**</b>
+<i>547</i>&nbsp;     * Set a throwable associated with the log event.
+<b class="nc"><i>548</i>&nbsp;     *</b>
+<b class="nc"><i>549</i>&nbsp;     * @param thrown  a throwable (may be null)</b>
+<i>550</i>&nbsp;     */
+<i>551</i>&nbsp;    public void setThrown(Throwable thrown) {
+<b class="nc"><i>552</i>&nbsp;        this.thrown = thrown;</b>
+<b class="nc"><i>553</i>&nbsp;    }</b>
+<b class="nc"><i>554</i>&nbsp;</b>
+<b class="nc"><i>555</i>&nbsp;    private static final long serialVersionUID = 5372048053134512534L;</b>
+<b class="nc"><i>556</i>&nbsp;</b>
+<i>557</i>&nbsp;    /**
+<b class="nc"><i>558</i>&nbsp;     * @serialData Serialized fields, followed by a two byte version number</b>
+<b class="nc"><i>559</i>&nbsp;     * (major byte, followed by minor byte), followed by information on</b>
+<i>560</i>&nbsp;     * the log record parameter array.  If there is no parameter array,
+<i>561</i>&nbsp;     * then -1 is written.  If there is a parameter array (possible of zero
+<b class="nc"><i>562</i>&nbsp;     * length) then the array length is written as an integer, followed</b>
+<i>563</i>&nbsp;     * by String values for each parameter.  If a parameter is null, then
+<b class="nc"><i>564</i>&nbsp;     * a null String is written.  Otherwise the output of Object.toString()</b>
+<i>565</i>&nbsp;     * is written.
+<b class="nc"><i>566</i>&nbsp;     */</b>
+<b class="nc"><i>567</i>&nbsp;    private void writeObject(ObjectOutputStream out) throws IOException {</b>
+<i>568</i>&nbsp;        // We have to write serialized fields first.
+<i>569</i>&nbsp;        ObjectOutputStream.PutField pf = out.putFields();
+<i>570</i>&nbsp;        pf.put(&quot;level&quot;, level);
+<i>571</i>&nbsp;        pf.put(&quot;sequenceNumber&quot;, sequenceNumber);
+<i>572</i>&nbsp;        pf.put(&quot;sourceClassName&quot;, sourceClassName);
+<i>573</i>&nbsp;        pf.put(&quot;sourceMethodName&quot;, sourceMethodName);
+<i>574</i>&nbsp;        pf.put(&quot;message&quot;, message);
+<i>575</i>&nbsp;        pf.put(&quot;threadID&quot;, threadID);
+<i>576</i>&nbsp;        pf.put(&quot;millis&quot;, instant.toEpochMilli());
+<i>577</i>&nbsp;        pf.put(&quot;nanoAdjustment&quot;, instant.getNano() % 1000_000);
+<i>578</i>&nbsp;        pf.put(&quot;thrown&quot;, thrown);
+<b class="nc"><i>579</i>&nbsp;        pf.put(&quot;loggerName&quot;, loggerName);</b>
+<b class="nc"><i>580</i>&nbsp;        pf.put(&quot;resourceBundleName&quot;, resourceBundleName);</b>
+<b class="nc"><i>581</i>&nbsp;        out.writeFields();</b>
+<i>582</i>&nbsp;
+<i>583</i>&nbsp;        // Write our version number.
+<i>584</i>&nbsp;        out.writeByte(1);
+<i>585</i>&nbsp;        out.writeByte(0);
+<i>586</i>&nbsp;        if (parameters == null) {
+<i>587</i>&nbsp;            out.writeInt(-1);
+<i>588</i>&nbsp;            return;
+<i>589</i>&nbsp;        }
+<i>590</i>&nbsp;        out.writeInt(parameters.length);
+<i>591</i>&nbsp;        // Write string values for the parameters.
+<i>592</i>&nbsp;        for (Object parameter : parameters) {
+<i>593</i>&nbsp;            out.writeObject(Objects.toString(parameter, null));
+<i>594</i>&nbsp;        }
+<i>595</i>&nbsp;    }
+<i>596</i>&nbsp;
+<i>597</i>&nbsp;    private void readObject(ObjectInputStream in)
+<i>598</i>&nbsp;                        throws IOException, ClassNotFoundException {
+<i>599</i>&nbsp;        // We have to read serialized fields first.
+<i>600</i>&nbsp;        ObjectInputStream.GetField gf = in.readFields();
+<i>601</i>&nbsp;        level = (Level) gf.get(&quot;level&quot;, null);
+<i>602</i>&nbsp;        sequenceNumber = gf.get(&quot;sequenceNumber&quot;, 0L);
+<i>603</i>&nbsp;        sourceClassName = (String) gf.get(&quot;sourceClassName&quot;, null);
+<i>604</i>&nbsp;        sourceMethodName = (String) gf.get(&quot;sourceMethodName&quot;, null);
+<i>605</i>&nbsp;        message = (String) gf.get(&quot;message&quot;, null);
+<i>606</i>&nbsp;        threadID = gf.get(&quot;threadID&quot;, 0);
+<i>607</i>&nbsp;        long millis = gf.get(&quot;millis&quot;, 0L);
+<i>608</i>&nbsp;        int nanoOfMilli = gf.get(&quot;nanoAdjustment&quot;, 0);
+<i>609</i>&nbsp;        instant = Instant.ofEpochSecond(
+<i>610</i>&nbsp;            millis / 1000L, (millis % 1000L) * 1000_000L + nanoOfMilli);
+<i>611</i>&nbsp;        thrown = (Throwable) gf.get(&quot;thrown&quot;, null);
+<i>612</i>&nbsp;        loggerName = (String) gf.get(&quot;loggerName&quot;, null);
+<i>613</i>&nbsp;        resourceBundleName = (String) gf.get(&quot;resourceBundleName&quot;, null);
+<i>614</i>&nbsp;
+<i>615</i>&nbsp;        // Read version number.
+<i>616</i>&nbsp;        byte major = in.readByte();
+<i>617</i>&nbsp;        byte minor = in.readByte();
+<i>618</i>&nbsp;        if (major != 1) {
+<i>619</i>&nbsp;            throw new IOException(&quot;LogRecord: bad version: &quot; + major + &quot;.&quot; + minor);
+<i>620</i>&nbsp;        }
+<i>621</i>&nbsp;        int len = in.readInt();
+<i>622</i>&nbsp;        if (len &lt; -1) {
+<i>623</i>&nbsp;            throw new NegativeArraySizeException();
+<i>624</i>&nbsp;        } else if (len == -1) {
+<i>625</i>&nbsp;            parameters = null;
+<i>626</i>&nbsp;        } else if (len &lt; 255) {
+<i>627</i>&nbsp;            parameters = new Object[len];
+<i>628</i>&nbsp;            for (int i = 0; i &lt; parameters.length; i++) {
+<i>629</i>&nbsp;                parameters[i] = in.readObject();
+<i>630</i>&nbsp;            }
+<i>631</i>&nbsp;        } else {
+<i>632</i>&nbsp;            List&lt;Object&gt; params = new ArrayList&lt;&gt;(Math.min(len, 1024));
+<i>633</i>&nbsp;            for (int i = 0; i &lt; len; i++) {
+<i>634</i>&nbsp;                params.add(in.readObject());
+<i>635</i>&nbsp;            }
+<i>636</i>&nbsp;            parameters = params.toArray(new Object[params.size()]);
+<i>637</i>&nbsp;        }
+<i>638</i>&nbsp;        // If necessary, try to regenerate the resource bundle.
+<i>639</i>&nbsp;        if (resourceBundleName != null) {
+<i>640</i>&nbsp;            try {
+<i>641</i>&nbsp;                // use system class loader to ensure the ResourceBundle
+<i>642</i>&nbsp;                // instance is a different instance than null loader uses
+<i>643</i>&nbsp;                final ResourceBundle bundle =
+<i>644</i>&nbsp;                        ResourceBundle.getBundle(resourceBundleName,
+<i>645</i>&nbsp;                                Locale.getDefault(),
+<i>646</i>&nbsp;                                ClassLoader.getSystemClassLoader());
+<i>647</i>&nbsp;                resourceBundle = bundle;
+<i>648</i>&nbsp;            } catch (MissingResourceException ex) {
+<i>649</i>&nbsp;                // This is not a good place to throw an exception,
+<i>650</i>&nbsp;                // so we simply leave the resourceBundle null.
+<i>651</i>&nbsp;                resourceBundle = null;
+<i>652</i>&nbsp;            }
+<i>653</i>&nbsp;        }
+<i>654</i>&nbsp;
+<i>655</i>&nbsp;        needToInferCaller = false;
+<i>656</i>&nbsp;    }
+<i>657</i>&nbsp;
+<i>658</i>&nbsp;    // Private method to infer the caller&#39;s class and method names
+<i>659</i>&nbsp;    //
+<i>660</i>&nbsp;    // Note:
+<i>661</i>&nbsp;    // For testing purposes - it is possible to customize the process
+<i>662</i>&nbsp;    // by which LogRecord will infer the source class name and source method name
+<i>663</i>&nbsp;    // when analyzing the call stack.
+<i>664</i>&nbsp;    // &lt;p&gt;
+<i>665</i>&nbsp;    // The system property {@code jdk.logger.packages} can define a comma separated
+<i>666</i>&nbsp;    // list of strings corresponding to additional package name prefixes that
+<i>667</i>&nbsp;    // should be ignored when trying to infer the source caller class name.
+<i>668</i>&nbsp;    // Those stack frames whose {@linkplain StackTraceElement#getClassName()
+<i>669</i>&nbsp;    // declaring class name} start with one such prefix will be ignored.
+<i>670</i>&nbsp;    // &lt;p&gt;
+<i>671</i>&nbsp;    // This is primarily useful when providing utility logging classes wrapping
+<i>672</i>&nbsp;    // a logger instance, as it makes it possible to instruct LogRecord to skip
+<i>673</i>&nbsp;    // those utility frames when inferring the caller source class name.
+<i>674</i>&nbsp;    // &lt;p&gt;
+<i>675</i>&nbsp;    // The {@code jdk.logger.packages} system property is consulted only once.
+<i>676</i>&nbsp;    // &lt;p&gt;
+<i>677</i>&nbsp;    // This property is not standard, implementation specific, and yet
+<i>678</i>&nbsp;    // undocumented (and thus subject to changes without notice).
+<i>679</i>&nbsp;    //
+<i>680</i>&nbsp;    private void inferCaller() {
+<i>681</i>&nbsp;        needToInferCaller = false;
+<i>682</i>&nbsp;        // Skip all frames until we have found the first logger frame.
+<i>683</i>&nbsp;        Optional&lt;StackWalker.StackFrame&gt; frame = new CallerFinder().get();
+<i>684</i>&nbsp;        frame.ifPresent(f -&gt; {
+<i>685</i>&nbsp;            setSourceClassName(f.getClassName());
+<i>686</i>&nbsp;            setSourceMethodName(f.getMethodName());
+<i>687</i>&nbsp;        });
+<i>688</i>&nbsp;
+<i>689</i>&nbsp;        // We haven&#39;t found a suitable frame, so just punt.  This is
+<i>690</i>&nbsp;        // OK as we are only committed to making a &quot;best effort&quot; here.
+<i>691</i>&nbsp;    }
+<i>692</i>&nbsp;
+<i>693</i>&nbsp;    /*
+<i>694</i>&nbsp;     * CallerFinder is a stateful predicate.
+<i>695</i>&nbsp;     */
+<i>696</i>&nbsp;    static final class CallerFinder implements Predicate&lt;StackWalker.StackFrame&gt; {
+<i>697</i>&nbsp;        private static final StackWalker WALKER;
+<i>698</i>&nbsp;        static {
+<i>699</i>&nbsp;            final PrivilegedAction&lt;StackWalker&gt; action =
+<i>700</i>&nbsp;                    () -&gt; StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+<i>701</i>&nbsp;            WALKER = AccessController.doPrivileged(action);
+<i>702</i>&nbsp;        }
+<i>703</i>&nbsp;
+<i>704</i>&nbsp;        /**
+<i>705</i>&nbsp;         * Returns StackFrame of the caller&#39;s frame.
+<i>706</i>&nbsp;         * @return StackFrame of the caller&#39;s frame.
+<i>707</i>&nbsp;         */
+<i>708</i>&nbsp;        Optional&lt;StackWalker.StackFrame&gt; get() {
+<i>709</i>&nbsp;            return WALKER.walk((s) -&gt; s.filter(this).findFirst());
+<i>710</i>&nbsp;        }
+<i>711</i>&nbsp;
+<i>712</i>&nbsp;        private boolean lookingForLogger = true;
+<i>713</i>&nbsp;        /**
+<i>714</i>&nbsp;         * Returns true if we have found the caller&#39;s frame, false if the frame
+<i>715</i>&nbsp;         * must be skipped.
+<i>716</i>&nbsp;         *
+<i>717</i>&nbsp;         * @param t The frame info.
+<i>718</i>&nbsp;         * @return true if we have found the caller&#39;s frame, false if the frame
+<i>719</i>&nbsp;         * must be skipped.
+<i>720</i>&nbsp;         */
+<i>721</i>&nbsp;        @Override
+<i>722</i>&nbsp;        public boolean test(StackWalker.StackFrame t) {
+<i>723</i>&nbsp;            final String cname = t.getClassName();
+<i>724</i>&nbsp;            // We should skip all frames until we have found the logger,
+<i>725</i>&nbsp;            // because these frames could be frames introduced by e.g. custom
+<i>726</i>&nbsp;            // sub classes of Handler.
+<i>727</i>&nbsp;            if (lookingForLogger) {
+<i>728</i>&nbsp;                // the log record could be created for a platform logger
+<i>729</i>&nbsp;                lookingForLogger = !isLoggerImplFrame(cname);
+<i>730</i>&nbsp;                return false;
+<i>731</i>&nbsp;            }
+<i>732</i>&nbsp;            // Continue walking until we&#39;ve found the relevant calling frame.
+<i>733</i>&nbsp;            // Skips logging/logger infrastructure.
+<i>734</i>&nbsp;            return !isFilteredFrame(t);
+<i>735</i>&nbsp;        }
+<i>736</i>&nbsp;
+<i>737</i>&nbsp;        private boolean isLoggerImplFrame(String cname) {
+<i>738</i>&nbsp;            return (cname.equals(&quot;java.util.logging.Logger&quot;) ||
+<i>739</i>&nbsp;                    cname.startsWith(&quot;sun.util.logging.PlatformLogger&quot;));
+<i>740</i>&nbsp;        }
+<i>741</i>&nbsp;    }
+<i>742</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

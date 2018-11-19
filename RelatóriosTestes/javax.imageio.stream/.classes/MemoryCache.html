@@ -1,0 +1,460 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: MemoryCache</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">javax.imageio.stream</a> ]
+</div>
+
+<h1>Coverage Summary for Class: MemoryCache (javax.imageio.stream)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">MemoryCache</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 12)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 122)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2003, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package javax.imageio.stream;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.ArrayList;
+<i>29</i>&nbsp;import java.io.InputStream;
+<i>30</i>&nbsp;import java.io.OutputStream;
+<i>31</i>&nbsp;import java.io.IOException;
+<i>32</i>&nbsp;
+<i>33</i>&nbsp;/**
+<i>34</i>&nbsp; * Package-visible class consolidating common code for
+<i>35</i>&nbsp; * {@code MemoryCacheImageInputStream} and
+<i>36</i>&nbsp; * {@code MemoryCacheImageOutputStream}.
+<i>37</i>&nbsp; * This class keeps an {@code ArrayList} of 8K blocks,
+<i>38</i>&nbsp; * loaded sequentially.  Blocks may only be disposed of
+<i>39</i>&nbsp; * from the index 0 forward.  As blocks are freed, the
+<i>40</i>&nbsp; * corresponding entries in the array list are set to
+<i>41</i>&nbsp; * {@code null}, but no compacting is performed.
+<i>42</i>&nbsp; * This allows the index for each block to never change,
+<i>43</i>&nbsp; * and the length of the cache is always the same as the
+<i>44</i>&nbsp; * total amount of data ever cached.  Cached data is
+<i>45</i>&nbsp; * therefore always contiguous from the point of last
+<i>46</i>&nbsp; * disposal to the current length.
+<i>47</i>&nbsp; *
+<i>48</i>&nbsp; * &lt;p&gt; The total number of blocks resident in the cache must not
+<i>49</i>&nbsp; * exceed {@code Integer.MAX_VALUE}.  In practice, the limit of
+<i>50</i>&nbsp; * available memory will be exceeded long before this becomes an
+<i>51</i>&nbsp; * issue, since a full cache would contain 8192*2^31 = 16 terabytes of
+<i>52</i>&nbsp; * data.
+<i>53</i>&nbsp; *
+<i>54</i>&nbsp; * A {@code MemoryCache} may be reused after a call
+<i>55</i>&nbsp; * to {@code reset()}.
+<i>56</i>&nbsp; */
+<b class="nc"><i>57</i>&nbsp;class MemoryCache {</b>
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    private static final int BUFFER_LENGTH = 8192;
+<i>60</i>&nbsp;
+<b class="nc"><i>61</i>&nbsp;    private ArrayList&lt;byte[]&gt; cache = new ArrayList&lt;&gt;();</b>
+<i>62</i>&nbsp;
+<b class="nc"><i>63</i>&nbsp;    private long cacheStart = 0L;</b>
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    /**
+<i>66</i>&nbsp;     * The largest position ever written to the cache.
+<i>67</i>&nbsp;     */
+<b class="nc"><i>68</i>&nbsp;    private long length = 0L;</b>
+<i>69</i>&nbsp;
+<i>70</i>&nbsp;    private byte[] getCacheBlock(long blockNum) throws IOException {
+<b class="nc"><i>71</i>&nbsp;        long blockOffset = blockNum - cacheStart;</b>
+<b class="nc"><i>72</i>&nbsp;        if (blockOffset &gt; Integer.MAX_VALUE) {</b>
+<i>73</i>&nbsp;            // This can only happen when the cache hits 16 terabytes of
+<i>74</i>&nbsp;            // contiguous data...
+<b class="nc"><i>75</i>&nbsp;            throw new IOException(&quot;Cache addressing limit exceeded!&quot;);</b>
+<i>76</i>&nbsp;        }
+<b class="nc"><i>77</i>&nbsp;        return cache.get((int)blockOffset);</b>
+<i>78</i>&nbsp;    }
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;    /**
+<i>81</i>&nbsp;     * Ensures that at least {@code pos} bytes are cached,
+<i>82</i>&nbsp;     * or the end of the source is reached.  The return value
+<i>83</i>&nbsp;     * is equal to the smaller of {@code pos} and the
+<i>84</i>&nbsp;     * length of the source.
+<i>85</i>&nbsp;     *
+<i>86</i>&nbsp;     * @throws IOException if there is no more memory for cache
+<i>87</i>&nbsp;     */
+<i>88</i>&nbsp;    public long loadFromStream(InputStream stream, long pos)
+<b class="nc"><i>89</i>&nbsp;        throws IOException {</b>
+<b class="nc"><i>90</i>&nbsp;        // We&#39;ve already got enough data cached</b>
+<i>91</i>&nbsp;        if (pos &lt; length) {
+<i>92</i>&nbsp;            return pos;
+<b class="nc"><i>93</i>&nbsp;        }</b>
+<b class="nc"><i>94</i>&nbsp;</b>
+<i>95</i>&nbsp;        int offset = (int)(length % BUFFER_LENGTH);
+<b class="nc"><i>96</i>&nbsp;        byte [] buf = null;</b>
+<b class="nc"><i>97</i>&nbsp;</b>
+<b class="nc"><i>98</i>&nbsp;        long len = pos - length;</b>
+<i>99</i>&nbsp;        if (offset != 0) {
+<i>100</i>&nbsp;            buf = getCacheBlock(length/BUFFER_LENGTH);
+<b class="nc"><i>101</i>&nbsp;        }</b>
+<b class="nc"><i>102</i>&nbsp;</b>
+<i>103</i>&nbsp;        while (len &gt; 0) {
+<b class="nc"><i>104</i>&nbsp;            if (buf == null) {</b>
+<b class="nc"><i>105</i>&nbsp;                try {</b>
+<b class="nc"><i>106</i>&nbsp;                    buf = new byte[BUFFER_LENGTH];</b>
+<b class="nc"><i>107</i>&nbsp;                } catch (OutOfMemoryError e) {</b>
+<b class="nc"><i>108</i>&nbsp;                    throw new IOException(&quot;No memory left for cache!&quot;);</b>
+<i>109</i>&nbsp;                }
+<i>110</i>&nbsp;                offset = 0;
+<b class="nc"><i>111</i>&nbsp;            }</b>
+<b class="nc"><i>112</i>&nbsp;</b>
+<b class="nc"><i>113</i>&nbsp;            int left = BUFFER_LENGTH - offset;</b>
+<b class="nc"><i>114</i>&nbsp;            int nbytes = (int)Math.min(len, (long)left);</b>
+<b class="nc"><i>115</i>&nbsp;            nbytes = stream.read(buf, offset, nbytes);</b>
+<i>116</i>&nbsp;            if (nbytes == -1) {
+<i>117</i>&nbsp;                return length; // EOF
+<b class="nc"><i>118</i>&nbsp;            }</b>
+<b class="nc"><i>119</i>&nbsp;</b>
+<i>120</i>&nbsp;            if (offset == 0) {
+<i>121</i>&nbsp;                cache.add(buf);
+<b class="nc"><i>122</i>&nbsp;            }</b>
+<b class="nc"><i>123</i>&nbsp;</b>
+<b class="nc"><i>124</i>&nbsp;            len -= nbytes;</b>
+<i>125</i>&nbsp;            length += nbytes;
+<b class="nc"><i>126</i>&nbsp;            offset += nbytes;</b>
+<i>127</i>&nbsp;
+<i>128</i>&nbsp;            if (offset &gt;= BUFFER_LENGTH) {
+<b class="nc"><i>129</i>&nbsp;                // we&#39;ve filled the current buffer, so a new one will be</b>
+<i>130</i>&nbsp;                // allocated next time around (and offset will be reset to 0)
+<b class="nc"><i>131</i>&nbsp;                buf = null;</b>
+<i>132</i>&nbsp;            }
+<b class="nc"><i>133</i>&nbsp;        }</b>
+<i>134</i>&nbsp;
+<i>135</i>&nbsp;        return pos;
+<i>136</i>&nbsp;    }
+<i>137</i>&nbsp;
+<i>138</i>&nbsp;    /**
+<i>139</i>&nbsp;     * Writes out a portion of the cache to an {@code OutputStream}.
+<i>140</i>&nbsp;     * This method preserves no state about the output stream, and does
+<i>141</i>&nbsp;     * not dispose of any blocks containing bytes written.  To dispose
+<i>142</i>&nbsp;     * blocks, use {@link #disposeBefore disposeBefore()}.
+<i>143</i>&nbsp;     *
+<i>144</i>&nbsp;     * @exception IndexOutOfBoundsException if any portion of
+<i>145</i>&nbsp;     * the requested data is not in the cache (including if {@code pos}
+<i>146</i>&nbsp;     * is in a block already disposed), or if either {@code pos} or
+<i>147</i>&nbsp;     * {@code len} is &lt; 0.
+<i>148</i>&nbsp;     * @throws IOException if there is an I/O exception while writing to the
+<b class="nc"><i>149</i>&nbsp;     * stream</b>
+<b class="nc"><i>150</i>&nbsp;     */</b>
+<i>151</i>&nbsp;    public void writeToStream(OutputStream stream, long pos, long len)
+<b class="nc"><i>152</i>&nbsp;        throws IOException {</b>
+<b class="nc"><i>153</i>&nbsp;        if (pos + len &gt; length) {</b>
+<i>154</i>&nbsp;            throw new IndexOutOfBoundsException(&quot;Argument out of cache&quot;);
+<b class="nc"><i>155</i>&nbsp;        }</b>
+<i>156</i>&nbsp;        if ((pos &lt; 0) || (len &lt; 0)) {
+<i>157</i>&nbsp;            throw new IndexOutOfBoundsException(&quot;Negative pos or len&quot;);
+<i>158</i>&nbsp;        }
+<b class="nc"><i>159</i>&nbsp;        if (len == 0) {</b>
+<b class="nc"><i>160</i>&nbsp;            return;</b>
+<b class="nc"><i>161</i>&nbsp;        }</b>
+<i>162</i>&nbsp;
+<b class="nc"><i>163</i>&nbsp;        long bufIndex = pos/BUFFER_LENGTH;</b>
+<i>164</i>&nbsp;        if (bufIndex &lt; cacheStart) {
+<b class="nc"><i>165</i>&nbsp;            throw new IndexOutOfBoundsException(&quot;pos already disposed&quot;);</b>
+<b class="nc"><i>166</i>&nbsp;        }</b>
+<b class="nc"><i>167</i>&nbsp;        int offset = (int)(pos % BUFFER_LENGTH);</b>
+<b class="nc"><i>168</i>&nbsp;</b>
+<b class="nc"><i>169</i>&nbsp;        byte[] buf = getCacheBlock(bufIndex++);</b>
+<i>170</i>&nbsp;        while (len &gt; 0) {
+<b class="nc"><i>171</i>&nbsp;            if (buf == null) {</b>
+<b class="nc"><i>172</i>&nbsp;                buf = getCacheBlock(bufIndex++);</b>
+<b class="nc"><i>173</i>&nbsp;                offset = 0;</b>
+<b class="nc"><i>174</i>&nbsp;            }</b>
+<b class="nc"><i>175</i>&nbsp;            int nbytes = (int)Math.min(len, (long)(BUFFER_LENGTH - offset));</b>
+<i>176</i>&nbsp;            stream.write(buf, offset, nbytes);
+<i>177</i>&nbsp;            buf = null;
+<i>178</i>&nbsp;            len -= nbytes;
+<i>179</i>&nbsp;        }
+<i>180</i>&nbsp;    }
+<i>181</i>&nbsp;
+<b class="nc"><i>182</i>&nbsp;    /**</b>
+<b class="nc"><i>183</i>&nbsp;     * Ensure that there is space to write a byte at the given position.</b>
+<b class="nc"><i>184</i>&nbsp;     *</b>
+<b class="nc"><i>185</i>&nbsp;     * throws IOException if there is no more memory left for cache</b>
+<i>186</i>&nbsp;     */
+<b class="nc"><i>187</i>&nbsp;    private void pad(long pos) throws IOException {</b>
+<b class="nc"><i>188</i>&nbsp;        long currIndex = cacheStart + cache.size() - 1;</b>
+<b class="nc"><i>189</i>&nbsp;        long lastIndex = pos/BUFFER_LENGTH;</b>
+<b class="nc"><i>190</i>&nbsp;        long numNewBuffers = lastIndex - currIndex;</b>
+<i>191</i>&nbsp;        for (long i = 0; i &lt; numNewBuffers; i++) {
+<i>192</i>&nbsp;            try {
+<i>193</i>&nbsp;                cache.add(new byte[BUFFER_LENGTH]);
+<i>194</i>&nbsp;            } catch (OutOfMemoryError e) {
+<i>195</i>&nbsp;                throw new IOException(&quot;No memory left for cache!&quot;);
+<i>196</i>&nbsp;            }
+<i>197</i>&nbsp;        }
+<i>198</i>&nbsp;    }
+<i>199</i>&nbsp;
+<i>200</i>&nbsp;    /**
+<i>201</i>&nbsp;     * Overwrites and/or appends the cache from a byte array.
+<i>202</i>&nbsp;     * The length of the cache will be extended as needed to hold
+<i>203</i>&nbsp;     * the incoming data.
+<i>204</i>&nbsp;     *
+<i>205</i>&nbsp;     * @param b an array of bytes containing data to be written.
+<i>206</i>&nbsp;     * @param off the starting offset within the data array.
+<i>207</i>&nbsp;     * @param len the number of bytes to be written.
+<i>208</i>&nbsp;     * @param pos the cache position at which to begin writing.
+<i>209</i>&nbsp;     *
+<i>210</i>&nbsp;     * @exception NullPointerException if {@code b} is {@code null}.
+<b class="nc"><i>211</i>&nbsp;     * @exception IndexOutOfBoundsException if {@code off},</b>
+<b class="nc"><i>212</i>&nbsp;     * {@code len}, or {@code pos} are negative,</b>
+<i>213</i>&nbsp;     * or if {@code off+len &gt; b.length}.
+<i>214</i>&nbsp;     * @throws IOException if there is an I/O error while writing to the cache
+<b class="nc"><i>215</i>&nbsp;     */</b>
+<i>216</i>&nbsp;    public void write(byte[] b, int off, int len, long pos)
+<b class="nc"><i>217</i>&nbsp;        throws IOException {</b>
+<i>218</i>&nbsp;        if (b == null) {
+<i>219</i>&nbsp;            throw new NullPointerException(&quot;b == null!&quot;);
+<i>220</i>&nbsp;        }
+<b class="nc"><i>221</i>&nbsp;        // Fix 4430357 - if off + len &lt; 0, overflow occurred</b>
+<b class="nc"><i>222</i>&nbsp;        if ((off &lt; 0) || (len &lt; 0) || (pos &lt; 0) ||</b>
+<b class="nc"><i>223</i>&nbsp;            (off + len &gt; b.length) || (off + len &lt; 0)) {</b>
+<b class="nc"><i>224</i>&nbsp;            throw new IndexOutOfBoundsException();</b>
+<i>225</i>&nbsp;        }
+<i>226</i>&nbsp;
+<i>227</i>&nbsp;        // Ensure there is space for the incoming data
+<b class="nc"><i>228</i>&nbsp;        long lastPos = pos + len - 1;</b>
+<b class="nc"><i>229</i>&nbsp;        if (lastPos &gt;= length) {</b>
+<b class="nc"><i>230</i>&nbsp;            pad(lastPos);</b>
+<b class="nc"><i>231</i>&nbsp;            length = lastPos + 1;</b>
+<b class="nc"><i>232</i>&nbsp;        }</b>
+<i>233</i>&nbsp;
+<b class="nc"><i>234</i>&nbsp;        // Copy the data into the cache, block by block</b>
+<b class="nc"><i>235</i>&nbsp;        int offset = (int)(pos % BUFFER_LENGTH);</b>
+<b class="nc"><i>236</i>&nbsp;        while (len &gt; 0) {</b>
+<b class="nc"><i>237</i>&nbsp;            byte[] buf = getCacheBlock(pos/BUFFER_LENGTH);</b>
+<b class="nc"><i>238</i>&nbsp;            int nbytes = Math.min(len, BUFFER_LENGTH - offset);</b>
+<i>239</i>&nbsp;            System.arraycopy(b, off, buf, offset, nbytes);
+<i>240</i>&nbsp;
+<i>241</i>&nbsp;            pos += nbytes;
+<i>242</i>&nbsp;            off += nbytes;
+<i>243</i>&nbsp;            len -= nbytes;
+<i>244</i>&nbsp;            offset = 0; // Always after the first time
+<i>245</i>&nbsp;        }
+<i>246</i>&nbsp;    }
+<i>247</i>&nbsp;
+<i>248</i>&nbsp;    /**
+<i>249</i>&nbsp;     * Overwrites or appends a single byte to the cache.
+<i>250</i>&nbsp;     * The length of the cache will be extended as needed to hold
+<i>251</i>&nbsp;     * the incoming data.
+<i>252</i>&nbsp;     *
+<b class="nc"><i>253</i>&nbsp;     * @param b an {@code int} whose 8 least significant bits</b>
+<b class="nc"><i>254</i>&nbsp;     * will be written.</b>
+<i>255</i>&nbsp;     * @param pos the cache position at which to begin writing.
+<i>256</i>&nbsp;     *
+<i>257</i>&nbsp;     * @exception IndexOutOfBoundsException if {@code pos} is negative.
+<b class="nc"><i>258</i>&nbsp;     * @throws IOException if there is an I/O error while writing to the cache</b>
+<b class="nc"><i>259</i>&nbsp;     */</b>
+<b class="nc"><i>260</i>&nbsp;    public void write(int b, long pos) throws IOException {</b>
+<i>261</i>&nbsp;        if (pos &lt; 0) {
+<i>262</i>&nbsp;            throw new ArrayIndexOutOfBoundsException(&quot;pos &lt; 0&quot;);
+<i>263</i>&nbsp;        }
+<b class="nc"><i>264</i>&nbsp;</b>
+<b class="nc"><i>265</i>&nbsp;        // Ensure there is space for the incoming data</b>
+<b class="nc"><i>266</i>&nbsp;        if (pos &gt;= length) {</b>
+<i>267</i>&nbsp;            pad(pos);
+<i>268</i>&nbsp;            length = pos + 1;
+<i>269</i>&nbsp;        }
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;        // Insert the data.
+<i>272</i>&nbsp;        byte[] buf = getCacheBlock(pos/BUFFER_LENGTH);
+<i>273</i>&nbsp;        int offset = (int)(pos % BUFFER_LENGTH);
+<i>274</i>&nbsp;        buf[offset] = (byte)b;
+<b class="nc"><i>275</i>&nbsp;    }</b>
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;    /**
+<i>278</i>&nbsp;     * Returns the total length of data that has been cached,
+<i>279</i>&nbsp;     * regardless of whether any early blocks have been disposed.
+<i>280</i>&nbsp;     * This value will only ever increase.
+<i>281</i>&nbsp;     */
+<i>282</i>&nbsp;    public long getLength() {
+<i>283</i>&nbsp;        return length;
+<b class="nc"><i>284</i>&nbsp;    }</b>
+<b class="nc"><i>285</i>&nbsp;</b>
+<i>286</i>&nbsp;    /**
+<i>287</i>&nbsp;     * Returns the single byte at the given position, as an
+<b class="nc"><i>288</i>&nbsp;     * {@code int}.  Returns -1 if this position has</b>
+<b class="nc"><i>289</i>&nbsp;     * not been cached or has been disposed.</b>
+<b class="nc"><i>290</i>&nbsp;     *</b>
+<i>291</i>&nbsp;     * @throws IOException if an I/O error occurs while reading from the byte
+<i>292</i>&nbsp;     * array
+<b class="nc"><i>293</i>&nbsp;     */</b>
+<i>294</i>&nbsp;    public int read(long pos) throws IOException {
+<i>295</i>&nbsp;        if (pos &gt;= length) {
+<i>296</i>&nbsp;            return -1;
+<i>297</i>&nbsp;        }
+<i>298</i>&nbsp;
+<i>299</i>&nbsp;        byte[] buf = getCacheBlock(pos/BUFFER_LENGTH);
+<i>300</i>&nbsp;        if (buf == null) {
+<i>301</i>&nbsp;            return -1;
+<i>302</i>&nbsp;        }
+<i>303</i>&nbsp;
+<i>304</i>&nbsp;        return buf[(int)(pos % BUFFER_LENGTH)] &amp; 0xff;
+<i>305</i>&nbsp;    }
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;    /**
+<i>308</i>&nbsp;     * Copy {@code len} bytes from the cache, starting
+<i>309</i>&nbsp;     * at cache position {@code pos}, into the array
+<b class="nc"><i>310</i>&nbsp;     * {@code b} at offset {@code off}.</b>
+<b class="nc"><i>311</i>&nbsp;     *</b>
+<i>312</i>&nbsp;     * @exception NullPointerException if b is {@code null}
+<i>313</i>&nbsp;     * @exception IndexOutOfBoundsException if {@code off},
+<b class="nc"><i>314</i>&nbsp;     * {@code len} or {@code pos} are negative or if</b>
+<i>315</i>&nbsp;     * {@code off + len &gt; b.length} or if any portion of the
+<b class="nc"><i>316</i>&nbsp;     * requested data is not in the cache (including if</b>
+<i>317</i>&nbsp;     * {@code pos} is in a block that has already been disposed).
+<b class="nc"><i>318</i>&nbsp;     * @throws IOException if an I/O exception occurs while reading from the</b>
+<b class="nc"><i>319</i>&nbsp;     * byte array</b>
+<i>320</i>&nbsp;     */
+<i>321</i>&nbsp;    public void read(byte[] b, int off, int len, long pos)
+<b class="nc"><i>322</i>&nbsp;        throws IOException {</b>
+<b class="nc"><i>323</i>&nbsp;        if (b == null) {</b>
+<b class="nc"><i>324</i>&nbsp;            throw new NullPointerException(&quot;b == null!&quot;);</b>
+<b class="nc"><i>325</i>&nbsp;        }</b>
+<b class="nc"><i>326</i>&nbsp;        // Fix 4430357 - if off + len &lt; 0, overflow occurred</b>
+<b class="nc"><i>327</i>&nbsp;        if ((off &lt; 0) || (len &lt; 0) || (pos &lt; 0) ||</b>
+<i>328</i>&nbsp;            (off + len &gt; b.length) || (off + len &lt; 0)) {
+<b class="nc"><i>329</i>&nbsp;            throw new IndexOutOfBoundsException();</b>
+<b class="nc"><i>330</i>&nbsp;        }</b>
+<b class="nc"><i>331</i>&nbsp;        if (pos + len &gt; length) {</b>
+<b class="nc"><i>332</i>&nbsp;            throw new IndexOutOfBoundsException();</b>
+<i>333</i>&nbsp;        }
+<i>334</i>&nbsp;
+<i>335</i>&nbsp;        long index = pos/BUFFER_LENGTH;
+<i>336</i>&nbsp;        int offset = (int)pos % BUFFER_LENGTH;
+<i>337</i>&nbsp;        while (len &gt; 0) {
+<i>338</i>&nbsp;            int nbytes = Math.min(len, BUFFER_LENGTH - offset);
+<i>339</i>&nbsp;            byte[] buf = getCacheBlock(index++);
+<i>340</i>&nbsp;            System.arraycopy(buf, offset, b, off, nbytes);
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;            len -= nbytes;
+<b class="nc"><i>343</i>&nbsp;            off += nbytes;</b>
+<b class="nc"><i>344</i>&nbsp;            offset = 0; // Always after the first time</b>
+<b class="nc"><i>345</i>&nbsp;        }</b>
+<i>346</i>&nbsp;    }
+<b class="nc"><i>347</i>&nbsp;</b>
+<b class="nc"><i>348</i>&nbsp;    /**</b>
+<b class="nc"><i>349</i>&nbsp;     * Free the blocks up to the position {@code pos}.</b>
+<i>350</i>&nbsp;     * The byte at {@code pos} remains available.
+<b class="nc"><i>351</i>&nbsp;     *</b>
+<i>352</i>&nbsp;     * @exception IndexOutOfBoundsException if {@code pos}
+<i>353</i>&nbsp;     * is in a block that has already been disposed.
+<i>354</i>&nbsp;     */
+<i>355</i>&nbsp;    public void disposeBefore(long pos) {
+<i>356</i>&nbsp;        long index = pos/BUFFER_LENGTH;
+<i>357</i>&nbsp;        if (index &lt; cacheStart) {
+<i>358</i>&nbsp;            throw new IndexOutOfBoundsException(&quot;pos already disposed&quot;);
+<i>359</i>&nbsp;        }
+<b class="nc"><i>360</i>&nbsp;        long numBlocks = Math.min(index - cacheStart, cache.size());</b>
+<b class="nc"><i>361</i>&nbsp;        for (long i = 0; i &lt; numBlocks; i++) {</b>
+<b class="nc"><i>362</i>&nbsp;            cache.remove(0);</b>
+<i>363</i>&nbsp;        }
+<i>364</i>&nbsp;        this.cacheStart = index;
+<i>365</i>&nbsp;    }
+<i>366</i>&nbsp;
+<i>367</i>&nbsp;    /**
+<i>368</i>&nbsp;     * Erase the entire cache contents and reset the length to 0.
+<i>369</i>&nbsp;     * The cache object may subsequently be reused as though it had just
+<i>370</i>&nbsp;     * been allocated.
+<i>371</i>&nbsp;     */
+<i>372</i>&nbsp;    public void reset() {
+<i>373</i>&nbsp;        cache.clear();
+<i>374</i>&nbsp;        cacheStart = 0;
+<i>375</i>&nbsp;        length = 0L;
+<i>376</i>&nbsp;    }
+<i>377</i>&nbsp; }
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>

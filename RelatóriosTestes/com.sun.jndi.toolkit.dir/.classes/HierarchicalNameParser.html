@@ -1,0 +1,1045 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: HierarchicalNameParser</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.jndi.toolkit.dir</a> ]
+</div>
+
+<h1>Coverage Summary for Class: HierarchicalNameParser (com.sun.jndi.toolkit.dir)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">HierarchicalNameParser</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 9)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1999, 2011, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;package com.sun.jndi.toolkit.dir;
+<i>26</i>&nbsp;
+<i>27</i>&nbsp;import javax.naming.*;
+<i>28</i>&nbsp;import javax.naming.directory.*;
+<i>29</i>&nbsp;import javax.naming.spi.*;
+<i>30</i>&nbsp;import java.util.*;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;/**
+<i>33</i>&nbsp; * A sample service provider that implements a hierarchical directory in memory.
+<i>34</i>&nbsp; * Every operation begins by doing a lookup on the name passed to it and then
+<i>35</i>&nbsp; * calls a corresponding &quot;{@code do&lt;OperationName&gt;}&quot; on the result of the lookup. The
+<i>36</i>&nbsp; * &quot;{@code do&lt;OperationName&gt;}&quot; does the work without any further resolution (it assumes
+<i>37</i>&nbsp; * that it is the target context).
+<i>38</i>&nbsp; */
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;public class HierMemDirCtx implements DirContext {
+<i>41</i>&nbsp;
+<i>42</i>&nbsp;    static private final boolean debug = false;
+<i>43</i>&nbsp;    private static final NameParser defaultParser = new HierarchicalNameParser();
+<i>44</i>&nbsp;
+<i>45</i>&nbsp;    protected Hashtable&lt;String, Object&gt; myEnv;
+<i>46</i>&nbsp;    protected Hashtable&lt;Name, Object&gt; bindings;
+<i>47</i>&nbsp;    protected Attributes attrs;
+<i>48</i>&nbsp;    protected boolean ignoreCase = false;
+<i>49</i>&nbsp;    protected NamingException readOnlyEx = null;
+<i>50</i>&nbsp;    protected NameParser myParser = defaultParser;
+<i>51</i>&nbsp;
+<i>52</i>&nbsp;    private boolean alwaysUseFactory;
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;    public void close() throws NamingException {
+<i>55</i>&nbsp;        myEnv = null;
+<i>56</i>&nbsp;        bindings = null;
+<i>57</i>&nbsp;        attrs = null;
+<i>58</i>&nbsp;    }
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    public String getNameInNamespace() throws NamingException {
+<i>61</i>&nbsp;        throw new OperationNotSupportedException(
+<i>62</i>&nbsp;            &quot;Cannot determine full name&quot;);
+<i>63</i>&nbsp;    }
+<i>64</i>&nbsp;
+<i>65</i>&nbsp;    public HierMemDirCtx() {
+<i>66</i>&nbsp;        this(null, false, false);
+<i>67</i>&nbsp;    }
+<i>68</i>&nbsp;
+<i>69</i>&nbsp;    public HierMemDirCtx(boolean ignoreCase) {
+<i>70</i>&nbsp;        this(null, ignoreCase, false);
+<i>71</i>&nbsp;    }
+<i>72</i>&nbsp;
+<i>73</i>&nbsp;    public HierMemDirCtx(Hashtable&lt;String, Object&gt; environment, boolean ignoreCase) {
+<i>74</i>&nbsp;        this(environment, ignoreCase, false);
+<i>75</i>&nbsp;    }
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    protected HierMemDirCtx(Hashtable&lt;String, Object&gt; environment,
+<i>78</i>&nbsp;        boolean ignoreCase, boolean useFac) {
+<i>79</i>&nbsp;        myEnv = environment;
+<i>80</i>&nbsp;        this.ignoreCase = ignoreCase;
+<i>81</i>&nbsp;        init();
+<i>82</i>&nbsp;        this.alwaysUseFactory = useFac;
+<i>83</i>&nbsp;    }
+<i>84</i>&nbsp;
+<i>85</i>&nbsp;    private void init() {
+<i>86</i>&nbsp;        attrs = new BasicAttributes(ignoreCase);
+<i>87</i>&nbsp;        bindings = new Hashtable&lt;&gt;(11, 0.75f);
+<i>88</i>&nbsp;    }
+<i>89</i>&nbsp;
+<i>90</i>&nbsp;    public Object lookup(String name) throws NamingException {
+<i>91</i>&nbsp;        return lookup(myParser.parse(name));
+<i>92</i>&nbsp;    }
+<i>93</i>&nbsp;
+<i>94</i>&nbsp;    public Object lookup(Name name) throws NamingException {
+<i>95</i>&nbsp;        return doLookup(name, alwaysUseFactory);
+<i>96</i>&nbsp;    }
+<i>97</i>&nbsp;
+<i>98</i>&nbsp;    public Object doLookup(Name name, boolean useFactory)
+<i>99</i>&nbsp;        throws NamingException {
+<i>100</i>&nbsp;
+<i>101</i>&nbsp;        Object target = null;
+<i>102</i>&nbsp;        name = canonizeName(name);
+<i>103</i>&nbsp;
+<i>104</i>&nbsp;        switch(name.size()) {
+<i>105</i>&nbsp;        case 0:
+<i>106</i>&nbsp;            // name is empty, caller wants this object
+<i>107</i>&nbsp;            target = this;
+<i>108</i>&nbsp;            break;
+<i>109</i>&nbsp;
+<i>110</i>&nbsp;        case 1:
+<i>111</i>&nbsp;            // name is atomic, caller wants one of this object&#39;s bindings
+<i>112</i>&nbsp;            target = bindings.get(name);
+<i>113</i>&nbsp;            break;
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;        default:
+<i>116</i>&nbsp;            // name is compound, delegate to child context
+<i>117</i>&nbsp;            HierMemDirCtx ctx = (HierMemDirCtx)bindings.get(name.getPrefix(1));
+<i>118</i>&nbsp;            if(ctx == null) {
+<i>119</i>&nbsp;                target = null;
+<i>120</i>&nbsp;            } else {
+<i>121</i>&nbsp;                target = ctx.doLookup(name.getSuffix(1), false);
+<i>122</i>&nbsp;            }
+<i>123</i>&nbsp;            break;
+<i>124</i>&nbsp;        }
+<i>125</i>&nbsp;
+<i>126</i>&nbsp;        if(target == null) {
+<i>127</i>&nbsp;            throw new NameNotFoundException(name.toString());
+<i>128</i>&nbsp;        }
+<i>129</i>&nbsp;
+<i>130</i>&nbsp;        if (useFactory) {
+<i>131</i>&nbsp;            try {
+<i>132</i>&nbsp;                return DirectoryManager.getObjectInstance(target,
+<i>133</i>&nbsp;                    name, this, myEnv,
+<i>134</i>&nbsp;                    (target instanceof HierMemDirCtx) ?
+<i>135</i>&nbsp;                    ((HierMemDirCtx)target).attrs : null);
+<i>136</i>&nbsp;            } catch (NamingException e) {
+<i>137</i>&nbsp;                throw e;
+<i>138</i>&nbsp;            } catch (Exception e) {
+<i>139</i>&nbsp;                NamingException e2 = new NamingException(
+<i>140</i>&nbsp;                    &quot;Problem calling getObjectInstance&quot;);
+<i>141</i>&nbsp;                e2.setRootCause(e);
+<i>142</i>&nbsp;                throw e2;
+<i>143</i>&nbsp;            }
+<i>144</i>&nbsp;        } else {
+<i>145</i>&nbsp;            return target;
+<i>146</i>&nbsp;        }
+<i>147</i>&nbsp;    }
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;    public void bind(String name, Object obj) throws NamingException {
+<i>150</i>&nbsp;        bind(myParser.parse(name), obj);
+<i>151</i>&nbsp;    }
+<i>152</i>&nbsp;
+<i>153</i>&nbsp;    public void bind(Name name, Object obj) throws NamingException {
+<i>154</i>&nbsp;        doBind(name, obj, null, alwaysUseFactory);
+<i>155</i>&nbsp;    }
+<i>156</i>&nbsp;
+<i>157</i>&nbsp;    public void bind(String name, Object obj, Attributes attrs)
+<i>158</i>&nbsp;            throws NamingException {
+<i>159</i>&nbsp;        bind(myParser.parse(name), obj, attrs);
+<i>160</i>&nbsp;    }
+<i>161</i>&nbsp;
+<i>162</i>&nbsp;    public void bind(Name name, Object obj, Attributes attrs)
+<i>163</i>&nbsp;            throws NamingException {
+<i>164</i>&nbsp;        doBind(name, obj, attrs, alwaysUseFactory);
+<i>165</i>&nbsp;    }
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;    protected void doBind(Name name, Object obj, Attributes attrs,
+<i>168</i>&nbsp;        boolean useFactory) throws NamingException {
+<i>169</i>&nbsp;        if (name.isEmpty()) {
+<i>170</i>&nbsp;            throw new InvalidNameException(&quot;Cannot bind empty name&quot;);
+<i>171</i>&nbsp;        }
+<i>172</i>&nbsp;
+<i>173</i>&nbsp;        if (useFactory) {
+<i>174</i>&nbsp;            DirStateFactory.Result res = DirectoryManager.getStateToBind(
+<i>175</i>&nbsp;                obj, name, this, myEnv, attrs);
+<i>176</i>&nbsp;            obj = res.getObject();
+<i>177</i>&nbsp;            attrs = res.getAttributes();
+<i>178</i>&nbsp;        }
+<i>179</i>&nbsp;
+<i>180</i>&nbsp;        HierMemDirCtx ctx= (HierMemDirCtx) doLookup(getInternalName(name), false);
+<i>181</i>&nbsp;        ctx.doBindAux(getLeafName(name), obj);
+<i>182</i>&nbsp;
+<i>183</i>&nbsp;        if (attrs != null &amp;&amp; attrs.size() &gt; 0) {
+<i>184</i>&nbsp;            modifyAttributes(name, ADD_ATTRIBUTE, attrs);
+<i>185</i>&nbsp;        }
+<i>186</i>&nbsp;    }
+<i>187</i>&nbsp;
+<i>188</i>&nbsp;    protected void doBindAux(Name name, Object obj) throws NamingException {
+<i>189</i>&nbsp;        if (readOnlyEx != null) {
+<i>190</i>&nbsp;            throw (NamingException) readOnlyEx.fillInStackTrace();
+<i>191</i>&nbsp;        }
+<i>192</i>&nbsp;
+<i>193</i>&nbsp;        if (bindings.get(name) != null) {
+<i>194</i>&nbsp;            throw new NameAlreadyBoundException(name.toString());
+<i>195</i>&nbsp;        }
+<i>196</i>&nbsp;        if(obj instanceof HierMemDirCtx) {
+<i>197</i>&nbsp;            bindings.put(name, obj);
+<i>198</i>&nbsp;        } else {
+<i>199</i>&nbsp;            throw new SchemaViolationException(
+<i>200</i>&nbsp;                &quot;This context only supports binding objects of it&#39;s own kind&quot;);
+<i>201</i>&nbsp;        }
+<i>202</i>&nbsp;    }
+<i>203</i>&nbsp;
+<i>204</i>&nbsp;    public void rebind(String name, Object obj) throws NamingException {
+<i>205</i>&nbsp;        rebind(myParser.parse(name), obj);
+<i>206</i>&nbsp;    }
+<i>207</i>&nbsp;
+<i>208</i>&nbsp;    public void rebind(Name name, Object obj) throws NamingException {
+<i>209</i>&nbsp;        doRebind(name, obj, null, alwaysUseFactory);
+<i>210</i>&nbsp;    }
+<i>211</i>&nbsp;
+<i>212</i>&nbsp;    public void rebind(String name, Object obj, Attributes attrs)
+<i>213</i>&nbsp;            throws NamingException {
+<i>214</i>&nbsp;        rebind(myParser.parse(name), obj, attrs);
+<i>215</i>&nbsp;    }
+<i>216</i>&nbsp;
+<i>217</i>&nbsp;    public void rebind(Name name, Object obj, Attributes attrs)
+<i>218</i>&nbsp;            throws NamingException {
+<i>219</i>&nbsp;        doRebind(name, obj, attrs, alwaysUseFactory);
+<i>220</i>&nbsp;    }
+<i>221</i>&nbsp;
+<i>222</i>&nbsp;    protected void doRebind(Name name, Object obj, Attributes attrs,
+<i>223</i>&nbsp;        boolean useFactory) throws NamingException {
+<i>224</i>&nbsp;        if (name.isEmpty()) {
+<i>225</i>&nbsp;            throw new InvalidNameException(&quot;Cannot rebind empty name&quot;);
+<i>226</i>&nbsp;        }
+<i>227</i>&nbsp;
+<i>228</i>&nbsp;        if (useFactory) {
+<i>229</i>&nbsp;            DirStateFactory.Result res = DirectoryManager.getStateToBind(
+<i>230</i>&nbsp;                obj, name, this, myEnv, attrs);
+<i>231</i>&nbsp;            obj = res.getObject();
+<i>232</i>&nbsp;            attrs = res.getAttributes();
+<i>233</i>&nbsp;        }
+<i>234</i>&nbsp;
+<i>235</i>&nbsp;        HierMemDirCtx ctx= (HierMemDirCtx) doLookup(getInternalName(name), false);
+<i>236</i>&nbsp;        ctx.doRebindAux(getLeafName(name), obj);
+<i>237</i>&nbsp;
+<i>238</i>&nbsp;        //
+<i>239</i>&nbsp;        // attrs == null -&gt; use attrs from obj
+<i>240</i>&nbsp;        // attrs != null -&gt; use attrs
+<i>241</i>&nbsp;        //
+<i>242</i>&nbsp;        // %%% Strictly speaking, when attrs is non-null, we should
+<i>243</i>&nbsp;        // take the explicit step of removing obj&#39;s attrs.
+<i>244</i>&nbsp;        // We don&#39;t do that currently.
+<i>245</i>&nbsp;
+<i>246</i>&nbsp;        if (attrs != null &amp;&amp; attrs.size() &gt; 0) {
+<i>247</i>&nbsp;            modifyAttributes(name, ADD_ATTRIBUTE, attrs);
+<i>248</i>&nbsp;        }
+<i>249</i>&nbsp;    }
+<i>250</i>&nbsp;
+<i>251</i>&nbsp;    protected void doRebindAux(Name name, Object obj) throws NamingException {
+<i>252</i>&nbsp;        if (readOnlyEx != null) {
+<i>253</i>&nbsp;            throw (NamingException) readOnlyEx.fillInStackTrace();
+<i>254</i>&nbsp;        }
+<i>255</i>&nbsp;        if(obj instanceof HierMemDirCtx) {
+<i>256</i>&nbsp;            bindings.put(name, obj);
+<i>257</i>&nbsp;
+<i>258</i>&nbsp;        } else {
+<i>259</i>&nbsp;            throw new SchemaViolationException(
+<i>260</i>&nbsp;                &quot;This context only supports binding objects of it&#39;s own kind&quot;);
+<i>261</i>&nbsp;        }
+<i>262</i>&nbsp;    }
+<i>263</i>&nbsp;
+<i>264</i>&nbsp;    public void unbind(String name) throws NamingException {
+<i>265</i>&nbsp;        unbind(myParser.parse(name));
+<i>266</i>&nbsp;    }
+<i>267</i>&nbsp;
+<i>268</i>&nbsp;    public void unbind(Name name) throws NamingException {
+<i>269</i>&nbsp;        if (name.isEmpty()) {
+<i>270</i>&nbsp;            throw new InvalidNameException(&quot;Cannot unbind empty name&quot;);
+<i>271</i>&nbsp;        } else {
+<i>272</i>&nbsp;            HierMemDirCtx ctx=
+<i>273</i>&nbsp;                (HierMemDirCtx) doLookup(getInternalName(name), false);
+<i>274</i>&nbsp;            ctx.doUnbind(getLeafName(name));
+<i>275</i>&nbsp;        }
+<i>276</i>&nbsp;    }
+<i>277</i>&nbsp;
+<i>278</i>&nbsp;    protected void doUnbind(Name name) throws NamingException {
+<i>279</i>&nbsp;        if (readOnlyEx != null) {
+<i>280</i>&nbsp;            throw (NamingException) readOnlyEx.fillInStackTrace();
+<i>281</i>&nbsp;        }
+<i>282</i>&nbsp;
+<i>283</i>&nbsp;        bindings.remove(name);  // attrs will also be removed along with ctx
+<i>284</i>&nbsp;    }
+<i>285</i>&nbsp;
+<i>286</i>&nbsp;    public void rename(String oldname, String newname)
+<i>287</i>&nbsp;            throws NamingException {
+<i>288</i>&nbsp;         rename(myParser.parse(oldname), myParser.parse(newname));
+<i>289</i>&nbsp;    }
+<i>290</i>&nbsp;
+<i>291</i>&nbsp;    public void rename(Name oldname, Name newname)
+<i>292</i>&nbsp;            throws NamingException {
+<i>293</i>&nbsp;
+<i>294</i>&nbsp;        if(newname.isEmpty() || oldname.isEmpty()) {
+<i>295</i>&nbsp;            throw new InvalidNameException(&quot;Cannot rename empty name&quot;);
+<i>296</i>&nbsp;        }
+<i>297</i>&nbsp;
+<i>298</i>&nbsp;        if (!getInternalName(newname).equals(getInternalName(oldname))) {
+<i>299</i>&nbsp;            throw new InvalidNameException(&quot;Cannot rename across contexts&quot;);
+<i>300</i>&nbsp;        }
+<i>301</i>&nbsp;
+<i>302</i>&nbsp;        HierMemDirCtx ctx =
+<i>303</i>&nbsp;            (HierMemDirCtx) doLookup(getInternalName(newname), false);
+<i>304</i>&nbsp;        ctx.doRename(getLeafName(oldname), getLeafName(newname));
+<i>305</i>&nbsp;    }
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;    protected void doRename(Name oldname, Name newname) throws NamingException {
+<i>308</i>&nbsp;        if (readOnlyEx != null) {
+<i>309</i>&nbsp;            throw (NamingException) readOnlyEx.fillInStackTrace();
+<i>310</i>&nbsp;        }
+<i>311</i>&nbsp;
+<i>312</i>&nbsp;        oldname = canonizeName(oldname);
+<i>313</i>&nbsp;        newname = canonizeName(newname);
+<i>314</i>&nbsp;
+<i>315</i>&nbsp;        // Check if new name exists
+<i>316</i>&nbsp;        if (bindings.get(newname) != null) {
+<i>317</i>&nbsp;            throw new NameAlreadyBoundException(newname.toString());
+<i>318</i>&nbsp;        }
+<i>319</i>&nbsp;
+<i>320</i>&nbsp;        // Check if old name is bound
+<i>321</i>&nbsp;        Object oldBinding = bindings.remove(oldname);
+<i>322</i>&nbsp;        if (oldBinding == null) {
+<i>323</i>&nbsp;            throw new NameNotFoundException(oldname.toString());
+<i>324</i>&nbsp;        }
+<i>325</i>&nbsp;
+<i>326</i>&nbsp;        bindings.put(newname, oldBinding);
+<i>327</i>&nbsp;    }
+<i>328</i>&nbsp;
+<i>329</i>&nbsp;    public NamingEnumeration&lt;NameClassPair&gt; list(String name) throws NamingException {
+<i>330</i>&nbsp;        return list(myParser.parse(name));
+<i>331</i>&nbsp;    }
+<i>332</i>&nbsp;
+<i>333</i>&nbsp;    public NamingEnumeration&lt;NameClassPair&gt; list(Name name) throws NamingException {
+<i>334</i>&nbsp;        HierMemDirCtx ctx = (HierMemDirCtx) doLookup(name, false);
+<i>335</i>&nbsp;        return ctx.doList();
+<i>336</i>&nbsp;    }
+<i>337</i>&nbsp;
+<i>338</i>&nbsp;    protected NamingEnumeration&lt;NameClassPair&gt; doList () throws NamingException {
+<i>339</i>&nbsp;        return new FlatNames(bindings.keys());
+<i>340</i>&nbsp;    }
+<i>341</i>&nbsp;
+<i>342</i>&nbsp;
+<i>343</i>&nbsp;    public NamingEnumeration&lt;Binding&gt; listBindings(String name) throws NamingException {
+<i>344</i>&nbsp;        return listBindings(myParser.parse(name));
+<i>345</i>&nbsp;    }
+<i>346</i>&nbsp;
+<i>347</i>&nbsp;    public NamingEnumeration&lt;Binding&gt; listBindings(Name name) throws NamingException {
+<i>348</i>&nbsp;        HierMemDirCtx ctx = (HierMemDirCtx)doLookup(name, false);
+<i>349</i>&nbsp;        return ctx.doListBindings(alwaysUseFactory);
+<i>350</i>&nbsp;    }
+<i>351</i>&nbsp;
+<i>352</i>&nbsp;    protected NamingEnumeration&lt;Binding&gt; doListBindings(boolean useFactory)
+<i>353</i>&nbsp;        throws NamingException {
+<i>354</i>&nbsp;        return new FlatBindings(bindings, myEnv, useFactory);
+<i>355</i>&nbsp;    }
+<i>356</i>&nbsp;
+<i>357</i>&nbsp;    public void destroySubcontext(String name) throws NamingException {
+<i>358</i>&nbsp;        destroySubcontext(myParser.parse(name));
+<i>359</i>&nbsp;    }
+<i>360</i>&nbsp;
+<i>361</i>&nbsp;    public void destroySubcontext(Name name) throws NamingException {
+<i>362</i>&nbsp;        HierMemDirCtx ctx =
+<i>363</i>&nbsp;            (HierMemDirCtx) doLookup(getInternalName(name), false);
+<i>364</i>&nbsp;        ctx.doDestroySubcontext(getLeafName(name));
+<i>365</i>&nbsp;    }
+<i>366</i>&nbsp;
+<i>367</i>&nbsp;    protected void doDestroySubcontext(Name name) throws NamingException {
+<i>368</i>&nbsp;
+<i>369</i>&nbsp;        if (readOnlyEx != null) {
+<i>370</i>&nbsp;            throw (NamingException) readOnlyEx.fillInStackTrace();
+<i>371</i>&nbsp;        }
+<i>372</i>&nbsp;        name = canonizeName(name);
+<i>373</i>&nbsp;        bindings.remove(name);
+<i>374</i>&nbsp;    }
+<i>375</i>&nbsp;
+<i>376</i>&nbsp;    public Context createSubcontext(String name) throws NamingException {
+<i>377</i>&nbsp;        return createSubcontext(myParser.parse(name));
+<i>378</i>&nbsp;    }
+<i>379</i>&nbsp;
+<i>380</i>&nbsp;    public Context createSubcontext(Name name) throws NamingException {
+<i>381</i>&nbsp;        return createSubcontext(name, null);
+<i>382</i>&nbsp;    }
+<i>383</i>&nbsp;
+<i>384</i>&nbsp;    public DirContext createSubcontext(String name, Attributes attrs)
+<i>385</i>&nbsp;            throws NamingException {
+<i>386</i>&nbsp;        return createSubcontext(myParser.parse(name), attrs);
+<i>387</i>&nbsp;    }
+<i>388</i>&nbsp;
+<i>389</i>&nbsp;    public DirContext createSubcontext(Name name, Attributes attrs)
+<i>390</i>&nbsp;            throws NamingException {
+<i>391</i>&nbsp;        HierMemDirCtx ctx =
+<i>392</i>&nbsp;            (HierMemDirCtx) doLookup(getInternalName(name), false);
+<i>393</i>&nbsp;        return ctx.doCreateSubcontext(getLeafName(name), attrs);
+<i>394</i>&nbsp;    }
+<i>395</i>&nbsp;
+<i>396</i>&nbsp;    protected DirContext doCreateSubcontext(Name name, Attributes attrs)
+<i>397</i>&nbsp;        throws NamingException {
+<i>398</i>&nbsp;        if (readOnlyEx != null) {
+<i>399</i>&nbsp;            throw (NamingException) readOnlyEx.fillInStackTrace();
+<i>400</i>&nbsp;        }
+<i>401</i>&nbsp;
+<i>402</i>&nbsp;        name = canonizeName(name);
+<i>403</i>&nbsp;
+<i>404</i>&nbsp;        if (bindings.get(name) != null) {
+<i>405</i>&nbsp;            throw new NameAlreadyBoundException(name.toString());
+<i>406</i>&nbsp;        }
+<i>407</i>&nbsp;        HierMemDirCtx newCtx = createNewCtx();
+<i>408</i>&nbsp;        bindings.put(name, newCtx);
+<i>409</i>&nbsp;        if(attrs != null) {
+<i>410</i>&nbsp;            newCtx.modifyAttributes(&quot;&quot;, ADD_ATTRIBUTE, attrs);
+<i>411</i>&nbsp;        }
+<i>412</i>&nbsp;        return newCtx;
+<i>413</i>&nbsp;    }
+<i>414</i>&nbsp;
+<i>415</i>&nbsp;
+<i>416</i>&nbsp;    public Object lookupLink(String name) throws NamingException {
+<i>417</i>&nbsp;        // This context does not treat links specially
+<i>418</i>&nbsp;        return lookupLink(myParser.parse(name));
+<i>419</i>&nbsp;    }
+<i>420</i>&nbsp;
+<i>421</i>&nbsp;    public Object lookupLink(Name name) throws NamingException {
+<i>422</i>&nbsp;        // Flat namespace; no federation; just call string version
+<i>423</i>&nbsp;        return lookup(name);
+<i>424</i>&nbsp;    }
+<i>425</i>&nbsp;
+<i>426</i>&nbsp;    public NameParser getNameParser(String name) throws NamingException {
+<i>427</i>&nbsp;        return myParser;
+<i>428</i>&nbsp;    }
+<i>429</i>&nbsp;
+<i>430</i>&nbsp;    public NameParser getNameParser(Name name) throws NamingException {
+<i>431</i>&nbsp;        return myParser;
+<i>432</i>&nbsp;    }
+<i>433</i>&nbsp;
+<i>434</i>&nbsp;    public String composeName(String name, String prefix)
+<i>435</i>&nbsp;            throws NamingException {
+<i>436</i>&nbsp;        Name result = composeName(new CompositeName(name),
+<i>437</i>&nbsp;                                  new CompositeName(prefix));
+<i>438</i>&nbsp;        return result.toString();
+<i>439</i>&nbsp;    }
+<i>440</i>&nbsp;
+<i>441</i>&nbsp;    public Name composeName(Name name, Name prefix)
+<i>442</i>&nbsp;            throws NamingException {
+<i>443</i>&nbsp;        name = canonizeName(name);
+<i>444</i>&nbsp;        prefix = canonizeName(prefix);
+<i>445</i>&nbsp;        Name result = (Name)(prefix.clone());
+<i>446</i>&nbsp;        result.addAll(name);
+<i>447</i>&nbsp;        return result;
+<i>448</i>&nbsp;    }
+<i>449</i>&nbsp;
+<i>450</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;) // clone()
+<i>451</i>&nbsp;    public Object addToEnvironment(String propName, Object propVal)
+<i>452</i>&nbsp;            throws NamingException {
+<i>453</i>&nbsp;        myEnv = (myEnv == null)
+<i>454</i>&nbsp;                ? new Hashtable&lt;String, Object&gt;(11, 0.75f)
+<i>455</i>&nbsp;                : (Hashtable&lt;String, Object&gt;)myEnv.clone();
+<i>456</i>&nbsp;
+<i>457</i>&nbsp;        return myEnv.put(propName, propVal);
+<i>458</i>&nbsp;    }
+<i>459</i>&nbsp;
+<i>460</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;) // clone()
+<i>461</i>&nbsp;    public Object removeFromEnvironment(String propName)
+<i>462</i>&nbsp;            throws NamingException {
+<i>463</i>&nbsp;        if (myEnv == null)
+<i>464</i>&nbsp;            return null;
+<i>465</i>&nbsp;
+<i>466</i>&nbsp;        myEnv = (Hashtable&lt;String, Object&gt;)myEnv.clone();
+<i>467</i>&nbsp;        return myEnv.remove(propName);
+<i>468</i>&nbsp;    }
+<i>469</i>&nbsp;
+<i>470</i>&nbsp;    @SuppressWarnings(&quot;unchecked&quot;) // clone()
+<i>471</i>&nbsp;    public Hashtable&lt;String, Object&gt; getEnvironment() throws NamingException {
+<i>472</i>&nbsp;        if (myEnv == null) {
+<i>473</i>&nbsp;            return new Hashtable&lt;&gt;(5, 0.75f);
+<i>474</i>&nbsp;        } else {
+<i>475</i>&nbsp;            return (Hashtable&lt;String, Object&gt;)myEnv.clone();
+<i>476</i>&nbsp;        }
+<i>477</i>&nbsp;    }
+<i>478</i>&nbsp;
+<i>479</i>&nbsp;    public Attributes getAttributes(String name)
+<i>480</i>&nbsp;       throws NamingException {
+<i>481</i>&nbsp;       return getAttributes(myParser.parse(name));
+<i>482</i>&nbsp;    }
+<i>483</i>&nbsp;
+<i>484</i>&nbsp;    public Attributes getAttributes(Name name)
+<i>485</i>&nbsp;        throws NamingException {
+<i>486</i>&nbsp;        HierMemDirCtx ctx = (HierMemDirCtx) doLookup(name, false);
+<i>487</i>&nbsp;        return ctx.doGetAttributes();
+<i>488</i>&nbsp;    }
+<i>489</i>&nbsp;
+<i>490</i>&nbsp;    protected Attributes doGetAttributes() throws NamingException {
+<i>491</i>&nbsp;        return (Attributes)attrs.clone();
+<i>492</i>&nbsp;    }
+<i>493</i>&nbsp;
+<i>494</i>&nbsp;    public Attributes getAttributes(String name, String[] attrIds)
+<i>495</i>&nbsp;        throws NamingException {
+<i>496</i>&nbsp;        return getAttributes(myParser.parse(name), attrIds);
+<i>497</i>&nbsp;    }
+<i>498</i>&nbsp;
+<i>499</i>&nbsp;    public Attributes getAttributes(Name name, String[] attrIds)
+<i>500</i>&nbsp;        throws NamingException {
+<i>501</i>&nbsp;        HierMemDirCtx ctx = (HierMemDirCtx) doLookup(name, false);
+<i>502</i>&nbsp;        return ctx.doGetAttributes(attrIds);
+<i>503</i>&nbsp;    }
+<i>504</i>&nbsp;
+<i>505</i>&nbsp;    protected Attributes doGetAttributes(String[] attrIds)
+<i>506</i>&nbsp;        throws NamingException {
+<i>507</i>&nbsp;
+<i>508</i>&nbsp;        if (attrIds == null) {
+<i>509</i>&nbsp;            return doGetAttributes();
+<i>510</i>&nbsp;        }
+<i>511</i>&nbsp;        Attributes attrs = new BasicAttributes(ignoreCase);
+<i>512</i>&nbsp;        Attribute attr = null;
+<i>513</i>&nbsp;            for(int i=0; i&lt;attrIds.length; i++) {
+<i>514</i>&nbsp;                attr = this.attrs.get(attrIds[i]);
+<i>515</i>&nbsp;                if (attr != null) {
+<i>516</i>&nbsp;                    attrs.put(attr);
+<i>517</i>&nbsp;                }
+<i>518</i>&nbsp;            }
+<i>519</i>&nbsp;        return attrs;
+<i>520</i>&nbsp;    }
+<i>521</i>&nbsp;
+<i>522</i>&nbsp;    public void modifyAttributes(String name, int mod_op, Attributes attrs)
+<i>523</i>&nbsp;        throws NamingException   {
+<i>524</i>&nbsp;        modifyAttributes(myParser.parse(name), mod_op, attrs);
+<i>525</i>&nbsp;    }
+<i>526</i>&nbsp;
+<i>527</i>&nbsp;    public void modifyAttributes(Name name, int mod_op, Attributes attrs)
+<i>528</i>&nbsp;        throws NamingException {
+<i>529</i>&nbsp;
+<i>530</i>&nbsp;        if (attrs == null || attrs.size() == 0) {
+<i>531</i>&nbsp;            throw new IllegalArgumentException(
+<i>532</i>&nbsp;                &quot;Cannot modify without an attribute&quot;);
+<i>533</i>&nbsp;        }
+<i>534</i>&nbsp;
+<i>535</i>&nbsp;        // turn it into a modification Enumeration and pass it on
+<i>536</i>&nbsp;        NamingEnumeration&lt;? extends Attribute&gt; attrEnum = attrs.getAll();
+<i>537</i>&nbsp;        ModificationItem[] mods = new ModificationItem[attrs.size()];
+<i>538</i>&nbsp;        for (int i = 0; i &lt; mods.length &amp;&amp; attrEnum.hasMoreElements(); i++) {
+<i>539</i>&nbsp;            mods[i] = new ModificationItem(mod_op, attrEnum.next());
+<i>540</i>&nbsp;        }
+<i>541</i>&nbsp;
+<i>542</i>&nbsp;        modifyAttributes(name, mods);
+<i>543</i>&nbsp;    }
+<i>544</i>&nbsp;
+<i>545</i>&nbsp;    public void modifyAttributes(String name, ModificationItem[] mods)
+<i>546</i>&nbsp;        throws NamingException   {
+<i>547</i>&nbsp;        modifyAttributes(myParser.parse(name), mods);
+<i>548</i>&nbsp;    }
+<i>549</i>&nbsp;
+<i>550</i>&nbsp;    public void modifyAttributes(Name name, ModificationItem[] mods)
+<i>551</i>&nbsp;        throws NamingException {
+<i>552</i>&nbsp;        HierMemDirCtx ctx = (HierMemDirCtx) doLookup(name, false);
+<i>553</i>&nbsp;        ctx.doModifyAttributes(mods);
+<i>554</i>&nbsp;    }
+<i>555</i>&nbsp;
+<i>556</i>&nbsp;    protected void doModifyAttributes(ModificationItem[] mods)
+<i>557</i>&nbsp;        throws NamingException {
+<i>558</i>&nbsp;
+<i>559</i>&nbsp;        if (readOnlyEx != null) {
+<i>560</i>&nbsp;            throw (NamingException) readOnlyEx.fillInStackTrace();
+<i>561</i>&nbsp;        }
+<i>562</i>&nbsp;
+<i>563</i>&nbsp;        applyMods(mods, attrs);
+<i>564</i>&nbsp;    }
+<i>565</i>&nbsp;
+<i>566</i>&nbsp;    protected static Attributes applyMods(ModificationItem[] mods,
+<i>567</i>&nbsp;        Attributes orig) throws NamingException {
+<i>568</i>&nbsp;
+<i>569</i>&nbsp;        ModificationItem mod;
+<i>570</i>&nbsp;        Attribute existingAttr, modAttr;
+<i>571</i>&nbsp;        NamingEnumeration&lt;?&gt; modVals;
+<i>572</i>&nbsp;
+<i>573</i>&nbsp;        for (int i = 0; i &lt; mods.length; i++) {
+<i>574</i>&nbsp;            mod = mods[i];
+<i>575</i>&nbsp;            modAttr = mod.getAttribute();
+<i>576</i>&nbsp;
+<i>577</i>&nbsp;            switch(mod.getModificationOp()) {
+<i>578</i>&nbsp;            case ADD_ATTRIBUTE:
+<i>579</i>&nbsp;                if (debug) {
+<i>580</i>&nbsp;                    System.out.println(&quot;HierMemDSCtx: adding &quot; +
+<i>581</i>&nbsp;                                       mod.getAttribute().toString());
+<i>582</i>&nbsp;                }
+<i>583</i>&nbsp;                existingAttr = orig.get(modAttr.getID());
+<i>584</i>&nbsp;                if (existingAttr == null) {
+<i>585</i>&nbsp;                    orig.put((Attribute)modAttr.clone());
+<i>586</i>&nbsp;                } else {
+<i>587</i>&nbsp;                    // Add new attribute values to existing attribute
+<i>588</i>&nbsp;                    modVals = modAttr.getAll();
+<i>589</i>&nbsp;                    while (modVals.hasMore()) {
+<i>590</i>&nbsp;                        existingAttr.add(modVals.next());
+<i>591</i>&nbsp;                    }
+<i>592</i>&nbsp;                }
+<i>593</i>&nbsp;                break;
+<i>594</i>&nbsp;            case REPLACE_ATTRIBUTE:
+<i>595</i>&nbsp;                if (modAttr.size() == 0) {
+<i>596</i>&nbsp;                    orig.remove(modAttr.getID());
+<i>597</i>&nbsp;                } else {
+<i>598</i>&nbsp;                    orig.put((Attribute)modAttr.clone());
+<i>599</i>&nbsp;                }
+<i>600</i>&nbsp;                break;
+<i>601</i>&nbsp;            case REMOVE_ATTRIBUTE:
+<i>602</i>&nbsp;                existingAttr = orig.get(modAttr.getID());
+<i>603</i>&nbsp;                if (existingAttr != null) {
+<i>604</i>&nbsp;                    if (modAttr.size() == 0) {
+<i>605</i>&nbsp;                        orig.remove(modAttr.getID());
+<i>606</i>&nbsp;                    } else {
+<i>607</i>&nbsp;                        // Remove attribute values from existing attribute
+<i>608</i>&nbsp;                        modVals = modAttr.getAll();
+<i>609</i>&nbsp;                        while (modVals.hasMore()) {
+<i>610</i>&nbsp;                            existingAttr.remove(modVals.next());
+<i>611</i>&nbsp;                        }
+<i>612</i>&nbsp;                        if (existingAttr.size() == 0) {
+<i>613</i>&nbsp;                            orig.remove(modAttr.getID());
+<i>614</i>&nbsp;                        }
+<i>615</i>&nbsp;                    }
+<i>616</i>&nbsp;                }
+<i>617</i>&nbsp;                break;
+<i>618</i>&nbsp;            default:
+<i>619</i>&nbsp;                throw new AttributeModificationException(&quot;Unknown mod_op&quot;);
+<i>620</i>&nbsp;            }
+<i>621</i>&nbsp;        }
+<i>622</i>&nbsp;
+<i>623</i>&nbsp;        return orig;
+<i>624</i>&nbsp;    }
+<i>625</i>&nbsp;
+<i>626</i>&nbsp;    public NamingEnumeration&lt;SearchResult&gt; search(String name,
+<i>627</i>&nbsp;                                                  Attributes matchingAttributes)
+<i>628</i>&nbsp;        throws NamingException {
+<i>629</i>&nbsp;        return search(name, matchingAttributes, null);
+<i>630</i>&nbsp;    }
+<i>631</i>&nbsp;
+<i>632</i>&nbsp;    public NamingEnumeration&lt;SearchResult&gt; search(Name name,
+<i>633</i>&nbsp;                                                  Attributes matchingAttributes)
+<i>634</i>&nbsp;        throws NamingException {
+<i>635</i>&nbsp;            return search(name, matchingAttributes, null);
+<i>636</i>&nbsp;    }
+<i>637</i>&nbsp;
+<i>638</i>&nbsp;     public NamingEnumeration&lt;SearchResult&gt; search(String name,
+<i>639</i>&nbsp;                                                   Attributes matchingAttributes,
+<i>640</i>&nbsp;                                                   String[] attributesToReturn)
+<i>641</i>&nbsp;        throws NamingException {
+<i>642</i>&nbsp;        return search(myParser.parse(name), matchingAttributes,
+<i>643</i>&nbsp;            attributesToReturn);
+<i>644</i>&nbsp;    }
+<i>645</i>&nbsp;
+<i>646</i>&nbsp;     public NamingEnumeration&lt;SearchResult&gt; search(Name name,
+<i>647</i>&nbsp;                                                   Attributes matchingAttributes,
+<i>648</i>&nbsp;                                                   String[] attributesToReturn)
+<i>649</i>&nbsp;         throws NamingException {
+<i>650</i>&nbsp;
+<i>651</i>&nbsp;        HierMemDirCtx target = (HierMemDirCtx) doLookup(name, false);
+<i>652</i>&nbsp;
+<i>653</i>&nbsp;        SearchControls cons = new SearchControls();
+<i>654</i>&nbsp;        cons.setReturningAttributes(attributesToReturn);
+<i>655</i>&nbsp;
+<i>656</i>&nbsp;        return new LazySearchEnumerationImpl(
+<i>657</i>&nbsp;            target.doListBindings(false),
+<i>658</i>&nbsp;            new ContainmentFilter(matchingAttributes),
+<i>659</i>&nbsp;            cons, this, myEnv,
+<i>660</i>&nbsp;            false); // alwaysUseFactory ignored because objReturnFlag == false
+<i>661</i>&nbsp;    }
+<i>662</i>&nbsp;
+<i>663</i>&nbsp;    public NamingEnumeration&lt;SearchResult&gt; search(Name name,
+<i>664</i>&nbsp;                                                  String filter,
+<i>665</i>&nbsp;                                                  SearchControls cons)
+<i>666</i>&nbsp;        throws NamingException {
+<i>667</i>&nbsp;        DirContext target = (DirContext) doLookup(name, false);
+<i>668</i>&nbsp;
+<i>669</i>&nbsp;        SearchFilter stringfilter = new SearchFilter(filter);
+<i>670</i>&nbsp;        return new LazySearchEnumerationImpl(
+<i>671</i>&nbsp;            new HierContextEnumerator(target,
+<i>672</i>&nbsp;                (cons != null) ? cons.getSearchScope() :
+<i>673</i>&nbsp;                SearchControls.ONELEVEL_SCOPE),
+<i>674</i>&nbsp;            stringfilter,
+<i>675</i>&nbsp;            cons, this, myEnv, alwaysUseFactory);
+<i>676</i>&nbsp;    }
+<i>677</i>&nbsp;
+<i>678</i>&nbsp;     public NamingEnumeration&lt;SearchResult&gt; search(Name name,
+<i>679</i>&nbsp;                                                   String filterExpr,
+<i>680</i>&nbsp;                                                   Object[] filterArgs,
+<i>681</i>&nbsp;                                                   SearchControls cons)
+<i>682</i>&nbsp;            throws NamingException {
+<i>683</i>&nbsp;
+<i>684</i>&nbsp;        String strfilter = SearchFilter.format(filterExpr, filterArgs);
+<i>685</i>&nbsp;        return search(name, strfilter, cons);
+<i>686</i>&nbsp;    }
+<i>687</i>&nbsp;
+<i>688</i>&nbsp;    public NamingEnumeration&lt;SearchResult&gt; search(String name,
+<i>689</i>&nbsp;                                                  String filter,
+<i>690</i>&nbsp;                                                  SearchControls cons)
+<i>691</i>&nbsp;        throws NamingException {
+<i>692</i>&nbsp;        return search(myParser.parse(name), filter, cons);
+<i>693</i>&nbsp;    }
+<i>694</i>&nbsp;
+<i>695</i>&nbsp;    public NamingEnumeration&lt;SearchResult&gt; search(String name,
+<i>696</i>&nbsp;                                                  String filterExpr,
+<i>697</i>&nbsp;                                                  Object[] filterArgs,
+<i>698</i>&nbsp;                                                  SearchControls cons)
+<i>699</i>&nbsp;            throws NamingException {
+<i>700</i>&nbsp;        return search(myParser.parse(name), filterExpr, filterArgs, cons);
+<i>701</i>&nbsp;    }
+<i>702</i>&nbsp;
+<i>703</i>&nbsp;    // This function is called whenever a new object needs to be created.
+<i>704</i>&nbsp;    // this is used so that if anyone subclasses us, they can override this
+<i>705</i>&nbsp;    // and return object of their own kind.
+<i>706</i>&nbsp;    protected HierMemDirCtx createNewCtx() throws NamingException {
+<i>707</i>&nbsp;        return new HierMemDirCtx(myEnv, ignoreCase);
+<i>708</i>&nbsp;    }
+<i>709</i>&nbsp;
+<i>710</i>&nbsp;    // If the supplied name is a composite name, return the name that
+<i>711</i>&nbsp;    // is its first component.
+<i>712</i>&nbsp;    protected Name canonizeName(Name name) throws NamingException {
+<i>713</i>&nbsp;        Name canonicalName = name;
+<i>714</i>&nbsp;
+<i>715</i>&nbsp;        if(!(name instanceof HierarchicalName)) {
+<i>716</i>&nbsp;            // If name is not of the correct type, make copy
+<i>717</i>&nbsp;            canonicalName = new HierarchicalName();
+<i>718</i>&nbsp;            int n = name.size();
+<i>719</i>&nbsp;            for(int i = 0; i &lt; n; i++) {
+<i>720</i>&nbsp;                canonicalName.add(i, name.get(i));
+<i>721</i>&nbsp;            }
+<i>722</i>&nbsp;        }
+<i>723</i>&nbsp;
+<i>724</i>&nbsp;        return canonicalName;
+<i>725</i>&nbsp;    }
+<i>726</i>&nbsp;
+<i>727</i>&nbsp;     protected Name getInternalName(Name name) throws NamingException {
+<i>728</i>&nbsp;         return (name.getPrefix(name.size() - 1));
+<i>729</i>&nbsp;     }
+<i>730</i>&nbsp;
+<i>731</i>&nbsp;     protected Name getLeafName(Name name) throws NamingException {
+<i>732</i>&nbsp;         return (name.getSuffix(name.size() - 1));
+<i>733</i>&nbsp;     }
+<i>734</i>&nbsp;
+<i>735</i>&nbsp;
+<i>736</i>&nbsp;     public DirContext getSchema(String name) throws NamingException {
+<i>737</i>&nbsp;        throw new OperationNotSupportedException();
+<i>738</i>&nbsp;    }
+<i>739</i>&nbsp;
+<i>740</i>&nbsp;     public DirContext getSchema(Name name) throws NamingException {
+<i>741</i>&nbsp;        throw new OperationNotSupportedException();
+<i>742</i>&nbsp;    }
+<i>743</i>&nbsp;
+<i>744</i>&nbsp;     public DirContext getSchemaClassDefinition(String name)
+<i>745</i>&nbsp;        throws NamingException {
+<i>746</i>&nbsp;        throw new OperationNotSupportedException();
+<i>747</i>&nbsp;    }
+<i>748</i>&nbsp;
+<i>749</i>&nbsp;    public DirContext getSchemaClassDefinition(Name name)
+<i>750</i>&nbsp;            throws NamingException {
+<i>751</i>&nbsp;        throw new OperationNotSupportedException();
+<i>752</i>&nbsp;    }
+<i>753</i>&nbsp;
+<i>754</i>&nbsp;    // Set context in readonly mode; throw e when update operation attempted.
+<i>755</i>&nbsp;    public void setReadOnly(NamingException e) {
+<i>756</i>&nbsp;        readOnlyEx = e;
+<i>757</i>&nbsp;    }
+<i>758</i>&nbsp;
+<i>759</i>&nbsp;    // Set context to support case-insensitive names
+<i>760</i>&nbsp;    public void setIgnoreCase(boolean ignoreCase) {
+<i>761</i>&nbsp;        this.ignoreCase = ignoreCase;
+<i>762</i>&nbsp;    }
+<i>763</i>&nbsp;
+<i>764</i>&nbsp;    public void setNameParser(NameParser parser) {
+<i>765</i>&nbsp;        myParser = parser;
+<i>766</i>&nbsp;    }
+<i>767</i>&nbsp;
+<i>768</i>&nbsp;    /*
+<i>769</i>&nbsp;     * Common base class for FlatNames and FlatBindings.
+<i>770</i>&nbsp;     */
+<i>771</i>&nbsp;    private abstract class BaseFlatNames&lt;T&gt; implements NamingEnumeration&lt;T&gt; {
+<i>772</i>&nbsp;        Enumeration&lt;Name&gt; names;
+<i>773</i>&nbsp;
+<i>774</i>&nbsp;        BaseFlatNames (Enumeration&lt;Name&gt; names) {
+<i>775</i>&nbsp;            this.names = names;
+<i>776</i>&nbsp;        }
+<i>777</i>&nbsp;
+<i>778</i>&nbsp;        public final boolean hasMoreElements() {
+<i>779</i>&nbsp;            try {
+<i>780</i>&nbsp;                return hasMore();
+<i>781</i>&nbsp;            } catch (NamingException e) {
+<i>782</i>&nbsp;                return false;
+<i>783</i>&nbsp;            }
+<i>784</i>&nbsp;        }
+<i>785</i>&nbsp;
+<i>786</i>&nbsp;        public final boolean hasMore() throws NamingException {
+<i>787</i>&nbsp;            return names.hasMoreElements();
+<i>788</i>&nbsp;        }
+<i>789</i>&nbsp;
+<i>790</i>&nbsp;        public final T nextElement() {
+<i>791</i>&nbsp;            try {
+<i>792</i>&nbsp;                return next();
+<i>793</i>&nbsp;            } catch (NamingException e) {
+<i>794</i>&nbsp;                throw new NoSuchElementException(e.toString());
+<i>795</i>&nbsp;            }
+<i>796</i>&nbsp;        }
+<i>797</i>&nbsp;
+<i>798</i>&nbsp;        public abstract T next() throws NamingException;
+<i>799</i>&nbsp;
+<i>800</i>&nbsp;        public final void close() {
+<i>801</i>&nbsp;            names = null;
+<i>802</i>&nbsp;        }
+<i>803</i>&nbsp;    }
+<i>804</i>&nbsp;
+<i>805</i>&nbsp;    // Class for enumerating name/class pairs
+<i>806</i>&nbsp;    private final class FlatNames extends BaseFlatNames&lt;NameClassPair&gt; {
+<i>807</i>&nbsp;        FlatNames (Enumeration&lt;Name&gt; names) {
+<i>808</i>&nbsp;            super(names);
+<i>809</i>&nbsp;        }
+<i>810</i>&nbsp;
+<i>811</i>&nbsp;        @Override
+<i>812</i>&nbsp;        public NameClassPair next() throws NamingException {
+<i>813</i>&nbsp;            Name name = names.nextElement();
+<i>814</i>&nbsp;            String className = bindings.get(name).getClass().getName();
+<i>815</i>&nbsp;            return new NameClassPair(name.toString(), className);
+<i>816</i>&nbsp;        }
+<i>817</i>&nbsp;    }
+<i>818</i>&nbsp;
+<i>819</i>&nbsp;    // Class for enumerating bindings
+<i>820</i>&nbsp;    private final class FlatBindings extends BaseFlatNames&lt;Binding&gt; {
+<i>821</i>&nbsp;        private Hashtable&lt;Name, Object&gt; bds;
+<i>822</i>&nbsp;        private Hashtable&lt;String, Object&gt; env;
+<i>823</i>&nbsp;        private boolean useFactory;
+<i>824</i>&nbsp;
+<i>825</i>&nbsp;        FlatBindings(Hashtable&lt;Name, Object&gt; bindings,
+<i>826</i>&nbsp;                     Hashtable&lt;String, Object&gt; env,
+<i>827</i>&nbsp;                     boolean useFactory) {
+<i>828</i>&nbsp;            super(bindings.keys());
+<i>829</i>&nbsp;            this.env = env;
+<i>830</i>&nbsp;            this.bds = bindings;
+<i>831</i>&nbsp;            this.useFactory = useFactory;
+<i>832</i>&nbsp;        }
+<i>833</i>&nbsp;
+<i>834</i>&nbsp;        @Override
+<i>835</i>&nbsp;        public Binding next() throws NamingException {
+<i>836</i>&nbsp;            Name name = names.nextElement();
+<i>837</i>&nbsp;
+<i>838</i>&nbsp;            HierMemDirCtx obj = (HierMemDirCtx)bds.get(name);
+<i>839</i>&nbsp;
+<i>840</i>&nbsp;            Object answer = obj;
+<i>841</i>&nbsp;            if (useFactory) {
+<i>842</i>&nbsp;                Attributes attrs = obj.getAttributes(&quot;&quot;); // only method available
+<i>843</i>&nbsp;                try {
+<i>844</i>&nbsp;                    answer = DirectoryManager.getObjectInstance(obj,
+<i>845</i>&nbsp;                        name, HierMemDirCtx.this, env, attrs);
+<i>846</i>&nbsp;                } catch (NamingException e) {
+<i>847</i>&nbsp;                    throw e;
+<i>848</i>&nbsp;                } catch (Exception e) {
+<i>849</i>&nbsp;                    NamingException e2 = new NamingException(
+<i>850</i>&nbsp;                        &quot;Problem calling getObjectInstance&quot;);
+<i>851</i>&nbsp;                    e2.setRootCause(e);
+<i>852</i>&nbsp;                    throw e2;
+<i>853</i>&nbsp;                }
+<i>854</i>&nbsp;            }
+<i>855</i>&nbsp;
+<i>856</i>&nbsp;            return new Binding(name.toString(), answer);
+<i>857</i>&nbsp;        }
+<i>858</i>&nbsp;    }
+<i>859</i>&nbsp;
+<i>860</i>&nbsp;    public class HierContextEnumerator extends ContextEnumerator {
+<i>861</i>&nbsp;        public HierContextEnumerator(Context context, int scope)
+<i>862</i>&nbsp;            throws NamingException {
+<i>863</i>&nbsp;                super(context, scope);
+<i>864</i>&nbsp;        }
+<i>865</i>&nbsp;
+<i>866</i>&nbsp;        protected HierContextEnumerator(Context context, int scope,
+<i>867</i>&nbsp;            String contextName, boolean returnSelf) throws NamingException {
+<i>868</i>&nbsp;            super(context, scope, contextName, returnSelf);
+<i>869</i>&nbsp;        }
+<i>870</i>&nbsp;
+<i>871</i>&nbsp;        protected NamingEnumeration&lt;Binding&gt; getImmediateChildren(Context ctx)
+<i>872</i>&nbsp;            throws NamingException {
+<i>873</i>&nbsp;                return ((HierMemDirCtx)ctx).doListBindings(false);
+<i>874</i>&nbsp;        }
+<i>875</i>&nbsp;
+<i>876</i>&nbsp;        protected ContextEnumerator newEnumerator(Context ctx, int scope,
+<i>877</i>&nbsp;            String contextName, boolean returnSelf) throws NamingException {
+<i>878</i>&nbsp;                return new HierContextEnumerator(ctx, scope, contextName,
+<i>879</i>&nbsp;                    returnSelf);
+<i>880</i>&nbsp;        }
+<i>881</i>&nbsp;    }
+<i>882</i>&nbsp;}
+<i>883</i>&nbsp;
+<i>884</i>&nbsp;    // CompoundNames&#39;s HashCode() method isn&#39;t good enough for many strings.
+<i>885</i>&nbsp;    // The only purpose of this subclass is to have a more discerning
+<i>886</i>&nbsp;    // hash function. We&#39;ll make up for the performance hit by caching
+<i>887</i>&nbsp;    // the hash value.
+<i>888</i>&nbsp;
+<i>889</i>&nbsp;final class HierarchicalName extends CompoundName {
+<i>890</i>&nbsp;    private int hashValue = -1;
+<i>891</i>&nbsp;
+<i>892</i>&nbsp;    // Creates an empty name
+<i>893</i>&nbsp;    HierarchicalName() {
+<i>894</i>&nbsp;        super(new Enumeration&lt;String&gt;() {
+<i>895</i>&nbsp;                  public boolean hasMoreElements() {return false;}
+<i>896</i>&nbsp;                  public String nextElement() {throw new NoSuchElementException();}
+<i>897</i>&nbsp;              },
+<i>898</i>&nbsp;              HierarchicalNameParser.mySyntax);
+<i>899</i>&nbsp;    }
+<i>900</i>&nbsp;
+<i>901</i>&nbsp;    HierarchicalName(Enumeration&lt;String&gt; comps, Properties syntax) {
+<i>902</i>&nbsp;        super(comps, syntax);
+<i>903</i>&nbsp;    }
+<i>904</i>&nbsp;
+<i>905</i>&nbsp;    HierarchicalName(String n, Properties syntax) throws InvalidNameException {
+<i>906</i>&nbsp;        super(n, syntax);
+<i>907</i>&nbsp;    }
+<i>908</i>&nbsp;
+<i>909</i>&nbsp;    // just like String.hashCode, only it pays no attention to length
+<i>910</i>&nbsp;    public int hashCode() {
+<i>911</i>&nbsp;        if (hashValue == -1) {
+<i>912</i>&nbsp;
+<i>913</i>&nbsp;            String name = toString().toUpperCase(Locale.ENGLISH);
+<i>914</i>&nbsp;            int len = name.length();
+<i>915</i>&nbsp;            int off = 0;
+<i>916</i>&nbsp;            char val[] = new char[len];
+<i>917</i>&nbsp;
+<i>918</i>&nbsp;            name.getChars(0, len, val, 0);
+<i>919</i>&nbsp;
+<i>920</i>&nbsp;            for (int i = len; i &gt; 0; i--) {
+<i>921</i>&nbsp;                hashValue = (hashValue * 37) + val[off++];
+<i>922</i>&nbsp;            }
+<i>923</i>&nbsp;        }
+<i>924</i>&nbsp;
+<i>925</i>&nbsp;        return hashValue;
+<i>926</i>&nbsp;    }
+<i>927</i>&nbsp;
+<i>928</i>&nbsp;    public Name getPrefix(int posn) {
+<i>929</i>&nbsp;        Enumeration&lt;String&gt; comps = super.getPrefix(posn).getAll();
+<i>930</i>&nbsp;        return (new HierarchicalName(comps, mySyntax));
+<i>931</i>&nbsp;    }
+<i>932</i>&nbsp;
+<i>933</i>&nbsp;    public Name getSuffix(int posn) {
+<i>934</i>&nbsp;        Enumeration&lt;String&gt; comps = super.getSuffix(posn).getAll();
+<i>935</i>&nbsp;        return (new HierarchicalName(comps, mySyntax));
+<i>936</i>&nbsp;    }
+<i>937</i>&nbsp;
+<i>938</i>&nbsp;    public Object clone() {
+<i>939</i>&nbsp;        return (new HierarchicalName(getAll(), mySyntax));
+<i>940</i>&nbsp;    }
+<i>941</i>&nbsp;
+<i>942</i>&nbsp;    private static final long serialVersionUID = -6717336834584573168L;
+<i>943</i>&nbsp;}
+<i>944</i>&nbsp;
+<i>945</i>&nbsp;// This is the default name parser (used if setNameParser is not called)
+<b class="nc"><i>946</i>&nbsp;final class HierarchicalNameParser implements NameParser {</b>
+<b class="nc"><i>947</i>&nbsp;    static final Properties mySyntax = new Properties();</b>
+<i>948</i>&nbsp;    static {
+<b class="nc"><i>949</i>&nbsp;        mySyntax.put(&quot;jndi.syntax.direction&quot;, &quot;left_to_right&quot;);</b>
+<b class="nc"><i>950</i>&nbsp;        mySyntax.put(&quot;jndi.syntax.separator&quot;, &quot;/&quot;);</b>
+<b class="nc"><i>951</i>&nbsp;        mySyntax.put(&quot;jndi.syntax.ignorecase&quot;, &quot;true&quot;);</b>
+<b class="nc"><i>952</i>&nbsp;        mySyntax.put(&quot;jndi.syntax.escape&quot;, &quot;\\&quot;);</b>
+<b class="nc"><i>953</i>&nbsp;        mySyntax.put(&quot;jndi.syntax.beginquote&quot;, &quot;\&quot;&quot;);</b>
+<i>954</i>&nbsp;        //mySyntax.put(&quot;jndi.syntax.separator.ava&quot;, &quot;+&quot;);
+<i>955</i>&nbsp;        //mySyntax.put(&quot;jndi.syntax.separator.typeval&quot;, &quot;=&quot;);
+<b class="nc"><i>956</i>&nbsp;        mySyntax.put(&quot;jndi.syntax.trimblanks&quot;, &quot;false&quot;);</b>
+<i>957</i>&nbsp;    };
+<i>958</i>&nbsp;
+<i>959</i>&nbsp;    public Name parse(String name) throws NamingException {
+<b class="nc"><i>960</i>&nbsp;        return new HierarchicalName(name, mySyntax);</b>
+<i>961</i>&nbsp;    }
+<i>962</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

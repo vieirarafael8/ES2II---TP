@@ -1,0 +1,571 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: EventDispatcher</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">com.sun.media.sound</a> ]
+</div>
+
+<h1>Coverage Summary for Class: EventDispatcher (com.sun.media.sound)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">EventDispatcher</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 104)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">EventDispatcher$ClipInfo</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 5)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">EventDispatcher$EventInfo</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 4)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 6)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 20)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 115)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1998, 2018, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package com.sun.media.sound;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.util.ArrayList;
+<i>29</i>&nbsp;import java.util.List;
+<i>30</i>&nbsp;
+<i>31</i>&nbsp;import javax.sound.midi.ControllerEventListener;
+<i>32</i>&nbsp;import javax.sound.midi.MetaEventListener;
+<i>33</i>&nbsp;import javax.sound.midi.MetaMessage;
+<i>34</i>&nbsp;import javax.sound.midi.ShortMessage;
+<i>35</i>&nbsp;import javax.sound.sampled.LineEvent;
+<i>36</i>&nbsp;import javax.sound.sampled.LineListener;
+<i>37</i>&nbsp;
+<i>38</i>&nbsp;/**
+<i>39</i>&nbsp; * EventDispatcher.  Used by various classes in the Java Sound implementation
+<i>40</i>&nbsp; * to send events.
+<i>41</i>&nbsp; *
+<i>42</i>&nbsp; * @author David Rivas
+<i>43</i>&nbsp; * @author Kara Kytle
+<i>44</i>&nbsp; * @author Florian Bomers
+<i>45</i>&nbsp; */
+<i>46</i>&nbsp;final class EventDispatcher implements Runnable {
+<i>47</i>&nbsp;
+<b class="nc"><i>48</i>&nbsp;    /**</b>
+<i>49</i>&nbsp;     * time of inactivity until the auto closing clips
+<i>50</i>&nbsp;     * are closed.
+<i>51</i>&nbsp;     */
+<i>52</i>&nbsp;    private static final int AUTO_CLOSE_TIME = 5000;
+<i>53</i>&nbsp;
+<i>54</i>&nbsp;    /**
+<i>55</i>&nbsp;     * List of events.
+<i>56</i>&nbsp;     */
+<i>57</i>&nbsp;    private final ArrayList&lt;EventInfo&gt; eventQueue = new ArrayList&lt;&gt;();
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;    /**
+<b class="nc"><i>60</i>&nbsp;     * Thread object for this EventDispatcher instance.</b>
+<i>61</i>&nbsp;     */
+<i>62</i>&nbsp;    private Thread thread = null;
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    /*
+<i>65</i>&nbsp;     * support for auto-closing Clips
+<b class="nc"><i>66</i>&nbsp;     */</b>
+<i>67</i>&nbsp;    private final ArrayList&lt;ClipInfo&gt; autoClosingClips = new ArrayList&lt;&gt;();
+<i>68</i>&nbsp;
+<i>69</i>&nbsp;    /*
+<i>70</i>&nbsp;     * support for monitoring data lines
+<i>71</i>&nbsp;     */
+<b class="nc"><i>72</i>&nbsp;    private final ArrayList&lt;LineMonitor&gt; lineMonitors = new ArrayList&lt;&gt;();</b>
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;    /**
+<i>75</i>&nbsp;     * Approximate interval between calls to LineMonitor.checkLine
+<i>76</i>&nbsp;     */
+<b class="nc"><i>77</i>&nbsp;    static final int LINE_MONITOR_TIME = 400;</b>
+<i>78</i>&nbsp;
+<i>79</i>&nbsp;    /**
+<i>80</i>&nbsp;     * This start() method starts an event thread if one is not already active.
+<i>81</i>&nbsp;     */
+<i>82</i>&nbsp;    synchronized void start() {
+<i>83</i>&nbsp;
+<i>84</i>&nbsp;        if(thread == null) {
+<i>85</i>&nbsp;            thread = JSSecurityManager.createThread(this,
+<i>86</i>&nbsp;                                                    &quot;Java Sound Event Dispatcher&quot;,   // name
+<i>87</i>&nbsp;                                                    true,  // daemon
+<i>88</i>&nbsp;                                                    -1,    // priority
+<i>89</i>&nbsp;                                                    true); // doStart
+<b class="nc"><i>90</i>&nbsp;        }</b>
+<b class="nc"><i>91</i>&nbsp;    }</b>
+<i>92</i>&nbsp;
+<i>93</i>&nbsp;    /**
+<i>94</i>&nbsp;     * Invoked when there is at least one event in the queue.
+<i>95</i>&nbsp;     * Implement this as a callback to process one event.
+<i>96</i>&nbsp;     */
+<i>97</i>&nbsp;    void processEvent(EventInfo eventInfo) {
+<i>98</i>&nbsp;        int count = eventInfo.getListenerCount();
+<i>99</i>&nbsp;
+<i>100</i>&nbsp;        // process an LineEvent
+<i>101</i>&nbsp;        if (eventInfo.getEvent() instanceof LineEvent) {
+<i>102</i>&nbsp;            LineEvent event = (LineEvent) eventInfo.getEvent();
+<i>103</i>&nbsp;            if (Printer.debug) Printer.debug(&quot;Sending &quot;+event+&quot; to &quot;+count+&quot; listeners&quot;);
+<i>104</i>&nbsp;            for (int i = 0; i &lt; count; i++) {
+<b class="nc"><i>105</i>&nbsp;                try {</b>
+<i>106</i>&nbsp;                    ((LineListener) eventInfo.getListener(i)).update(event);
+<i>107</i>&nbsp;                } catch (Throwable t) {
+<b class="nc"><i>108</i>&nbsp;                    if (Printer.err) t.printStackTrace();</b>
+<b class="nc"><i>109</i>&nbsp;                }</b>
+<i>110</i>&nbsp;            }
+<b class="nc"><i>111</i>&nbsp;            return;</b>
+<i>112</i>&nbsp;        }
+<b class="nc"><i>113</i>&nbsp;</b>
+<b class="nc"><i>114</i>&nbsp;        // process a MetaMessage</b>
+<i>115</i>&nbsp;        if (eventInfo.getEvent() instanceof MetaMessage) {
+<b class="nc"><i>116</i>&nbsp;            MetaMessage event = (MetaMessage)eventInfo.getEvent();</b>
+<i>117</i>&nbsp;            for (int i = 0; i &lt; count; i++) {
+<i>118</i>&nbsp;                try {
+<i>119</i>&nbsp;                    ((MetaEventListener) eventInfo.getListener(i)).meta(event);
+<i>120</i>&nbsp;                } catch (Throwable t) {
+<i>121</i>&nbsp;                    if (Printer.err) t.printStackTrace();
+<b class="nc"><i>122</i>&nbsp;                }</b>
+<b class="nc"><i>123</i>&nbsp;            }</b>
+<b class="nc"><i>124</i>&nbsp;            return;</b>
+<i>125</i>&nbsp;        }
+<b class="nc"><i>126</i>&nbsp;</b>
+<b class="nc"><i>127</i>&nbsp;        // process a Controller or Mode Event</b>
+<i>128</i>&nbsp;        if (eventInfo.getEvent() instanceof ShortMessage) {
+<b class="nc"><i>129</i>&nbsp;            ShortMessage event = (ShortMessage)eventInfo.getEvent();</b>
+<i>130</i>&nbsp;            int status = event.getStatus();
+<i>131</i>&nbsp;
+<i>132</i>&nbsp;            // Controller and Mode events have status byte 0xBc, where
+<i>133</i>&nbsp;            // c is the channel they are sent on.
+<i>134</i>&nbsp;            if ((status &amp; 0xF0) == 0xB0) {
+<b class="nc"><i>135</i>&nbsp;                for (int i = 0; i &lt; count; i++) {</b>
+<b class="nc"><i>136</i>&nbsp;                    try {</b>
+<b class="nc"><i>137</i>&nbsp;                        ((ControllerEventListener) eventInfo.getListener(i)).controlChange(event);</b>
+<i>138</i>&nbsp;                    } catch (Throwable t) {
+<i>139</i>&nbsp;                        if (Printer.err) t.printStackTrace();
+<i>140</i>&nbsp;                    }
+<b class="nc"><i>141</i>&nbsp;                }</b>
+<b class="nc"><i>142</i>&nbsp;            }</b>
+<i>143</i>&nbsp;            return;
+<b class="nc"><i>144</i>&nbsp;        }</b>
+<b class="nc"><i>145</i>&nbsp;</b>
+<i>146</i>&nbsp;        Printer.err(&quot;Unknown event type: &quot; + eventInfo.getEvent());
+<b class="nc"><i>147</i>&nbsp;    }</b>
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;    /**
+<i>150</i>&nbsp;     * Wait until there is something in the event queue to process.  Then
+<i>151</i>&nbsp;     * dispatch the event to the listeners.The entire method does not
+<i>152</i>&nbsp;     * need to be synchronized since this includes taking the event out
+<b class="nc"><i>153</i>&nbsp;     * from the queue and processing the event. We only need to provide</b>
+<i>154</i>&nbsp;     * exclusive access over the code where an event is removed from the
+<i>155</i>&nbsp;     *queue.
+<i>156</i>&nbsp;     */
+<i>157</i>&nbsp;    void dispatchEvents() {
+<i>158</i>&nbsp;
+<i>159</i>&nbsp;        EventInfo eventInfo = null;
+<i>160</i>&nbsp;
+<i>161</i>&nbsp;        synchronized (this) {
+<i>162</i>&nbsp;
+<i>163</i>&nbsp;            // Wait till there is an event in the event queue.
+<i>164</i>&nbsp;            try {
+<i>165</i>&nbsp;
+<i>166</i>&nbsp;                if (eventQueue.size() == 0) {
+<b class="nc"><i>167</i>&nbsp;                    if (autoClosingClips.size() &gt; 0 || lineMonitors.size() &gt; 0) {</b>
+<i>168</i>&nbsp;                        int waitTime = AUTO_CLOSE_TIME;
+<b class="nc"><i>169</i>&nbsp;                        if (lineMonitors.size() &gt; 0) {</b>
+<i>170</i>&nbsp;                            waitTime = LINE_MONITOR_TIME;
+<i>171</i>&nbsp;                        }
+<i>172</i>&nbsp;                        wait(waitTime);
+<i>173</i>&nbsp;                    } else {
+<b class="nc"><i>174</i>&nbsp;                        wait();</b>
+<b class="nc"><i>175</i>&nbsp;                    }</b>
+<b class="nc"><i>176</i>&nbsp;                }</b>
+<b class="nc"><i>177</i>&nbsp;            } catch (InterruptedException e) {</b>
+<b class="nc"><i>178</i>&nbsp;            }</b>
+<i>179</i>&nbsp;            if (eventQueue.size() &gt; 0) {
+<b class="nc"><i>180</i>&nbsp;                // Remove the event from the queue and dispatch it to the listeners.</b>
+<b class="nc"><i>181</i>&nbsp;                eventInfo = eventQueue.remove(0);</b>
+<b class="nc"><i>182</i>&nbsp;            }</b>
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;        } // end of synchronized
+<b class="nc"><i>185</i>&nbsp;        if (eventInfo != null) {</b>
+<b class="nc"><i>186</i>&nbsp;            processEvent(eventInfo);</b>
+<b class="nc"><i>187</i>&nbsp;        } else {</b>
+<i>188</i>&nbsp;            if (autoClosingClips.size() &gt; 0) {
+<b class="nc"><i>189</i>&nbsp;                closeAutoClosingClips();</b>
+<i>190</i>&nbsp;            }
+<i>191</i>&nbsp;            if (lineMonitors.size() &gt; 0) {
+<b class="nc"><i>192</i>&nbsp;                monitorLines();</b>
+<b class="nc"><i>193</i>&nbsp;            }</b>
+<b class="nc"><i>194</i>&nbsp;        }</b>
+<i>195</i>&nbsp;    }
+<b class="nc"><i>196</i>&nbsp;</b>
+<b class="nc"><i>197</i>&nbsp;    /**</b>
+<i>198</i>&nbsp;     * Queue the given event in the event queue.
+<b class="nc"><i>199</i>&nbsp;     */</b>
+<b class="nc"><i>200</i>&nbsp;    private synchronized void postEvent(EventInfo eventInfo) {</b>
+<i>201</i>&nbsp;        eventQueue.add(eventInfo);
+<i>202</i>&nbsp;        notifyAll();
+<i>203</i>&nbsp;    }
+<i>204</i>&nbsp;
+<i>205</i>&nbsp;    /**
+<i>206</i>&nbsp;     * A loop to dispatch events.
+<i>207</i>&nbsp;     */
+<i>208</i>&nbsp;    @Override
+<i>209</i>&nbsp;    public void run() {
+<b class="nc"><i>210</i>&nbsp;</b>
+<b class="nc"><i>211</i>&nbsp;        while (true) {</b>
+<i>212</i>&nbsp;            try {
+<i>213</i>&nbsp;                dispatchEvents();
+<i>214</i>&nbsp;            } catch (Throwable t) {
+<i>215</i>&nbsp;                if (Printer.err) t.printStackTrace();
+<i>216</i>&nbsp;            }
+<i>217</i>&nbsp;        }
+<i>218</i>&nbsp;    }
+<i>219</i>&nbsp;
+<i>220</i>&nbsp;    /**
+<i>221</i>&nbsp;     * Send audio and MIDI events.
+<b class="nc"><i>222</i>&nbsp;     */</b>
+<b class="nc"><i>223</i>&nbsp;    void sendAudioEvents(Object event, List&lt;Object&gt; listeners) {</b>
+<i>224</i>&nbsp;        if ((listeners == null)
+<b class="nc"><i>225</i>&nbsp;            || (listeners.size() == 0)) {</b>
+<i>226</i>&nbsp;            // nothing to do
+<i>227</i>&nbsp;            return;
+<i>228</i>&nbsp;        }
+<i>229</i>&nbsp;
+<i>230</i>&nbsp;        start();
+<i>231</i>&nbsp;
+<i>232</i>&nbsp;        EventInfo eventInfo = new EventInfo(event, listeners);
+<i>233</i>&nbsp;        postEvent(eventInfo);
+<b class="nc"><i>234</i>&nbsp;    }</b>
+<b class="nc"><i>235</i>&nbsp;</b>
+<i>236</i>&nbsp;    /*
+<i>237</i>&nbsp;     * go through the list of registered auto-closing
+<i>238</i>&nbsp;     * Clip instances and close them, if appropriate
+<i>239</i>&nbsp;     *
+<b class="nc"><i>240</i>&nbsp;     * This method is called in regular intervals</b>
+<i>241</i>&nbsp;     */
+<b class="nc"><i>242</i>&nbsp;    private void closeAutoClosingClips() {</b>
+<b class="nc"><i>243</i>&nbsp;        synchronized(autoClosingClips) {</b>
+<i>244</i>&nbsp;            if (Printer.debug)Printer.debug(&quot;&gt; EventDispatcher.closeAutoClosingClips (&quot;+autoClosingClips.size()+&quot; clips)&quot;);
+<i>245</i>&nbsp;            long currTime = System.currentTimeMillis();
+<i>246</i>&nbsp;            for (int i = autoClosingClips.size()-1; i &gt;= 0 ; i--) {
+<i>247</i>&nbsp;                ClipInfo info = autoClosingClips.get(i);
+<i>248</i>&nbsp;                if (info.isExpired(currTime)) {
+<i>249</i>&nbsp;                    AutoClosingClip clip = info.getClip();
+<i>250</i>&nbsp;                    // sanity check
+<i>251</i>&nbsp;                    if (!clip.isOpen() || !clip.isAutoClosing()) {
+<i>252</i>&nbsp;                        if (Printer.debug)Printer.debug(&quot;EventDispatcher: removing clip &quot;+clip+&quot;  isOpen:&quot;+clip.isOpen());
+<i>253</i>&nbsp;                        autoClosingClips.remove(i);
+<b class="nc"><i>254</i>&nbsp;                    }</b>
+<i>255</i>&nbsp;                    else if (!clip.isRunning() &amp;&amp; !clip.isActive() &amp;&amp; clip.isAutoClosing()) {
+<b class="nc"><i>256</i>&nbsp;                        if (Printer.debug)Printer.debug(&quot;EventDispatcher: closing clip &quot;+clip);</b>
+<b class="nc"><i>257</i>&nbsp;                        clip.close();</b>
+<b class="nc"><i>258</i>&nbsp;                    } else {</b>
+<b class="nc"><i>259</i>&nbsp;                        if (Printer.debug)Printer.debug(&quot;Doing nothing with clip &quot;+clip+&quot;:&quot;);</b>
+<b class="nc"><i>260</i>&nbsp;                        if (Printer.debug)Printer.debug(&quot;  open=&quot;+clip.isOpen()+&quot;, autoclosing=&quot;+clip.isAutoClosing());</b>
+<i>261</i>&nbsp;                        if (Printer.debug)Printer.debug(&quot;  isRunning=&quot;+clip.isRunning()+&quot;, isActive=&quot;+clip.isActive());
+<b class="nc"><i>262</i>&nbsp;                    }</b>
+<i>263</i>&nbsp;                } else {
+<b class="nc"><i>264</i>&nbsp;                    if (Printer.debug)Printer.debug(&quot;EventDispatcher: clip &quot;+info.getClip()+&quot; not yet expired&quot;);</b>
+<i>265</i>&nbsp;                }
+<b class="nc"><i>266</i>&nbsp;            }</b>
+<i>267</i>&nbsp;        }
+<b class="nc"><i>268</i>&nbsp;        if (Printer.debug)Printer.debug(&quot;&lt; EventDispatcher.closeAutoClosingClips (&quot;+autoClosingClips.size()+&quot; clips)&quot;);</b>
+<i>269</i>&nbsp;    }
+<i>270</i>&nbsp;
+<i>271</i>&nbsp;    private int getAutoClosingClipIndex(AutoClosingClip clip) {
+<i>272</i>&nbsp;        synchronized(autoClosingClips) {
+<i>273</i>&nbsp;            for (int i = autoClosingClips.size()-1; i &gt;= 0; i--) {
+<i>274</i>&nbsp;                if (clip.equals(autoClosingClips.get(i).getClip())) {
+<i>275</i>&nbsp;                    return i;
+<i>276</i>&nbsp;                }
+<i>277</i>&nbsp;            }
+<b class="nc"><i>278</i>&nbsp;        }</b>
+<i>279</i>&nbsp;        return -1;
+<i>280</i>&nbsp;    }
+<i>281</i>&nbsp;
+<i>282</i>&nbsp;    /**
+<b class="nc"><i>283</i>&nbsp;     * called from auto-closing clips when one of their open() method is called.</b>
+<b class="nc"><i>284</i>&nbsp;     */</b>
+<b class="nc"><i>285</i>&nbsp;    void autoClosingClipOpened(AutoClosingClip clip) {</b>
+<b class="nc"><i>286</i>&nbsp;        if (Printer.debug)Printer.debug(&quot;&gt; EventDispatcher.autoClosingClipOpened &quot;);</b>
+<i>287</i>&nbsp;        int index = 0;
+<i>288</i>&nbsp;        synchronized(autoClosingClips) {
+<b class="nc"><i>289</i>&nbsp;            index = getAutoClosingClipIndex(clip);</b>
+<b class="nc"><i>290</i>&nbsp;            if (index == -1) {</b>
+<i>291</i>&nbsp;                if (Printer.debug)Printer.debug(&quot;EventDispatcher: adding auto-closing clip &quot;+clip);
+<i>292</i>&nbsp;                autoClosingClips.add(new ClipInfo(clip));
+<i>293</i>&nbsp;            }
+<i>294</i>&nbsp;        }
+<i>295</i>&nbsp;        if (index == -1) {
+<i>296</i>&nbsp;            synchronized (this) {
+<i>297</i>&nbsp;                // this is only for the case that the first clip is set to autoclosing,
+<b class="nc"><i>298</i>&nbsp;                // and it is already open, and nothing is done with it.</b>
+<b class="nc"><i>299</i>&nbsp;                // EventDispatcher.process() method would block in wait() and</b>
+<b class="nc"><i>300</i>&nbsp;                // never close this first clip, keeping the device open.</b>
+<b class="nc"><i>301</i>&nbsp;                notifyAll();</b>
+<i>302</i>&nbsp;            }
+<b class="nc"><i>303</i>&nbsp;        }</b>
+<i>304</i>&nbsp;        if (Printer.debug)Printer.debug(&quot;&lt; EventDispatcher.autoClosingClipOpened finished(&quot;+autoClosingClips.size()+&quot; clips)&quot;);
+<b class="nc"><i>305</i>&nbsp;    }</b>
+<b class="nc"><i>306</i>&nbsp;</b>
+<b class="nc"><i>307</i>&nbsp;    /**</b>
+<i>308</i>&nbsp;     * called from auto-closing clips when their closed() method is called.
+<i>309</i>&nbsp;     */
+<i>310</i>&nbsp;    void autoClosingClipClosed(AutoClosingClip clip) {
+<i>311</i>&nbsp;        synchronized(autoClosingClips) {
+<b class="nc"><i>312</i>&nbsp;            int index = getAutoClosingClipIndex(clip);</b>
+<b class="nc"><i>313</i>&nbsp;            if (index != -1) {</b>
+<i>314</i>&nbsp;                autoClosingClips.remove(index);
+<i>315</i>&nbsp;            }
+<i>316</i>&nbsp;        }
+<i>317</i>&nbsp;    }
+<i>318</i>&nbsp;
+<i>319</i>&nbsp;
+<i>320</i>&nbsp;    // ////////////////////////// Line Monitoring Support /////////////////// //
+<i>321</i>&nbsp;    /*
+<i>322</i>&nbsp;     * go through the list of registered line monitors
+<i>323</i>&nbsp;     * and call their checkLine method
+<i>324</i>&nbsp;     *
+<i>325</i>&nbsp;     * This method is called in regular intervals
+<i>326</i>&nbsp;     */
+<i>327</i>&nbsp;    private void monitorLines() {
+<i>328</i>&nbsp;        synchronized(lineMonitors) {
+<i>329</i>&nbsp;            if (Printer.debug)Printer.debug(&quot;&gt; EventDispatcher.monitorLines (&quot;+lineMonitors.size()+&quot; monitors)&quot;);
+<i>330</i>&nbsp;            for (int i = 0; i &lt; lineMonitors.size(); i++) {
+<i>331</i>&nbsp;                lineMonitors.get(i).checkLine();
+<i>332</i>&nbsp;            }
+<i>333</i>&nbsp;        }
+<b class="nc"><i>334</i>&nbsp;        if (Printer.debug)Printer.debug(&quot;&lt; EventDispatcher.monitorLines(&quot;+lineMonitors.size()+&quot; monitors)&quot;);</b>
+<i>335</i>&nbsp;    }
+<b class="nc"><i>336</i>&nbsp;</b>
+<b class="nc"><i>337</i>&nbsp;    /**</b>
+<i>338</i>&nbsp;     * Add this LineMonitor instance to the list of monitors.
+<b class="nc"><i>339</i>&nbsp;     */</b>
+<i>340</i>&nbsp;    void addLineMonitor(LineMonitor lm) {
+<i>341</i>&nbsp;        if (Printer.trace)Printer.trace(&quot;&gt; EventDispatcher.addLineMonitor(&quot;+lm+&quot;)&quot;);
+<i>342</i>&nbsp;        synchronized(lineMonitors) {
+<i>343</i>&nbsp;            if (lineMonitors.indexOf(lm) &gt;= 0) {
+<i>344</i>&nbsp;                if (Printer.trace)Printer.trace(&quot;&lt; EventDispatcher.addLineMonitor finished -- this monitor already exists!&quot;);
+<i>345</i>&nbsp;                return;
+<i>346</i>&nbsp;            }
+<i>347</i>&nbsp;            if (Printer.debug)Printer.debug(&quot;EventDispatcher: adding line monitor &quot;+lm);
+<i>348</i>&nbsp;            lineMonitors.add(lm);
+<b class="nc"><i>349</i>&nbsp;        }</b>
+<b class="nc"><i>350</i>&nbsp;        synchronized (this) {</b>
+<i>351</i>&nbsp;            // need to interrupt the infinite wait()
+<b class="nc"><i>352</i>&nbsp;            notifyAll();</b>
+<i>353</i>&nbsp;        }
+<i>354</i>&nbsp;        if (Printer.debug)Printer.debug(&quot;&lt; EventDispatcher.addLineMonitor finished -- now (&quot;+lineMonitors.size()+&quot; monitors)&quot;);
+<b class="nc"><i>355</i>&nbsp;    }</b>
+<b class="nc"><i>356</i>&nbsp;</b>
+<b class="nc"><i>357</i>&nbsp;    /**</b>
+<i>358</i>&nbsp;     * Remove this LineMonitor instance from the list of monitors.
+<b class="nc"><i>359</i>&nbsp;     */</b>
+<b class="nc"><i>360</i>&nbsp;    void removeLineMonitor(LineMonitor lm) {</b>
+<i>361</i>&nbsp;        if (Printer.trace)Printer.trace(&quot;&gt; EventDispatcher.removeLineMonitor(&quot;+lm+&quot;)&quot;);
+<i>362</i>&nbsp;        synchronized(lineMonitors) {
+<i>363</i>&nbsp;            if (lineMonitors.indexOf(lm) &lt; 0) {
+<i>364</i>&nbsp;                if (Printer.trace)Printer.trace(&quot;&lt; EventDispatcher.removeLineMonitor finished -- this monitor does not exist!&quot;);
+<i>365</i>&nbsp;                return;
+<i>366</i>&nbsp;            }
+<i>367</i>&nbsp;            if (Printer.debug)Printer.debug(&quot;EventDispatcher: removing line monitor &quot;+lm);
+<i>368</i>&nbsp;            lineMonitors.remove(lm);
+<b class="nc"><i>369</i>&nbsp;        }</b>
+<b class="nc"><i>370</i>&nbsp;        if (Printer.debug)Printer.debug(&quot;&lt; EventDispatcher.removeLineMonitor finished -- now (&quot;+lineMonitors.size()+&quot; monitors)&quot;);</b>
+<i>371</i>&nbsp;    }
+<b class="nc"><i>372</i>&nbsp;</b>
+<i>373</i>&nbsp;    /**
+<i>374</i>&nbsp;     * Container for an event and a set of listeners to deliver it to.
+<b class="nc"><i>375</i>&nbsp;     */</b>
+<b class="nc"><i>376</i>&nbsp;    private class EventInfo {</b>
+<i>377</i>&nbsp;
+<i>378</i>&nbsp;        private final Object event;
+<i>379</i>&nbsp;        private final Object[] listeners;
+<i>380</i>&nbsp;
+<i>381</i>&nbsp;        /**
+<i>382</i>&nbsp;         * Create a new instance of this event Info class
+<i>383</i>&nbsp;         * @param event the event to be dispatched
+<i>384</i>&nbsp;         * @param listeners listener list; will be copied
+<i>385</i>&nbsp;         */
+<i>386</i>&nbsp;        EventInfo(Object event, List&lt;Object&gt; listeners) {
+<i>387</i>&nbsp;            this.event = event;
+<i>388</i>&nbsp;            this.listeners = listeners.toArray();
+<i>389</i>&nbsp;        }
+<i>390</i>&nbsp;
+<i>391</i>&nbsp;        Object getEvent() {
+<i>392</i>&nbsp;            return event;
+<i>393</i>&nbsp;        }
+<i>394</i>&nbsp;
+<b class="nc"><i>395</i>&nbsp;        int getListenerCount() {</b>
+<b class="nc"><i>396</i>&nbsp;            return listeners.length;</b>
+<b class="nc"><i>397</i>&nbsp;        }</b>
+<i>398</i>&nbsp;
+<i>399</i>&nbsp;        Object getListener(int index) {
+<i>400</i>&nbsp;            return listeners[index];
+<b class="nc"><i>401</i>&nbsp;        }</b>
+<i>402</i>&nbsp;
+<i>403</i>&nbsp;    } // class EventInfo
+<i>404</i>&nbsp;
+<b class="nc"><i>405</i>&nbsp;</b>
+<i>406</i>&nbsp;    /**
+<i>407</i>&nbsp;     * Container for a clip with its expiration time.
+<i>408</i>&nbsp;     */
+<b class="nc"><i>409</i>&nbsp;    private class ClipInfo {</b>
+<i>410</i>&nbsp;
+<i>411</i>&nbsp;        private final AutoClosingClip clip;
+<i>412</i>&nbsp;        private final long expiration;
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;        /**
+<i>415</i>&nbsp;         * Create a new instance of this clip Info class.
+<i>416</i>&nbsp;         */
+<i>417</i>&nbsp;        ClipInfo(AutoClosingClip clip) {
+<i>418</i>&nbsp;            this.clip = clip;
+<i>419</i>&nbsp;            this.expiration = System.currentTimeMillis() + AUTO_CLOSE_TIME;
+<i>420</i>&nbsp;        }
+<i>421</i>&nbsp;
+<i>422</i>&nbsp;        AutoClosingClip getClip() {
+<i>423</i>&nbsp;            return clip;
+<i>424</i>&nbsp;        }
+<i>425</i>&nbsp;
+<b class="nc"><i>426</i>&nbsp;        boolean isExpired(long currTime) {</b>
+<b class="nc"><i>427</i>&nbsp;            return currTime &gt; expiration;</b>
+<b class="nc"><i>428</i>&nbsp;        }</b>
+<i>429</i>&nbsp;    } // class ClipInfo
+<i>430</i>&nbsp;
+<i>431</i>&nbsp;
+<b class="nc"><i>432</i>&nbsp;    /**</b>
+<i>433</i>&nbsp;     * Interface that a class that wants to get regular
+<i>434</i>&nbsp;     * line monitor events implements.
+<i>435</i>&nbsp;     */
+<b class="nc"><i>436</i>&nbsp;    interface LineMonitor {</b>
+<i>437</i>&nbsp;        /**
+<i>438</i>&nbsp;         * Called by event dispatcher in regular intervals.
+<i>439</i>&nbsp;         */
+<i>440</i>&nbsp;        void checkLine();
+<i>441</i>&nbsp;    }
+<i>442</i>&nbsp;
+<i>443</i>&nbsp;} // class EventDispatcher
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

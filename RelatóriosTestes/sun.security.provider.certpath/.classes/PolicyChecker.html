@@ -1,0 +1,1007 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: PolicyChecker</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.security.provider.certpath</a> ]
+</div>
+
+<h1>Coverage Summary for Class: PolicyChecker (sun.security.provider.certpath)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">PolicyChecker</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 16)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 337)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.security.provider.certpath;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import java.io.IOException;
+<i>29</i>&nbsp;import java.security.GeneralSecurityException;
+<i>30</i>&nbsp;import java.security.cert.Certificate;
+<i>31</i>&nbsp;import java.security.cert.CertificateException;
+<i>32</i>&nbsp;import java.security.cert.CertPathValidatorException;
+<i>33</i>&nbsp;import java.security.cert.PKIXCertPathChecker;
+<i>34</i>&nbsp;import java.security.cert.PKIXReason;
+<i>35</i>&nbsp;import java.security.cert.PolicyNode;
+<i>36</i>&nbsp;import java.security.cert.PolicyQualifierInfo;
+<i>37</i>&nbsp;import java.security.cert.X509Certificate;
+<i>38</i>&nbsp;import java.util.*;
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;import sun.security.util.Debug;
+<i>41</i>&nbsp;import sun.security.x509.CertificatePoliciesExtension;
+<i>42</i>&nbsp;import sun.security.x509.PolicyConstraintsExtension;
+<i>43</i>&nbsp;import sun.security.x509.PolicyMappingsExtension;
+<i>44</i>&nbsp;import sun.security.x509.CertificatePolicyMap;
+<i>45</i>&nbsp;import static sun.security.x509.PKIXExtensions.*;
+<i>46</i>&nbsp;import sun.security.x509.PolicyInformation;
+<i>47</i>&nbsp;import sun.security.x509.X509CertImpl;
+<i>48</i>&nbsp;import sun.security.x509.InhibitAnyPolicyExtension;
+<i>49</i>&nbsp;
+<i>50</i>&nbsp;/**
+<i>51</i>&nbsp; * PolicyChecker is a &lt;code&gt;PKIXCertPathChecker&lt;/code&gt; that checks policy
+<i>52</i>&nbsp; * information on a PKIX certificate, namely certificate policies, policy
+<i>53</i>&nbsp; * mappings, policy constraints and policy qualifiers.
+<i>54</i>&nbsp; *
+<i>55</i>&nbsp; * @since       1.4
+<i>56</i>&nbsp; * @author      Yassir Elley
+<i>57</i>&nbsp; */
+<i>58</i>&nbsp;class PolicyChecker extends PKIXCertPathChecker {
+<i>59</i>&nbsp;
+<i>60</i>&nbsp;    private final Set&lt;String&gt; initPolicies;
+<i>61</i>&nbsp;    private final int certPathLen;
+<i>62</i>&nbsp;    private final boolean expPolicyRequired;
+<i>63</i>&nbsp;    private final boolean polMappingInhibited;
+<i>64</i>&nbsp;    private final boolean anyPolicyInhibited;
+<i>65</i>&nbsp;    private final boolean rejectPolicyQualifiers;
+<i>66</i>&nbsp;    private PolicyNodeImpl rootNode;
+<i>67</i>&nbsp;    private int explicitPolicy;
+<i>68</i>&nbsp;    private int policyMapping;
+<i>69</i>&nbsp;    private int inhibitAnyPolicy;
+<i>70</i>&nbsp;    private int certIndex;
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    private Set&lt;String&gt; supportedExts;
+<i>73</i>&nbsp;
+<b class="nc"><i>74</i>&nbsp;    private static final Debug debug = Debug.getInstance(&quot;certpath&quot;);</b>
+<i>75</i>&nbsp;    static final String ANY_POLICY = &quot;2.5.29.32.0&quot;;
+<i>76</i>&nbsp;
+<i>77</i>&nbsp;    /**
+<i>78</i>&nbsp;     * Constructs a Policy Checker.
+<i>79</i>&nbsp;     *
+<i>80</i>&nbsp;     * @param initialPolicies Set of initial policies
+<i>81</i>&nbsp;     * @param certPathLen length of the certification path to be checked
+<i>82</i>&nbsp;     * @param expPolicyRequired true if explicit policy is required
+<i>83</i>&nbsp;     * @param polMappingInhibited true if policy mapping is inhibited
+<i>84</i>&nbsp;     * @param anyPolicyInhibited true if the ANY_POLICY OID should be inhibited
+<i>85</i>&nbsp;     * @param rejectPolicyQualifiers true if pol qualifiers are to be rejected
+<i>86</i>&nbsp;     * @param rootNode the initial root node of the valid policy tree
+<i>87</i>&nbsp;     */
+<i>88</i>&nbsp;    PolicyChecker(Set&lt;String&gt; initialPolicies, int certPathLen,
+<i>89</i>&nbsp;        boolean expPolicyRequired, boolean polMappingInhibited,
+<i>90</i>&nbsp;        boolean anyPolicyInhibited, boolean rejectPolicyQualifiers,
+<i>91</i>&nbsp;        PolicyNodeImpl rootNode)
+<b class="nc"><i>92</i>&nbsp;    {</b>
+<b class="nc"><i>93</i>&nbsp;        if (initialPolicies.isEmpty()) {</b>
+<i>94</i>&nbsp;            // if no initialPolicies are specified by user, set
+<i>95</i>&nbsp;            // initPolicies to be anyPolicy by default
+<b class="nc"><i>96</i>&nbsp;            this.initPolicies = new HashSet&lt;String&gt;(1);</b>
+<b class="nc"><i>97</i>&nbsp;            this.initPolicies.add(ANY_POLICY);</b>
+<i>98</i>&nbsp;        } else {
+<b class="nc"><i>99</i>&nbsp;            this.initPolicies = new HashSet&lt;String&gt;(initialPolicies);</b>
+<i>100</i>&nbsp;        }
+<b class="nc"><i>101</i>&nbsp;        this.certPathLen = certPathLen;</b>
+<b class="nc"><i>102</i>&nbsp;        this.expPolicyRequired = expPolicyRequired;</b>
+<b class="nc"><i>103</i>&nbsp;        this.polMappingInhibited = polMappingInhibited;</b>
+<b class="nc"><i>104</i>&nbsp;        this.anyPolicyInhibited = anyPolicyInhibited;</b>
+<b class="nc"><i>105</i>&nbsp;        this.rejectPolicyQualifiers = rejectPolicyQualifiers;</b>
+<b class="nc"><i>106</i>&nbsp;        this.rootNode = rootNode;</b>
+<i>107</i>&nbsp;    }
+<i>108</i>&nbsp;
+<i>109</i>&nbsp;    /**
+<i>110</i>&nbsp;     * Initializes the internal state of the checker from parameters
+<i>111</i>&nbsp;     * specified in the constructor
+<i>112</i>&nbsp;     *
+<i>113</i>&nbsp;     * @param forward a boolean indicating whether this checker should be
+<i>114</i>&nbsp;     *        initialized capable of building in the forward direction
+<i>115</i>&nbsp;     * @throws CertPathValidatorException if user wants to enable forward
+<i>116</i>&nbsp;     *         checking and forward checking is not supported.
+<i>117</i>&nbsp;     */
+<i>118</i>&nbsp;    @Override
+<i>119</i>&nbsp;    public void init(boolean forward) throws CertPathValidatorException {
+<b class="nc"><i>120</i>&nbsp;        if (forward) {</b>
+<b class="nc"><i>121</i>&nbsp;            throw new CertPathValidatorException</b>
+<i>122</i>&nbsp;                                        (&quot;forward checking not supported&quot;);
+<i>123</i>&nbsp;        }
+<i>124</i>&nbsp;
+<b class="nc"><i>125</i>&nbsp;        certIndex = 1;</b>
+<b class="nc"><i>126</i>&nbsp;        explicitPolicy = (expPolicyRequired ? 0 : certPathLen + 1);</b>
+<b class="nc"><i>127</i>&nbsp;        policyMapping = (polMappingInhibited ? 0 : certPathLen + 1);</b>
+<b class="nc"><i>128</i>&nbsp;        inhibitAnyPolicy = (anyPolicyInhibited ? 0 : certPathLen + 1);</b>
+<i>129</i>&nbsp;    }
+<i>130</i>&nbsp;
+<i>131</i>&nbsp;    /**
+<i>132</i>&nbsp;     * Checks if forward checking is supported. Forward checking refers
+<i>133</i>&nbsp;     * to the ability of the PKIXCertPathChecker to perform its checks
+<i>134</i>&nbsp;     * when presented with certificates in the forward direction (from
+<i>135</i>&nbsp;     * target to anchor).
+<i>136</i>&nbsp;     *
+<i>137</i>&nbsp;     * @return true if forward checking is supported, false otherwise
+<i>138</i>&nbsp;     */
+<i>139</i>&nbsp;    @Override
+<i>140</i>&nbsp;    public boolean isForwardCheckingSupported() {
+<b class="nc"><i>141</i>&nbsp;        return false;</b>
+<i>142</i>&nbsp;    }
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;    /**
+<i>145</i>&nbsp;     * Gets an immutable Set of the OID strings for the extensions that
+<i>146</i>&nbsp;     * the PKIXCertPathChecker supports (i.e. recognizes, is able to
+<i>147</i>&nbsp;     * process), or null if no extensions are
+<i>148</i>&nbsp;     * supported. All OID strings that a PKIXCertPathChecker might
+<i>149</i>&nbsp;     * possibly be able to process should be included.
+<i>150</i>&nbsp;     *
+<i>151</i>&nbsp;     * @return the Set of extensions supported by this PKIXCertPathChecker,
+<i>152</i>&nbsp;     * or null if no extensions are supported
+<i>153</i>&nbsp;     */
+<i>154</i>&nbsp;    @Override
+<i>155</i>&nbsp;    public Set&lt;String&gt; getSupportedExtensions() {
+<b class="nc"><i>156</i>&nbsp;        if (supportedExts == null) {</b>
+<b class="nc"><i>157</i>&nbsp;            supportedExts = new HashSet&lt;String&gt;(4);</b>
+<b class="nc"><i>158</i>&nbsp;            supportedExts.add(CertificatePolicies_Id.toString());</b>
+<b class="nc"><i>159</i>&nbsp;            supportedExts.add(PolicyMappings_Id.toString());</b>
+<b class="nc"><i>160</i>&nbsp;            supportedExts.add(PolicyConstraints_Id.toString());</b>
+<b class="nc"><i>161</i>&nbsp;            supportedExts.add(InhibitAnyPolicy_Id.toString());</b>
+<b class="nc"><i>162</i>&nbsp;            supportedExts = Collections.unmodifiableSet(supportedExts);</b>
+<i>163</i>&nbsp;        }
+<b class="nc"><i>164</i>&nbsp;        return supportedExts;</b>
+<i>165</i>&nbsp;    }
+<i>166</i>&nbsp;
+<i>167</i>&nbsp;    /**
+<i>168</i>&nbsp;     * Performs the policy processing checks on the certificate using its
+<i>169</i>&nbsp;     * internal state.
+<i>170</i>&nbsp;     *
+<i>171</i>&nbsp;     * @param cert the Certificate to be processed
+<i>172</i>&nbsp;     * @param unresCritExts the unresolved critical extensions
+<i>173</i>&nbsp;     * @throws CertPathValidatorException if the certificate does not verify
+<i>174</i>&nbsp;     */
+<i>175</i>&nbsp;    @Override
+<i>176</i>&nbsp;    public void check(Certificate cert, Collection&lt;String&gt; unresCritExts)
+<i>177</i>&nbsp;        throws CertPathValidatorException
+<i>178</i>&nbsp;    {
+<i>179</i>&nbsp;        // now do the policy checks
+<b class="nc"><i>180</i>&nbsp;        checkPolicy((X509Certificate) cert);</b>
+<i>181</i>&nbsp;
+<b class="nc"><i>182</i>&nbsp;        if (unresCritExts != null &amp;&amp; !unresCritExts.isEmpty()) {</b>
+<b class="nc"><i>183</i>&nbsp;            unresCritExts.remove(CertificatePolicies_Id.toString());</b>
+<b class="nc"><i>184</i>&nbsp;            unresCritExts.remove(PolicyMappings_Id.toString());</b>
+<b class="nc"><i>185</i>&nbsp;            unresCritExts.remove(PolicyConstraints_Id.toString());</b>
+<b class="nc"><i>186</i>&nbsp;            unresCritExts.remove(InhibitAnyPolicy_Id.toString());</b>
+<i>187</i>&nbsp;        }
+<i>188</i>&nbsp;    }
+<i>189</i>&nbsp;
+<i>190</i>&nbsp;    /**
+<i>191</i>&nbsp;     * Internal method to run through all the checks.
+<i>192</i>&nbsp;     *
+<i>193</i>&nbsp;     * @param currCert the certificate to be processed
+<i>194</i>&nbsp;     * @exception CertPathValidatorException Exception thrown if
+<i>195</i>&nbsp;     * the certificate does not verify
+<i>196</i>&nbsp;     */
+<i>197</i>&nbsp;    private void checkPolicy(X509Certificate currCert)
+<i>198</i>&nbsp;        throws CertPathValidatorException
+<i>199</i>&nbsp;    {
+<b class="nc"><i>200</i>&nbsp;        String msg = &quot;certificate policies&quot;;</b>
+<b class="nc"><i>201</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>202</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() ---checking &quot; + msg</b>
+<i>203</i>&nbsp;                + &quot;...&quot;);
+<b class="nc"><i>204</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() certIndex = &quot;</b>
+<i>205</i>&nbsp;                + certIndex);
+<b class="nc"><i>206</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() BEFORE PROCESSING: &quot;</b>
+<i>207</i>&nbsp;                + &quot;explicitPolicy = &quot; + explicitPolicy);
+<b class="nc"><i>208</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() BEFORE PROCESSING: &quot;</b>
+<i>209</i>&nbsp;                + &quot;policyMapping = &quot; + policyMapping);
+<b class="nc"><i>210</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() BEFORE PROCESSING: &quot;</b>
+<i>211</i>&nbsp;                + &quot;inhibitAnyPolicy = &quot; + inhibitAnyPolicy);
+<b class="nc"><i>212</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() BEFORE PROCESSING: &quot;</b>
+<i>213</i>&nbsp;                + &quot;policyTree = &quot; + rootNode);
+<i>214</i>&nbsp;        }
+<i>215</i>&nbsp;
+<b class="nc"><i>216</i>&nbsp;        X509CertImpl currCertImpl = null;</b>
+<i>217</i>&nbsp;        try {
+<b class="nc"><i>218</i>&nbsp;            currCertImpl = X509CertImpl.toImpl(currCert);</b>
+<b class="nc"><i>219</i>&nbsp;        } catch (CertificateException ce) {</b>
+<b class="nc"><i>220</i>&nbsp;            throw new CertPathValidatorException(ce);</b>
+<b class="nc"><i>221</i>&nbsp;        }</b>
+<i>222</i>&nbsp;
+<b class="nc"><i>223</i>&nbsp;        boolean finalCert = (certIndex == certPathLen);</b>
+<i>224</i>&nbsp;
+<b class="nc"><i>225</i>&nbsp;        rootNode = processPolicies(certIndex, initPolicies, explicitPolicy,</b>
+<i>226</i>&nbsp;            policyMapping, inhibitAnyPolicy, rejectPolicyQualifiers, rootNode,
+<i>227</i>&nbsp;            currCertImpl, finalCert);
+<i>228</i>&nbsp;
+<b class="nc"><i>229</i>&nbsp;        if (!finalCert) {</b>
+<b class="nc"><i>230</i>&nbsp;            explicitPolicy = mergeExplicitPolicy(explicitPolicy, currCertImpl,</b>
+<i>231</i>&nbsp;                                                 finalCert);
+<b class="nc"><i>232</i>&nbsp;            policyMapping = mergePolicyMapping(policyMapping, currCertImpl);</b>
+<b class="nc"><i>233</i>&nbsp;            inhibitAnyPolicy = mergeInhibitAnyPolicy(inhibitAnyPolicy,</b>
+<i>234</i>&nbsp;                                                     currCertImpl);
+<i>235</i>&nbsp;        }
+<i>236</i>&nbsp;
+<b class="nc"><i>237</i>&nbsp;        certIndex++;</b>
+<i>238</i>&nbsp;
+<b class="nc"><i>239</i>&nbsp;        if (debug != null) {</b>
+<b class="nc"><i>240</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() AFTER PROCESSING: &quot;</b>
+<i>241</i>&nbsp;                + &quot;explicitPolicy = &quot; + explicitPolicy);
+<b class="nc"><i>242</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() AFTER PROCESSING: &quot;</b>
+<i>243</i>&nbsp;                + &quot;policyMapping = &quot; + policyMapping);
+<b class="nc"><i>244</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() AFTER PROCESSING: &quot;</b>
+<i>245</i>&nbsp;                + &quot;inhibitAnyPolicy = &quot; + inhibitAnyPolicy);
+<b class="nc"><i>246</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() AFTER PROCESSING: &quot;</b>
+<i>247</i>&nbsp;                + &quot;policyTree = &quot; + rootNode);
+<b class="nc"><i>248</i>&nbsp;            debug.println(&quot;PolicyChecker.checkPolicy() &quot; + msg + &quot; verified&quot;);</b>
+<i>249</i>&nbsp;        }
+<i>250</i>&nbsp;    }
+<i>251</i>&nbsp;
+<i>252</i>&nbsp;    /**
+<i>253</i>&nbsp;     * Merges the specified explicitPolicy value with the
+<i>254</i>&nbsp;     * requireExplicitPolicy field of the &lt;code&gt;PolicyConstraints&lt;/code&gt;
+<i>255</i>&nbsp;     * extension obtained from the certificate. An explicitPolicy
+<i>256</i>&nbsp;     * value of -1 implies no constraint.
+<i>257</i>&nbsp;     *
+<i>258</i>&nbsp;     * @param explicitPolicy an integer which indicates if a non-null
+<i>259</i>&nbsp;     * valid policy tree is required
+<i>260</i>&nbsp;     * @param currCert the Certificate to be processed
+<i>261</i>&nbsp;     * @param finalCert a boolean indicating whether currCert is
+<i>262</i>&nbsp;     * the final cert in the cert path
+<i>263</i>&nbsp;     * @return returns the new explicitPolicy value
+<i>264</i>&nbsp;     * @exception CertPathValidatorException Exception thrown if an error
+<i>265</i>&nbsp;     * occurs
+<i>266</i>&nbsp;     */
+<i>267</i>&nbsp;    static int mergeExplicitPolicy(int explicitPolicy, X509CertImpl currCert,
+<i>268</i>&nbsp;        boolean finalCert) throws CertPathValidatorException
+<i>269</i>&nbsp;    {
+<b class="nc"><i>270</i>&nbsp;        if ((explicitPolicy &gt; 0) &amp;&amp; !X509CertImpl.isSelfIssued(currCert)) {</b>
+<b class="nc"><i>271</i>&nbsp;            explicitPolicy--;</b>
+<i>272</i>&nbsp;        }
+<i>273</i>&nbsp;
+<i>274</i>&nbsp;        try {
+<b class="nc"><i>275</i>&nbsp;            PolicyConstraintsExtension polConstExt</b>
+<b class="nc"><i>276</i>&nbsp;                = currCert.getPolicyConstraintsExtension();</b>
+<b class="nc"><i>277</i>&nbsp;            if (polConstExt == null)</b>
+<b class="nc"><i>278</i>&nbsp;                return explicitPolicy;</b>
+<b class="nc"><i>279</i>&nbsp;            int require =</b>
+<b class="nc"><i>280</i>&nbsp;                polConstExt.get(PolicyConstraintsExtension.REQUIRE).intValue();</b>
+<b class="nc"><i>281</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>282</i>&nbsp;                debug.println(&quot;PolicyChecker.mergeExplicitPolicy() &quot;</b>
+<i>283</i>&nbsp;                   + &quot;require Index from cert = &quot; + require);
+<i>284</i>&nbsp;            }
+<b class="nc"><i>285</i>&nbsp;            if (!finalCert) {</b>
+<b class="nc"><i>286</i>&nbsp;                if (require != -1) {</b>
+<b class="nc"><i>287</i>&nbsp;                    if ((explicitPolicy == -1) || (require &lt; explicitPolicy)) {</b>
+<b class="nc"><i>288</i>&nbsp;                        explicitPolicy = require;</b>
+<i>289</i>&nbsp;                    }
+<i>290</i>&nbsp;                }
+<i>291</i>&nbsp;            } else {
+<b class="nc"><i>292</i>&nbsp;                if (require == 0)</b>
+<b class="nc"><i>293</i>&nbsp;                    explicitPolicy = require;</b>
+<i>294</i>&nbsp;            }
+<b class="nc"><i>295</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>296</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>297</i>&nbsp;                debug.println(&quot;PolicyChecker.mergeExplicitPolicy &quot;</b>
+<i>298</i>&nbsp;                              + &quot;unexpected exception&quot;);
+<b class="nc"><i>299</i>&nbsp;                e.printStackTrace();</b>
+<i>300</i>&nbsp;            }
+<b class="nc"><i>301</i>&nbsp;            throw new CertPathValidatorException(e);</b>
+<b class="nc"><i>302</i>&nbsp;        }</b>
+<i>303</i>&nbsp;
+<b class="nc"><i>304</i>&nbsp;        return explicitPolicy;</b>
+<i>305</i>&nbsp;    }
+<i>306</i>&nbsp;
+<i>307</i>&nbsp;    /**
+<i>308</i>&nbsp;     * Merges the specified policyMapping value with the
+<i>309</i>&nbsp;     * inhibitPolicyMapping field of the &lt;code&gt;PolicyConstraints&lt;/code&gt;
+<i>310</i>&nbsp;     * extension obtained from the certificate. A policyMapping
+<i>311</i>&nbsp;     * value of -1 implies no constraint.
+<i>312</i>&nbsp;     *
+<i>313</i>&nbsp;     * @param policyMapping an integer which indicates if policy mapping
+<i>314</i>&nbsp;     * is inhibited
+<i>315</i>&nbsp;     * @param currCert the Certificate to be processed
+<i>316</i>&nbsp;     * @return returns the new policyMapping value
+<i>317</i>&nbsp;     * @exception CertPathValidatorException Exception thrown if an error
+<i>318</i>&nbsp;     * occurs
+<i>319</i>&nbsp;     */
+<i>320</i>&nbsp;    static int mergePolicyMapping(int policyMapping, X509CertImpl currCert)
+<i>321</i>&nbsp;        throws CertPathValidatorException
+<i>322</i>&nbsp;    {
+<b class="nc"><i>323</i>&nbsp;        if ((policyMapping &gt; 0) &amp;&amp; !X509CertImpl.isSelfIssued(currCert)) {</b>
+<b class="nc"><i>324</i>&nbsp;            policyMapping--;</b>
+<i>325</i>&nbsp;        }
+<i>326</i>&nbsp;
+<i>327</i>&nbsp;        try {
+<b class="nc"><i>328</i>&nbsp;            PolicyConstraintsExtension polConstExt</b>
+<b class="nc"><i>329</i>&nbsp;                = currCert.getPolicyConstraintsExtension();</b>
+<b class="nc"><i>330</i>&nbsp;            if (polConstExt == null)</b>
+<b class="nc"><i>331</i>&nbsp;                return policyMapping;</b>
+<i>332</i>&nbsp;
+<b class="nc"><i>333</i>&nbsp;            int inhibit =</b>
+<b class="nc"><i>334</i>&nbsp;                polConstExt.get(PolicyConstraintsExtension.INHIBIT).intValue();</b>
+<b class="nc"><i>335</i>&nbsp;            if (debug != null)</b>
+<b class="nc"><i>336</i>&nbsp;                debug.println(&quot;PolicyChecker.mergePolicyMapping() &quot;</b>
+<i>337</i>&nbsp;                    + &quot;inhibit Index from cert = &quot; + inhibit);
+<i>338</i>&nbsp;
+<b class="nc"><i>339</i>&nbsp;            if (inhibit != -1) {</b>
+<b class="nc"><i>340</i>&nbsp;                if ((policyMapping == -1) || (inhibit &lt; policyMapping)) {</b>
+<b class="nc"><i>341</i>&nbsp;                    policyMapping = inhibit;</b>
+<i>342</i>&nbsp;                }
+<i>343</i>&nbsp;            }
+<b class="nc"><i>344</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>345</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>346</i>&nbsp;                debug.println(&quot;PolicyChecker.mergePolicyMapping &quot;</b>
+<i>347</i>&nbsp;                              + &quot;unexpected exception&quot;);
+<b class="nc"><i>348</i>&nbsp;                e.printStackTrace();</b>
+<i>349</i>&nbsp;            }
+<b class="nc"><i>350</i>&nbsp;            throw new CertPathValidatorException(e);</b>
+<b class="nc"><i>351</i>&nbsp;        }</b>
+<i>352</i>&nbsp;
+<b class="nc"><i>353</i>&nbsp;        return policyMapping;</b>
+<i>354</i>&nbsp;    }
+<i>355</i>&nbsp;
+<i>356</i>&nbsp;    /**
+<i>357</i>&nbsp;     * Merges the specified inhibitAnyPolicy value with the
+<i>358</i>&nbsp;     * SkipCerts value of the InhibitAnyPolicy
+<i>359</i>&nbsp;     * extension obtained from the certificate.
+<i>360</i>&nbsp;     *
+<i>361</i>&nbsp;     * @param inhibitAnyPolicy an integer which indicates whether
+<i>362</i>&nbsp;     * &quot;any-policy&quot; is considered a match
+<i>363</i>&nbsp;     * @param currCert the Certificate to be processed
+<i>364</i>&nbsp;     * @return returns the new inhibitAnyPolicy value
+<i>365</i>&nbsp;     * @exception CertPathValidatorException Exception thrown if an error
+<i>366</i>&nbsp;     * occurs
+<i>367</i>&nbsp;     */
+<i>368</i>&nbsp;    static int mergeInhibitAnyPolicy(int inhibitAnyPolicy,
+<i>369</i>&nbsp;        X509CertImpl currCert) throws CertPathValidatorException
+<i>370</i>&nbsp;    {
+<b class="nc"><i>371</i>&nbsp;        if ((inhibitAnyPolicy &gt; 0) &amp;&amp; !X509CertImpl.isSelfIssued(currCert)) {</b>
+<b class="nc"><i>372</i>&nbsp;            inhibitAnyPolicy--;</b>
+<i>373</i>&nbsp;        }
+<i>374</i>&nbsp;
+<i>375</i>&nbsp;        try {
+<b class="nc"><i>376</i>&nbsp;            InhibitAnyPolicyExtension inhAnyPolExt = (InhibitAnyPolicyExtension)</b>
+<b class="nc"><i>377</i>&nbsp;                currCert.getExtension(InhibitAnyPolicy_Id);</b>
+<b class="nc"><i>378</i>&nbsp;            if (inhAnyPolExt == null)</b>
+<b class="nc"><i>379</i>&nbsp;                return inhibitAnyPolicy;</b>
+<i>380</i>&nbsp;
+<b class="nc"><i>381</i>&nbsp;            int skipCerts =</b>
+<b class="nc"><i>382</i>&nbsp;                inhAnyPolExt.get(InhibitAnyPolicyExtension.SKIP_CERTS).intValue();</b>
+<b class="nc"><i>383</i>&nbsp;            if (debug != null)</b>
+<b class="nc"><i>384</i>&nbsp;                debug.println(&quot;PolicyChecker.mergeInhibitAnyPolicy() &quot;</b>
+<i>385</i>&nbsp;                    + &quot;skipCerts Index from cert = &quot; + skipCerts);
+<i>386</i>&nbsp;
+<b class="nc"><i>387</i>&nbsp;            if (skipCerts != -1) {</b>
+<b class="nc"><i>388</i>&nbsp;                if (skipCerts &lt; inhibitAnyPolicy) {</b>
+<b class="nc"><i>389</i>&nbsp;                    inhibitAnyPolicy = skipCerts;</b>
+<i>390</i>&nbsp;                }
+<i>391</i>&nbsp;            }
+<b class="nc"><i>392</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>393</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>394</i>&nbsp;                debug.println(&quot;PolicyChecker.mergeInhibitAnyPolicy &quot;</b>
+<i>395</i>&nbsp;                              + &quot;unexpected exception&quot;);
+<b class="nc"><i>396</i>&nbsp;                e.printStackTrace();</b>
+<i>397</i>&nbsp;            }
+<b class="nc"><i>398</i>&nbsp;            throw new CertPathValidatorException(e);</b>
+<b class="nc"><i>399</i>&nbsp;        }</b>
+<i>400</i>&nbsp;
+<b class="nc"><i>401</i>&nbsp;        return inhibitAnyPolicy;</b>
+<i>402</i>&nbsp;    }
+<i>403</i>&nbsp;
+<i>404</i>&nbsp;    /**
+<i>405</i>&nbsp;     * Processes certificate policies in the certificate.
+<i>406</i>&nbsp;     *
+<i>407</i>&nbsp;     * @param certIndex the index of the certificate
+<i>408</i>&nbsp;     * @param initPolicies the initial policies required by the user
+<i>409</i>&nbsp;     * @param explicitPolicy an integer which indicates if a non-null
+<i>410</i>&nbsp;     * valid policy tree is required
+<i>411</i>&nbsp;     * @param policyMapping an integer which indicates if policy
+<i>412</i>&nbsp;     * mapping is inhibited
+<i>413</i>&nbsp;     * @param inhibitAnyPolicy an integer which indicates whether
+<i>414</i>&nbsp;     * &quot;any-policy&quot; is considered a match
+<i>415</i>&nbsp;     * @param rejectPolicyQualifiers a boolean indicating whether the
+<i>416</i>&nbsp;     * user wants to reject policies that have qualifiers
+<i>417</i>&nbsp;     * @param origRootNode the root node of the valid policy tree
+<i>418</i>&nbsp;     * @param currCert the Certificate to be processed
+<i>419</i>&nbsp;     * @param finalCert a boolean indicating whether currCert is the final
+<i>420</i>&nbsp;     * cert in the cert path
+<i>421</i>&nbsp;     * @return the root node of the valid policy tree after modification
+<i>422</i>&nbsp;     * @exception CertPathValidatorException Exception thrown if an
+<i>423</i>&nbsp;     * error occurs while processing policies.
+<i>424</i>&nbsp;     */
+<i>425</i>&nbsp;    static PolicyNodeImpl processPolicies(int certIndex, Set&lt;String&gt; initPolicies,
+<i>426</i>&nbsp;        int explicitPolicy, int policyMapping, int inhibitAnyPolicy,
+<i>427</i>&nbsp;        boolean rejectPolicyQualifiers, PolicyNodeImpl origRootNode,
+<i>428</i>&nbsp;        X509CertImpl currCert, boolean finalCert)
+<i>429</i>&nbsp;        throws CertPathValidatorException
+<i>430</i>&nbsp;    {
+<b class="nc"><i>431</i>&nbsp;        boolean policiesCritical = false;</b>
+<i>432</i>&nbsp;        List&lt;PolicyInformation&gt; policyInfo;
+<b class="nc"><i>433</i>&nbsp;        PolicyNodeImpl rootNode = null;</b>
+<b class="nc"><i>434</i>&nbsp;        Set&lt;PolicyQualifierInfo&gt; anyQuals = new HashSet&lt;&gt;();</b>
+<i>435</i>&nbsp;
+<b class="nc"><i>436</i>&nbsp;        if (origRootNode == null)</b>
+<b class="nc"><i>437</i>&nbsp;            rootNode = null;</b>
+<i>438</i>&nbsp;        else
+<b class="nc"><i>439</i>&nbsp;            rootNode = origRootNode.copyTree();</b>
+<i>440</i>&nbsp;
+<i>441</i>&nbsp;        // retrieve policyOIDs from currCert
+<b class="nc"><i>442</i>&nbsp;        CertificatePoliciesExtension currCertPolicies</b>
+<b class="nc"><i>443</i>&nbsp;            = currCert.getCertificatePoliciesExtension();</b>
+<i>444</i>&nbsp;
+<i>445</i>&nbsp;        // PKIX: Section 6.1.3: Step (d)
+<b class="nc"><i>446</i>&nbsp;        if ((currCertPolicies != null) &amp;&amp; (rootNode != null)) {</b>
+<b class="nc"><i>447</i>&nbsp;            policiesCritical = currCertPolicies.isCritical();</b>
+<b class="nc"><i>448</i>&nbsp;            if (debug != null)</b>
+<b class="nc"><i>449</i>&nbsp;                debug.println(&quot;PolicyChecker.processPolicies() &quot;</b>
+<i>450</i>&nbsp;                    + &quot;policiesCritical = &quot; + policiesCritical);
+<i>451</i>&nbsp;
+<i>452</i>&nbsp;            try {
+<b class="nc"><i>453</i>&nbsp;                policyInfo = currCertPolicies.get(CertificatePoliciesExtension.POLICIES);</b>
+<b class="nc"><i>454</i>&nbsp;            } catch (IOException ioe) {</b>
+<b class="nc"><i>455</i>&nbsp;                throw new CertPathValidatorException(&quot;Exception while &quot;</b>
+<i>456</i>&nbsp;                    + &quot;retrieving policyOIDs&quot;, ioe);
+<b class="nc"><i>457</i>&nbsp;            }</b>
+<i>458</i>&nbsp;
+<b class="nc"><i>459</i>&nbsp;            if (debug != null)</b>
+<b class="nc"><i>460</i>&nbsp;                debug.println(&quot;PolicyChecker.processPolicies() &quot;</b>
+<i>461</i>&nbsp;                    + &quot;rejectPolicyQualifiers = &quot; + rejectPolicyQualifiers);
+<i>462</i>&nbsp;
+<b class="nc"><i>463</i>&nbsp;            boolean foundAnyPolicy = false;</b>
+<i>464</i>&nbsp;
+<i>465</i>&nbsp;            // process each policy in cert
+<b class="nc"><i>466</i>&nbsp;            for (PolicyInformation curPolInfo : policyInfo) {</b>
+<b class="nc"><i>467</i>&nbsp;                String curPolicy =</b>
+<b class="nc"><i>468</i>&nbsp;                    curPolInfo.getPolicyIdentifier().getIdentifier().toString();</b>
+<i>469</i>&nbsp;
+<b class="nc"><i>470</i>&nbsp;                if (curPolicy.equals(ANY_POLICY)) {</b>
+<b class="nc"><i>471</i>&nbsp;                    foundAnyPolicy = true;</b>
+<b class="nc"><i>472</i>&nbsp;                    anyQuals = curPolInfo.getPolicyQualifiers();</b>
+<i>473</i>&nbsp;                } else {
+<i>474</i>&nbsp;                    // PKIX: Section 6.1.3: Step (d)(1)
+<b class="nc"><i>475</i>&nbsp;                    if (debug != null)</b>
+<b class="nc"><i>476</i>&nbsp;                        debug.println(&quot;PolicyChecker.processPolicies() &quot;</b>
+<i>477</i>&nbsp;                                      + &quot;processing policy: &quot; + curPolicy);
+<i>478</i>&nbsp;
+<i>479</i>&nbsp;                    // retrieve policy qualifiers from cert
+<b class="nc"><i>480</i>&nbsp;                    Set&lt;PolicyQualifierInfo&gt; pQuals =</b>
+<b class="nc"><i>481</i>&nbsp;                                        curPolInfo.getPolicyQualifiers();</b>
+<i>482</i>&nbsp;
+<i>483</i>&nbsp;                    // reject cert if we find critical policy qualifiers and
+<i>484</i>&nbsp;                    // the policyQualifiersRejected flag is set in the params
+<b class="nc"><i>485</i>&nbsp;                    if (!pQuals.isEmpty() &amp;&amp; rejectPolicyQualifiers &amp;&amp;</b>
+<i>486</i>&nbsp;                        policiesCritical) {
+<b class="nc"><i>487</i>&nbsp;                        throw new CertPathValidatorException(</b>
+<i>488</i>&nbsp;                            &quot;critical policy qualifiers present in certificate&quot;,
+<i>489</i>&nbsp;                            null, null, -1, PKIXReason.INVALID_POLICY);
+<i>490</i>&nbsp;                    }
+<i>491</i>&nbsp;
+<i>492</i>&nbsp;                    // PKIX: Section 6.1.3: Step (d)(1)(i)
+<b class="nc"><i>493</i>&nbsp;                    boolean foundMatch = processParents(certIndex,</b>
+<i>494</i>&nbsp;                        policiesCritical, rejectPolicyQualifiers, rootNode,
+<i>495</i>&nbsp;                        curPolicy, pQuals, false);
+<i>496</i>&nbsp;
+<b class="nc"><i>497</i>&nbsp;                    if (!foundMatch) {</b>
+<i>498</i>&nbsp;                        // PKIX: Section 6.1.3: Step (d)(1)(ii)
+<b class="nc"><i>499</i>&nbsp;                        processParents(certIndex, policiesCritical,</b>
+<i>500</i>&nbsp;                            rejectPolicyQualifiers, rootNode, curPolicy,
+<i>501</i>&nbsp;                            pQuals, true);
+<i>502</i>&nbsp;                    }
+<i>503</i>&nbsp;                }
+<b class="nc"><i>504</i>&nbsp;            }</b>
+<i>505</i>&nbsp;
+<i>506</i>&nbsp;            // PKIX: Section 6.1.3: Step (d)(2)
+<b class="nc"><i>507</i>&nbsp;            if (foundAnyPolicy) {</b>
+<b class="nc"><i>508</i>&nbsp;                if ((inhibitAnyPolicy &gt; 0) ||</b>
+<b class="nc"><i>509</i>&nbsp;                        (!finalCert &amp;&amp; X509CertImpl.isSelfIssued(currCert))) {</b>
+<b class="nc"><i>510</i>&nbsp;                    if (debug != null) {</b>
+<b class="nc"><i>511</i>&nbsp;                        debug.println(&quot;PolicyChecker.processPolicies() &quot;</b>
+<i>512</i>&nbsp;                            + &quot;processing policy: &quot; + ANY_POLICY);
+<i>513</i>&nbsp;                    }
+<b class="nc"><i>514</i>&nbsp;                    processParents(certIndex, policiesCritical,</b>
+<i>515</i>&nbsp;                        rejectPolicyQualifiers, rootNode, ANY_POLICY, anyQuals,
+<i>516</i>&nbsp;                        true);
+<i>517</i>&nbsp;                }
+<i>518</i>&nbsp;            }
+<i>519</i>&nbsp;
+<i>520</i>&nbsp;            // PKIX: Section 6.1.3: Step (d)(3)
+<b class="nc"><i>521</i>&nbsp;            rootNode.prune(certIndex);</b>
+<b class="nc"><i>522</i>&nbsp;            if (!rootNode.getChildren().hasNext()) {</b>
+<b class="nc"><i>523</i>&nbsp;                rootNode = null;</b>
+<i>524</i>&nbsp;            }
+<b class="nc"><i>525</i>&nbsp;        } else if (currCertPolicies == null) {</b>
+<b class="nc"><i>526</i>&nbsp;            if (debug != null)</b>
+<b class="nc"><i>527</i>&nbsp;                debug.println(&quot;PolicyChecker.processPolicies() &quot;</b>
+<i>528</i>&nbsp;                              + &quot;no policies present in cert&quot;);
+<i>529</i>&nbsp;            // PKIX: Section 6.1.3: Step (e)
+<b class="nc"><i>530</i>&nbsp;            rootNode = null;</b>
+<i>531</i>&nbsp;        }
+<i>532</i>&nbsp;
+<i>533</i>&nbsp;        // We delay PKIX: Section 6.1.3: Step (f) to the end
+<i>534</i>&nbsp;        // because the code that follows may delete some nodes
+<i>535</i>&nbsp;        // resulting in a null tree
+<b class="nc"><i>536</i>&nbsp;        if (rootNode != null) {</b>
+<b class="nc"><i>537</i>&nbsp;            if (!finalCert) {</b>
+<i>538</i>&nbsp;                // PKIX: Section 6.1.4: Steps (a)-(b)
+<b class="nc"><i>539</i>&nbsp;                rootNode = processPolicyMappings(currCert, certIndex,</b>
+<i>540</i>&nbsp;                    policyMapping, rootNode, policiesCritical, anyQuals);
+<i>541</i>&nbsp;            }
+<i>542</i>&nbsp;        }
+<i>543</i>&nbsp;
+<i>544</i>&nbsp;        // At this point, we optimize the PKIX algorithm by
+<i>545</i>&nbsp;        // removing those nodes which would later have
+<i>546</i>&nbsp;        // been removed by PKIX: Section 6.1.5: Step (g)(iii)
+<i>547</i>&nbsp;
+<b class="nc"><i>548</i>&nbsp;        if ((rootNode != null) &amp;&amp; (!initPolicies.contains(ANY_POLICY))</b>
+<i>549</i>&nbsp;            &amp;&amp; (currCertPolicies != null)) {
+<b class="nc"><i>550</i>&nbsp;            rootNode = removeInvalidNodes(rootNode, certIndex,</b>
+<i>551</i>&nbsp;                                          initPolicies, currCertPolicies);
+<i>552</i>&nbsp;
+<i>553</i>&nbsp;            // PKIX: Section 6.1.5: Step (g)(iii)
+<b class="nc"><i>554</i>&nbsp;            if ((rootNode != null) &amp;&amp; finalCert) {</b>
+<i>555</i>&nbsp;                // rewrite anyPolicy leaf nodes (see method comments)
+<b class="nc"><i>556</i>&nbsp;                rootNode = rewriteLeafNodes(certIndex, initPolicies, rootNode);</b>
+<i>557</i>&nbsp;            }
+<i>558</i>&nbsp;        }
+<i>559</i>&nbsp;
+<i>560</i>&nbsp;
+<b class="nc"><i>561</i>&nbsp;        if (finalCert) {</b>
+<i>562</i>&nbsp;            // PKIX: Section 6.1.5: Steps (a) and (b)
+<b class="nc"><i>563</i>&nbsp;            explicitPolicy = mergeExplicitPolicy(explicitPolicy, currCert,</b>
+<i>564</i>&nbsp;                                             finalCert);
+<i>565</i>&nbsp;        }
+<i>566</i>&nbsp;
+<i>567</i>&nbsp;        // PKIX: Section 6.1.3: Step (f)
+<i>568</i>&nbsp;        // verify that either explicit policy is greater than 0 or
+<i>569</i>&nbsp;        // the valid_policy_tree is not equal to NULL
+<i>570</i>&nbsp;
+<b class="nc"><i>571</i>&nbsp;        if ((explicitPolicy == 0) &amp;&amp; (rootNode == null)) {</b>
+<b class="nc"><i>572</i>&nbsp;            throw new CertPathValidatorException</b>
+<i>573</i>&nbsp;                (&quot;non-null policy tree required and policy tree is null&quot;,
+<i>574</i>&nbsp;                 null, null, -1, PKIXReason.INVALID_POLICY);
+<i>575</i>&nbsp;        }
+<i>576</i>&nbsp;
+<b class="nc"><i>577</i>&nbsp;        return rootNode;</b>
+<i>578</i>&nbsp;    }
+<i>579</i>&nbsp;
+<i>580</i>&nbsp;    /**
+<i>581</i>&nbsp;     * Rewrite leaf nodes at the end of validation as described in RFC 5280
+<i>582</i>&nbsp;     * section 6.1.5: Step (g)(iii). Leaf nodes with anyPolicy are replaced
+<i>583</i>&nbsp;     * by nodes explicitly representing initial policies not already
+<i>584</i>&nbsp;     * represented by leaf nodes.
+<i>585</i>&nbsp;     *
+<i>586</i>&nbsp;     * This method should only be called when processing the final cert
+<i>587</i>&nbsp;     * and if the policy tree is not null and initial policies is not
+<i>588</i>&nbsp;     * anyPolicy.
+<i>589</i>&nbsp;     *
+<i>590</i>&nbsp;     * @param certIndex the depth of the tree
+<i>591</i>&nbsp;     * @param initPolicies Set of user specified initial policies
+<i>592</i>&nbsp;     * @param rootNode the root of the policy tree
+<i>593</i>&nbsp;     */
+<i>594</i>&nbsp;    private static PolicyNodeImpl rewriteLeafNodes(int certIndex,
+<i>595</i>&nbsp;            Set&lt;String&gt; initPolicies, PolicyNodeImpl rootNode) {
+<b class="nc"><i>596</i>&nbsp;        Set&lt;PolicyNodeImpl&gt; anyNodes =</b>
+<b class="nc"><i>597</i>&nbsp;                        rootNode.getPolicyNodesValid(certIndex, ANY_POLICY);</b>
+<b class="nc"><i>598</i>&nbsp;        if (anyNodes.isEmpty()) {</b>
+<b class="nc"><i>599</i>&nbsp;            return rootNode;</b>
+<i>600</i>&nbsp;        }
+<b class="nc"><i>601</i>&nbsp;        PolicyNodeImpl anyNode = anyNodes.iterator().next();</b>
+<b class="nc"><i>602</i>&nbsp;        PolicyNodeImpl parentNode = (PolicyNodeImpl)anyNode.getParent();</b>
+<b class="nc"><i>603</i>&nbsp;        parentNode.deleteChild(anyNode);</b>
+<i>604</i>&nbsp;        // see if there are any initialPolicies not represented by leaf nodes
+<b class="nc"><i>605</i>&nbsp;        Set&lt;String&gt; initial = new HashSet&lt;&gt;(initPolicies);</b>
+<b class="nc"><i>606</i>&nbsp;        for (PolicyNodeImpl node : rootNode.getPolicyNodes(certIndex)) {</b>
+<b class="nc"><i>607</i>&nbsp;            initial.remove(node.getValidPolicy());</b>
+<b class="nc"><i>608</i>&nbsp;        }</b>
+<b class="nc"><i>609</i>&nbsp;        if (initial.isEmpty()) {</b>
+<i>610</i>&nbsp;            // we deleted the anyPolicy node and have nothing to re-add,
+<i>611</i>&nbsp;            // so we need to prune the tree
+<b class="nc"><i>612</i>&nbsp;            rootNode.prune(certIndex);</b>
+<b class="nc"><i>613</i>&nbsp;            if (rootNode.getChildren().hasNext() == false) {</b>
+<b class="nc"><i>614</i>&nbsp;                rootNode = null;</b>
+<i>615</i>&nbsp;            }
+<i>616</i>&nbsp;        } else {
+<b class="nc"><i>617</i>&nbsp;            boolean anyCritical = anyNode.isCritical();</b>
+<b class="nc"><i>618</i>&nbsp;            Set&lt;PolicyQualifierInfo&gt; anyQualifiers =</b>
+<b class="nc"><i>619</i>&nbsp;                                                anyNode.getPolicyQualifiers();</b>
+<b class="nc"><i>620</i>&nbsp;            for (String policy : initial) {</b>
+<b class="nc"><i>621</i>&nbsp;                Set&lt;String&gt; expectedPolicies = Collections.singleton(policy);</b>
+<b class="nc"><i>622</i>&nbsp;                PolicyNodeImpl node = new PolicyNodeImpl(parentNode, policy,</b>
+<i>623</i>&nbsp;                    anyQualifiers, anyCritical, expectedPolicies, false);
+<b class="nc"><i>624</i>&nbsp;            }</b>
+<i>625</i>&nbsp;        }
+<b class="nc"><i>626</i>&nbsp;        return rootNode;</b>
+<i>627</i>&nbsp;    }
+<i>628</i>&nbsp;
+<i>629</i>&nbsp;    /**
+<i>630</i>&nbsp;     * Finds the policy nodes of depth (certIndex-1) where curPolicy
+<i>631</i>&nbsp;     * is in the expected policy set and creates a new child node
+<i>632</i>&nbsp;     * appropriately. If matchAny is true, then a value of ANY_POLICY
+<i>633</i>&nbsp;     * in the expected policy set will match any curPolicy. If matchAny
+<i>634</i>&nbsp;     * is false, then the expected policy set must exactly contain the
+<i>635</i>&nbsp;     * curPolicy to be considered a match. This method returns a boolean
+<i>636</i>&nbsp;     * value indicating whether a match was found.
+<i>637</i>&nbsp;     *
+<i>638</i>&nbsp;     * @param certIndex the index of the certificate whose policy is
+<i>639</i>&nbsp;     * being processed
+<i>640</i>&nbsp;     * @param policiesCritical a boolean indicating whether the certificate
+<i>641</i>&nbsp;     * policies extension is critical
+<i>642</i>&nbsp;     * @param rejectPolicyQualifiers a boolean indicating whether the
+<i>643</i>&nbsp;     * user wants to reject policies that have qualifiers
+<i>644</i>&nbsp;     * @param rootNode the root node of the valid policy tree
+<i>645</i>&nbsp;     * @param curPolicy a String representing the policy being processed
+<i>646</i>&nbsp;     * @param pQuals the policy qualifiers of the policy being processed or an
+<i>647</i>&nbsp;     * empty Set if there are no qualifiers
+<i>648</i>&nbsp;     * @param matchAny a boolean indicating whether a value of ANY_POLICY
+<i>649</i>&nbsp;     * in the expected policy set will be considered a match
+<i>650</i>&nbsp;     * @return a boolean indicating whether a match was found
+<i>651</i>&nbsp;     * @exception CertPathValidatorException Exception thrown if error occurs.
+<i>652</i>&nbsp;     */
+<i>653</i>&nbsp;    private static boolean processParents(int certIndex,
+<i>654</i>&nbsp;        boolean policiesCritical, boolean rejectPolicyQualifiers,
+<i>655</i>&nbsp;        PolicyNodeImpl rootNode, String curPolicy,
+<i>656</i>&nbsp;        Set&lt;PolicyQualifierInfo&gt; pQuals,
+<i>657</i>&nbsp;        boolean matchAny) throws CertPathValidatorException
+<i>658</i>&nbsp;    {
+<b class="nc"><i>659</i>&nbsp;        boolean foundMatch = false;</b>
+<i>660</i>&nbsp;
+<b class="nc"><i>661</i>&nbsp;        if (debug != null)</b>
+<b class="nc"><i>662</i>&nbsp;            debug.println(&quot;PolicyChecker.processParents(): matchAny = &quot;</b>
+<i>663</i>&nbsp;                + matchAny);
+<i>664</i>&nbsp;
+<i>665</i>&nbsp;        // find matching parents
+<b class="nc"><i>666</i>&nbsp;        Set&lt;PolicyNodeImpl&gt; parentNodes =</b>
+<b class="nc"><i>667</i>&nbsp;                rootNode.getPolicyNodesExpected(certIndex - 1,</b>
+<i>668</i>&nbsp;                                                curPolicy, matchAny);
+<i>669</i>&nbsp;
+<i>670</i>&nbsp;        // for each matching parent, extend policy tree
+<b class="nc"><i>671</i>&nbsp;        for (PolicyNodeImpl curParent : parentNodes) {</b>
+<b class="nc"><i>672</i>&nbsp;            if (debug != null)</b>
+<b class="nc"><i>673</i>&nbsp;                debug.println(&quot;PolicyChecker.processParents() &quot;</b>
+<b class="nc"><i>674</i>&nbsp;                              + &quot;found parent:\n&quot; + curParent.asString());</b>
+<i>675</i>&nbsp;
+<b class="nc"><i>676</i>&nbsp;            foundMatch = true;</b>
+<b class="nc"><i>677</i>&nbsp;            String curParPolicy = curParent.getValidPolicy();</b>
+<i>678</i>&nbsp;
+<b class="nc"><i>679</i>&nbsp;            PolicyNodeImpl curNode = null;</b>
+<b class="nc"><i>680</i>&nbsp;            Set&lt;String&gt; curExpPols = null;</b>
+<i>681</i>&nbsp;
+<b class="nc"><i>682</i>&nbsp;            if (curPolicy.equals(ANY_POLICY)) {</b>
+<i>683</i>&nbsp;                // do step 2
+<b class="nc"><i>684</i>&nbsp;                Set&lt;String&gt; parExpPols = curParent.getExpectedPolicies();</b>
+<i>685</i>&nbsp;            parentExplicitPolicies:
+<b class="nc"><i>686</i>&nbsp;                for (String curParExpPol : parExpPols) {</b>
+<i>687</i>&nbsp;
+<b class="nc"><i>688</i>&nbsp;                    Iterator&lt;PolicyNodeImpl&gt; childIter =</b>
+<b class="nc"><i>689</i>&nbsp;                                        curParent.getChildren();</b>
+<b class="nc"><i>690</i>&nbsp;                    while (childIter.hasNext()) {</b>
+<b class="nc"><i>691</i>&nbsp;                        PolicyNodeImpl childNode = childIter.next();</b>
+<b class="nc"><i>692</i>&nbsp;                        String childPolicy = childNode.getValidPolicy();</b>
+<b class="nc"><i>693</i>&nbsp;                        if (curParExpPol.equals(childPolicy)) {</b>
+<b class="nc"><i>694</i>&nbsp;                            if (debug != null)</b>
+<b class="nc"><i>695</i>&nbsp;                                debug.println(childPolicy + &quot; in parent&#39;s &quot;</b>
+<i>696</i>&nbsp;                                    + &quot;expected policy set already appears in &quot;
+<i>697</i>&nbsp;                                    + &quot;child node&quot;);
+<i>698</i>&nbsp;                            continue parentExplicitPolicies;
+<i>699</i>&nbsp;                        }
+<b class="nc"><i>700</i>&nbsp;                    }</b>
+<i>701</i>&nbsp;
+<b class="nc"><i>702</i>&nbsp;                    Set&lt;String&gt; expPols = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>703</i>&nbsp;                    expPols.add(curParExpPol);</b>
+<i>704</i>&nbsp;
+<b class="nc"><i>705</i>&nbsp;                    curNode = new PolicyNodeImpl</b>
+<i>706</i>&nbsp;                        (curParent, curParExpPol, pQuals,
+<i>707</i>&nbsp;                         policiesCritical, expPols, false);
+<b class="nc"><i>708</i>&nbsp;                }</b>
+<b class="nc"><i>709</i>&nbsp;            } else {</b>
+<b class="nc"><i>710</i>&nbsp;                curExpPols = new HashSet&lt;String&gt;();</b>
+<b class="nc"><i>711</i>&nbsp;                curExpPols.add(curPolicy);</b>
+<i>712</i>&nbsp;
+<b class="nc"><i>713</i>&nbsp;                curNode = new PolicyNodeImpl</b>
+<i>714</i>&nbsp;                    (curParent, curPolicy, pQuals,
+<i>715</i>&nbsp;                     policiesCritical, curExpPols, false);
+<i>716</i>&nbsp;            }
+<b class="nc"><i>717</i>&nbsp;        }</b>
+<i>718</i>&nbsp;
+<b class="nc"><i>719</i>&nbsp;        return foundMatch;</b>
+<i>720</i>&nbsp;    }
+<i>721</i>&nbsp;
+<i>722</i>&nbsp;    /**
+<i>723</i>&nbsp;     * Processes policy mappings in the certificate.
+<i>724</i>&nbsp;     *
+<i>725</i>&nbsp;     * @param currCert the Certificate to be processed
+<i>726</i>&nbsp;     * @param certIndex the index of the current certificate
+<i>727</i>&nbsp;     * @param policyMapping an integer which indicates if policy
+<i>728</i>&nbsp;     * mapping is inhibited
+<i>729</i>&nbsp;     * @param rootNode the root node of the valid policy tree
+<i>730</i>&nbsp;     * @param policiesCritical a boolean indicating if the certificate policies
+<i>731</i>&nbsp;     * extension is critical
+<i>732</i>&nbsp;     * @param anyQuals the qualifiers associated with ANY-POLICY, or an empty
+<i>733</i>&nbsp;     * Set if there are no qualifiers associated with ANY-POLICY
+<i>734</i>&nbsp;     * @return the root node of the valid policy tree after modification
+<i>735</i>&nbsp;     * @exception CertPathValidatorException exception thrown if an error
+<i>736</i>&nbsp;     * occurs while processing policy mappings
+<i>737</i>&nbsp;     */
+<i>738</i>&nbsp;    private static PolicyNodeImpl processPolicyMappings(X509CertImpl currCert,
+<i>739</i>&nbsp;        int certIndex, int policyMapping, PolicyNodeImpl rootNode,
+<i>740</i>&nbsp;        boolean policiesCritical, Set&lt;PolicyQualifierInfo&gt; anyQuals)
+<i>741</i>&nbsp;        throws CertPathValidatorException
+<i>742</i>&nbsp;    {
+<b class="nc"><i>743</i>&nbsp;        PolicyMappingsExtension polMappingsExt</b>
+<b class="nc"><i>744</i>&nbsp;            = currCert.getPolicyMappingsExtension();</b>
+<i>745</i>&nbsp;
+<b class="nc"><i>746</i>&nbsp;        if (polMappingsExt == null)</b>
+<b class="nc"><i>747</i>&nbsp;            return rootNode;</b>
+<i>748</i>&nbsp;
+<b class="nc"><i>749</i>&nbsp;        if (debug != null)</b>
+<b class="nc"><i>750</i>&nbsp;            debug.println(&quot;PolicyChecker.processPolicyMappings() &quot;</b>
+<i>751</i>&nbsp;                + &quot;inside policyMapping check&quot;);
+<i>752</i>&nbsp;
+<b class="nc"><i>753</i>&nbsp;        List&lt;CertificatePolicyMap&gt; maps = null;</b>
+<i>754</i>&nbsp;        try {
+<b class="nc"><i>755</i>&nbsp;            maps = polMappingsExt.get(PolicyMappingsExtension.MAP);</b>
+<b class="nc"><i>756</i>&nbsp;        } catch (IOException e) {</b>
+<b class="nc"><i>757</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>758</i>&nbsp;                debug.println(&quot;PolicyChecker.processPolicyMappings() &quot;</b>
+<i>759</i>&nbsp;                    + &quot;mapping exception&quot;);
+<b class="nc"><i>760</i>&nbsp;                e.printStackTrace();</b>
+<i>761</i>&nbsp;            }
+<b class="nc"><i>762</i>&nbsp;            throw new CertPathValidatorException(&quot;Exception while checking &quot;</b>
+<i>763</i>&nbsp;                                                 + &quot;mapping&quot;, e);
+<b class="nc"><i>764</i>&nbsp;        }</b>
+<i>765</i>&nbsp;
+<b class="nc"><i>766</i>&nbsp;        boolean childDeleted = false;</b>
+<b class="nc"><i>767</i>&nbsp;        for (CertificatePolicyMap polMap : maps) {</b>
+<b class="nc"><i>768</i>&nbsp;            String issuerDomain</b>
+<b class="nc"><i>769</i>&nbsp;                = polMap.getIssuerIdentifier().getIdentifier().toString();</b>
+<b class="nc"><i>770</i>&nbsp;            String subjectDomain</b>
+<b class="nc"><i>771</i>&nbsp;                = polMap.getSubjectIdentifier().getIdentifier().toString();</b>
+<b class="nc"><i>772</i>&nbsp;            if (debug != null) {</b>
+<b class="nc"><i>773</i>&nbsp;                debug.println(&quot;PolicyChecker.processPolicyMappings() &quot;</b>
+<i>774</i>&nbsp;                              + &quot;issuerDomain = &quot; + issuerDomain);
+<b class="nc"><i>775</i>&nbsp;                debug.println(&quot;PolicyChecker.processPolicyMappings() &quot;</b>
+<i>776</i>&nbsp;                              + &quot;subjectDomain = &quot; + subjectDomain);
+<i>777</i>&nbsp;            }
+<i>778</i>&nbsp;
+<b class="nc"><i>779</i>&nbsp;            if (issuerDomain.equals(ANY_POLICY)) {</b>
+<b class="nc"><i>780</i>&nbsp;                throw new CertPathValidatorException</b>
+<i>781</i>&nbsp;                    (&quot;encountered an issuerDomainPolicy of ANY_POLICY&quot;,
+<i>782</i>&nbsp;                     null, null, -1, PKIXReason.INVALID_POLICY);
+<i>783</i>&nbsp;            }
+<i>784</i>&nbsp;
+<b class="nc"><i>785</i>&nbsp;            if (subjectDomain.equals(ANY_POLICY)) {</b>
+<b class="nc"><i>786</i>&nbsp;                throw new CertPathValidatorException</b>
+<i>787</i>&nbsp;                    (&quot;encountered a subjectDomainPolicy of ANY_POLICY&quot;,
+<i>788</i>&nbsp;                     null, null, -1, PKIXReason.INVALID_POLICY);
+<i>789</i>&nbsp;            }
+<i>790</i>&nbsp;
+<b class="nc"><i>791</i>&nbsp;            Set&lt;PolicyNodeImpl&gt; validNodes =</b>
+<b class="nc"><i>792</i>&nbsp;                rootNode.getPolicyNodesValid(certIndex, issuerDomain);</b>
+<b class="nc"><i>793</i>&nbsp;            if (!validNodes.isEmpty()) {</b>
+<b class="nc"><i>794</i>&nbsp;                for (PolicyNodeImpl curNode : validNodes) {</b>
+<b class="nc"><i>795</i>&nbsp;                    if ((policyMapping &gt; 0) || (policyMapping == -1)) {</b>
+<b class="nc"><i>796</i>&nbsp;                        curNode.addExpectedPolicy(subjectDomain);</b>
+<b class="nc"><i>797</i>&nbsp;                    } else if (policyMapping == 0) {</b>
+<b class="nc"><i>798</i>&nbsp;                        PolicyNodeImpl parentNode =</b>
+<b class="nc"><i>799</i>&nbsp;                            (PolicyNodeImpl) curNode.getParent();</b>
+<b class="nc"><i>800</i>&nbsp;                        if (debug != null)</b>
+<b class="nc"><i>801</i>&nbsp;                            debug.println(&quot;PolicyChecker.processPolicyMappings&quot;</b>
+<i>802</i>&nbsp;                                + &quot;() before deleting: policy tree = &quot;
+<i>803</i>&nbsp;                                + rootNode);
+<b class="nc"><i>804</i>&nbsp;                        parentNode.deleteChild(curNode);</b>
+<b class="nc"><i>805</i>&nbsp;                        childDeleted = true;</b>
+<b class="nc"><i>806</i>&nbsp;                        if (debug != null)</b>
+<b class="nc"><i>807</i>&nbsp;                            debug.println(&quot;PolicyChecker.processPolicyMappings&quot;</b>
+<i>808</i>&nbsp;                                + &quot;() after deleting: policy tree = &quot;
+<i>809</i>&nbsp;                                + rootNode);
+<i>810</i>&nbsp;                    }
+<b class="nc"><i>811</i>&nbsp;                }</b>
+<i>812</i>&nbsp;            } else { // no node of depth i has a valid policy
+<b class="nc"><i>813</i>&nbsp;                if ((policyMapping &gt; 0) || (policyMapping == -1)) {</b>
+<b class="nc"><i>814</i>&nbsp;                    Set&lt;PolicyNodeImpl&gt; validAnyNodes =</b>
+<b class="nc"><i>815</i>&nbsp;                        rootNode.getPolicyNodesValid(certIndex, ANY_POLICY);</b>
+<b class="nc"><i>816</i>&nbsp;                    for (PolicyNodeImpl curAnyNode : validAnyNodes) {</b>
+<b class="nc"><i>817</i>&nbsp;                        PolicyNodeImpl curAnyNodeParent =</b>
+<b class="nc"><i>818</i>&nbsp;                            (PolicyNodeImpl) curAnyNode.getParent();</b>
+<i>819</i>&nbsp;
+<b class="nc"><i>820</i>&nbsp;                        Set&lt;String&gt; expPols = new HashSet&lt;&gt;();</b>
+<b class="nc"><i>821</i>&nbsp;                        expPols.add(subjectDomain);</b>
+<i>822</i>&nbsp;
+<b class="nc"><i>823</i>&nbsp;                        PolicyNodeImpl curNode = new PolicyNodeImpl</b>
+<i>824</i>&nbsp;                            (curAnyNodeParent, issuerDomain, anyQuals,
+<i>825</i>&nbsp;                             policiesCritical, expPols, true);
+<b class="nc"><i>826</i>&nbsp;                    }</b>
+<i>827</i>&nbsp;                }
+<i>828</i>&nbsp;            }
+<b class="nc"><i>829</i>&nbsp;        }</b>
+<i>830</i>&nbsp;
+<b class="nc"><i>831</i>&nbsp;        if (childDeleted) {</b>
+<b class="nc"><i>832</i>&nbsp;            rootNode.prune(certIndex);</b>
+<b class="nc"><i>833</i>&nbsp;            if (!rootNode.getChildren().hasNext()) {</b>
+<b class="nc"><i>834</i>&nbsp;                if (debug != null)</b>
+<b class="nc"><i>835</i>&nbsp;                    debug.println(&quot;setting rootNode to null&quot;);</b>
+<b class="nc"><i>836</i>&nbsp;                rootNode = null;</b>
+<i>837</i>&nbsp;            }
+<i>838</i>&nbsp;        }
+<i>839</i>&nbsp;
+<b class="nc"><i>840</i>&nbsp;        return rootNode;</b>
+<i>841</i>&nbsp;    }
+<i>842</i>&nbsp;
+<i>843</i>&nbsp;    /**
+<i>844</i>&nbsp;     * Removes those nodes which do not intersect with the initial policies
+<i>845</i>&nbsp;     * specified by the user.
+<i>846</i>&nbsp;     *
+<i>847</i>&nbsp;     * @param rootNode the root node of the valid policy tree
+<i>848</i>&nbsp;     * @param certIndex the index of the certificate being processed
+<i>849</i>&nbsp;     * @param initPolicies the Set of policies required by the user
+<i>850</i>&nbsp;     * @param currCertPolicies the CertificatePoliciesExtension of the
+<i>851</i>&nbsp;     * certificate being processed
+<i>852</i>&nbsp;     * @return the root node of the valid policy tree after modification
+<i>853</i>&nbsp;     * @exception CertPathValidatorException Exception thrown if error occurs.
+<i>854</i>&nbsp;     */
+<i>855</i>&nbsp;    private static PolicyNodeImpl removeInvalidNodes(PolicyNodeImpl rootNode,
+<i>856</i>&nbsp;        int certIndex, Set&lt;String&gt; initPolicies,
+<i>857</i>&nbsp;        CertificatePoliciesExtension currCertPolicies)
+<i>858</i>&nbsp;        throws CertPathValidatorException
+<i>859</i>&nbsp;    {
+<b class="nc"><i>860</i>&nbsp;        List&lt;PolicyInformation&gt; policyInfo = null;</b>
+<i>861</i>&nbsp;        try {
+<b class="nc"><i>862</i>&nbsp;            policyInfo = currCertPolicies.get(CertificatePoliciesExtension.POLICIES);</b>
+<b class="nc"><i>863</i>&nbsp;        } catch (IOException ioe) {</b>
+<b class="nc"><i>864</i>&nbsp;            throw new CertPathValidatorException(&quot;Exception while &quot;</b>
+<i>865</i>&nbsp;                + &quot;retrieving policyOIDs&quot;, ioe);
+<b class="nc"><i>866</i>&nbsp;        }</b>
+<i>867</i>&nbsp;
+<b class="nc"><i>868</i>&nbsp;        boolean childDeleted = false;</b>
+<b class="nc"><i>869</i>&nbsp;        for (PolicyInformation curPolInfo : policyInfo) {</b>
+<b class="nc"><i>870</i>&nbsp;            String curPolicy =</b>
+<b class="nc"><i>871</i>&nbsp;                curPolInfo.getPolicyIdentifier().getIdentifier().toString();</b>
+<i>872</i>&nbsp;
+<b class="nc"><i>873</i>&nbsp;            if (debug != null)</b>
+<b class="nc"><i>874</i>&nbsp;                debug.println(&quot;PolicyChecker.processPolicies() &quot;</b>
+<i>875</i>&nbsp;                              + &quot;processing policy second time: &quot; + curPolicy);
+<i>876</i>&nbsp;
+<b class="nc"><i>877</i>&nbsp;            Set&lt;PolicyNodeImpl&gt; validNodes =</b>
+<b class="nc"><i>878</i>&nbsp;                        rootNode.getPolicyNodesValid(certIndex, curPolicy);</b>
+<b class="nc"><i>879</i>&nbsp;            for (PolicyNodeImpl curNode : validNodes) {</b>
+<b class="nc"><i>880</i>&nbsp;                PolicyNodeImpl parentNode = (PolicyNodeImpl)curNode.getParent();</b>
+<b class="nc"><i>881</i>&nbsp;                if (parentNode.getValidPolicy().equals(ANY_POLICY)) {</b>
+<b class="nc"><i>882</i>&nbsp;                    if ((!initPolicies.contains(curPolicy)) &amp;&amp;</b>
+<b class="nc"><i>883</i>&nbsp;                        (!curPolicy.equals(ANY_POLICY))) {</b>
+<b class="nc"><i>884</i>&nbsp;                        if (debug != null)</b>
+<b class="nc"><i>885</i>&nbsp;                            debug.println(&quot;PolicyChecker.processPolicies() &quot;</b>
+<i>886</i>&nbsp;                                + &quot;before deleting: policy tree = &quot; + rootNode);
+<b class="nc"><i>887</i>&nbsp;                        parentNode.deleteChild(curNode);</b>
+<b class="nc"><i>888</i>&nbsp;                        childDeleted = true;</b>
+<b class="nc"><i>889</i>&nbsp;                        if (debug != null)</b>
+<b class="nc"><i>890</i>&nbsp;                            debug.println(&quot;PolicyChecker.processPolicies() &quot;</b>
+<i>891</i>&nbsp;                                + &quot;after deleting: policy tree = &quot; + rootNode);
+<i>892</i>&nbsp;                    }
+<i>893</i>&nbsp;                }
+<b class="nc"><i>894</i>&nbsp;            }</b>
+<b class="nc"><i>895</i>&nbsp;        }</b>
+<i>896</i>&nbsp;
+<b class="nc"><i>897</i>&nbsp;        if (childDeleted) {</b>
+<b class="nc"><i>898</i>&nbsp;            rootNode.prune(certIndex);</b>
+<b class="nc"><i>899</i>&nbsp;            if (!rootNode.getChildren().hasNext()) {</b>
+<b class="nc"><i>900</i>&nbsp;                rootNode = null;</b>
+<i>901</i>&nbsp;            }
+<i>902</i>&nbsp;        }
+<i>903</i>&nbsp;
+<b class="nc"><i>904</i>&nbsp;        return rootNode;</b>
+<i>905</i>&nbsp;    }
+<i>906</i>&nbsp;
+<i>907</i>&nbsp;    /**
+<i>908</i>&nbsp;     * Gets the root node of the valid policy tree, or null if the
+<i>909</i>&nbsp;     * valid policy tree is null. Marks each node of the returned tree
+<i>910</i>&nbsp;     * immutable and thread-safe.
+<i>911</i>&nbsp;     *
+<i>912</i>&nbsp;     * @return the root node of the valid policy tree, or null if
+<i>913</i>&nbsp;     * the valid policy tree is null
+<i>914</i>&nbsp;     */
+<i>915</i>&nbsp;    PolicyNode getPolicyTree() {
+<b class="nc"><i>916</i>&nbsp;        if (rootNode == null)</b>
+<b class="nc"><i>917</i>&nbsp;            return null;</b>
+<i>918</i>&nbsp;        else {
+<b class="nc"><i>919</i>&nbsp;            PolicyNodeImpl policyTree = rootNode.copyTree();</b>
+<b class="nc"><i>920</i>&nbsp;            policyTree.setImmutable();</b>
+<b class="nc"><i>921</i>&nbsp;            return policyTree;</b>
+<i>922</i>&nbsp;        }
+<i>923</i>&nbsp;    }
+<i>924</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:13</div>
+</div>
+</body>
+</html>

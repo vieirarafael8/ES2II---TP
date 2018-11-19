@@ -1,0 +1,601 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: Vset</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.tools.tree</a> ]
+</div>
+
+<h1>Coverage Summary for Class: Vset (sun.tools.tree)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Vset</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 19)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 191)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1996, 2003, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;
+<i>26</i>&nbsp;package sun.tools.tree;
+<i>27</i>&nbsp;
+<i>28</i>&nbsp;import sun.tools.java.*;
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;/**
+<i>31</i>&nbsp; * WARNING: The contents of this source file are not part of any
+<i>32</i>&nbsp; * supported API.  Code that depends on them does so at its own risk:
+<i>33</i>&nbsp; * they are subject to change or removal without notice.
+<i>34</i>&nbsp; */
+<i>35</i>&nbsp;public final
+<i>36</i>&nbsp;class Vset implements Constants {
+<i>37</i>&nbsp;    long vset;                  // DA bits for first 64 variables
+<i>38</i>&nbsp;    long uset;                  // DU bits for first 64 variables
+<i>39</i>&nbsp;
+<i>40</i>&nbsp;    // The extension array is interleaved, consisting of alternating
+<i>41</i>&nbsp;    // blocks of 64 DA bits followed by 64 DU bits followed by 64 DA
+<i>42</i>&nbsp;    // bits, and so on.
+<i>43</i>&nbsp;
+<i>44</i>&nbsp;    long x[];                   // extension array for more bits
+<i>45</i>&nbsp;
+<i>46</i>&nbsp;    // An infinite vector of zeroes or an infinite vector of ones is
+<i>47</i>&nbsp;    // represented by a special value of the extension array.
+<i>48</i>&nbsp;    //
+<i>49</i>&nbsp;    // IMPORTANT: The condition &#39;this.x == fullX&#39; is used as a marker for
+<i>50</i>&nbsp;    // unreachable code, i.e., for a dead-end.  We maintain the invariant
+<i>51</i>&nbsp;    // that (this.x != fullX || (this.vset == -1 &amp;&amp; this.uset == -1)).
+<i>52</i>&nbsp;    // A dead-end has the peculiar property that all variables are both
+<i>53</i>&nbsp;    // definitely assigned and definitely unassigned.  We always force this
+<i>54</i>&nbsp;    // condition to hold, even when the normal bitvector operations performed
+<i>55</i>&nbsp;    // during DA/DU analysis would produce a different result.  This supresses
+<i>56</i>&nbsp;    // reporting of DA/DU errors in unreachable code.
+<i>57</i>&nbsp;
+<b class="nc"><i>58</i>&nbsp;    static final long emptyX[] = new long[0]; // all zeroes</b>
+<b class="nc"><i>59</i>&nbsp;    static final long fullX[]  = new long[0]; // all ones</b>
+<i>60</i>&nbsp;
+<i>61</i>&nbsp;    // For more thorough testing of long vset support, it is helpful to
+<i>62</i>&nbsp;    // temporarily redefine this value to a smaller number, such as 1 or 2.
+<i>63</i>&nbsp;
+<i>64</i>&nbsp;    static final int VBITS = 64; // number of bits in vset (uset)
+<i>65</i>&nbsp;
+<i>66</i>&nbsp;    /**
+<i>67</i>&nbsp;     * This is the Vset which reports all vars assigned and unassigned.
+<i>68</i>&nbsp;     * This impossibility is degenerately true exactly when
+<i>69</i>&nbsp;     * control flow cannot reach this point.
+<i>70</i>&nbsp;     */
+<i>71</i>&nbsp;
+<i>72</i>&nbsp;    // We distinguish a canonical dead-end value generated initially for
+<i>73</i>&nbsp;    // statements that do not complete normally, making the next one unreachable.
+<i>74</i>&nbsp;    // Once an unreachable statement is reported, a non-canonical dead-end value
+<i>75</i>&nbsp;    // is used for subsequent statements in order to suppress redundant error
+<i>76</i>&nbsp;    // messages.
+<i>77</i>&nbsp;
+<b class="nc"><i>78</i>&nbsp;    static final Vset DEAD_END = new Vset(-1, -1, fullX);</b>
+<i>79</i>&nbsp;
+<i>80</i>&nbsp;    /**
+<i>81</i>&nbsp;     * Create an empty Vset.
+<i>82</i>&nbsp;     */
+<b class="nc"><i>83</i>&nbsp;    public Vset() {</b>
+<b class="nc"><i>84</i>&nbsp;        this.x = emptyX;</b>
+<i>85</i>&nbsp;    }
+<i>86</i>&nbsp;
+<b class="nc"><i>87</i>&nbsp;    private Vset(long vset, long uset, long x[]) {</b>
+<b class="nc"><i>88</i>&nbsp;        this.vset = vset;</b>
+<b class="nc"><i>89</i>&nbsp;        this.uset = uset;</b>
+<b class="nc"><i>90</i>&nbsp;        this.x = x;</b>
+<i>91</i>&nbsp;    }
+<i>92</i>&nbsp;
+<i>93</i>&nbsp;    /**
+<i>94</i>&nbsp;     * Create an copy of the given Vset.
+<i>95</i>&nbsp;     * (However, DEAD_END simply returns itself.)
+<i>96</i>&nbsp;     */
+<i>97</i>&nbsp;    public Vset copy() {
+<b class="nc"><i>98</i>&nbsp;        if (this == DEAD_END) {</b>
+<b class="nc"><i>99</i>&nbsp;            return this;</b>
+<i>100</i>&nbsp;        }
+<b class="nc"><i>101</i>&nbsp;        Vset vs = new Vset(vset, uset, x);</b>
+<b class="nc"><i>102</i>&nbsp;        if (x.length &gt; 0) {</b>
+<b class="nc"><i>103</i>&nbsp;            vs.growX(x.length); // recopy the extension vector</b>
+<i>104</i>&nbsp;        }
+<b class="nc"><i>105</i>&nbsp;        return vs;</b>
+<i>106</i>&nbsp;    }
+<i>107</i>&nbsp;
+<i>108</i>&nbsp;    private void growX(int length) {
+<b class="nc"><i>109</i>&nbsp;        long newX[] = new long[length];</b>
+<b class="nc"><i>110</i>&nbsp;        long oldX[] = x;</b>
+<b class="nc"><i>111</i>&nbsp;        for (int i = 0; i &lt; oldX.length; i++) {</b>
+<b class="nc"><i>112</i>&nbsp;            newX[i] = oldX[i];</b>
+<i>113</i>&nbsp;        }
+<b class="nc"><i>114</i>&nbsp;        x = newX;</b>
+<i>115</i>&nbsp;    }
+<i>116</i>&nbsp;
+<i>117</i>&nbsp;    /**
+<i>118</i>&nbsp;     * Ask if this is a vset for a dead end.
+<i>119</i>&nbsp;     * Answer true only for the canonical dead-end, DEAD_END.
+<i>120</i>&nbsp;     * A canonical dead-end is produced only as a result of
+<i>121</i>&nbsp;     * a statement that cannot complete normally, as specified
+<i>122</i>&nbsp;     * by the JLS.  Due to the special-case rules for if-then
+<i>123</i>&nbsp;     * and if-then-else, this may fail to detect actual unreachable
+<i>124</i>&nbsp;     * code that could easily be identified.
+<i>125</i>&nbsp;     */
+<i>126</i>&nbsp;
+<i>127</i>&nbsp;    public boolean isDeadEnd() {
+<b class="nc"><i>128</i>&nbsp;        return (this == DEAD_END);</b>
+<i>129</i>&nbsp;    }
+<i>130</i>&nbsp;
+<i>131</i>&nbsp;    /**
+<i>132</i>&nbsp;     * Ask if this is a vset for a dead end.
+<i>133</i>&nbsp;     * Answer true for any dead-end.
+<i>134</i>&nbsp;     * Since &#39;clearDeadEnd&#39; has no effect on this predicate,
+<i>135</i>&nbsp;     * if-then and if-then-else are handled in the more &#39;obvious&#39;
+<i>136</i>&nbsp;     * and precise way.  This predicate is to be preferred for
+<i>137</i>&nbsp;     * dead code elimination purposes.
+<i>138</i>&nbsp;     * (Presently used in workaround for bug 4173473 in MethodExpression.java)
+<i>139</i>&nbsp;     */
+<i>140</i>&nbsp;    public boolean isReallyDeadEnd() {
+<b class="nc"><i>141</i>&nbsp;        return (x == fullX);</b>
+<i>142</i>&nbsp;    }
+<i>143</i>&nbsp;
+<i>144</i>&nbsp;    /**
+<i>145</i>&nbsp;     * Replace canonical DEAD_END with a distinct but
+<i>146</i>&nbsp;     * equivalent Vset.  The bits are unaltered, but
+<i>147</i>&nbsp;     * the result does not answer true to &#39;isDeadEnd&#39;.
+<i>148</i>&nbsp;     * &lt;p&gt;
+<i>149</i>&nbsp;     * Used mostly for error recovery, but see
+<i>150</i>&nbsp;     * &#39;IfStatement.check&#39;, where it is used to
+<i>151</i>&nbsp;     * implement the special-case treatment of
+<i>152</i>&nbsp;     * statement reachability for such statements.
+<i>153</i>&nbsp;     */
+<i>154</i>&nbsp;    public Vset clearDeadEnd() {
+<b class="nc"><i>155</i>&nbsp;        if (this == DEAD_END) {</b>
+<b class="nc"><i>156</i>&nbsp;            return new Vset(-1, -1, fullX);</b>
+<i>157</i>&nbsp;        }
+<b class="nc"><i>158</i>&nbsp;        return this;</b>
+<i>159</i>&nbsp;    }
+<i>160</i>&nbsp;
+<i>161</i>&nbsp;    /**
+<i>162</i>&nbsp;     * Ask if a var is definitely assigned.
+<i>163</i>&nbsp;     */
+<i>164</i>&nbsp;    public boolean testVar(int varNumber) {
+<b class="nc"><i>165</i>&nbsp;        long bit = (1L &lt;&lt; varNumber);</b>
+<b class="nc"><i>166</i>&nbsp;        if (varNumber &gt;= VBITS) {</b>
+<b class="nc"><i>167</i>&nbsp;            int i = (varNumber / VBITS - 1) * 2;</b>
+<b class="nc"><i>168</i>&nbsp;            if (i &gt;= x.length) {</b>
+<b class="nc"><i>169</i>&nbsp;                return (x == fullX);</b>
+<i>170</i>&nbsp;            }
+<b class="nc"><i>171</i>&nbsp;            return (x[i] &amp; bit) != 0;</b>
+<i>172</i>&nbsp;        } else {
+<b class="nc"><i>173</i>&nbsp;            return (vset &amp; bit) != 0;</b>
+<i>174</i>&nbsp;        }
+<i>175</i>&nbsp;    }
+<i>176</i>&nbsp;
+<i>177</i>&nbsp;    /**
+<i>178</i>&nbsp;     * Ask if a var is definitely un-assigned.
+<i>179</i>&nbsp;     * (This is not just the negation of testVar:
+<i>180</i>&nbsp;     * It&#39;s possible for neither to be true.)
+<i>181</i>&nbsp;     */
+<i>182</i>&nbsp;    public boolean testVarUnassigned(int varNumber) {
+<b class="nc"><i>183</i>&nbsp;        long bit = (1L &lt;&lt; varNumber);</b>
+<b class="nc"><i>184</i>&nbsp;        if (varNumber &gt;= VBITS) {</b>
+<i>185</i>&nbsp;            // index &quot;uset&quot; extension
+<b class="nc"><i>186</i>&nbsp;            int i = ((varNumber / VBITS - 1) * 2) + 1;</b>
+<b class="nc"><i>187</i>&nbsp;            if (i &gt;= x.length) {</b>
+<b class="nc"><i>188</i>&nbsp;                return (x == fullX);</b>
+<i>189</i>&nbsp;            }
+<b class="nc"><i>190</i>&nbsp;            return (x[i] &amp; bit) != 0;</b>
+<i>191</i>&nbsp;        } else {
+<b class="nc"><i>192</i>&nbsp;            return (uset &amp; bit) != 0;</b>
+<i>193</i>&nbsp;        }
+<i>194</i>&nbsp;    }
+<i>195</i>&nbsp;
+<i>196</i>&nbsp;    /**
+<i>197</i>&nbsp;     * Note that a var is definitely assigned.
+<i>198</i>&nbsp;     * (Side-effecting.)
+<i>199</i>&nbsp;     */
+<i>200</i>&nbsp;    public Vset addVar(int varNumber) {
+<b class="nc"><i>201</i>&nbsp;        if (x == fullX) {</b>
+<b class="nc"><i>202</i>&nbsp;            return this;</b>
+<i>203</i>&nbsp;        }
+<i>204</i>&nbsp;
+<i>205</i>&nbsp;        // gen DA, kill DU
+<i>206</i>&nbsp;
+<b class="nc"><i>207</i>&nbsp;        long bit = (1L &lt;&lt; varNumber);</b>
+<b class="nc"><i>208</i>&nbsp;        if (varNumber &gt;= VBITS) {</b>
+<b class="nc"><i>209</i>&nbsp;            int i = (varNumber / VBITS - 1) * 2;</b>
+<b class="nc"><i>210</i>&nbsp;            if (i &gt;= x.length) {</b>
+<b class="nc"><i>211</i>&nbsp;                growX(i+1);</b>
+<i>212</i>&nbsp;            }
+<b class="nc"><i>213</i>&nbsp;            x[i] |= bit;</b>
+<b class="nc"><i>214</i>&nbsp;            if (i+1 &lt; x.length) {</b>
+<b class="nc"><i>215</i>&nbsp;                x[i+1] &amp;=~ bit;</b>
+<i>216</i>&nbsp;            }
+<b class="nc"><i>217</i>&nbsp;        } else {</b>
+<b class="nc"><i>218</i>&nbsp;            vset |= bit;</b>
+<b class="nc"><i>219</i>&nbsp;            uset &amp;=~ bit;</b>
+<i>220</i>&nbsp;        }
+<b class="nc"><i>221</i>&nbsp;        return this;</b>
+<i>222</i>&nbsp;    }
+<i>223</i>&nbsp;
+<i>224</i>&nbsp;    /**
+<i>225</i>&nbsp;     * Note that a var is definitely un-assigned.
+<i>226</i>&nbsp;     * (Side-effecting.)
+<i>227</i>&nbsp;     */
+<i>228</i>&nbsp;    public Vset addVarUnassigned(int varNumber) {
+<b class="nc"><i>229</i>&nbsp;        if (x == fullX) {</b>
+<b class="nc"><i>230</i>&nbsp;            return this;</b>
+<i>231</i>&nbsp;        }
+<i>232</i>&nbsp;
+<i>233</i>&nbsp;        // gen DU, kill DA
+<i>234</i>&nbsp;
+<b class="nc"><i>235</i>&nbsp;        long bit = (1L &lt;&lt; varNumber);</b>
+<b class="nc"><i>236</i>&nbsp;        if (varNumber &gt;= VBITS) {</b>
+<i>237</i>&nbsp;            // index &quot;uset&quot; extension
+<b class="nc"><i>238</i>&nbsp;            int i = ((varNumber / VBITS - 1) * 2) + 1;</b>
+<b class="nc"><i>239</i>&nbsp;            if (i &gt;= x.length) {</b>
+<b class="nc"><i>240</i>&nbsp;                growX(i+1);</b>
+<i>241</i>&nbsp;            }
+<b class="nc"><i>242</i>&nbsp;            x[i] |= bit;</b>
+<b class="nc"><i>243</i>&nbsp;            x[i-1] &amp;=~ bit;</b>
+<b class="nc"><i>244</i>&nbsp;        } else {</b>
+<b class="nc"><i>245</i>&nbsp;            uset |= bit;</b>
+<b class="nc"><i>246</i>&nbsp;            vset &amp;=~ bit;</b>
+<i>247</i>&nbsp;        }
+<b class="nc"><i>248</i>&nbsp;        return this;</b>
+<i>249</i>&nbsp;    }
+<i>250</i>&nbsp;
+<i>251</i>&nbsp;    /**
+<i>252</i>&nbsp;     * Retract any assertion about the var.
+<i>253</i>&nbsp;     * This operation is ineffective on a dead-end.
+<i>254</i>&nbsp;     * (Side-effecting.)
+<i>255</i>&nbsp;     */
+<i>256</i>&nbsp;    public Vset clearVar(int varNumber) {
+<b class="nc"><i>257</i>&nbsp;        if (x == fullX) {</b>
+<b class="nc"><i>258</i>&nbsp;            return this;</b>
+<i>259</i>&nbsp;        }
+<b class="nc"><i>260</i>&nbsp;        long bit = (1L &lt;&lt; varNumber);</b>
+<b class="nc"><i>261</i>&nbsp;        if (varNumber &gt;= VBITS) {</b>
+<b class="nc"><i>262</i>&nbsp;            int i = (varNumber / VBITS - 1) * 2;</b>
+<b class="nc"><i>263</i>&nbsp;            if (i &gt;= x.length) {</b>
+<b class="nc"><i>264</i>&nbsp;                return this;</b>
+<i>265</i>&nbsp;            }
+<b class="nc"><i>266</i>&nbsp;            x[i] &amp;=~ bit;</b>
+<b class="nc"><i>267</i>&nbsp;            if (i+1 &lt; x.length) {</b>
+<b class="nc"><i>268</i>&nbsp;                x[i+1] &amp;=~ bit;</b>
+<i>269</i>&nbsp;            }
+<b class="nc"><i>270</i>&nbsp;        } else {</b>
+<b class="nc"><i>271</i>&nbsp;            vset &amp;=~ bit;</b>
+<b class="nc"><i>272</i>&nbsp;            uset &amp;=~ bit;</b>
+<i>273</i>&nbsp;        }
+<b class="nc"><i>274</i>&nbsp;        return this;</b>
+<i>275</i>&nbsp;    }
+<i>276</i>&nbsp;
+<i>277</i>&nbsp;    /**
+<i>278</i>&nbsp;     * Join with another vset.  This is set intersection.
+<i>279</i>&nbsp;     * (Side-effecting.)
+<i>280</i>&nbsp;     */
+<i>281</i>&nbsp;    public Vset join(Vset other) {
+<i>282</i>&nbsp;
+<i>283</i>&nbsp;        // Return a dead-end if both vsets are dead-ends.
+<i>284</i>&nbsp;        // Return the canonical DEAD_END only if both vsets
+<i>285</i>&nbsp;        // are the canonical DEAD_END.  Otherwise, an incoming
+<i>286</i>&nbsp;        // dead-end vset has already produced an error message,
+<i>287</i>&nbsp;        // and is now assumed to be reachable.
+<b class="nc"><i>288</i>&nbsp;        if (this == DEAD_END) {</b>
+<b class="nc"><i>289</i>&nbsp;            return other.copy();</b>
+<i>290</i>&nbsp;        }
+<b class="nc"><i>291</i>&nbsp;        if (other == DEAD_END) {</b>
+<b class="nc"><i>292</i>&nbsp;            return this;</b>
+<i>293</i>&nbsp;        }
+<b class="nc"><i>294</i>&nbsp;        if (x == fullX) {</b>
+<b class="nc"><i>295</i>&nbsp;            return other.copy();</b>
+<i>296</i>&nbsp;        }
+<b class="nc"><i>297</i>&nbsp;        if (other.x == fullX) {</b>
+<b class="nc"><i>298</i>&nbsp;            return this;</b>
+<i>299</i>&nbsp;        }
+<i>300</i>&nbsp;
+<i>301</i>&nbsp;        // DA = DA intersection DA
+<i>302</i>&nbsp;        // DU = DU intersection DU
+<i>303</i>&nbsp;
+<b class="nc"><i>304</i>&nbsp;        vset &amp;= other.vset;</b>
+<b class="nc"><i>305</i>&nbsp;        uset &amp;= other.uset;</b>
+<i>306</i>&nbsp;
+<b class="nc"><i>307</i>&nbsp;        if (other.x == emptyX) {</b>
+<b class="nc"><i>308</i>&nbsp;            x = emptyX;</b>
+<i>309</i>&nbsp;        } else {
+<i>310</i>&nbsp;            // ASSERT(otherX.length &gt; 0);
+<b class="nc"><i>311</i>&nbsp;            long otherX[] = other.x;</b>
+<b class="nc"><i>312</i>&nbsp;            int selfLength = x.length;</b>
+<b class="nc"><i>313</i>&nbsp;            int limit = (otherX.length &lt; selfLength) ? otherX.length : selfLength;</b>
+<b class="nc"><i>314</i>&nbsp;            for (int i = 0; i &lt; limit; i++) {</b>
+<b class="nc"><i>315</i>&nbsp;                x[i] &amp;= otherX[i];</b>
+<i>316</i>&nbsp;            }
+<i>317</i>&nbsp;            // If self is longer than other, all remaining
+<i>318</i>&nbsp;            // bits are implicitly 0.  In the result, then,
+<i>319</i>&nbsp;            // the remaining DA and DU bits are cleared.
+<b class="nc"><i>320</i>&nbsp;            for (int i = limit; i &lt; selfLength; i++) {</b>
+<b class="nc"><i>321</i>&nbsp;                x[i] = 0;</b>
+<i>322</i>&nbsp;            }
+<i>323</i>&nbsp;        }
+<b class="nc"><i>324</i>&nbsp;        return this;</b>
+<i>325</i>&nbsp;    }
+<i>326</i>&nbsp;
+<i>327</i>&nbsp;    /**
+<i>328</i>&nbsp;     * Add in the definite assignment bits of another vset,
+<i>329</i>&nbsp;     * but join the definite unassignment bits.  This unusual
+<i>330</i>&nbsp;     * operation is used only for &#39;finally&#39; blocks.  The
+<i>331</i>&nbsp;     * original vset &#39;this&#39; is destroyed by this operation.
+<i>332</i>&nbsp;     * (Part of fix for 4068688.)
+<i>333</i>&nbsp;     */
+<i>334</i>&nbsp;
+<i>335</i>&nbsp;    public Vset addDAandJoinDU(Vset other) {
+<i>336</i>&nbsp;
+<i>337</i>&nbsp;        // Return a dead-end if either vset is a dead end.
+<i>338</i>&nbsp;        // If either vset is the canonical DEAD_END, the
+<i>339</i>&nbsp;        // result is also the canonical DEAD_END.
+<b class="nc"><i>340</i>&nbsp;        if (this == DEAD_END) {</b>
+<b class="nc"><i>341</i>&nbsp;            return this;</b>
+<i>342</i>&nbsp;        }
+<b class="nc"><i>343</i>&nbsp;        if (other == DEAD_END) {</b>
+<b class="nc"><i>344</i>&nbsp;            return other;</b>
+<i>345</i>&nbsp;        }
+<b class="nc"><i>346</i>&nbsp;        if (x == fullX) {</b>
+<b class="nc"><i>347</i>&nbsp;            return this;</b>
+<i>348</i>&nbsp;        }
+<b class="nc"><i>349</i>&nbsp;        if (other.x == fullX) {</b>
+<b class="nc"><i>350</i>&nbsp;            return other.copy();</b>
+<i>351</i>&nbsp;        }
+<i>352</i>&nbsp;
+<i>353</i>&nbsp;        // DA = DA union DA&#39;
+<i>354</i>&nbsp;        // DU = (DU intersection DU&#39;) - DA&#39;
+<i>355</i>&nbsp;
+<b class="nc"><i>356</i>&nbsp;        vset = vset | other.vset;</b>
+<b class="nc"><i>357</i>&nbsp;        uset = (uset &amp; other.uset) &amp; ~other.vset;</b>
+<i>358</i>&nbsp;
+<b class="nc"><i>359</i>&nbsp;        int selfLength = x.length;</b>
+<b class="nc"><i>360</i>&nbsp;        long otherX[] = other.x;</b>
+<b class="nc"><i>361</i>&nbsp;        int otherLength = otherX.length;</b>
+<i>362</i>&nbsp;
+<b class="nc"><i>363</i>&nbsp;        if (otherX != emptyX) {</b>
+<i>364</i>&nbsp;            // ASSERT(otherX.length &gt; 0);
+<b class="nc"><i>365</i>&nbsp;            if (otherLength &gt; selfLength) {</b>
+<b class="nc"><i>366</i>&nbsp;                growX(otherLength);</b>
+<i>367</i>&nbsp;            }
+<b class="nc"><i>368</i>&nbsp;            int i = 0;</b>
+<b class="nc"><i>369</i>&nbsp;            while (i &lt; otherLength) {</b>
+<b class="nc"><i>370</i>&nbsp;                x[i] |= otherX[i];</b>
+<b class="nc"><i>371</i>&nbsp;                i++;</b>
+<b class="nc"><i>372</i>&nbsp;                if (i == otherLength) break;</b>
+<b class="nc"><i>373</i>&nbsp;                x[i] = ((x[i] &amp; otherX[i]) &amp; ~otherX[i-1]);</b>
+<b class="nc"><i>374</i>&nbsp;                i++;</b>
+<i>375</i>&nbsp;            }
+<i>376</i>&nbsp;        }
+<i>377</i>&nbsp;        // If self is longer than other, all remaining
+<i>378</i>&nbsp;        // bits are implicitly 0. In the result, then,
+<i>379</i>&nbsp;        // the remaining DA bits are left unchanged, and
+<i>380</i>&nbsp;        // the DU bits are all cleared. First, align
+<i>381</i>&nbsp;        // index to the next block of DU bits (odd index).
+<b class="nc"><i>382</i>&nbsp;        for (int i = (otherLength | 1); i &lt; selfLength; i += 2) {</b>
+<b class="nc"><i>383</i>&nbsp;            x[i] = 0;</b>
+<i>384</i>&nbsp;        }
+<b class="nc"><i>385</i>&nbsp;        return this;</b>
+<i>386</i>&nbsp;    }
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;
+<i>389</i>&nbsp;    /**
+<i>390</i>&nbsp;     * Construct a vset consisting of the DA bits of the first argument
+<i>391</i>&nbsp;     * and the DU bits of the second argument.  This is a higly unusual
+<i>392</i>&nbsp;     * operation, as it implies a case where the flowgraph for DA analysis
+<i>393</i>&nbsp;     * differs from that for DU analysis.  It is only needed for analysing
+<i>394</i>&nbsp;     * &#39;try&#39; blocks.  The result is a dead-end iff the first argument is
+<i>395</i>&nbsp;     * dead-end. (Part of fix for 4068688.)
+<i>396</i>&nbsp;     */
+<i>397</i>&nbsp;
+<i>398</i>&nbsp;    public static Vset firstDAandSecondDU(Vset sourceDA, Vset sourceDU) {
+<i>399</i>&nbsp;
+<i>400</i>&nbsp;        // Note that reachability status is received via &#39;sourceDA&#39; only!
+<i>401</i>&nbsp;        // This is a consequence of the fact that reachability and DA
+<i>402</i>&nbsp;        // analysis are performed on an identical flow graph, whereas the
+<i>403</i>&nbsp;        // flowgraph for DU analysis differs in the case of a &#39;try&#39; statement.
+<b class="nc"><i>404</i>&nbsp;        if (sourceDA.x == fullX) {</b>
+<b class="nc"><i>405</i>&nbsp;            return sourceDA.copy();</b>
+<i>406</i>&nbsp;        }
+<i>407</i>&nbsp;
+<b class="nc"><i>408</i>&nbsp;        long sourceDAx[] = sourceDA.x;</b>
+<b class="nc"><i>409</i>&nbsp;        int lenDA = sourceDAx.length;</b>
+<b class="nc"><i>410</i>&nbsp;        long sourceDUx[] = sourceDU.x;</b>
+<b class="nc"><i>411</i>&nbsp;        int lenDU = sourceDUx.length;</b>
+<b class="nc"><i>412</i>&nbsp;        int limit = (lenDA &gt; lenDU) ? lenDA : lenDU;</b>
+<b class="nc"><i>413</i>&nbsp;        long x[] = emptyX;</b>
+<i>414</i>&nbsp;
+<b class="nc"><i>415</i>&nbsp;        if (limit &gt; 0) {</b>
+<b class="nc"><i>416</i>&nbsp;            x = new long[limit];</b>
+<b class="nc"><i>417</i>&nbsp;            for (int i = 0; i &lt; lenDA; i += 2) {</b>
+<b class="nc"><i>418</i>&nbsp;                x[i] = sourceDAx[i];</b>
+<i>419</i>&nbsp;            }
+<b class="nc"><i>420</i>&nbsp;            for (int i = 1; i &lt; lenDU; i += 2) {</b>
+<b class="nc"><i>421</i>&nbsp;                x[i] = sourceDUx[i];</b>
+<i>422</i>&nbsp;            }
+<i>423</i>&nbsp;        }
+<i>424</i>&nbsp;
+<b class="nc"><i>425</i>&nbsp;        return new Vset(sourceDA.vset, sourceDU.uset, x);</b>
+<i>426</i>&nbsp;    }
+<i>427</i>&nbsp;
+<i>428</i>&nbsp;    /**
+<i>429</i>&nbsp;     * Remove variables from the vset that are no longer part of
+<i>430</i>&nbsp;     * a context.  Zeroes are stored past varNumber.
+<i>431</i>&nbsp;     * (Side-effecting.)&lt;p&gt;
+<i>432</i>&nbsp;     * However, if this is a dead end, keep it so.
+<i>433</i>&nbsp;     * That is, leave an infinite tail of bits set.
+<i>434</i>&nbsp;     */
+<i>435</i>&nbsp;    public Vset removeAdditionalVars(int varNumber) {
+<b class="nc"><i>436</i>&nbsp;        if (x == fullX) {</b>
+<b class="nc"><i>437</i>&nbsp;            return this;</b>
+<i>438</i>&nbsp;        }
+<b class="nc"><i>439</i>&nbsp;        long bit = (1L &lt;&lt; varNumber);</b>
+<b class="nc"><i>440</i>&nbsp;        if (varNumber &gt;= VBITS) {</b>
+<b class="nc"><i>441</i>&nbsp;            int i = (varNumber / VBITS - 1) * 2;</b>
+<b class="nc"><i>442</i>&nbsp;            if (i &lt; x.length) {</b>
+<b class="nc"><i>443</i>&nbsp;                x[i] &amp;= (bit - 1);</b>
+<b class="nc"><i>444</i>&nbsp;                if (++i &lt; x.length) {</b>
+<b class="nc"><i>445</i>&nbsp;                    x[i] &amp;= (bit - 1); // do the &quot;uset&quot; extension also</b>
+<i>446</i>&nbsp;                }
+<b class="nc"><i>447</i>&nbsp;                while (++i &lt; x.length) {</b>
+<b class="nc"><i>448</i>&nbsp;                    x[i] = 0;</b>
+<i>449</i>&nbsp;                }
+<i>450</i>&nbsp;            }
+<b class="nc"><i>451</i>&nbsp;        } else {</b>
+<b class="nc"><i>452</i>&nbsp;            if (x.length &gt; 0) {</b>
+<b class="nc"><i>453</i>&nbsp;                x = emptyX;</b>
+<i>454</i>&nbsp;            }
+<b class="nc"><i>455</i>&nbsp;            vset &amp;= (bit - 1);</b>
+<b class="nc"><i>456</i>&nbsp;            uset &amp;= (bit - 1);</b>
+<i>457</i>&nbsp;        }
+<b class="nc"><i>458</i>&nbsp;        return this;</b>
+<i>459</i>&nbsp;    }
+<i>460</i>&nbsp;
+<i>461</i>&nbsp;    /**
+<i>462</i>&nbsp;     * Return one larger than the highest bit set.
+<i>463</i>&nbsp;     */
+<i>464</i>&nbsp;    public int varLimit() {
+<i>465</i>&nbsp;        long vset;
+<i>466</i>&nbsp;        int result;
+<i>467</i>&nbsp;    scan: {
+<b class="nc"><i>468</i>&nbsp;            for (int i = (x.length / 2) * 2; i &gt;= 0; i -= 2) {</b>
+<b class="nc"><i>469</i>&nbsp;                if (i == x.length)  continue; // oops</b>
+<b class="nc"><i>470</i>&nbsp;                vset = x[i];</b>
+<b class="nc"><i>471</i>&nbsp;                if (i+1 &lt; x.length) {</b>
+<b class="nc"><i>472</i>&nbsp;                    vset |= x[i+1]; // check the &quot;uset&quot; also</b>
+<i>473</i>&nbsp;                }
+<b class="nc"><i>474</i>&nbsp;                if (vset != 0) {</b>
+<b class="nc"><i>475</i>&nbsp;                    result = (i/2 + 1) * VBITS;</b>
+<b class="nc"><i>476</i>&nbsp;                    break scan;</b>
+<i>477</i>&nbsp;                }
+<i>478</i>&nbsp;            }
+<b class="nc"><i>479</i>&nbsp;            vset = this.vset;</b>
+<b class="nc"><i>480</i>&nbsp;            vset |= this.uset;  // check the &quot;uset&quot; also</b>
+<b class="nc"><i>481</i>&nbsp;            if (vset != 0) {</b>
+<b class="nc"><i>482</i>&nbsp;                result = 0;</b>
+<b class="nc"><i>483</i>&nbsp;                break scan;</b>
+<i>484</i>&nbsp;            } else {
+<b class="nc"><i>485</i>&nbsp;                return 0;</b>
+<i>486</i>&nbsp;            }
+<i>487</i>&nbsp;        }
+<b class="nc"><i>488</i>&nbsp;        while (vset != 0) {</b>
+<b class="nc"><i>489</i>&nbsp;            result += 1;</b>
+<b class="nc"><i>490</i>&nbsp;            vset &gt;&gt;&gt;= 1;</b>
+<i>491</i>&nbsp;        }
+<b class="nc"><i>492</i>&nbsp;        return result;</b>
+<i>493</i>&nbsp;    }
+<i>494</i>&nbsp;
+<i>495</i>&nbsp;    public String toString() {
+<b class="nc"><i>496</i>&nbsp;        if (this == DEAD_END)</b>
+<b class="nc"><i>497</i>&nbsp;            return &quot;{DEAD_END}&quot;;</b>
+<b class="nc"><i>498</i>&nbsp;        StringBuilder sb = new StringBuilder(&quot;{&quot;);</b>
+<b class="nc"><i>499</i>&nbsp;        int maxVar = VBITS * (1 + (x.length+1)/2);</b>
+<b class="nc"><i>500</i>&nbsp;        for (int i = 0; i &lt; maxVar; i++) {</b>
+<b class="nc"><i>501</i>&nbsp;            if (!testVarUnassigned(i)) {</b>
+<b class="nc"><i>502</i>&nbsp;                if (sb.length() &gt; 1) {</b>
+<b class="nc"><i>503</i>&nbsp;                    sb.append(&#39; &#39;);</b>
+<i>504</i>&nbsp;                }
+<b class="nc"><i>505</i>&nbsp;                sb.append(i);</b>
+<b class="nc"><i>506</i>&nbsp;                if (!testVar(i)) {</b>
+<b class="nc"><i>507</i>&nbsp;                    sb.append(&#39;?&#39;); // not definitely unassigned</b>
+<i>508</i>&nbsp;                }
+<i>509</i>&nbsp;            }
+<i>510</i>&nbsp;        }
+<b class="nc"><i>511</i>&nbsp;        if (x == fullX) {</b>
+<b class="nc"><i>512</i>&nbsp;            sb.append(&quot;...DEAD_END&quot;);</b>
+<i>513</i>&nbsp;        }
+<b class="nc"><i>514</i>&nbsp;        sb.append(&#39;}&#39;);</b>
+<b class="nc"><i>515</i>&nbsp;        return sb.toString();</b>
+<i>516</i>&nbsp;    }
+<i>517</i>&nbsp;
+<i>518</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:11</div>
+</div>
+</body>
+</html>

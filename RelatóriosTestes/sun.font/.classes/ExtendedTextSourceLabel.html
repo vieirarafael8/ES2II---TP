@@ -1,0 +1,1136 @@
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html id="htmlId">
+<head>
+  <title>Coverage Report :: ExtendedTextSourceLabel</title>
+  <style type="text/css">
+    @import "../../.css/coverage.css";
+  </style>
+</head>
+
+<body>
+<div class="header"></div>
+
+<div class="content">
+<div class="breadCrumbs">
+    [ <a href="../../index.html">all classes</a> ]
+    [ <a href="../index.html">sun.font</a> ]
+</div>
+
+<h1>Coverage Summary for Class: ExtendedTextSourceLabel (sun.font)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ExtendedTextSourceLabel</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 45)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/ 364)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<div class="sourceCode"><i>1</i>&nbsp;/*
+<i>2</i>&nbsp; * Copyright (c) 1998, 2017, Oracle and/or its affiliates. All rights reserved.
+<i>3</i>&nbsp; * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+<i>4</i>&nbsp; *
+<i>5</i>&nbsp; *
+<i>6</i>&nbsp; *
+<i>7</i>&nbsp; *
+<i>8</i>&nbsp; *
+<i>9</i>&nbsp; *
+<i>10</i>&nbsp; *
+<i>11</i>&nbsp; *
+<i>12</i>&nbsp; *
+<i>13</i>&nbsp; *
+<i>14</i>&nbsp; *
+<i>15</i>&nbsp; *
+<i>16</i>&nbsp; *
+<i>17</i>&nbsp; *
+<i>18</i>&nbsp; *
+<i>19</i>&nbsp; *
+<i>20</i>&nbsp; *
+<i>21</i>&nbsp; *
+<i>22</i>&nbsp; *
+<i>23</i>&nbsp; *
+<i>24</i>&nbsp; */
+<i>25</i>&nbsp;/*
+<i>26</i>&nbsp; *
+<i>27</i>&nbsp; * (C) Copyright IBM Corp. 1998-2003 - All Rights Reserved
+<i>28</i>&nbsp; */
+<i>29</i>&nbsp;
+<i>30</i>&nbsp;package sun.font;
+<i>31</i>&nbsp;
+<i>32</i>&nbsp;import java.awt.Font;
+<i>33</i>&nbsp;import java.awt.Graphics2D;
+<i>34</i>&nbsp;import java.awt.Rectangle;
+<i>35</i>&nbsp;import java.awt.Shape;
+<i>36</i>&nbsp;
+<i>37</i>&nbsp;import java.awt.font.FontRenderContext;
+<i>38</i>&nbsp;import java.awt.font.GlyphJustificationInfo;
+<i>39</i>&nbsp;import java.awt.font.GlyphMetrics;
+<i>40</i>&nbsp;import java.awt.font.LineMetrics;
+<i>41</i>&nbsp;import java.awt.font.TextAttribute;
+<i>42</i>&nbsp;
+<i>43</i>&nbsp;import java.awt.geom.AffineTransform;
+<i>44</i>&nbsp;import java.awt.geom.Point2D;
+<i>45</i>&nbsp;import java.awt.geom.Rectangle2D;
+<i>46</i>&nbsp;
+<i>47</i>&nbsp;import java.util.Map;
+<i>48</i>&nbsp;
+<i>49</i>&nbsp;/**
+<i>50</i>&nbsp; * Default implementation of ExtendedTextLabel.
+<i>51</i>&nbsp; */
+<i>52</i>&nbsp;
+<i>53</i>&nbsp;// {jbr} I made this class package-private to keep the
+<i>54</i>&nbsp;// Decoration.Label API package-private.
+<i>55</i>&nbsp;
+<i>56</i>&nbsp;/* public */
+<i>57</i>&nbsp;class ExtendedTextSourceLabel extends ExtendedTextLabel implements Decoration.Label {
+<i>58</i>&nbsp;
+<i>59</i>&nbsp;  TextSource source;
+<i>60</i>&nbsp;  private Decoration decorator;
+<i>61</i>&nbsp;
+<i>62</i>&nbsp;  // caches
+<i>63</i>&nbsp;  private Font font;
+<i>64</i>&nbsp;  private AffineTransform baseTX;
+<i>65</i>&nbsp;  private CoreMetrics cm;
+<i>66</i>&nbsp;
+<i>67</i>&nbsp;  Rectangle2D lb;
+<i>68</i>&nbsp;  Rectangle2D ab;
+<i>69</i>&nbsp;  Rectangle2D vb;
+<i>70</i>&nbsp;  Rectangle2D ib;
+<i>71</i>&nbsp;  StandardGlyphVector gv;
+<i>72</i>&nbsp;  float[] charinfo;
+<i>73</i>&nbsp;
+<i>74</i>&nbsp;  /**
+<i>75</i>&nbsp;   * Create from a TextSource.
+<i>76</i>&nbsp;   */
+<b class="nc"><i>77</i>&nbsp;  public ExtendedTextSourceLabel(TextSource source, Decoration decorator) {</b>
+<b class="nc"><i>78</i>&nbsp;    this.source = source;</b>
+<b class="nc"><i>79</i>&nbsp;    this.decorator = decorator;</b>
+<b class="nc"><i>80</i>&nbsp;    finishInit();</b>
+<i>81</i>&nbsp;  }
+<i>82</i>&nbsp;
+<i>83</i>&nbsp;  /**
+<i>84</i>&nbsp;   * Create from a TextSource, optionally using cached data from oldLabel starting at the offset.
+<i>85</i>&nbsp;   * If present oldLabel must have been created from a run of text that includes the text used in
+<i>86</i>&nbsp;   * the new label.  Start in source corresponds to logical character offset in oldLabel.
+<i>87</i>&nbsp;   */
+<b class="nc"><i>88</i>&nbsp;  public ExtendedTextSourceLabel(TextSource source, ExtendedTextSourceLabel oldLabel, int offset) {</b>
+<i>89</i>&nbsp;    // currently no optimization.
+<b class="nc"><i>90</i>&nbsp;    this.source = source;</b>
+<b class="nc"><i>91</i>&nbsp;    this.decorator = oldLabel.decorator;</b>
+<b class="nc"><i>92</i>&nbsp;    finishInit();</b>
+<i>93</i>&nbsp;  }
+<i>94</i>&nbsp;
+<i>95</i>&nbsp;  private void finishInit() {
+<b class="nc"><i>96</i>&nbsp;    font = source.getFont();</b>
+<i>97</i>&nbsp;
+<b class="nc"><i>98</i>&nbsp;    Map&lt;TextAttribute, ?&gt; atts = font.getAttributes();</b>
+<b class="nc"><i>99</i>&nbsp;    baseTX = AttributeValues.getBaselineTransform(atts);</b>
+<b class="nc"><i>100</i>&nbsp;    if (baseTX == null){</b>
+<b class="nc"><i>101</i>&nbsp;        cm = source.getCoreMetrics();</b>
+<i>102</i>&nbsp;    } else {
+<b class="nc"><i>103</i>&nbsp;      AffineTransform charTX = AttributeValues.getCharTransform(atts);</b>
+<b class="nc"><i>104</i>&nbsp;      if (charTX == null) {</b>
+<b class="nc"><i>105</i>&nbsp;          charTX = new AffineTransform();</b>
+<i>106</i>&nbsp;      }
+<b class="nc"><i>107</i>&nbsp;      font = font.deriveFont(charTX);</b>
+<i>108</i>&nbsp;
+<b class="nc"><i>109</i>&nbsp;      LineMetrics lm = font.getLineMetrics(source.getChars(), source.getStart(),</b>
+<b class="nc"><i>110</i>&nbsp;          source.getStart() + source.getLength(), source.getFRC());</b>
+<b class="nc"><i>111</i>&nbsp;      cm = CoreMetrics.get(lm);</b>
+<i>112</i>&nbsp;    }
+<i>113</i>&nbsp;  }
+<i>114</i>&nbsp;
+<i>115</i>&nbsp;
+<i>116</i>&nbsp;  // TextLabel API
+<i>117</i>&nbsp;
+<i>118</i>&nbsp;  public Rectangle2D getLogicalBounds() {
+<b class="nc"><i>119</i>&nbsp;    return getLogicalBounds(0, 0);</b>
+<i>120</i>&nbsp;  }
+<i>121</i>&nbsp;
+<i>122</i>&nbsp;  public Rectangle2D getLogicalBounds(float x, float y) {
+<b class="nc"><i>123</i>&nbsp;    if (lb == null) {</b>
+<b class="nc"><i>124</i>&nbsp;      lb = createLogicalBounds();</b>
+<i>125</i>&nbsp;    }
+<b class="nc"><i>126</i>&nbsp;    return new Rectangle2D.Float((float)(lb.getX() + x),</b>
+<b class="nc"><i>127</i>&nbsp;                                 (float)(lb.getY() + y),</b>
+<b class="nc"><i>128</i>&nbsp;                                 (float)lb.getWidth(),</b>
+<b class="nc"><i>129</i>&nbsp;                                 (float)lb.getHeight());</b>
+<i>130</i>&nbsp;  }
+<i>131</i>&nbsp;
+<i>132</i>&nbsp;    public float getAdvance() {
+<b class="nc"><i>133</i>&nbsp;        if (lb == null) {</b>
+<b class="nc"><i>134</i>&nbsp;            lb = createLogicalBounds();</b>
+<i>135</i>&nbsp;        }
+<b class="nc"><i>136</i>&nbsp;        return (float)lb.getWidth();</b>
+<i>137</i>&nbsp;    }
+<i>138</i>&nbsp;
+<i>139</i>&nbsp;  public Rectangle2D getVisualBounds(float x, float y) {
+<b class="nc"><i>140</i>&nbsp;    if (vb == null) {</b>
+<b class="nc"><i>141</i>&nbsp;      vb = decorator.getVisualBounds(this);</b>
+<i>142</i>&nbsp;    }
+<b class="nc"><i>143</i>&nbsp;    return new Rectangle2D.Float((float)(vb.getX() + x),</b>
+<b class="nc"><i>144</i>&nbsp;                                 (float)(vb.getY() + y),</b>
+<b class="nc"><i>145</i>&nbsp;                                 (float)vb.getWidth(),</b>
+<b class="nc"><i>146</i>&nbsp;                                 (float)vb.getHeight());</b>
+<i>147</i>&nbsp;  }
+<i>148</i>&nbsp;
+<i>149</i>&nbsp;  public Rectangle2D getAlignBounds(float x, float y) {
+<b class="nc"><i>150</i>&nbsp;    if (ab == null) {</b>
+<b class="nc"><i>151</i>&nbsp;      ab = createAlignBounds();</b>
+<i>152</i>&nbsp;    }
+<b class="nc"><i>153</i>&nbsp;    return new Rectangle2D.Float((float)(ab.getX() + x),</b>
+<b class="nc"><i>154</i>&nbsp;                                 (float)(ab.getY() + y),</b>
+<b class="nc"><i>155</i>&nbsp;                                 (float)ab.getWidth(),</b>
+<b class="nc"><i>156</i>&nbsp;                                 (float)ab.getHeight());</b>
+<i>157</i>&nbsp;
+<i>158</i>&nbsp;  }
+<i>159</i>&nbsp;
+<i>160</i>&nbsp;  public Rectangle2D getItalicBounds(float x, float y) {
+<b class="nc"><i>161</i>&nbsp;    if (ib == null) {</b>
+<b class="nc"><i>162</i>&nbsp;      ib = createItalicBounds();</b>
+<i>163</i>&nbsp;    }
+<b class="nc"><i>164</i>&nbsp;    return new Rectangle2D.Float((float)(ib.getX() + x),</b>
+<b class="nc"><i>165</i>&nbsp;                                 (float)(ib.getY() + y),</b>
+<b class="nc"><i>166</i>&nbsp;                                 (float)ib.getWidth(),</b>
+<b class="nc"><i>167</i>&nbsp;                                 (float)ib.getHeight());</b>
+<i>168</i>&nbsp;
+<i>169</i>&nbsp;  }
+<i>170</i>&nbsp;
+<i>171</i>&nbsp;  public Rectangle getPixelBounds(FontRenderContext frc, float x, float y) {
+<b class="nc"><i>172</i>&nbsp;      return getGV().getPixelBounds(frc, x, y);</b>
+<i>173</i>&nbsp;  }
+<i>174</i>&nbsp;
+<i>175</i>&nbsp;  public boolean isSimple() {
+<b class="nc"><i>176</i>&nbsp;      return decorator == Decoration.getPlainDecoration() &amp;&amp;</b>
+<i>177</i>&nbsp;             baseTX == null;
+<i>178</i>&nbsp;  }
+<i>179</i>&nbsp;
+<i>180</i>&nbsp;  public AffineTransform getBaselineTransform() {
+<b class="nc"><i>181</i>&nbsp;      return baseTX; // passing internal object, caller must not modify!</b>
+<i>182</i>&nbsp;  }
+<i>183</i>&nbsp;
+<i>184</i>&nbsp;  public Shape handleGetOutline(float x, float y) {
+<b class="nc"><i>185</i>&nbsp;    return getGV().getOutline(x, y);</b>
+<i>186</i>&nbsp;  }
+<i>187</i>&nbsp;
+<i>188</i>&nbsp;  public Shape getOutline(float x, float y) {
+<b class="nc"><i>189</i>&nbsp;    return decorator.getOutline(this, x, y);</b>
+<i>190</i>&nbsp;  }
+<i>191</i>&nbsp;
+<i>192</i>&nbsp;  public void handleDraw(Graphics2D g, float x, float y) {
+<b class="nc"><i>193</i>&nbsp;    g.drawGlyphVector(getGV(), x, y);</b>
+<i>194</i>&nbsp;  }
+<i>195</i>&nbsp;
+<i>196</i>&nbsp;  public void draw(Graphics2D g, float x, float y) {
+<b class="nc"><i>197</i>&nbsp;    decorator.drawTextAndDecorations(this, g, x, y);</b>
+<i>198</i>&nbsp;  }
+<i>199</i>&nbsp;
+<i>200</i>&nbsp;  /**
+<i>201</i>&nbsp;   * The logical bounds extends from the origin of the glyphvector to the
+<i>202</i>&nbsp;   * position at which a following glyphvector&#39;s origin should be placed.
+<i>203</i>&nbsp;   * We always assume glyph vectors are rendered from left to right, so
+<i>204</i>&nbsp;   * the origin is always to the left.
+<i>205</i>&nbsp;   * &lt;p&gt; On a left-to-right run, combining marks and &#39;ligatured away&#39;
+<i>206</i>&nbsp;   * characters are to the right of their base characters.  The charinfo
+<i>207</i>&nbsp;   * array will record the character positions for these &#39;missing&#39; characters
+<i>208</i>&nbsp;   * as being at the origin+advance of the base glyph, with zero advance.
+<i>209</i>&nbsp;   * (This is not necessarily the same as the glyph position, for example,
+<i>210</i>&nbsp;   * an umlaut glyph may have a position to the left of this point, it depends
+<i>211</i>&nbsp;   * on whether the font was designed so that such glyphs overhang to the left
+<i>212</i>&nbsp;   * of their origin, or whether it presumes some kind of kerning to position
+<i>213</i>&nbsp;   * the glyphs).  Anyway, the left of the bounds is the origin of the first
+<i>214</i>&nbsp;   * logical (leftmost) character, and the right is the origin + advance of the
+<i>215</i>&nbsp;   * last logical (rightmost) character.
+<i>216</i>&nbsp;   * &lt;p&gt; On a right-to-left run, these special characters are to the left
+<i>217</i>&nbsp;   * of their base characters.  Again, since &#39;glyph position&#39; has been abstracted
+<i>218</i>&nbsp;   * away, we can use the origin of the leftmost character, and the origin +
+<i>219</i>&nbsp;   * advance of the rightmost character.
+<i>220</i>&nbsp;   * &lt;p&gt; On a mixed run (hindi) we can&#39;t rely on the first logical character
+<i>221</i>&nbsp;   * being the leftmost character.  However we can again rely on the leftmost
+<i>222</i>&nbsp;   * character origin and the rightmost character + advance.
+<i>223</i>&nbsp;   */
+<i>224</i>&nbsp;  protected Rectangle2D createLogicalBounds() {
+<b class="nc"><i>225</i>&nbsp;    return getGV().getLogicalBounds();</b>
+<i>226</i>&nbsp;  }
+<i>227</i>&nbsp;
+<i>228</i>&nbsp;  public Rectangle2D handleGetVisualBounds() {
+<b class="nc"><i>229</i>&nbsp;    return getGV().getVisualBounds();</b>
+<i>230</i>&nbsp;  }
+<i>231</i>&nbsp;
+<i>232</i>&nbsp;  /**
+<i>233</i>&nbsp;   * Like createLogicalBounds except ignore leading and logically trailing white space.
+<i>234</i>&nbsp;   * this assumes logically trailing whitespace is also visually trailing.
+<i>235</i>&nbsp;   * Whitespace is anything that has a zero visual width, regardless of its advance.
+<i>236</i>&nbsp;   * &lt;p&gt; We make the same simplifying assumptions as in createLogicalBounds, namely
+<i>237</i>&nbsp;   * that we can rely on the charinfo to shield us from any glyph positioning oddities
+<i>238</i>&nbsp;   * in the font that place the glyph for a character at other than the pos + advance
+<i>239</i>&nbsp;   * of the character to its left.  So we no longer need to skip chars with zero
+<i>240</i>&nbsp;   * advance, as their bounds (right and left) are already correct.
+<i>241</i>&nbsp;   */
+<i>242</i>&nbsp;  protected Rectangle2D createAlignBounds() {
+<b class="nc"><i>243</i>&nbsp;    float[] info = getCharinfo();</b>
+<i>244</i>&nbsp;
+<b class="nc"><i>245</i>&nbsp;    float al = 0f;</b>
+<b class="nc"><i>246</i>&nbsp;    float at = -cm.ascent;</b>
+<b class="nc"><i>247</i>&nbsp;    float aw = 0f;</b>
+<b class="nc"><i>248</i>&nbsp;    float ah = cm.ascent + cm.descent;</b>
+<i>249</i>&nbsp;
+<b class="nc"><i>250</i>&nbsp;    if (charinfo == null || charinfo.length == 0) {</b>
+<b class="nc"><i>251</i>&nbsp;        return new Rectangle2D.Float(al, at, aw, ah);</b>
+<i>252</i>&nbsp;    }
+<i>253</i>&nbsp;
+<b class="nc"><i>254</i>&nbsp;    boolean lineIsLTR = (source.getLayoutFlags() &amp; 0x8) == 0;</b>
+<b class="nc"><i>255</i>&nbsp;    int rn = info.length - numvals;</b>
+<b class="nc"><i>256</i>&nbsp;    if (lineIsLTR) {</b>
+<b class="nc"><i>257</i>&nbsp;      while (rn &gt; 0 &amp;&amp; info[rn+visw] == 0) {</b>
+<b class="nc"><i>258</i>&nbsp;        rn -= numvals;</b>
+<i>259</i>&nbsp;      }
+<i>260</i>&nbsp;    }
+<i>261</i>&nbsp;
+<b class="nc"><i>262</i>&nbsp;    if (rn &gt;= 0) {</b>
+<b class="nc"><i>263</i>&nbsp;      int ln = 0;</b>
+<b class="nc"><i>264</i>&nbsp;      while (ln &lt; rn &amp;&amp; ((info[ln+advx] == 0) || (!lineIsLTR &amp;&amp; info[ln+visw] == 0))) {</b>
+<b class="nc"><i>265</i>&nbsp;        ln += numvals;</b>
+<i>266</i>&nbsp;      }
+<i>267</i>&nbsp;
+<b class="nc"><i>268</i>&nbsp;      al = Math.max(0f, info[ln+posx]);</b>
+<b class="nc"><i>269</i>&nbsp;      aw = info[rn+posx] + info[rn+advx] - al;</b>
+<i>270</i>&nbsp;    }
+<i>271</i>&nbsp;
+<i>272</i>&nbsp;    /*
+<i>273</i>&nbsp;      boolean lineIsLTR = source.lineIsLTR();
+<i>274</i>&nbsp;      int rn = info.length - numvals;
+<i>275</i>&nbsp;      while (rn &gt; 0 &amp;&amp; ((info[rn+advx] == 0) || (lineIsLTR &amp;&amp; info[rn+visw] == 0))) {
+<i>276</i>&nbsp;      rn -= numvals;
+<i>277</i>&nbsp;      }
+<i>278</i>&nbsp;
+<i>279</i>&nbsp;      if (rn &gt;= 0) {
+<i>280</i>&nbsp;      int ln = 0;
+<i>281</i>&nbsp;      while (ln &lt; rn &amp;&amp; ((info[ln+advx] == 0) || (!lineIsLTR &amp;&amp; info[ln+visw] == 0))) {
+<i>282</i>&nbsp;      ln += numvals;
+<i>283</i>&nbsp;      }
+<i>284</i>&nbsp;
+<i>285</i>&nbsp;      al = Math.max(0f, info[ln+posx]);
+<i>286</i>&nbsp;      aw = info[rn+posx] + info[rn+advx] - al;
+<i>287</i>&nbsp;      }
+<i>288</i>&nbsp;      */
+<i>289</i>&nbsp;
+<b class="nc"><i>290</i>&nbsp;    return new Rectangle2D.Float(al, at, aw, ah);</b>
+<i>291</i>&nbsp;  }
+<i>292</i>&nbsp;
+<i>293</i>&nbsp;  public Rectangle2D createItalicBounds() {
+<b class="nc"><i>294</i>&nbsp;    float ia = cm.italicAngle;</b>
+<i>295</i>&nbsp;
+<b class="nc"><i>296</i>&nbsp;    Rectangle2D lb = getLogicalBounds();</b>
+<b class="nc"><i>297</i>&nbsp;    float l = (float)lb.getMinX();</b>
+<b class="nc"><i>298</i>&nbsp;    float t = -cm.ascent;</b>
+<b class="nc"><i>299</i>&nbsp;    float r = (float)lb.getMaxX();</b>
+<b class="nc"><i>300</i>&nbsp;    float b = cm.descent;</b>
+<b class="nc"><i>301</i>&nbsp;    if (ia != 0) {</b>
+<b class="nc"><i>302</i>&nbsp;        if (ia &gt; 0) {</b>
+<b class="nc"><i>303</i>&nbsp;            l -= ia * (b - cm.ssOffset);</b>
+<b class="nc"><i>304</i>&nbsp;            r -= ia * (t - cm.ssOffset);</b>
+<i>305</i>&nbsp;        } else {
+<b class="nc"><i>306</i>&nbsp;            l -= ia * (t - cm.ssOffset);</b>
+<b class="nc"><i>307</i>&nbsp;            r -= ia * (b - cm.ssOffset);</b>
+<i>308</i>&nbsp;        }
+<i>309</i>&nbsp;    }
+<b class="nc"><i>310</i>&nbsp;    return new Rectangle2D.Float(l, t, r - l, b - t);</b>
+<i>311</i>&nbsp;  }
+<i>312</i>&nbsp;
+<i>313</i>&nbsp;  private StandardGlyphVector getGV() {
+<b class="nc"><i>314</i>&nbsp;    if (gv == null) {</b>
+<b class="nc"><i>315</i>&nbsp;      gv = createGV();</b>
+<i>316</i>&nbsp;    }
+<i>317</i>&nbsp;
+<b class="nc"><i>318</i>&nbsp;    return gv;</b>
+<i>319</i>&nbsp;  }
+<i>320</i>&nbsp;
+<i>321</i>&nbsp;  protected StandardGlyphVector createGV() {
+<b class="nc"><i>322</i>&nbsp;    FontRenderContext frc = source.getFRC();</b>
+<b class="nc"><i>323</i>&nbsp;    int flags = source.getLayoutFlags();</b>
+<b class="nc"><i>324</i>&nbsp;    char[] context = source.getChars();</b>
+<b class="nc"><i>325</i>&nbsp;    int start = source.getStart();</b>
+<b class="nc"><i>326</i>&nbsp;    int length = source.getLength();</b>
+<i>327</i>&nbsp;
+<b class="nc"><i>328</i>&nbsp;    GlyphLayout gl = GlyphLayout.get(null); // !!! no custom layout engines</b>
+<b class="nc"><i>329</i>&nbsp;    gv = gl.layout(font, frc, context, start, length, flags, null); // ??? use textsource</b>
+<b class="nc"><i>330</i>&nbsp;    GlyphLayout.done(gl);</b>
+<i>331</i>&nbsp;
+<b class="nc"><i>332</i>&nbsp;    return gv;</b>
+<i>333</i>&nbsp;  }
+<i>334</i>&nbsp;
+<i>335</i>&nbsp;  // ExtendedTextLabel API
+<i>336</i>&nbsp;
+<i>337</i>&nbsp;  private static final int posx = 0,
+<i>338</i>&nbsp;    posy = 1,
+<i>339</i>&nbsp;    advx = 2,
+<i>340</i>&nbsp;    advy = 3,
+<i>341</i>&nbsp;    visx = 4,
+<i>342</i>&nbsp;    visy = 5,
+<i>343</i>&nbsp;    visw = 6,
+<i>344</i>&nbsp;    vish = 7;
+<i>345</i>&nbsp;  private static final int numvals = 8;
+<i>346</i>&nbsp;
+<i>347</i>&nbsp;  public int getNumCharacters() {
+<b class="nc"><i>348</i>&nbsp;    return source.getLength();</b>
+<i>349</i>&nbsp;  }
+<i>350</i>&nbsp;
+<i>351</i>&nbsp;  public CoreMetrics getCoreMetrics() {
+<b class="nc"><i>352</i>&nbsp;    return cm;</b>
+<i>353</i>&nbsp;  }
+<i>354</i>&nbsp;
+<i>355</i>&nbsp;  public float getCharX(int index) {
+<b class="nc"><i>356</i>&nbsp;    validate(index);</b>
+<b class="nc"><i>357</i>&nbsp;    float[] charinfo = getCharinfo();</b>
+<b class="nc"><i>358</i>&nbsp;    int idx = l2v(index) * numvals + posx;</b>
+<b class="nc"><i>359</i>&nbsp;    if (charinfo == null || idx &gt;= charinfo.length) {</b>
+<b class="nc"><i>360</i>&nbsp;        return 0f;</b>
+<i>361</i>&nbsp;    } else {
+<b class="nc"><i>362</i>&nbsp;        return charinfo[idx];</b>
+<i>363</i>&nbsp;    }
+<i>364</i>&nbsp;  }
+<i>365</i>&nbsp;
+<i>366</i>&nbsp;  public float getCharY(int index) {
+<b class="nc"><i>367</i>&nbsp;    validate(index);</b>
+<b class="nc"><i>368</i>&nbsp;    float[] charinfo = getCharinfo();</b>
+<b class="nc"><i>369</i>&nbsp;    int idx = l2v(index) * numvals + posy;</b>
+<b class="nc"><i>370</i>&nbsp;    if (charinfo == null || idx &gt;= charinfo.length) {</b>
+<b class="nc"><i>371</i>&nbsp;        return 0f;</b>
+<i>372</i>&nbsp;    } else {
+<b class="nc"><i>373</i>&nbsp;        return charinfo[idx];</b>
+<i>374</i>&nbsp;    }
+<i>375</i>&nbsp;  }
+<i>376</i>&nbsp;
+<i>377</i>&nbsp;  public float getCharAdvance(int index) {
+<b class="nc"><i>378</i>&nbsp;    validate(index);</b>
+<b class="nc"><i>379</i>&nbsp;    float[] charinfo = getCharinfo();</b>
+<b class="nc"><i>380</i>&nbsp;    int idx = l2v(index) * numvals + advx;</b>
+<b class="nc"><i>381</i>&nbsp;    if (charinfo == null || idx &gt;= charinfo.length) {</b>
+<b class="nc"><i>382</i>&nbsp;        return 0f;</b>
+<i>383</i>&nbsp;    } else {
+<b class="nc"><i>384</i>&nbsp;        return charinfo[idx];</b>
+<i>385</i>&nbsp;    }
+<i>386</i>&nbsp;  }
+<i>387</i>&nbsp;
+<i>388</i>&nbsp;  public Rectangle2D handleGetCharVisualBounds(int index) {
+<b class="nc"><i>389</i>&nbsp;    validate(index);</b>
+<b class="nc"><i>390</i>&nbsp;    float[] charinfo = getCharinfo();</b>
+<b class="nc"><i>391</i>&nbsp;    index = l2v(index) * numvals;</b>
+<b class="nc"><i>392</i>&nbsp;    if (charinfo == null || (index+vish) &gt;= charinfo.length) {</b>
+<b class="nc"><i>393</i>&nbsp;        return new Rectangle2D.Float();</b>
+<i>394</i>&nbsp;    }
+<b class="nc"><i>395</i>&nbsp;    return new Rectangle2D.Float(</b>
+<i>396</i>&nbsp;                                 charinfo[index + visx],
+<i>397</i>&nbsp;                                 charinfo[index + visy],
+<i>398</i>&nbsp;                                 charinfo[index + visw],
+<i>399</i>&nbsp;                                 charinfo[index + vish]);
+<i>400</i>&nbsp;  }
+<i>401</i>&nbsp;
+<i>402</i>&nbsp;  public Rectangle2D getCharVisualBounds(int index, float x, float y) {
+<i>403</i>&nbsp;
+<b class="nc"><i>404</i>&nbsp;    Rectangle2D bounds = decorator.getCharVisualBounds(this, index);</b>
+<b class="nc"><i>405</i>&nbsp;    if (x != 0 || y != 0) {</b>
+<b class="nc"><i>406</i>&nbsp;        bounds.setRect(bounds.getX()+x,</b>
+<b class="nc"><i>407</i>&nbsp;                       bounds.getY()+y,</b>
+<b class="nc"><i>408</i>&nbsp;                       bounds.getWidth(),</b>
+<b class="nc"><i>409</i>&nbsp;                       bounds.getHeight());</b>
+<i>410</i>&nbsp;    }
+<b class="nc"><i>411</i>&nbsp;    return bounds;</b>
+<i>412</i>&nbsp;  }
+<i>413</i>&nbsp;
+<i>414</i>&nbsp;  private void validate(int index) {
+<b class="nc"><i>415</i>&nbsp;    if (index &lt; 0) {</b>
+<b class="nc"><i>416</i>&nbsp;      throw new IllegalArgumentException(&quot;index &quot; + index + &quot; &lt; 0&quot;);</b>
+<b class="nc"><i>417</i>&nbsp;    } else if (index &gt;= source.getLength()) {</b>
+<b class="nc"><i>418</i>&nbsp;      throw new IllegalArgumentException(&quot;index &quot; + index + &quot; &lt; &quot; + source.getLength());</b>
+<i>419</i>&nbsp;    }
+<i>420</i>&nbsp;  }
+<i>421</i>&nbsp;
+<i>422</i>&nbsp;  /*
+<i>423</i>&nbsp;    public int hitTestChar(float x, float y) {
+<i>424</i>&nbsp;    // !!! return index of char hit, for swing
+<i>425</i>&nbsp;    // result is negative for trailing-edge hits
+<i>426</i>&nbsp;    // no italics so no problem at margins.
+<i>427</i>&nbsp;    // for now, ignore y since we assume horizontal text
+<i>428</i>&nbsp;
+<i>429</i>&nbsp;    // find non-combining char origin to right of x
+<i>430</i>&nbsp;    float[] charinfo = getCharinfo();
+<i>431</i>&nbsp;
+<i>432</i>&nbsp;    int n = 0;
+<i>433</i>&nbsp;    int e = source.getLength();
+<i>434</i>&nbsp;    while (n &lt; e &amp;&amp; charinfo[n + advx] != 0 &amp;&amp; charinfo[n + posx] &gt; x) {
+<i>435</i>&nbsp;    n += numvals;
+<i>436</i>&nbsp;    }
+<i>437</i>&nbsp;    float rightx = n &lt; e ? charinfo[n+posx] : charinfo[e - numvals + posx] + charinfo[e - numvals + advx];
+<i>438</i>&nbsp;
+<i>439</i>&nbsp;    // find non-combining char to left of that char
+<i>440</i>&nbsp;    n -= numvals;
+<i>441</i>&nbsp;    while (n &gt;= 0 &amp;&amp; charinfo[n+advx] == 0) {
+<i>442</i>&nbsp;    n -= numvals;
+<i>443</i>&nbsp;    }
+<i>444</i>&nbsp;    float leftx = n &gt;= 0 ? charinfo[n+posx] : 0;
+<i>445</i>&nbsp;    float lefta = n &gt;= 0 ? charinfo[n+advx] : 0;
+<i>446</i>&nbsp;
+<i>447</i>&nbsp;    n /= numvals;
+<i>448</i>&nbsp;
+<i>449</i>&nbsp;    boolean left = true;
+<i>450</i>&nbsp;    if (x &lt; leftx + lefta / 2f) {
+<i>451</i>&nbsp;    // left of prev char
+<i>452</i>&nbsp;    } else if (x &lt; (leftx + lefta + rightx) / 2f) {
+<i>453</i>&nbsp;    // right of prev char
+<i>454</i>&nbsp;    left = false;
+<i>455</i>&nbsp;    } else {
+<i>456</i>&nbsp;    // left of follow char
+<i>457</i>&nbsp;    n += 1;
+<i>458</i>&nbsp;    }
+<i>459</i>&nbsp;
+<i>460</i>&nbsp;    if ((source.getLayoutFlags() &amp; 0x1) != 0) {
+<i>461</i>&nbsp;    n = getNumCharacters() - 1 - n;
+<i>462</i>&nbsp;    left = !left;
+<i>463</i>&nbsp;    }
+<i>464</i>&nbsp;
+<i>465</i>&nbsp;    return left ? n : -n;
+<i>466</i>&nbsp;    }
+<i>467</i>&nbsp;    */
+<i>468</i>&nbsp;
+<i>469</i>&nbsp;  public int logicalToVisual(int logicalIndex) {
+<b class="nc"><i>470</i>&nbsp;    validate(logicalIndex);</b>
+<b class="nc"><i>471</i>&nbsp;    return l2v(logicalIndex);</b>
+<i>472</i>&nbsp;  }
+<i>473</i>&nbsp;
+<i>474</i>&nbsp;  public int visualToLogical(int visualIndex) {
+<b class="nc"><i>475</i>&nbsp;    validate(visualIndex);</b>
+<b class="nc"><i>476</i>&nbsp;    return v2l(visualIndex);</b>
+<i>477</i>&nbsp;  }
+<i>478</i>&nbsp;
+<i>479</i>&nbsp;  public int getLineBreakIndex(int start, float width) {
+<b class="nc"><i>480</i>&nbsp;    float[] charinfo = getCharinfo();</b>
+<b class="nc"><i>481</i>&nbsp;    int length = source.getLength();</b>
+<b class="nc"><i>482</i>&nbsp;    --start;</b>
+<b class="nc"><i>483</i>&nbsp;    while (width &gt;= 0 &amp;&amp; ++start &lt; length) {</b>
+<b class="nc"><i>484</i>&nbsp;      int cidx = l2v(start) * numvals + advx;</b>
+<b class="nc"><i>485</i>&nbsp;      if (cidx &gt;= charinfo.length) {</b>
+<b class="nc"><i>486</i>&nbsp;          break; // layout bailed for some reason</b>
+<i>487</i>&nbsp;      }
+<b class="nc"><i>488</i>&nbsp;      float adv = charinfo[cidx];</b>
+<b class="nc"><i>489</i>&nbsp;      width -= adv;</b>
+<b class="nc"><i>490</i>&nbsp;    }</b>
+<i>491</i>&nbsp;
+<b class="nc"><i>492</i>&nbsp;    return start;</b>
+<i>493</i>&nbsp;  }
+<i>494</i>&nbsp;
+<i>495</i>&nbsp;  public float getAdvanceBetween(int start, int limit) {
+<b class="nc"><i>496</i>&nbsp;    float a = 0f;</b>
+<i>497</i>&nbsp;
+<b class="nc"><i>498</i>&nbsp;    float[] charinfo = getCharinfo();</b>
+<b class="nc"><i>499</i>&nbsp;    --start;</b>
+<b class="nc"><i>500</i>&nbsp;    while (++start &lt; limit) {</b>
+<b class="nc"><i>501</i>&nbsp;      int cidx = l2v(start) * numvals + advx;</b>
+<b class="nc"><i>502</i>&nbsp;      if (cidx &gt;= charinfo.length) {</b>
+<b class="nc"><i>503</i>&nbsp;          break; // layout bailed for some reason</b>
+<i>504</i>&nbsp;      }
+<b class="nc"><i>505</i>&nbsp;      a += charinfo[cidx];</b>
+<b class="nc"><i>506</i>&nbsp;    }</b>
+<i>507</i>&nbsp;
+<b class="nc"><i>508</i>&nbsp;    return a;</b>
+<i>509</i>&nbsp;  }
+<i>510</i>&nbsp;
+<i>511</i>&nbsp;  public boolean caretAtOffsetIsValid(int offset) {
+<i>512</i>&nbsp;      // REMIND: improve this implementation
+<i>513</i>&nbsp;
+<i>514</i>&nbsp;      // Ligature formation can either be done in logical order,
+<i>515</i>&nbsp;      // with the ligature glyph logically preceding the null
+<i>516</i>&nbsp;      // chars;  or in visual order, with the ligature glyph to
+<i>517</i>&nbsp;      // the left of the null chars.  This method&#39;s implementation
+<i>518</i>&nbsp;      // must reflect which strategy is used.
+<i>519</i>&nbsp;
+<b class="nc"><i>520</i>&nbsp;      if (offset == 0 || offset == source.getLength()) {</b>
+<b class="nc"><i>521</i>&nbsp;          return true;</b>
+<i>522</i>&nbsp;      }
+<b class="nc"><i>523</i>&nbsp;      char c = source.getChars()[source.getStart() + offset];</b>
+<b class="nc"><i>524</i>&nbsp;      if (c == &#39;\t&#39; || c == &#39;\n&#39; || c == &#39;\r&#39;) { // hack</b>
+<b class="nc"><i>525</i>&nbsp;          return true;</b>
+<i>526</i>&nbsp;      }
+<b class="nc"><i>527</i>&nbsp;      int v = l2v(offset);</b>
+<i>528</i>&nbsp;
+<i>529</i>&nbsp;      // If ligatures are always to the left, do this stuff:
+<i>530</i>&nbsp;      //if (!(source.getLayoutFlags() &amp; 0x1) == 0) {
+<i>531</i>&nbsp;      //    v += 1;
+<i>532</i>&nbsp;      //    if (v == source.getLength()) {
+<i>533</i>&nbsp;      //        return true;
+<i>534</i>&nbsp;      //    }
+<i>535</i>&nbsp;      //}
+<i>536</i>&nbsp;
+<b class="nc"><i>537</i>&nbsp;      int idx = v * numvals + advx;</b>
+<b class="nc"><i>538</i>&nbsp;      float[] charinfo = getCharinfo();</b>
+<b class="nc"><i>539</i>&nbsp;      if (charinfo == null || idx &gt;= charinfo.length) {</b>
+<b class="nc"><i>540</i>&nbsp;          return false;</b>
+<i>541</i>&nbsp;      } else {
+<b class="nc"><i>542</i>&nbsp;          return charinfo[idx] != 0;</b>
+<i>543</i>&nbsp;      }
+<i>544</i>&nbsp;  }
+<i>545</i>&nbsp;
+<i>546</i>&nbsp;  private float[] getCharinfo() {
+<b class="nc"><i>547</i>&nbsp;    if (charinfo == null) {</b>
+<b class="nc"><i>548</i>&nbsp;      charinfo = createCharinfo();</b>
+<i>549</i>&nbsp;    }
+<b class="nc"><i>550</i>&nbsp;    return charinfo;</b>
+<i>551</i>&nbsp;  }
+<i>552</i>&nbsp;
+<b class="nc"><i>553</i>&nbsp;  private static final boolean DEBUG = FontUtilities.debugFonts();</b>
+<i>554</i>&nbsp;/*
+<i>555</i>&nbsp;* This takes the glyph info record obtained from the glyph vector and converts it into a similar record
+<i>556</i>&nbsp;* adjusted to represent character data instead.  For economy we don&#39;t use glyph info records in this processing.
+<i>557</i>&nbsp;*
+<i>558</i>&nbsp;* Here are some constraints:
+<i>559</i>&nbsp;* - there can be more glyphs than characters (glyph insertion, perhaps based on normalization, has taken place)
+<i>560</i>&nbsp;* - there can be fewer glyphs than characters
+<i>561</i>&nbsp;*   Some layout engines may insert 0xffff glyphs for characters ligaturized away, but
+<i>562</i>&nbsp;*   not all do, and it cannot be relied upon.
+<i>563</i>&nbsp;* - each glyph maps to a single character, when multiple glyphs exist for a character they all map to it, but
+<i>564</i>&nbsp;*   no two characters map to the same glyph
+<i>565</i>&nbsp;* - multiple glyphs mapping to the same character need not be in sequence (thai, tamil have split characters)
+<i>566</i>&nbsp;* - glyphs may be arbitrarily reordered (Indic reorders glyphs)
+<i>567</i>&nbsp;* - all glyphs share the same bidi level
+<i>568</i>&nbsp;* - all glyphs share the same horizontal (or vertical) baseline
+<i>569</i>&nbsp;* - combining marks visually follow their base character in the glyph array-- i.e. in an rtl gv they are
+<i>570</i>&nbsp;*   to the left of their base character-- and have zero advance.
+<i>571</i>&nbsp;*
+<i>572</i>&nbsp;* The output maps this to character positions, and therefore caret positions, via the following assumptions:
+<i>573</i>&nbsp;* - zero-advance glyphs do not contribute to the advance of their character (i.e. position is ignored), conversely
+<i>574</i>&nbsp;*   if a glyph is to contribute to the advance of its character it must have a non-zero (float) advance
+<i>575</i>&nbsp;* - no carets can appear between a zero width character and its preceding character, where &#39;preceding&#39; is
+<i>576</i>&nbsp;*   defined logically.
+<i>577</i>&nbsp;* - no carets can appear within a split character
+<i>578</i>&nbsp;* - no carets can appear within a local reordering (i.e. Indic reordering, or non-adjacent split characters)
+<i>579</i>&nbsp;* - all characters lie on the same baseline, and it is either horizontal or vertical
+<i>580</i>&nbsp;* - the charinfo is in uniform ltr or rtl order (visual order), since local reorderings and split characters are removed
+<i>581</i>&nbsp;*
+<i>582</i>&nbsp;* The algorithm works in the following way:
+<i>583</i>&nbsp;* 1) we scan the glyphs ltr or rtl based on the bidi run direction
+<i>584</i>&nbsp;* 2) Since the may be fewer glyphs than chars we cannot work in place.
+<i>585</i>&nbsp;*    A new array is allocated for output.
+<i>586</i>&nbsp;*    a) if the line is ltr, we start writing at position 0 until we finish, there may be leftver space
+<i>587</i>&nbsp;*    b) if the line is rtl and 1-1, we start writing at position numChars/glyphs - 1 until we finish at 0
+<i>588</i>&nbsp;*    c) otherwise if we don&#39;t finish at 0, we have to copy the data down
+<i>589</i>&nbsp;* 3) we consume clusters in the following way:
+<i>590</i>&nbsp;*    a) the first element is always consumed
+<i>591</i>&nbsp;*    b) subsequent elements are consumed if:
+<i>592</i>&nbsp;*       i) their advance is zero
+<i>593</i>&nbsp;*       ii) their character index &lt;= the character index of any character seen in this cluster
+<i>594</i>&nbsp;*       iii) the minimum character index seen in this cluster isn&#39;t adjacent to the previous cluster
+<i>595</i>&nbsp;*    c) character data is written as follows for horizontal lines (x/y and w/h are exchanged on vertical lines)
+<i>596</i>&nbsp;*       i) the x position is the position of the leftmost glyph whose advance is not zero
+<i>597</i>&nbsp;*       ii)the y position is the baseline
+<i>598</i>&nbsp;*       iii) the x advance is the distance to the maximum x + adv of all glyphs whose advance is not zero
+<i>599</i>&nbsp;*       iv) the y advance is the baseline
+<i>600</i>&nbsp;*       v) vis x,y,w,h tightly encloses the vis x,y,w,h of all the glyphs with nonzero w and h
+<i>601</i>&nbsp;* 4) In the future, we can make some simple optimizations to avoid copying if we know some things:
+<i>602</i>&nbsp;*    a) if the mapping is 1-1, unidirectional, and there are no zero-adv glyphs, we just return the glyphinfo
+<i>603</i>&nbsp;*    b) if the mapping is 1-1, unidirectional, we just adjust the remaining glyphs to originate at right/left of the base
+<i>604</i>&nbsp;*    c) if the mapping is 1-1, we compute the base position and advance as we go, then go back to adjust the remaining glyphs
+<i>605</i>&nbsp;*    d) otherwise we keep separate track of the write position as we do (c) since no glyph in the cluster may be in the
+<i>606</i>&nbsp;*    position we are writing.
+<i>607</i>&nbsp;*    e) most clusters are simply the single base glyph in the same position as its character, so we try to avoid
+<i>608</i>&nbsp;*    copying its data unnecessarily.
+<i>609</i>&nbsp;* 5) the glyph vector ought to provide access to these &#39;global&#39; attributes to enable these optimizations.  A single
+<i>610</i>&nbsp;*    int with flags set is probably ok, we could also provide accessors for each attribute.  This doesn&#39;t map to
+<i>611</i>&nbsp;*    the GlyphMetrics flags very well, so I won&#39;t attempt to keep them similar.  It might be useful to add those
+<i>612</i>&nbsp;*    in addition to these.
+<i>613</i>&nbsp;*    int FLAG_HAS_ZERO_ADVANCE_GLYPHS = 1; // set if there are zero-advance glyphs
+<i>614</i>&nbsp;*    int FLAG_HAS_NONUNIFORM_ORDER = 2; // set if some glyphs are rearranged out of character visual order
+<i>615</i>&nbsp;*    int FLAG_HAS_SPLIT_CHARACTERS = 4; // set if multiple glyphs per character
+<i>616</i>&nbsp;*    int getDescriptionFlags(); // return an int containing the above flags
+<i>617</i>&nbsp;*    boolean hasZeroAdvanceGlyphs();
+<i>618</i>&nbsp;*    boolean hasNonuniformOrder();
+<i>619</i>&nbsp;*    boolean hasSplitCharacters();
+<i>620</i>&nbsp;*    The optimized cases in (4) correspond to values 0, 1, 3, and 7 returned by getDescriptionFlags().
+<i>621</i>&nbsp;*/
+<i>622</i>&nbsp;  protected float[] createCharinfo() {
+<b class="nc"><i>623</i>&nbsp;    StandardGlyphVector gv = getGV();</b>
+<b class="nc"><i>624</i>&nbsp;    float[] glyphinfo = null;</b>
+<i>625</i>&nbsp;    try {
+<b class="nc"><i>626</i>&nbsp;        glyphinfo = gv.getGlyphInfo();</b>
+<i>627</i>&nbsp;    }
+<b class="nc"><i>628</i>&nbsp;    catch (Exception e) {</b>
+<b class="nc"><i>629</i>&nbsp;        if (DEBUG) {</b>
+<b class="nc"><i>630</i>&nbsp;            System.err.println(source);</b>
+<b class="nc"><i>631</i>&nbsp;            e.printStackTrace();</b>
+<i>632</i>&nbsp;        }
+<b class="nc"><i>633</i>&nbsp;        glyphinfo = new float[gv.getNumGlyphs() * numvals];</b>
+<b class="nc"><i>634</i>&nbsp;    }</b>
+<i>635</i>&nbsp;
+<b class="nc"><i>636</i>&nbsp;    int numGlyphs = gv.getNumGlyphs();</b>
+<b class="nc"><i>637</i>&nbsp;    if (numGlyphs == 0) {</b>
+<b class="nc"><i>638</i>&nbsp;        return glyphinfo;</b>
+<i>639</i>&nbsp;    }
+<b class="nc"><i>640</i>&nbsp;    int[] indices = gv.getGlyphCharIndices(0, numGlyphs, null);</b>
+<b class="nc"><i>641</i>&nbsp;    float[] charInfo = new float[source.getLength() * numvals];</b>
+<i>642</i>&nbsp;
+<b class="nc"><i>643</i>&nbsp;    if (DEBUG) {</b>
+<b class="nc"><i>644</i>&nbsp;      System.err.println(&quot;number of glyphs: &quot; + numGlyphs);</b>
+<b class="nc"><i>645</i>&nbsp;      System.err.println(&quot;glyphinfo.len: &quot; + glyphinfo.length);</b>
+<b class="nc"><i>646</i>&nbsp;      System.err.println(&quot;indices.len: &quot; + indices.length);</b>
+<b class="nc"><i>647</i>&nbsp;      for (int i = 0; i &lt; numGlyphs; ++i) {</b>
+<b class="nc"><i>648</i>&nbsp;        System.err.println(&quot;g: &quot; + i +</b>
+<b class="nc"><i>649</i>&nbsp;            &quot;  v: &quot; + gv.getGlyphCode(i) +</b>
+<i>650</i>&nbsp;            &quot;, x: &quot; + glyphinfo[i*numvals+posx] +
+<i>651</i>&nbsp;            &quot;, a: &quot; + glyphinfo[i*numvals+advx] +
+<i>652</i>&nbsp;            &quot;, n: &quot; + indices[i]);
+<i>653</i>&nbsp;      }
+<i>654</i>&nbsp;    }
+<i>655</i>&nbsp;
+<b class="nc"><i>656</i>&nbsp;    int minIndex = indices[0];  // smallest index seen this cluster</b>
+<b class="nc"><i>657</i>&nbsp;    int maxIndex = minIndex;    // largest index seen this cluster</b>
+<b class="nc"><i>658</i>&nbsp;    int cp = 0;                 // character position</b>
+<b class="nc"><i>659</i>&nbsp;    int cc = 0;</b>
+<b class="nc"><i>660</i>&nbsp;    int gp = 0;                 // glyph position</b>
+<b class="nc"><i>661</i>&nbsp;    int gx = 0;                 // glyph index (visual)</b>
+<b class="nc"><i>662</i>&nbsp;    int gxlimit = numGlyphs;    // limit of gx, when we reach this we&#39;re done</b>
+<b class="nc"><i>663</i>&nbsp;    int pdelta = numvals;       // delta for incrementing positions</b>
+<b class="nc"><i>664</i>&nbsp;    int xdelta = 1;             // delta for incrementing indices</b>
+<i>665</i>&nbsp;
+<b class="nc"><i>666</i>&nbsp;    boolean rtl = (source.getLayoutFlags() &amp; 0x1) == 1;</b>
+<b class="nc"><i>667</i>&nbsp;    if (rtl) {</b>
+<b class="nc"><i>668</i>&nbsp;        minIndex = indices[numGlyphs - 1];</b>
+<b class="nc"><i>669</i>&nbsp;        maxIndex = minIndex;</b>
+<b class="nc"><i>670</i>&nbsp;        cp = charInfo.length - numvals;</b>
+<b class="nc"><i>671</i>&nbsp;        gp = glyphinfo.length - numvals;</b>
+<b class="nc"><i>672</i>&nbsp;        gx = numGlyphs - 1;</b>
+<b class="nc"><i>673</i>&nbsp;        gxlimit = -1;</b>
+<b class="nc"><i>674</i>&nbsp;        pdelta = -numvals;</b>
+<b class="nc"><i>675</i>&nbsp;        xdelta = -1;</b>
+<i>676</i>&nbsp;    }
+<i>677</i>&nbsp;
+<i>678</i>&nbsp;    /*
+<i>679</i>&nbsp;    // to support vertical, use &#39;ixxxx&#39; indices and swap horiz and vertical components
+<i>680</i>&nbsp;    if (source.isVertical()) {
+<i>681</i>&nbsp;        iposx = posy;
+<i>682</i>&nbsp;        iposy = posx;
+<i>683</i>&nbsp;        iadvx = advy;
+<i>684</i>&nbsp;        iadvy = advx;
+<i>685</i>&nbsp;        ivisx = visy;
+<i>686</i>&nbsp;        ivisy = visx;
+<i>687</i>&nbsp;        ivish = visw;
+<i>688</i>&nbsp;        ivisw = vish;
+<i>689</i>&nbsp;    } else {
+<i>690</i>&nbsp;        // use standard values
+<i>691</i>&nbsp;    }
+<i>692</i>&nbsp;    */
+<i>693</i>&nbsp;
+<i>694</i>&nbsp;    // use intermediates to reduce array access when we need to
+<b class="nc"><i>695</i>&nbsp;    float cposl = 0, cposr = 0, cvisl = 0, cvist = 0, cvisr = 0, cvisb = 0;</b>
+<b class="nc"><i>696</i>&nbsp;    float baseline = 0;</b>
+<i>697</i>&nbsp;
+<b class="nc"><i>698</i>&nbsp;    while (gx != gxlimit) {</b>
+<i>699</i>&nbsp;        // start of new cluster
+<b class="nc"><i>700</i>&nbsp;        int clusterExtraGlyphs = 0;</b>
+<i>701</i>&nbsp;
+<b class="nc"><i>702</i>&nbsp;        minIndex = indices[gx];</b>
+<b class="nc"><i>703</i>&nbsp;        maxIndex = minIndex;</b>
+<i>704</i>&nbsp;
+<b class="nc"><i>705</i>&nbsp;        cposl = glyphinfo[gp + posx];</b>
+<b class="nc"><i>706</i>&nbsp;        cposr = cposl + glyphinfo[gp + advx];</b>
+<b class="nc"><i>707</i>&nbsp;        cvisl = glyphinfo[gp + visx];</b>
+<b class="nc"><i>708</i>&nbsp;        cvist = glyphinfo[gp + visy];</b>
+<b class="nc"><i>709</i>&nbsp;        cvisr = cvisl + glyphinfo[gp + visw];</b>
+<b class="nc"><i>710</i>&nbsp;        cvisb = cvist + glyphinfo[gp + vish];</b>
+<i>711</i>&nbsp;
+<i>712</i>&nbsp;        // advance to next glyph
+<b class="nc"><i>713</i>&nbsp;        gx += xdelta;</b>
+<b class="nc"><i>714</i>&nbsp;        gp += pdelta;</b>
+<i>715</i>&nbsp;
+<b class="nc"><i>716</i>&nbsp;        while (gx != gxlimit &amp;&amp;</b>
+<i>717</i>&nbsp;               ((glyphinfo[gp + advx] == 0) ||
+<i>718</i>&nbsp;               (indices[gx] &lt;= maxIndex) ||
+<i>719</i>&nbsp;               (maxIndex - minIndex &gt; clusterExtraGlyphs))) {
+<i>720</i>&nbsp;
+<b class="nc"><i>721</i>&nbsp;            ++clusterExtraGlyphs; // have an extra glyph in this cluster</b>
+<b class="nc"><i>722</i>&nbsp;            if (DEBUG) {</b>
+<b class="nc"><i>723</i>&nbsp;                System.err.println(&quot;gp=&quot; +gp +&quot; adv=&quot; + glyphinfo[gp + advx] +</b>
+<i>724</i>&nbsp;                                   &quot; gx=&quot;+ gx+ &quot; i[gx]=&quot;+indices[gx] +
+<i>725</i>&nbsp;                                   &quot; clusterExtraGlyphs=&quot;+clusterExtraGlyphs);
+<i>726</i>&nbsp;            }
+<i>727</i>&nbsp;
+<i>728</i>&nbsp;            // adjust advance only if new glyph has non-zero advance
+<b class="nc"><i>729</i>&nbsp;            float radvx = glyphinfo[gp + advx];</b>
+<b class="nc"><i>730</i>&nbsp;            if (radvx != 0) {</b>
+<b class="nc"><i>731</i>&nbsp;                float rposx = glyphinfo[gp + posx];</b>
+<b class="nc"><i>732</i>&nbsp;                cposl = Math.min(cposl, rposx);</b>
+<b class="nc"><i>733</i>&nbsp;                cposr = Math.max(cposr, rposx + radvx);</b>
+<i>734</i>&nbsp;            }
+<i>735</i>&nbsp;
+<i>736</i>&nbsp;            // adjust visible bounds only if new glyph has non-empty bounds
+<b class="nc"><i>737</i>&nbsp;            float rvisw = glyphinfo[gp + visw];</b>
+<b class="nc"><i>738</i>&nbsp;            if (rvisw != 0) {</b>
+<b class="nc"><i>739</i>&nbsp;                float rvisx = glyphinfo[gp + visx];</b>
+<b class="nc"><i>740</i>&nbsp;                float rvisy = glyphinfo[gp + visy];</b>
+<b class="nc"><i>741</i>&nbsp;                cvisl = Math.min(cvisl, rvisx);</b>
+<b class="nc"><i>742</i>&nbsp;                cvist = Math.min(cvist, rvisy);</b>
+<b class="nc"><i>743</i>&nbsp;                cvisr = Math.max(cvisr, rvisx + rvisw);</b>
+<b class="nc"><i>744</i>&nbsp;                cvisb = Math.max(cvisb, rvisy + glyphinfo[gp + vish]);</b>
+<i>745</i>&nbsp;            }
+<i>746</i>&nbsp;
+<i>747</i>&nbsp;            // adjust min, max index
+<b class="nc"><i>748</i>&nbsp;            minIndex = Math.min(minIndex, indices[gx]);</b>
+<b class="nc"><i>749</i>&nbsp;            maxIndex = Math.max(maxIndex, indices[gx]);</b>
+<i>750</i>&nbsp;
+<i>751</i>&nbsp;            // get ready to examine next glyph
+<b class="nc"><i>752</i>&nbsp;            gx += xdelta;</b>
+<b class="nc"><i>753</i>&nbsp;            gp += pdelta;</b>
+<b class="nc"><i>754</i>&nbsp;        }</b>
+<i>755</i>&nbsp;        // done with cluster, gx and gp are set for next glyph
+<i>756</i>&nbsp;
+<b class="nc"><i>757</i>&nbsp;        if (DEBUG) {</b>
+<b class="nc"><i>758</i>&nbsp;            System.err.println(&quot;minIndex = &quot; + minIndex + &quot;, maxIndex = &quot; + maxIndex);</b>
+<i>759</i>&nbsp;        }
+<i>760</i>&nbsp;
+<i>761</i>&nbsp;        // save adjustments to the base character and do common adjustments.
+<b class="nc"><i>762</i>&nbsp;        charInfo[cp + posx] = cposl;</b>
+<b class="nc"><i>763</i>&nbsp;        charInfo[cp + posy] = baseline;</b>
+<b class="nc"><i>764</i>&nbsp;        charInfo[cp + advx] = cposr - cposl;</b>
+<b class="nc"><i>765</i>&nbsp;        charInfo[cp + advy] = 0;</b>
+<b class="nc"><i>766</i>&nbsp;        charInfo[cp + visx] = cvisl;</b>
+<b class="nc"><i>767</i>&nbsp;        charInfo[cp + visy] = cvist;</b>
+<b class="nc"><i>768</i>&nbsp;        charInfo[cp + visw] = cvisr - cvisl;</b>
+<b class="nc"><i>769</i>&nbsp;        charInfo[cp + vish] = cvisb - cvist;</b>
+<b class="nc"><i>770</i>&nbsp;        cc++;</b>
+<i>771</i>&nbsp;
+<i>772</i>&nbsp;        /* We may have consumed multiple glyphs for this char position.
+<b class="nc"><i>773</i>&nbsp;         * Map those extra consumed glyphs to char positions that would follow</b>
+<b class="nc"><i>774</i>&nbsp;         * up to the index prior to that which begins the next cluster.</b>
+<i>775</i>&nbsp;         * If we have reached the last glyph (reached gxlimit) then we need to
+<b class="nc"><i>776</i>&nbsp;         * map remaining unmapped chars to the same location as the last one.</b>
+<i>777</i>&nbsp;         */
+<b class="nc"><i>778</i>&nbsp;        int tgt;</b>
+<b class="nc"><i>779</i>&nbsp;        if (gx == gxlimit) {</b>
+<i>780</i>&nbsp;           tgt = charInfo.length / numvals;
+<i>781</i>&nbsp;        } else {
+<i>782</i>&nbsp;           tgt = indices[gx];
+<b class="nc"><i>783</i>&nbsp;        }</b>
+<b class="nc"><i>784</i>&nbsp;        if (DEBUG) {</b>
+<i>785</i>&nbsp;           System.err.println(&quot;gx=&quot; + gx + &quot; gxlimit=&quot; + gxlimit +
+<b class="nc"><i>786</i>&nbsp;                              &quot; charInfo.len=&quot; + charInfo.length +</b>
+<i>787</i>&nbsp;                              &quot; tgt=&quot; + tgt + &quot; cc=&quot; + cc + &quot; cp=&quot; + cp);
+<b class="nc"><i>788</i>&nbsp;        }</b>
+<b class="nc"><i>789</i>&nbsp;        while (cc &lt; tgt) {</b>
+<i>790</i>&nbsp;            if (rtl) {
+<b class="nc"><i>791</i>&nbsp;                // if rtl, characters to left of base, else to right.  reuse cposr.</b>
+<i>792</i>&nbsp;                cposr = cposl;
+<b class="nc"><i>793</i>&nbsp;            }</b>
+<b class="nc"><i>794</i>&nbsp;            cvisr -= cvisl; // reuse, convert to deltas.</b>
+<b class="nc"><i>795</i>&nbsp;            cvisb -= cvist;</b>
+<i>796</i>&nbsp;
+<i>797</i>&nbsp;            cp += pdelta;
+<i>798</i>&nbsp;
+<i>799</i>&nbsp;            if (cp &lt; 0 || cp &gt;= charInfo.length) {
+<i>800</i>&nbsp;                if (DEBUG)  {
+<b class="nc"><i>801</i>&nbsp;                    System.err.println(&quot;Error : cp=&quot; + cp +</b>
+<b class="nc"><i>802</i>&nbsp;                                       &quot; charInfo.length=&quot; + charInfo.length);</b>
+<i>803</i>&nbsp;                }
+<b class="nc"><i>804</i>&nbsp;                break;</b>
+<b class="nc"><i>805</i>&nbsp;            }</b>
+<b class="nc"><i>806</i>&nbsp;</b>
+<b class="nc"><i>807</i>&nbsp;            if (DEBUG) {</b>
+<b class="nc"><i>808</i>&nbsp;                System.err.println(&quot;Insert charIndex &quot; + cc + &quot; at pos=&quot;+cp);</b>
+<b class="nc"><i>809</i>&nbsp;            }</b>
+<b class="nc"><i>810</i>&nbsp;            charInfo[cp + posx] = cposr;</b>
+<b class="nc"><i>811</i>&nbsp;            charInfo[cp + posy] = baseline;</b>
+<b class="nc"><i>812</i>&nbsp;            charInfo[cp + advx] = 0;</b>
+<i>813</i>&nbsp;            charInfo[cp + advy] = 0;
+<b class="nc"><i>814</i>&nbsp;            charInfo[cp + visx] = cvisl;</b>
+<b class="nc"><i>815</i>&nbsp;            charInfo[cp + visy] = cvist;</b>
+<i>816</i>&nbsp;            charInfo[cp + visw] = cvisr;
+<b class="nc"><i>817</i>&nbsp;            charInfo[cp + vish] = cvisb;</b>
+<b class="nc"><i>818</i>&nbsp;            cc++;</b>
+<b class="nc"><i>819</i>&nbsp;        }</b>
+<b class="nc"><i>820</i>&nbsp;        cp += pdelta; // reset for new cluster</b>
+<b class="nc"><i>821</i>&nbsp;    }</b>
+<i>822</i>&nbsp;
+<b class="nc"><i>823</i>&nbsp;    if (DEBUG) {</b>
+<b class="nc"><i>824</i>&nbsp;        char[] chars = source.getChars();</b>
+<i>825</i>&nbsp;        int start = source.getStart();
+<i>826</i>&nbsp;        int length = source.getLength();
+<i>827</i>&nbsp;        System.err.println(&quot;char info for &quot; + length + &quot; characters&quot;);
+<i>828</i>&nbsp;
+<i>829</i>&nbsp;        for (int i = 0; i &lt; length * numvals;) {
+<i>830</i>&nbsp;            System.err.println(&quot; ch: &quot; + Integer.toHexString(chars[start + v2l(i / numvals)]) +
+<i>831</i>&nbsp;                               &quot; x: &quot; + charInfo[i++] +
+<i>832</i>&nbsp;                               &quot; y: &quot; + charInfo[i++] +
+<i>833</i>&nbsp;                               &quot; xa: &quot; + charInfo[i++] +
+<i>834</i>&nbsp;                               &quot; ya: &quot; + charInfo[i++] +
+<b class="nc"><i>835</i>&nbsp;                               &quot; l: &quot; + charInfo[i++] +</b>
+<i>836</i>&nbsp;                               &quot; t: &quot; + charInfo[i++] +
+<i>837</i>&nbsp;                               &quot; w: &quot; + charInfo[i++] +
+<i>838</i>&nbsp;                               &quot; h: &quot; + charInfo[i++]);
+<i>839</i>&nbsp;      }
+<i>840</i>&nbsp;    }
+<i>841</i>&nbsp;    return charInfo;
+<i>842</i>&nbsp;  }
+<i>843</i>&nbsp;
+<b class="nc"><i>844</i>&nbsp;  /**</b>
+<i>845</i>&nbsp;   * Map logical character index to visual character index.
+<i>846</i>&nbsp;   * &lt;p&gt;
+<i>847</i>&nbsp;   * This ignores hindi reordering.  @see createCharinfo
+<i>848</i>&nbsp;   */
+<i>849</i>&nbsp;  protected int l2v(int index) {
+<i>850</i>&nbsp;    return (source.getLayoutFlags() &amp; 0x1) == 0 ? index : source.getLength() - 1 - index;
+<i>851</i>&nbsp;  }
+<i>852</i>&nbsp;
+<b class="nc"><i>853</i>&nbsp;  /**</b>
+<i>854</i>&nbsp;   * Map visual character index to logical character index.
+<i>855</i>&nbsp;   * &lt;p&gt;
+<i>856</i>&nbsp;   * This ignores hindi reordering.  @see createCharinfo
+<b class="nc"><i>857</i>&nbsp;   */</b>
+<i>858</i>&nbsp;  protected int v2l(int index) {
+<i>859</i>&nbsp;    return (source.getLayoutFlags() &amp; 0x1) == 0 ? index : source.getLength() - 1 - index;
+<i>860</i>&nbsp;  }
+<i>861</i>&nbsp;
+<b class="nc"><i>862</i>&nbsp;  public TextLineComponent getSubset(int start, int limit, int dir) {</b>
+<i>863</i>&nbsp;    return new ExtendedTextSourceLabel(source.getSubSource(start, limit-start, dir), decorator);
+<i>864</i>&nbsp;  }
+<i>865</i>&nbsp;
+<i>866</i>&nbsp;  public String toString() {
+<i>867</i>&nbsp;    if (true) {
+<i>868</i>&nbsp;        return source.toString(TextSource.WITHOUT_CONTEXT);
+<i>869</i>&nbsp;    }
+<i>870</i>&nbsp;    StringBuilder sb = new StringBuilder();
+<i>871</i>&nbsp;    sb.append(super.toString());
+<i>872</i>&nbsp;    sb.append(&quot;[source:&quot;);
+<i>873</i>&nbsp;    sb.append(source.toString(TextSource.WITHOUT_CONTEXT));
+<i>874</i>&nbsp;    sb.append(&quot;, lb:&quot;);
+<i>875</i>&nbsp;    sb.append(lb);
+<i>876</i>&nbsp;    sb.append(&quot;, ab:&quot;);
+<i>877</i>&nbsp;    sb.append(ab);
+<i>878</i>&nbsp;    sb.append(&quot;, vb:&quot;);
+<i>879</i>&nbsp;    sb.append(vb);
+<i>880</i>&nbsp;    sb.append(&quot;, gv:&quot;);
+<i>881</i>&nbsp;    sb.append(gv);
+<i>882</i>&nbsp;    sb.append(&quot;, ci: &quot;);
+<i>883</i>&nbsp;    if (charinfo == null) {
+<i>884</i>&nbsp;      sb.append(&quot;null&quot;);
+<i>885</i>&nbsp;    } else {
+<i>886</i>&nbsp;      sb.append(charinfo[0]);
+<i>887</i>&nbsp;      for (int i = 1; i &lt; charinfo.length;) {
+<i>888</i>&nbsp;        sb.append(i % numvals == 0 ? &quot;; &quot; : &quot;, &quot;);
+<i>889</i>&nbsp;        sb.append(charinfo[i]);
+<i>890</i>&nbsp;      }
+<i>891</i>&nbsp;    }
+<i>892</i>&nbsp;    sb.append(&quot;]&quot;);
+<i>893</i>&nbsp;
+<i>894</i>&nbsp;    return sb.toString();
+<i>895</i>&nbsp;  }
+<b class="nc"><i>896</i>&nbsp;</b>
+<i>897</i>&nbsp;  //public static ExtendedTextLabel create(TextSource source) {
+<i>898</i>&nbsp;  //  return new ExtendedTextSourceLabel(source);
+<i>899</i>&nbsp;  //}
+<i>900</i>&nbsp;
+<i>901</i>&nbsp;  public int getNumJustificationInfos() {
+<i>902</i>&nbsp;    return getGV().getNumGlyphs();
+<i>903</i>&nbsp;  }
+<i>904</i>&nbsp;
+<i>905</i>&nbsp;
+<b class="nc"><i>906</i>&nbsp;  public void getJustificationInfos(GlyphJustificationInfo[] infos, int infoStart, int charStart, int charLimit) {</b>
+<i>907</i>&nbsp;    // This simple implementation only uses spaces for justification.
+<b class="nc"><i>908</i>&nbsp;    // Since regular characters aren&#39;t justified, we don&#39;t need to deal with</b>
+<i>909</i>&nbsp;    // special infos for combining marks or ligature substitution glyphs.
+<b class="nc"><i>910</i>&nbsp;    // added character justification for kanjii only 2/22/98</b>
+<i>911</i>&nbsp;
+<b class="nc"><i>912</i>&nbsp;    StandardGlyphVector gv = getGV();</b>
+<i>913</i>&nbsp;
+<i>914</i>&nbsp;    float[] charinfo = getCharinfo();
+<i>915</i>&nbsp;
+<i>916</i>&nbsp;    float size = gv.getFont().getSize2D();
+<b class="nc"><i>917</i>&nbsp;</b>
+<i>918</i>&nbsp;    GlyphJustificationInfo nullInfo =
+<i>919</i>&nbsp;      new GlyphJustificationInfo(0,
+<i>920</i>&nbsp;                                 false, GlyphJustificationInfo.PRIORITY_NONE, 0, 0,
+<i>921</i>&nbsp;                                 false, GlyphJustificationInfo.PRIORITY_NONE, 0, 0);
+<b class="nc"><i>922</i>&nbsp;</b>
+<i>923</i>&nbsp;    GlyphJustificationInfo spaceInfo =
+<i>924</i>&nbsp;      new GlyphJustificationInfo(size,
+<i>925</i>&nbsp;                                 true, GlyphJustificationInfo.PRIORITY_WHITESPACE, 0, size,
+<i>926</i>&nbsp;                                 true, GlyphJustificationInfo.PRIORITY_WHITESPACE, 0, size / 4f);
+<b class="nc"><i>927</i>&nbsp;</b>
+<b class="nc"><i>928</i>&nbsp;    GlyphJustificationInfo kanjiInfo =</b>
+<i>929</i>&nbsp;      new GlyphJustificationInfo(size,
+<i>930</i>&nbsp;                                 true, GlyphJustificationInfo.PRIORITY_INTERCHAR, size, size,
+<i>931</i>&nbsp;                                 false, GlyphJustificationInfo.PRIORITY_NONE, 0, 0);
+<b class="nc"><i>932</i>&nbsp;</b>
+<b class="nc"><i>933</i>&nbsp;    char[] chars = source.getChars();</b>
+<b class="nc"><i>934</i>&nbsp;    int offset = source.getStart();</b>
+<b class="nc"><i>935</i>&nbsp;</b>
+<b class="nc"><i>936</i>&nbsp;    // assume data is 1-1 and either all rtl or all ltr, for now</b>
+<b class="nc"><i>937</i>&nbsp;</b>
+<b class="nc"><i>938</i>&nbsp;    int numGlyphs = gv.getNumGlyphs();</b>
+<b class="nc"><i>939</i>&nbsp;    int minGlyph = 0;</b>
+<i>940</i>&nbsp;    int maxGlyph = numGlyphs;
+<b class="nc"><i>941</i>&nbsp;    boolean ltr = (source.getLayoutFlags() &amp; 0x1) == 0;</b>
+<b class="nc"><i>942</i>&nbsp;    if (charStart != 0 || charLimit != source.getLength()) {</b>
+<i>943</i>&nbsp;      if (ltr) {
+<i>944</i>&nbsp;        minGlyph = charStart;
+<i>945</i>&nbsp;        maxGlyph = charLimit;
+<b class="nc"><i>946</i>&nbsp;      } else {</b>
+<b class="nc"><i>947</i>&nbsp;        minGlyph = numGlyphs - charLimit;</b>
+<b class="nc"><i>948</i>&nbsp;        maxGlyph = numGlyphs - charStart;</b>
+<b class="nc"><i>949</i>&nbsp;      }</b>
+<b class="nc"><i>950</i>&nbsp;    }</b>
+<i>951</i>&nbsp;
+<b class="nc"><i>952</i>&nbsp;    for (int i = 0; i &lt; numGlyphs; ++i) {</b>
+<b class="nc"><i>953</i>&nbsp;      GlyphJustificationInfo info = null;</b>
+<b class="nc"><i>954</i>&nbsp;      if (i &gt;= minGlyph &amp;&amp; i &lt; maxGlyph) {</b>
+<b class="nc"><i>955</i>&nbsp;        if (charinfo[i * numvals + advx] == 0) { // combining marks don&#39;t justify</b>
+<i>956</i>&nbsp;          info = nullInfo;
+<b class="nc"><i>957</i>&nbsp;        } else {</b>
+<i>958</i>&nbsp;          int ci = v2l(i); // 1-1 assumption again
+<i>959</i>&nbsp;          char c = chars[offset + ci];
+<i>960</i>&nbsp;          if (Character.isWhitespace(c)) {
+<b class="nc"><i>961</i>&nbsp;            info = spaceInfo;</b>
+<i>962</i>&nbsp;            // CJK, Hangul, CJK Compatibility areas
+<b class="nc"><i>963</i>&nbsp;          } else if (c &gt;= 0x4e00 &amp;&amp;</b>
+<i>964</i>&nbsp;                     (c &lt; 0xa000) ||
+<i>965</i>&nbsp;                     (c &gt;= 0xac00 &amp;&amp; c &lt; 0xd7b0) ||
+<i>966</i>&nbsp;                     (c &gt;= 0xf900 &amp;&amp; c &lt; 0xfb00)) {
+<b class="nc"><i>967</i>&nbsp;            info = kanjiInfo;</b>
+<i>968</i>&nbsp;          } else {
+<i>969</i>&nbsp;            info = nullInfo;
+<i>970</i>&nbsp;          }
+<i>971</i>&nbsp;        }
+<i>972</i>&nbsp;      }
+<i>973</i>&nbsp;      infos[infoStart + i] = info;
+<i>974</i>&nbsp;    }
+<i>975</i>&nbsp;  }
+<b class="nc"><i>976</i>&nbsp;</b>
+<i>977</i>&nbsp;  public TextLineComponent applyJustificationDeltas(float[] deltas, int deltaStart, boolean[] flags) {
+<i>978</i>&nbsp;
+<b class="nc"><i>979</i>&nbsp;    // when we justify, we need to adjust the charinfo since spaces</b>
+<i>980</i>&nbsp;    // change their advances.  preserve the existing charinfo.
+<i>981</i>&nbsp;
+<i>982</i>&nbsp;    float[] newCharinfo = getCharinfo().clone();
+<b class="nc"><i>983</i>&nbsp;</b>
+<b class="nc"><i>984</i>&nbsp;    // we only push spaces, so never need to rejustify</b>
+<b class="nc"><i>985</i>&nbsp;    flags[0] = false;</b>
+<i>986</i>&nbsp;
+<i>987</i>&nbsp;    // preserve the existing gv.
+<i>988</i>&nbsp;
+<i>989</i>&nbsp;    StandardGlyphVector newgv = (StandardGlyphVector)getGV().clone();
+<i>990</i>&nbsp;    float[] newPositions = newgv.getGlyphPositions(null);
+<i>991</i>&nbsp;    int numGlyphs = newgv.getNumGlyphs();
+<i>992</i>&nbsp;
+<i>993</i>&nbsp;    /*
+<i>994</i>&nbsp;    System.out.println(&quot;oldgv: &quot; + getGV() + &quot;, newgv: &quot; + newgv);
+<i>995</i>&nbsp;    System.out.println(&quot;newpositions: &quot; + newPositions);
+<i>996</i>&nbsp;    for (int i = 0; i &lt; newPositions.length; i += 2) {
+<i>997</i>&nbsp;      System.out.println(&quot;[&quot; + (i/2) + &quot;] &quot; + newPositions[i] + &quot;, &quot; + newPositions[i+1]);
+<i>998</i>&nbsp;    }
+<i>999</i>&nbsp;
+<b class="nc"><i>1000</i>&nbsp;    System.out.println(&quot;deltas: &quot; + deltas + &quot; start: &quot; + deltaStart);</b>
+<b class="nc"><i>1001</i>&nbsp;    for (int i = deltaStart; i &lt; deltaStart + numGlyphs; i += 2) {</b>
+<i>1002</i>&nbsp;      System.out.println(&quot;[&quot; + (i/2) + &quot;] &quot; + deltas[i] + &quot;, &quot; + deltas[i+1]);
+<i>1003</i>&nbsp;    }
+<i>1004</i>&nbsp;    */
+<i>1005</i>&nbsp;
+<i>1006</i>&nbsp;    char[] chars = source.getChars();
+<b class="nc"><i>1007</i>&nbsp;    int offset = source.getStart();</b>
+<b class="nc"><i>1008</i>&nbsp;</b>
+<b class="nc"><i>1009</i>&nbsp;    // accumulate the deltas to adjust positions and advances.</b>
+<b class="nc"><i>1010</i>&nbsp;    // handle whitespace by modifying advance,</b>
+<i>1011</i>&nbsp;    // handle everything else by modifying position before and after
+<b class="nc"><i>1012</i>&nbsp;</b>
+<i>1013</i>&nbsp;    float deltaPos = 0;
+<b class="nc"><i>1014</i>&nbsp;    for (int i = 0; i &lt; numGlyphs; ++i) {</b>
+<b class="nc"><i>1015</i>&nbsp;      if (Character.isWhitespace(chars[offset + v2l(i)])) {</b>
+<b class="nc"><i>1016</i>&nbsp;        newPositions[i*2] += deltaPos;</b>
+<i>1017</i>&nbsp;
+<b class="nc"><i>1018</i>&nbsp;        float deltaAdv = deltas[deltaStart + i*2] + deltas[deltaStart + i*2 + 1];</b>
+<b class="nc"><i>1019</i>&nbsp;</b>
+<b class="nc"><i>1020</i>&nbsp;        newCharinfo[i * numvals + posx] += deltaPos;</b>
+<i>1021</i>&nbsp;        newCharinfo[i * numvals + visx] += deltaPos;
+<b class="nc"><i>1022</i>&nbsp;        newCharinfo[i * numvals + advx] += deltaAdv;</b>
+<b class="nc"><i>1023</i>&nbsp;</b>
+<b class="nc"><i>1024</i>&nbsp;        deltaPos += deltaAdv;</b>
+<i>1025</i>&nbsp;      } else {
+<b class="nc"><i>1026</i>&nbsp;        deltaPos += deltas[deltaStart + i*2];</b>
+<i>1027</i>&nbsp;
+<i>1028</i>&nbsp;        newPositions[i*2] += deltaPos;
+<b class="nc"><i>1029</i>&nbsp;        newCharinfo[i * numvals + posx] += deltaPos;</b>
+<i>1030</i>&nbsp;        newCharinfo[i * numvals + visx] += deltaPos;
+<b class="nc"><i>1031</i>&nbsp;</b>
+<i>1032</i>&nbsp;        deltaPos += deltas[deltaStart + i*2 + 1];
+<i>1033</i>&nbsp;      }
+<i>1034</i>&nbsp;    }
+<i>1035</i>&nbsp;    newPositions[numGlyphs * 2] += deltaPos;
+<i>1036</i>&nbsp;
+<i>1037</i>&nbsp;    newgv.setGlyphPositions(newPositions);
+<i>1038</i>&nbsp;
+<i>1039</i>&nbsp;    /*
+<i>1040</i>&nbsp;    newPositions = newgv.getGlyphPositions(null);
+<b class="nc"><i>1041</i>&nbsp;    System.out.println(&quot;&gt;&gt; newpositions: &quot; + newPositions);</b>
+<b class="nc"><i>1042</i>&nbsp;    for (int i = 0; i &lt; newPositions.length; i += 2) {</b>
+<b class="nc"><i>1043</i>&nbsp;      System.out.println(&quot;[&quot; + (i/2) + &quot;] &quot; + newPositions[i] + &quot;, &quot; + newPositions[i+1]);</b>
+<i>1044</i>&nbsp;    }
+<b class="nc"><i>1045</i>&nbsp;    */</b>
+<i>1046</i>&nbsp;
+<i>1047</i>&nbsp;    ExtendedTextSourceLabel result = new ExtendedTextSourceLabel(source, decorator);
+<i>1048</i>&nbsp;    result.gv = newgv;
+<i>1049</i>&nbsp;    result.charinfo = newCharinfo;
+<i>1050</i>&nbsp;
+<i>1051</i>&nbsp;    return result;
+<i>1052</i>&nbsp;  }
+<i>1053</i>&nbsp;}
+</div>
+</div>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2018-11-19 23:12</div>
+</div>
+</body>
+</html>
