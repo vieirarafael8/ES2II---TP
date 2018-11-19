@@ -20,71 +20,232 @@ public class Tests {
     @BeforeEach
     public void setUp() throws UserAlreadyExists {
 
-        //Inicialização do sistema do aluguer de bicicletas
+        //Inicialização do sistema
         brs = new BikeRentalSystem(1);
 
-        //Adição de um User com o id=0
+        //User com o id=0
         brs.registerUser(0, "Rafael", 1);
+        //User com o id=1
+        brs.registerUser(1, "Gabriel", 1);
 
-        //Adição de um lock com id=0 e um Deposit com o id=0
-        brs.addLock(0, 0);
+        //Adição de um lock
+        brs.addLock(1, 0);
 
-        //Adição de uma bicicleta com o id=0
-        brs.addBicycle(0, 0, 0);
+        //Adição de uma bicicleta
+        brs.addBicycle(1, 0, 0);
 
     }
 
-    /*
-    Teste se é lançada a exceção quando o utilizador já existe
-     */
     @Test
     public void testRegisterUserExist() {
 
-        //Verificação se a excepção é lançada com o id=0
+        //Excepção é lançada
         assertThrows(UserAlreadyExists.class, () -> {
 
             brs.registerUser(0, "Rafael", 1);
 
-            //O teste é válido, pois o utilizador Rafael com o id 0, já existe
+            //O teste é válido
         }, "Should Throw Exception: UserAlreadyExists");
 
     }
 
-    /*
- Teste se utilizador é adicionado
-  */
-    @Test
+      @Test
     public void testRegisterUserValido() throws UserAlreadyExists{
 
-        brs.registerUser(1, "Emanuel", 2);
+        brs.registerUser(2,"Nuno", 2);
 
-        //O teste é válido, pois o utilizador Emanuel
-        // com o IDUser=1 não existe e foi adicionado
-        assertEquals(1, brs.getUsers().get(1).getIDUser());
+        //O teste é válido
+       assertEquals(2, brs.getUsers().get(2).getIDUser());
 
     }
 
+    //Testesw getBicycle
+    @Test
+    public void testGetBicycle1() throws UserDoesNotExists {
+        //Adicionar Crédito
+        brs.addCredit(1, 1);
+
+        //Adição de um Lock
+        brs.addLock(1, 1);
+
+        //Adição de uma Bicicleta
+        brs.addBicycle(0, 1, 1);
+
+        //Retorna -1 se tentar requisitar uma bicicleta sem depósito
+        assertEquals(0, brs.getBicycle(1, 1, 0));
+
+       brs.getBicycle(1, 1, 0);
+    }
 
     @Test
-    public void testVerifyCredit() throws UserAlreadyExists {
-
-        //Adiciona um crédito ao user com IDUser=0
+    public void testGetBicycle2() throws UserDoesNotExists {
+        //Adicionar Crédito
         brs.addCredit(0, 1);
 
-        //Adiciona mais um user sem créditos
-        brs.registerUser(1, "Nuno", 2);
+        //Adição de um Lock
+        brs.addLock(1, 1);
 
-        //Verificação se retorna false ao verificar se é possivel
-        // adicionar créditos a um utilizador não existente na lista de users ou se um user não tem creditos
+        //Adição de uma Bicicleta
+        brs.addBicycle(1, 1, 1);
 
-        assertAll("Should return False if user with IDUser=2 does not exist or there is no credits in IDUser=1",
-                () -> assertFalse(brs.verifyCredit(1)),
-                () -> assertFalse(brs.verifyCredit(2))
-        );
+        //Retorna -1 se tentar requisitar uma bicicleta sem depósito
+        assertEquals(-1, brs.getBicycle(1,0,0));
 
-        //Verificação se retorna true ao verificar se um user tem créditos suficientes
+        brs.getBicycle(1, 0, 0);
+    }
+    @Test
+    public void testGetBicycle3() throws UserDoesNotExists {
+        //Adicionar Crédito
+        brs.addCredit(1, 1);
+
+        //Adição de um Lock
+        brs.addLock(0, 1);
+
+        //Adição de uma Bicicleta
+        brs.addBicycle(0, 1, 1);
+
+        //Retorna -1 se tentar requisitar uma bicicleta sem depósito
+        assertEquals(-1, brs.getBicycle(0,1,0));
+
+        brs.getBicycle(0, 1, 0);
+    }
+    @Test
+    public void testGetBicycle4() throws UserDoesNotExists {
+        //Adicionar
+        brs.addCredit(1, 1);
+
+        //Adição de um Lock
+        brs.addLock(1, 1);
+
+        //Adição de uma Bicicleta
+        brs.addBicycle(1, 1, 1);
+
+        //Retorna -1 se tentar requisitar uma bicicleta sem depósito
+        assertEquals(-1, brs.getBicycle(1,1,-1));
+
+        brs.getBicycle(1, 1, -1);
+    }
+    @Test
+    public void testGetBicycle5() throws UserDoesNotExists {
+        //Adicionar Crédito
+        brs.addCredit(1, 1);
+
+        //Adição de um Lock
+        brs.addLock(1, 1);
+
+        //Adição de uma Bicicleta
+        brs.addBicycle(1, 1, 1);
+
+        //Testar se retorna -1 se tentar requisitar uma bicicleta sem depósito
+        assertEquals(0, brs.getBicycle(1,1,1));
+
+        brs.getBicycle(1, 1, 1);
+    }
+
+    @Test
+    public void testVerifyCredit1() {
+
+        //Adiciona um crédito
+        brs.addCredit(-1, 1);
+
+        assertTrue(brs.verifyCredit(-1));
+    }
+
+    @Test
+    public void testVerifyCredit2() {
+
+        //Adiciona um crédito
+        brs.addCredit(0, 1);
+
         assertTrue(brs.verifyCredit(0));
+    }
+    @Test
+    public void testVerifyCredit3() {
+
+        //Adiciona um crédito
+        brs.addCredit(1, 1);
+
+        assertTrue(brs.verifyCredit(1));
+    }
+
+    @Test
+    public void testAddCredit1() {
+        //Utilizador em que se adiciona créditos
+        User u = brs.getUsers().get(1);
+
+        brs.addCredit(1, 1);
+
+        //O crédito foi adicionado com sucesso
+        assertEquals(1, u.getCredit(), "Expected = 1, Actual = " + u.getCredit());
+    }
+    @Test
+    public void testAddCredit2() {
+        //Utilizador em que se adiciona créditos
+        User u = brs.getUsers().get(0);
+
+        brs.addCredit(0, 1);
+
+        //O crédito foi adicionado com sucesso
+        assertEquals(1, u.getCredit(), "Expected = 1, Actual = " + u.getCredit());
+    }
+    @Test
+    public void testAddCredit3() {
+        //Utilizador em que se adiciona créditos
+        User u = brs.getUsers().get(-1);
+
+        brs.addCredit(-1, 1);
+
+        //O crédito foi adicionado com sucesso
+        assertEquals(1, u.getCredit(), "Expected = 1, Actual = " + u.getCredit());
+    }
+    @Test
+    public void testAddCredit4() {
+        //Utilizador em que se adiciona créditos
+        User u = brs.getUsers().get(1);
+
+        brs.addCredit(1, 0);
+
+        //O crédito foi adicionado com sucesso
+        assertEquals(1, u.getCredit(), "Expected = 1, Actual = " + u.getCredit());
+    }
+
+    @Test
+    public void testRegisterUser1() {
+        //Verificar se a excepção é lançada
+        assertThrows(UserAlreadyExists.class, () -> {
+            brs.registerUser(1, "Gabriel", 1);
+        }, "Should Throw Exception: UserAlreadyExists"); //O teste é válido
 
     }
 
+    @Test
+    public void testRegisterUser2() {
+        //Verificar se a excepção é lançada
+        assertThrows(UserAlreadyExists.class, () -> {
+            brs.registerUser(-1, "Nuno", 1);
+        }, "Should Throw Exception: UserAlreadyExists"); //O teste é válido
+
+    }
+
+    @Test
+    public void testRegisterUser3() {
+        //Verificar se a excepção é lançada
+        assertThrows(UserAlreadyExists.class, () -> {
+            brs.registerUser(0, "Rafael", 1);
+        }, "Should Throw Exception: UserAlreadyExists"); //O teste é válido
+
+    }
+    @Test
+    public void testReturnBicycle() throws UserDoesNotExists {
+
+
+        //Testar se retorna -1 se depósito não existir
+        assertEquals(0, brs.getBicycle(1, 1, 1));
+
+        //Senão existirem lugares de entrega livre
+        assertEquals(0, brs.returnBicycle(1, 1, 1));
+
+        //Testar se retorna o saldo atual do cliente, quando se calcula o pagamento
+        assertEquals(0, brs.verifyCredit(1));
+    }
 }
